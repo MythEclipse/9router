@@ -1,0 +1,12 @@
+# https://moonrepo.dev/docs/config/project
+$schema: "https://moonrepo.dev/schemas/project.json"
+
+language: "unknown"
+tags:
+  - "type/router"
+
+fileGroups:
+  sources:
+    - "src/**/*"
+    - "next.config.mjs"
+    - "package.json"
