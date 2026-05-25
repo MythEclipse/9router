@@ -6,17 +6,32 @@ const aliasKv = makeKv("modelAliases");
 const customKv = makeKv("customModels");
 const mitmKv = makeKv("mitmAlias");
 
+if (!global._aliasCache) global._aliasCache = { data: null, ts: 0 };
+const CACHE_TTL_MS = 15000;
+
+function invalidateAliasCache() {
+  global._aliasCache = { data: null, ts: 0 };
+}
+
 // modelAliases: key=alias, value=modelString
 export async function getModelAliases() {
-  return await aliasKv.getAll();
+  const now = Date.now();
+  if (global._aliasCache.data && now - global._aliasCache.ts < CACHE_TTL_MS) {
+    return global._aliasCache.data;
+  }
+  const data = await aliasKv.getAll();
+  global._aliasCache = { data, ts: now };
+  return data;
 }
 
 export async function setModelAlias(alias, model) {
   await aliasKv.set(alias, model);
+  invalidateAliasCache();
 }
 
 export async function deleteModelAlias(alias) {
   await aliasKv.remove(alias);
+  invalidateAliasCache();
 }
 
 // customModels: key=`${providerAlias}|${id}|${type}`, value=full model object

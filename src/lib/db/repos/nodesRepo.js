@@ -2,6 +2,13 @@ import { v4 as uuidv4 } from "uuid";
 import { getAdapter } from "../driver.js";
 import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
 
+if (!global._nodesCache) global._nodesCache = { data: null, ts: 0 };
+const CACHE_TTL_MS = 15000;
+
+function invalidateNodesCache() {
+  global._nodesCache = { data: null, ts: 0 };
+}
+
 function rowToNode(row) {
   if (!row) return null;
   const extra = parseJson(row.data, {});
@@ -39,12 +46,19 @@ function upsert(db, n) {
 }
 
 export async function getProviderNodes(filter = {}) {
-  const db = await getAdapter();
-  const where = [];
-  const params = [];
-  if (filter.type) { where.push("type = ?"); params.push(filter.type); }
-  const sql = `SELECT * FROM providerNodes${where.length ? ` WHERE ${where.join(" AND ")}` : ""}`;
-  return db.all(sql, params).map(rowToNode);
+  const now = Date.now();
+  if (!global._nodesCache.data || now - global._nodesCache.ts >= CACHE_TTL_MS) {
+    const db = await getAdapter();
+    const sql = `SELECT * FROM providerNodes`;
+    global._nodesCache.data = db.all(sql).map(rowToNode);
+    global._nodesCache.ts = now;
+  }
+  
+  let nodes = global._nodesCache.data;
+  if (filter.type) {
+    nodes = nodes.filter(n => n.type === filter.type);
+  }
+  return nodes;
 }
 
 export async function getProviderNodeById(id) {
@@ -66,6 +80,7 @@ export async function createProviderNode(data) {
     updatedAt: now,
   };
   upsert(db, node);
+  invalidateNodesCache();
   return node;
 }
 
@@ -79,6 +94,7 @@ export async function updateProviderNode(id, data) {
     upsert(db, merged);
     result = merged;
   });
+  if (result) invalidateNodesCache();
   return result;
 }
 
@@ -91,5 +107,6 @@ export async function deleteProviderNode(id) {
     removed = rowToNode(row);
     db.run(`DELETE FROM providerNodes WHERE id = ?`, [id]);
   });
+  if (removed) invalidateNodesCache();
   return removed;
 }

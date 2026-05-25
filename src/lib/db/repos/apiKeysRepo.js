@@ -1,6 +1,14 @@
 import { v4 as uuidv4 } from "uuid";
 import { getAdapter } from "../driver.js";
 
+if (!global._apiKeysCache) global._apiKeysCache = { map: new Map(), ts: 0 };
+const CACHE_TTL_MS = 15000;
+
+function invalidateCache() {
+  global._apiKeysCache.map.clear();
+  global._apiKeysCache.ts = 0;
+}
+
 function rowToKey(row) {
   if (!row) return null;
   return {
@@ -42,6 +50,7 @@ export async function createApiKey(name, machineId) {
     `INSERT INTO apiKeys(id, key, name, machineId, isActive, createdAt) VALUES(?, ?, ?, ?, ?, ?)`,
     [apiKey.id, apiKey.key, apiKey.name, apiKey.machineId, 1, apiKey.createdAt]
   );
+  invalidateCache();
   return apiKey;
 }
 
@@ -58,18 +67,28 @@ export async function updateApiKey(id, data) {
     );
     result = merged;
   });
+  if (result) invalidateCache();
   return result;
 }
 
 export async function deleteApiKey(id) {
   const db = await getAdapter();
   const res = db.run(`DELETE FROM apiKeys WHERE id = ?`, [id]);
-  return (res?.changes ?? 0) > 0;
+  const changed = (res?.changes ?? 0) > 0;
+  if (changed) invalidateCache();
+  return changed;
 }
 
 export async function validateApiKey(key) {
+  const now = Date.now();
+  if (now - global._apiKeysCache.ts > CACHE_TTL_MS) invalidateCache();
+  if (global._apiKeysCache.map.has(key)) return global._apiKeysCache.map.get(key);
+
   const db = await getAdapter();
   const row = db.get(`SELECT isActive FROM apiKeys WHERE key = ?`, [key]);
-  if (!row) return false;
-  return row.isActive === 1 || row.isActive === true;
+  const isValid = row ? (row.isActive === 1 || row.isActive === true) : false;
+
+  global._apiKeysCache.map.set(key, isValid);
+  if (global._apiKeysCache.ts === 0) global._apiKeysCache.ts = now;
+  return isValid;
 }

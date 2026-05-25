@@ -2,6 +2,14 @@ import { v4 as uuidv4 } from "uuid";
 import { getAdapter } from "../driver.js";
 import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
 
+if (!global._combosCache) global._combosCache = { map: new Map(), ts: 0 };
+const CACHE_TTL_MS = 15000;
+
+function invalidateCombosCache() {
+  global._combosCache.map.clear();
+  global._combosCache.ts = 0;
+}
+
 function rowToCombo(row) {
   if (!row) return null;
   return {
@@ -27,9 +35,17 @@ export async function getComboById(id) {
 }
 
 export async function getComboByName(name) {
+  const now = Date.now();
+  if (now - global._combosCache.ts > CACHE_TTL_MS) invalidateCombosCache();
+  if (global._combosCache.map.has(name)) return global._combosCache.map.get(name);
+
   const db = await getAdapter();
   const row = db.get(`SELECT * FROM combos WHERE name = ?`, [name]);
-  return rowToCombo(row);
+  const combo = rowToCombo(row);
+
+  global._combosCache.map.set(name, combo);
+  if (global._combosCache.ts === 0) global._combosCache.ts = now;
+  return combo;
 }
 
 export async function createCombo(data) {
@@ -47,6 +63,7 @@ export async function createCombo(data) {
     `INSERT INTO combos(id, name, kind, models, createdAt, updatedAt) VALUES(?, ?, ?, ?, ?, ?)`,
     [combo.id, combo.name, combo.kind, stringifyJson(combo.models), combo.createdAt, combo.updatedAt]
   );
+  invalidateCombosCache();
   return combo;
 }
 
@@ -63,11 +80,14 @@ export async function updateCombo(id, data) {
     );
     result = merged;
   });
+  if (result) invalidateCombosCache();
   return result;
 }
 
 export async function deleteCombo(id) {
   const db = await getAdapter();
   const res = db.run(`DELETE FROM combos WHERE id = ?`, [id]);
-  return (res?.changes ?? 0) > 0;
+  const changed = (res?.changes ?? 0) > 0;
+  if (changed) invalidateCombosCache();
+  return changed;
 }
