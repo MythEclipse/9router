@@ -90,7 +90,8 @@ function createNoOpLogger() {
     appendOpenAIChunk() {},
     logConvertedResponse() {},
     appendConvertedChunk() {},
-    logError() {}
+    logError() {},
+    close() {}
   };
 }
 
@@ -109,6 +110,10 @@ export async function createRequestLogger(sourceFormat, targetFormat, model) {
   
   // Wait for session to be created before returning logger
   const sessionPath = await createLogSession(sourceFormat, targetFormat, model);
+  
+  let providerStream = null;
+  let openaiStream = null;
+  let convertedStream = null;
   
   return {
     get sessionPath() { return sessionPath; },
@@ -166,8 +171,11 @@ export async function createRequestLogger(sourceFormat, targetFormat, model) {
     appendProviderChunk(chunk) {
       if (!fs || !sessionPath) return;
       try {
-        const filePath = path.join(sessionPath, "5_res_provider.txt");
-        fs.appendFile(filePath, chunk, () => {});
+        if (!providerStream) {
+          const filePath = path.join(sessionPath, "5_res_provider.txt");
+          providerStream = fs.createWriteStream(filePath, { flags: 'a' });
+        }
+        providerStream.write(chunk);
       } catch (err) {
         // Ignore append errors
       }
@@ -177,8 +185,11 @@ export async function createRequestLogger(sourceFormat, targetFormat, model) {
     appendOpenAIChunk(chunk) {
       if (!fs || !sessionPath) return;
       try {
-        const filePath = path.join(sessionPath, "6_res_openai.txt");
-        fs.appendFile(filePath, chunk, () => {});
+        if (!openaiStream) {
+          const filePath = path.join(sessionPath, "6_res_openai.txt");
+          openaiStream = fs.createWriteStream(filePath, { flags: 'a' });
+        }
+        openaiStream.write(chunk);
       } catch (err) {
         // Ignore append errors
       }
@@ -196,8 +207,11 @@ export async function createRequestLogger(sourceFormat, targetFormat, model) {
     appendConvertedChunk(chunk) {
       if (!fs || !sessionPath) return;
       try {
-        const filePath = path.join(sessionPath, "7_res_client.txt");
-        fs.appendFile(filePath, chunk, () => {});
+        if (!convertedStream) {
+          const filePath = path.join(sessionPath, "7_res_client.txt");
+          convertedStream = fs.createWriteStream(filePath, { flags: 'a' });
+        }
+        convertedStream.write(chunk);
       } catch (err) {
         // Ignore append errors
       }
@@ -211,6 +225,13 @@ export async function createRequestLogger(sourceFormat, targetFormat, model) {
         stack: error?.stack,
         requestBody
       });
+    },
+    
+    // Close active file streams
+    close() {
+      if (providerStream) { providerStream.end(); providerStream = null; }
+      if (openaiStream) { openaiStream.end(); openaiStream = null; }
+      if (convertedStream) { convertedStream.end(); convertedStream = null; }
     }
   };
 }

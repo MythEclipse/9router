@@ -107,11 +107,16 @@ export function formatSSE(data, sourceFormat) {
 
   // OpenAI Responses API format
   if (data && data.event && data.data) {
-    const cleanedEventData = cleanUsagePayload(data.data);
-    return `event: ${data.event}\ndata: ${JSON.stringify(cleanedEventData)}\n\n`;
+    let eventData = data.data;
+    if (eventData && typeof eventData === "object" && ("usage" in eventData || "response" in eventData)) {
+      eventData = cleanUsagePayload(eventData);
+    }
+    return `event: ${data.event}\ndata: ${JSON.stringify(eventData)}\n\n`;
   }
 
-  data = cleanUsagePayload(data);
+  if (data && typeof data === "object" && ("usage" in data || "response" in data)) {
+    data = cleanUsagePayload(data);
+  }
 
   // Claude format
   if (sourceFormat === FORMATS.CLAUDE && data && data.type) {

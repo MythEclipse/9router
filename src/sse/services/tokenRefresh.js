@@ -196,7 +196,7 @@ export async function updateProviderCredentials(connectionId, newCredentials) {
 /**
  * Check whether the provider token (and, for GitHub, the Copilot token) is
  * about to expire and refresh it proactively.
- *
+ */
 export async function checkAndRefreshToken(provider, credentials) {
   let creds = { ...credentials };
 

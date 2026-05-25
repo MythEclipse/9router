@@ -81,69 +81,94 @@ export function createSSEStream(options = {}) {
 
           if (trimmed.startsWith("data:") && trimmed.slice(5).trim() !== "[DONE]") {
             try {
-              const parsed = JSON.parse(trimmed.slice(5).trim());
+              const dataStr = trimmed.slice(5).trim();
+              
+              // Fast-path: Only parse if structural changes or injections are needed
+              const needsParse = dataStr.includes('"finish_reason"') || 
+                                 dataStr.includes('"usage"') || 
+                                 dataStr.includes('"prompt_filter_results"') || 
+                                 dataStr.includes('"content_filter_results"') || 
+                                 !dataStr.includes('"id":"chatcmpl-');
 
-              const idFixed = fixInvalidId(parsed);
+              if (!needsParse) {
+                // Fast-path content extraction (avoids JSON AST allocation)
+                const contentMatch = dataStr.match(/"content"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
+                if (contentMatch) {
+                  const contentExtracted = contentMatch[1];
+                  totalContentLength += contentExtracted.length;
+                  // Only minimal unescaping for logging/accumulation, accuracy is not critical for DB storage
+                  accumulatedContent += contentExtracted.replace(/\\n/g, '\n').replace(/\\"/g, '"');
+                }
+                const reasoningMatch = dataStr.match(/"reasoning_content"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
+                if (reasoningMatch) {
+                  const reasoningExtracted = reasoningMatch[1];
+                  totalContentLength += reasoningExtracted.length;
+                  accumulatedThinking += reasoningExtracted.replace(/\\n/g, '\n').replace(/\\"/g, '"');
+                }
+              } else {
+                const parsed = JSON.parse(dataStr);
+                const idFixed = fixInvalidId(parsed);
 
-              // Ensure OpenAI-required fields are present on streaming chunks (Letta compat)
-              let fieldsInjected = false;
-              if (parsed.choices !== undefined) {
-                if (!parsed.object) { parsed.object = "chat.completion.chunk"; fieldsInjected = true; }
-                if (!parsed.created) { parsed.created = Math.floor(Date.now() / 1000); fieldsInjected = true; }
-              }
+                // Ensure OpenAI-required fields are present on streaming chunks (Letta compat)
+                let fieldsInjected = false;
+                if (parsed.choices !== undefined) {
+                  if (!parsed.object) { parsed.object = "chat.completion.chunk"; fieldsInjected = true; }
+                  if (!parsed.created) { parsed.created = Math.floor(Date.now() / 1000); fieldsInjected = true; }
+                }
 
-              // Strip Azure-specific non-standard fields from streaming chunks
-              if (parsed.prompt_filter_results !== undefined) {
-                delete parsed.prompt_filter_results;
-                fieldsInjected = true;
-              }
-              if (parsed?.choices) {
-                for (const choice of parsed.choices) {
-                  if (choice.content_filter_results !== undefined) {
-                    delete choice.content_filter_results;
-                    fieldsInjected = true;
+                // Strip Azure-specific non-standard fields from streaming chunks
+                if (parsed.prompt_filter_results !== undefined) {
+                  delete parsed.prompt_filter_results;
+                  fieldsInjected = true;
+                }
+                if (parsed?.choices) {
+                  for (const choice of parsed.choices) {
+                    if (choice.content_filter_results !== undefined) {
+                      delete choice.content_filter_results;
+                      fieldsInjected = true;
+                    }
                   }
                 }
-              }
 
-              if (!hasValuableContent(parsed, FORMATS.OPENAI)) {
-                continue;
-              }
+                if (!hasValuableContent(parsed, FORMATS.OPENAI)) {
+                  continue;
+                }
 
-              const delta = parsed.choices?.[0]?.delta;
-              const content = delta?.content;
-              const reasoning = delta?.reasoning_content;
-              if (content && typeof content === "string") {
-                totalContentLength += content.length;
-                accumulatedContent += content;
-              }
-              if (reasoning && typeof reasoning === "string") {
-                totalContentLength += reasoning.length;
-                accumulatedThinking += reasoning;
-              }
+                const delta = parsed.choices?.[0]?.delta;
+                const content = delta?.content;
+                const reasoning = delta?.reasoning_content;
+                if (content && typeof content === "string") {
+                  totalContentLength += content.length;
+                  accumulatedContent += content;
+                }
+                if (reasoning && typeof reasoning === "string") {
+                  totalContentLength += reasoning.length;
+                  accumulatedThinking += reasoning;
+                }
 
-              const extracted = extractUsage(parsed);
-              if (extracted) {
-                usage = extracted;
-              }
+                const extracted = extractUsage(parsed);
+                if (extracted) {
+                  usage = extracted;
+                }
 
-              const isFinishChunk = parsed.choices?.[0]?.finish_reason;
-              if (isFinishChunk && !hasValidUsage(parsed.usage)) {
-                const estimated = estimateUsage(body, totalContentLength, FORMATS.OPENAI);
-                parsed.usage = filterUsageForFormat(estimated, FORMATS.OPENAI);
-                output = `data: ${JSON.stringify(parsed)}\n`;
-                usage = estimated;
-                injectedUsage = true;
-              } else if (isFinishChunk && usage) {
-                const buffered = addBufferToUsage(usage);
-                parsed.usage = filterUsageForFormat(buffered, FORMATS.OPENAI);
-                output = `data: ${JSON.stringify(parsed)}\n`;
-                injectedUsage = true;
-              } else if (idFixed || fieldsInjected) {
-                output = `data: ${JSON.stringify(parsed)}\n`;
-                injectedUsage = true;
+                const isFinishChunk = parsed.choices?.[0]?.finish_reason;
+                if (isFinishChunk && !hasValidUsage(parsed.usage)) {
+                  const estimated = estimateUsage(body, totalContentLength, FORMATS.OPENAI);
+                  parsed.usage = filterUsageForFormat(estimated, FORMATS.OPENAI);
+                  output = `data: ${JSON.stringify(parsed)}\n`;
+                  usage = estimated;
+                  injectedUsage = true;
+                } else if (isFinishChunk && usage) {
+                  const buffered = addBufferToUsage(usage);
+                  parsed.usage = filterUsageForFormat(buffered, FORMATS.OPENAI);
+                  output = `data: ${JSON.stringify(parsed)}\n`;
+                  injectedUsage = true;
+                } else if (idFixed || fieldsInjected) {
+                  output = `data: ${JSON.stringify(parsed)}\n`;
+                  injectedUsage = true;
+                }
               }
-            } catch { }
+            } catch (err) { }
           }
 
           if (!injectedUsage) {
@@ -293,6 +318,7 @@ export function createSSEStream(options = {}) {
               thinking: accumulatedThinking
             }, usage, ttftAt);
           }
+          reqLogger?.close?.();
           return;
         }
 
@@ -355,8 +381,10 @@ export function createSSEStream(options = {}) {
             thinking: accumulatedThinking
           }, state?.usage, ttftAt);
         }
+        reqLogger?.close?.();
       } catch (error) {
         console.log("Error in flush:", error);
+        reqLogger?.close?.();
       }
     }
   });
