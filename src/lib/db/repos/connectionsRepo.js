@@ -2,6 +2,73 @@ import { v4 as uuidv4 } from "uuid";
 import { getAdapter } from "../driver.js";
 import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
 
+// Connection cache (TTL: 15s)
+if (!global._connectionsCache) global._connectionsCache = { data: null, ts: 0 };
+const CACHE_TTL_MS = 15000;
+
+function invalidateConnectionsCache() {
+  global._connectionsCache = { data: null, ts: 0 };
+}
+
+// Background batch writer for connection usage updates (avoids blocking hot-path)
+if (!global._connectionUsageState) {
+  global._connectionUsageState = { buffer: new Map(), timer: null, flushing: false };
+}
+const USAGE_FLUSH_MS = 1000;
+
+function _flushConnectionUsage() {
+  const st = global._connectionUsageState;
+  if (st.flushing || st.buffer.size === 0) return;
+  st.flushing = true;
+  
+  const entries = Array.from(st.buffer.entries());
+  st.buffer.clear();
+  st.timer = null;
+
+  getAdapter()
+    .then((db) => {
+      db.transaction(() => {
+        for (const [id, updates] of entries) {
+          const row = db.get(`SELECT * FROM providerConnections WHERE id = ?`, [id]);
+          if (!row) continue;
+          
+          const existing = rowToConn(row);
+          const merged = { ...existing, ...updates, updatedAt: updates.updatedAt || new Date().toISOString() };
+          
+          const r = connToRow(merged);
+          db.run(
+            `UPDATE providerConnections SET provider=?, authType=?, name=?, email=?, priority=?, isActive=?, data=?, updatedAt=? WHERE id=?`,
+            [r.provider, r.authType, r.name, r.email, r.priority, r.isActive, r.data, r.updatedAt, id]
+          );
+        }
+      });
+    })
+    .catch((err) => console.error("[connectionsRepo] usage batch write failed:", err.message))
+    .finally(() => { st.flushing = false; });
+}
+
+export function updateProviderConnectionUsage(id, data) {
+  // Synchronously update cache for instant round-robin resolution
+  if (global._connectionsCache.data) {
+    const idx = global._connectionsCache.data.findIndex((c) => c.id === id);
+    if (idx !== -1) {
+      global._connectionsCache.data[idx] = { ...global._connectionsCache.data[idx], ...data, updatedAt: new Date().toISOString() };
+    }
+  }
+
+  // Push to async batch writer
+  const st = global._connectionUsageState;
+  const current = st.buffer.get(id) || {};
+  st.buffer.set(id, { ...current, ...data });
+
+  if (!st.timer) {
+    st.timer = setTimeout(() => {
+      st.timer = null;
+      _flushConnectionUsage();
+    }, USAGE_FLUSH_MS);
+  }
+}
+
 const OPTIONAL_FIELDS = [
   "displayName", "email", "globalPriority", "defaultModel",
   "accessToken", "refreshToken", "expiresAt", "tokenType",
@@ -57,16 +124,28 @@ function upsert(db, c) {
 }
 
 export async function getProviderConnections(filter = {}) {
-  const db = await getAdapter();
-  const where = [];
-  const params = [];
-  if (filter.provider) { where.push("provider = ?"); params.push(filter.provider); }
-  if (filter.isActive !== undefined) { where.push("isActive = ?"); params.push(filter.isActive ? 1 : 0); }
-  const sql = `SELECT * FROM providerConnections${where.length ? ` WHERE ${where.join(" AND ")}` : ""}`;
-  const rows = db.all(sql, params);
-  const list = rows.map(rowToConn);
-  list.sort((a, b) => (a.priority || 999) - (b.priority || 999));
-  return list;
+  const now = Date.now();
+  if (!global._connectionsCache.data || now - global._connectionsCache.ts >= CACHE_TTL_MS) {
+    const db = await getAdapter();
+    const rows = db.all(`SELECT * FROM providerConnections`);
+    const list = rows.map(rowToConn);
+    list.sort((a, b) => (a.priority || 999) - (b.priority || 999));
+    global._connectionsCache.data = list;
+    global._connectionsCache.ts = now;
+  }
+
+  // Filter against cached array
+  let result = global._connectionsCache.data;
+  if (filter.provider) {
+    result = result.filter(c => c.provider === filter.provider);
+  }
+  if (filter.isActive !== undefined) {
+    const activeFlag = filter.isActive;
+    result = result.filter(c => c.isActive === activeFlag);
+  }
+
+  // Deep clone to prevent accidental mutations by callers
+  return JSON.parse(JSON.stringify(result));
 }
 
 export async function getProviderConnectionById(id) {
@@ -150,6 +229,7 @@ export async function createProviderConnection(data) {
     result = conn;
   });
 
+  if (result) invalidateConnectionsCache();
   return result;
 }
 
@@ -166,6 +246,7 @@ export async function updateProviderConnection(id, data) {
     if (data.priority !== undefined) reorderInTx(db, existing.provider);
     result = merged;
   });
+  if (result) invalidateConnectionsCache();
   return result;
 }
 
@@ -179,6 +260,7 @@ export async function deleteProviderConnection(id) {
     reorderInTx(db, row.provider);
     ok = true;
   });
+  if (ok) invalidateConnectionsCache();
   return ok;
 }
 
@@ -186,12 +268,14 @@ export async function deleteProviderConnectionsByProvider(providerId) {
   const db = await getAdapter();
   const before = db.get(`SELECT COUNT(*) AS n FROM providerConnections WHERE provider = ?`, [providerId]);
   db.run(`DELETE FROM providerConnections WHERE provider = ?`, [providerId]);
+  invalidateConnectionsCache();
   return before?.n || 0;
 }
 
 export async function reorderProviderConnections(providerId) {
   const db = await getAdapter();
   db.transaction(() => reorderInTx(db, providerId));
+  invalidateConnectionsCache();
 }
 
 export async function cleanupProviderConnections() {
@@ -222,5 +306,6 @@ export async function cleanupProviderConnections() {
       if (dirty) upsert(db, conn);
     }
   });
+  if (cleaned > 0) invalidateConnectionsCache();
   return cleaned;
 }

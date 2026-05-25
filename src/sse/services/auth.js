@@ -1,23 +1,9 @@
-import { getProviderConnections, getProviderConnectionById, validateApiKey, updateProviderConnection, getSettings } from "@/lib/localDb";
+import { getProviderConnections, getProviderConnectionById, validateApiKey, updateProviderConnection, updateProviderConnectionUsage, getSettings } from "@/lib/localDb";
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy";
 import { formatRetryAfter, checkFallbackError, isModelLockActive, buildModelLockUpdate, getEarliestModelLockUntil } from "open-sse/services/accountFallback.js";
 import { MAX_RATE_LIMIT_COOLDOWN_MS } from "open-sse/config/errorConfig.js";
 import { resolveProviderId, FREE_PROVIDERS } from "@/shared/constants/providers.js";
 import * as log from "../utils/logger.js";
-
-// Per-provider mutexes to prevent race conditions during account selection.
-// Using a Map instead of a global mutex so different providers can select accounts
-// in parallel — only same-provider requests serialize.
-const providerMutexes = new Map();
-
-function getProviderMutex(providerId) {
-  let mutex = providerMutexes.get(providerId);
-  if (!mutex) {
-    mutex = { current: Promise.resolve() };
-    providerMutexes.set(providerId, mutex);
-  }
-  return mutex;
-}
 
 /**
  * Get provider credentials from localDb
@@ -36,15 +22,7 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
   // Resolve alias to provider ID (e.g., "kc" -> "kilocode")
   const providerId = resolveProviderId(provider);
 
-  // Acquire per-provider mutex so different providers can select accounts in parallel
-  const mutex = getProviderMutex(providerId);
-  const currentMutex = mutex.current;
-  let resolveMutex;
-  mutex.current = new Promise(resolve => { resolveMutex = resolve; });
-
   try {
-    await currentMutex;
-
     // Inject a virtual connection for no-auth free providers (with optional proxy pool from settings)
     if (FREE_PROVIDERS[providerId]?.noAuth) {
       const settings = await getSettings();
@@ -142,8 +120,8 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       if (current && current.lastUsedAt && currentCount < stickyLimit) {
         // Stay with current account
         connection = current;
-        // Update lastUsedAt and increment count (await to ensure persistence)
-        await updateProviderConnection(connection.id, {
+        // Update lastUsedAt and increment count without blocking
+        updateProviderConnectionUsage(connection.id, {
           lastUsedAt: new Date().toISOString(),
           consecutiveUseCount: (connection.consecutiveUseCount || 0) + 1
         });
@@ -158,8 +136,8 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
 
         connection = sortedByOldest[0];
 
-        // Update lastUsedAt and reset count to 1 (await to ensure persistence)
-        await updateProviderConnection(connection.id, {
+        // Update lastUsedAt and reset count to 1 without blocking
+        updateProviderConnectionUsage(connection.id, {
           lastUsedAt: new Date().toISOString(),
           consecutiveUseCount: 1
         });
@@ -194,8 +172,9 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       // Pass full connection for clearAccountError to read modelLock_* keys
       _connection: connection
     };
-  } finally {
-    if (resolveMutex) resolveMutex();
+  } catch (err) {
+    log.error("AUTH", `Error resolving credentials for ${provider}: ${err.message}`);
+    throw err;
   }
 }
 

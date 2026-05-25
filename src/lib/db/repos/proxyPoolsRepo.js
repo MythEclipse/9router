@@ -2,6 +2,14 @@ import { v4 as uuidv4 } from "uuid";
 import { getAdapter } from "../driver.js";
 import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
 
+// Proxy pools cache (TTL: 15s)
+if (!global._proxyPoolsCache) global._proxyPoolsCache = { data: null, ts: 0 };
+const CACHE_TTL_MS = 15000;
+
+function invalidateProxyPoolsCache() {
+  global._proxyPoolsCache = { data: null, ts: 0 };
+}
+
 function rowToPool(row) {
   if (!row) return null;
   const extra = parseJson(row.data, {});
@@ -40,20 +48,30 @@ function upsert(db, p) {
 }
 
 export async function getProxyPools(filter = {}) {
-  const db = await getAdapter();
-  const where = [];
-  const params = [];
-  if (filter.isActive !== undefined) { where.push("isActive = ?"); params.push(filter.isActive ? 1 : 0); }
-  if (filter.testStatus) { where.push("testStatus = ?"); params.push(filter.testStatus); }
-  const sql = `SELECT * FROM proxyPools${where.length ? ` WHERE ${where.join(" AND ")}` : ""}`;
-  const list = db.all(sql, params).map(rowToPool);
-  list.sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
-  return list;
+  const now = Date.now();
+  if (!global._proxyPoolsCache.data || now - global._proxyPoolsCache.ts >= CACHE_TTL_MS) {
+    const db = await getAdapter();
+    const rows = db.all(`SELECT * FROM proxyPools`);
+    const list = rows.map(rowToPool);
+    list.sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+    global._proxyPoolsCache.data = list;
+    global._proxyPoolsCache.ts = now;
+  }
+
+  let result = global._proxyPoolsCache.data;
+  if (filter.isActive !== undefined) {
+    const activeFlag = filter.isActive;
+    result = result.filter(p => p.isActive === activeFlag);
+  }
+  if (filter.testStatus) {
+    result = result.filter(p => p.testStatus === filter.testStatus);
+  }
+  return JSON.parse(JSON.stringify(result));
 }
 
 export async function getProxyPoolById(id) {
-  const db = await getAdapter();
-  return rowToPool(db.get(`SELECT * FROM proxyPools WHERE id = ?`, [id]));
+  const pools = await getProxyPools();
+  return pools.find(p => p.id === id) || null;
 }
 
 export async function createProxyPool(data) {
@@ -74,6 +92,7 @@ export async function createProxyPool(data) {
     updatedAt: now,
   };
   upsert(db, pool);
+  invalidateProxyPoolsCache();
   return pool;
 }
 
@@ -87,6 +106,7 @@ export async function updateProxyPool(id, data) {
     upsert(db, merged);
     result = merged;
   });
+  if (result) invalidateProxyPoolsCache();
   return result;
 }
 
@@ -99,5 +119,6 @@ export async function deleteProxyPool(id) {
     removed = rowToPool(row);
     db.run(`DELETE FROM proxyPools WHERE id = ?`, [id]);
   });
+  if (removed) invalidateProxyPoolsCache();
   return removed;
 }
