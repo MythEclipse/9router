@@ -205,8 +205,8 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     return createErrorResult(HTTP_STATUS.BAD_GATEWAY, errMsg);
   }
 
-  // Handle 401/403 - try token refresh (skip for noAuth providers)
-  if (!executor.noAuth && (providerResponse.status === HTTP_STATUS.UNAUTHORIZED || providerResponse.status === HTTP_STATUS.FORBIDDEN)) {
+  // Handle auth failures - try token refresh unless provider marks response as non-refreshable
+  if (!executor.noAuth && executor.shouldRefreshCredentials(providerResponse)) {
     try {
       const newCredentials = await refreshWithRetry(() => executor.refreshCredentials(credentials, log), 3, log);
       if (newCredentials?.accessToken || newCredentials?.copilotToken) {

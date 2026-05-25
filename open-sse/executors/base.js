@@ -91,6 +91,10 @@ export class BaseExecutor {
     return expiresAtMs - Date.now() < 5 * 60 * 1000;
   }
 
+  shouldRefreshCredentials(response) {
+    return response.status === HTTP_STATUS.UNAUTHORIZED || response.status === HTTP_STATUS.FORBIDDEN;
+  }
+
   parseError(response, bodyText) {
     return { status: response.status, message: bodyText || `HTTP ${response.status}` };
   }

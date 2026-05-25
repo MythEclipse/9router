@@ -122,9 +122,17 @@ export class CodexExecutor extends BaseExecutor {
     return super.execute(args);
   }
 
+  isCloudflareChallenge(response) {
+    return response.headers?.get?.("cf-mitigated") === "challenge";
+  }
+
+  shouldRefreshCredentials(response) {
+    return !this.isCloudflareChallenge(response) && super.shouldRefreshCredentials(response);
+  }
+
   // Parse Codex-specific upstream failures; fallback to default otherwise
   parseError(response, bodyText) {
-    if (response.headers?.get?.("cf-mitigated") === "challenge") {
+    if (this.isCloudflareChallenge(response)) {
       return {
         status: 503,
         message: "Codex upstream blocked by Cloudflare challenge. configure a proxy pool for provider codex or use a non-Codex provider.",
