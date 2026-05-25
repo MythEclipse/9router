@@ -110,27 +110,27 @@ export async function handleChat(request, clientRawRequest = null) {
     });
   }
 
-  // Single model request
-  return handleSingleModelChat(body, modelStr, clientRawRequest, request, apiKey);
+  // Single model request — pass settings to avoid redundant DB read
+  return handleSingleModelChat(body, modelStr, clientRawRequest, request, apiKey, settings);
 }
 
 /**
  * Handle single model chat request
  */
-async function handleSingleModelChat(body, modelStr, clientRawRequest = null, request = null, apiKey = null) {
+async function handleSingleModelChat(body, modelStr, clientRawRequest = null, request = null, apiKey = null, chatSettings = null) {
   const modelInfo = await getModelInfo(modelStr);
 
   // If provider is null, this might be a combo name - check and handle
   if (!modelInfo.provider) {
     const comboModels = await getComboModels(modelStr);
     if (comboModels) {
-      const chatSettings = await getSettings();
+      const cSettings = chatSettings || await getSettings();
       // Check for combo-specific strategy first, fallback to global
-      const comboStrategies = chatSettings.comboStrategies || {};
+      const comboStrategies = cSettings.comboStrategies || {};
       const comboSpecificStrategy = comboStrategies[modelStr]?.fallbackStrategy;
-      const comboStrategy = comboSpecificStrategy || chatSettings.comboStrategy || "fallback";
-      
-      const comboStickyLimit = chatSettings.comboStickyRoundRobinLimit;
+      const comboStrategy = comboSpecificStrategy || cSettings.comboStrategy || "fallback";
+
+      const comboStickyLimit = cSettings.comboStickyRoundRobinLimit;
       log.info("CHAT", `Combo "${modelStr}" with ${comboModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`);
       return handleComboChat({
         body,
@@ -197,9 +197,9 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       }
     }
 
-    // Use shared chatCore
-    const chatSettings = await getSettings();
-    const providerThinking = (chatSettings.providerThinking || {})[provider] || null;
+    // Use shared chatCore — reuse settings from handleChat or fetch from cache
+    const cSettings = chatSettings || await getSettings();
+    const providerThinking = (cSettings.providerThinking || {})[provider] || null;
     const result = await handleChatCore({
       body: { ...body, model: `${provider}/${model}` },
       modelInfo: { provider, model },
@@ -209,10 +209,10 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       connectionId: credentials.connectionId,
       userAgent,
       apiKey,
-      ccFilterNaming: !!chatSettings.ccFilterNaming,
-      rtkEnabled: !!chatSettings.rtkEnabled,
-      cavemanEnabled: !!chatSettings.cavemanEnabled,
-      cavemanLevel: chatSettings.cavemanLevel || "full",
+      ccFilterNaming: !!cSettings.ccFilterNaming,
+      rtkEnabled: !!cSettings.rtkEnabled,
+      cavemanEnabled: !!cSettings.cavemanEnabled,
+      cavemanLevel: cSettings.cavemanLevel || "full",
       providerThinking,
       // Detect source format by endpoint + body
       sourceFormatOverride: request?.url ? detectFormatByEndpoint(new URL(request.url).pathname, body) : null,

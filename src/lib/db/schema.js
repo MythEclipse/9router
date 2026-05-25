@@ -8,7 +8,8 @@ PRAGMA temp_store = MEMORY;
 PRAGMA mmap_size = 30000000;
 PRAGMA cache_size = -64000;
 PRAGMA foreign_keys = ON;
-PRAGMA busy_timeout = 5000;
+PRAGMA busy_timeout = 1000;
+PRAGMA wal_autocheckpoint = 1000;
 `;
 
 // Declarative current schema. Used by syncSchemaFromTables() to

@@ -68,7 +68,11 @@ export { getExecutor, hasSpecializedExecutor } from "./executors/index.js";
 
 // Utils
 export { errorResponse, formatProviderError } from "./utils/error.js";
-export { 
-  createSSETransformStreamWithLogger, 
-  createPassthroughStreamWithLogger 
+export {
+  createSSETransformStreamWithLogger,
+  createPassthroughStreamWithLogger
 } from "./utils/stream.js";
+
+// Preload translators at import time so cold start doesn't hit first request
+import { initTranslators } from "./translator/index.js";
+initTranslators();

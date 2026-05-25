@@ -1,12 +1,23 @@
-import { getProviderConnections, validateApiKey, updateProviderConnection, getSettings } from "@/lib/localDb";
+import { getProviderConnections, getProviderConnectionById, validateApiKey, updateProviderConnection, getSettings } from "@/lib/localDb";
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy";
 import { formatRetryAfter, checkFallbackError, isModelLockActive, buildModelLockUpdate, getEarliestModelLockUntil } from "open-sse/services/accountFallback.js";
 import { MAX_RATE_LIMIT_COOLDOWN_MS } from "open-sse/config/errorConfig.js";
 import { resolveProviderId, FREE_PROVIDERS } from "@/shared/constants/providers.js";
 import * as log from "../utils/logger.js";
 
-// Mutex to prevent race conditions during account selection
-let selectionMutex = Promise.resolve();
+// Per-provider mutexes to prevent race conditions during account selection.
+// Using a Map instead of a global mutex so different providers can select accounts
+// in parallel — only same-provider requests serialize.
+const providerMutexes = new Map();
+
+function getProviderMutex(providerId) {
+  let mutex = providerMutexes.get(providerId);
+  if (!mutex) {
+    mutex = { current: Promise.resolve() };
+    providerMutexes.set(providerId, mutex);
+  }
+  return mutex;
+}
 
 /**
  * Get provider credentials from localDb
@@ -21,16 +32,18 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
     ? excludeConnectionIds
     : (excludeConnectionIds ? new Set([excludeConnectionIds]) : new Set());
   const preferredConnectionId = options?.preferredConnectionId || null;
-  // Acquire mutex to prevent race conditions
-  const currentMutex = selectionMutex;
+
+  // Resolve alias to provider ID (e.g., "kc" -> "kilocode")
+  const providerId = resolveProviderId(provider);
+
+  // Acquire per-provider mutex so different providers can select accounts in parallel
+  const mutex = getProviderMutex(providerId);
+  const currentMutex = mutex.current;
   let resolveMutex;
-  selectionMutex = new Promise(resolve => { resolveMutex = resolve; });
+  mutex.current = new Promise(resolve => { resolveMutex = resolve; });
 
   try {
     await currentMutex;
-
-    // Resolve alias to provider ID (e.g., "kc" -> "kilocode")
-    const providerId = resolveProviderId(provider);
 
     // Inject a virtual connection for no-auth free providers (with optional proxy pool from settings)
     if (FREE_PROVIDERS[providerId]?.noAuth) {
@@ -198,8 +211,7 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
  */
 export async function markAccountUnavailable(connectionId, status, errorText, provider = null, model = null, resetsAtMs = null) {
   if (!connectionId || connectionId === "noauth") return { shouldFallback: false, cooldownMs: 0 };
-  const connections = await getProviderConnections({ provider });
-  const conn = connections.find(c => c.id === connectionId);
+  const conn = await getProviderConnectionById(connectionId);
   const backoffLevel = conn?.backoffLevel || 0;
 
   // Provider-specific precise cooldown (e.g. codex usage_limit_reached resets_at) overrides backoff

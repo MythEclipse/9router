@@ -63,9 +63,19 @@ function mergeWithDefaults(raw) {
   return merged;
 }
 
+// In-memory settings cache with short TTL (avoids DB query per getSettings call).
+// Global survives Next.js dev hot-reload.
+if (!global._settingsCache) global._settingsCache = { data: null, ts: 0 };
+const SETTINGS_CACHE_TTL_MS = 5000;
+
 export async function getSettings() {
+  if (global._settingsCache.data && Date.now() - global._settingsCache.ts < SETTINGS_CACHE_TTL_MS) {
+    return global._settingsCache.data;
+  }
   const raw = await readRaw();
-  return mergeWithDefaults(raw);
+  const merged = mergeWithDefaults(raw);
+  global._settingsCache = { data: merged, ts: Date.now() };
+  return merged;
 }
 
 // Atomic read-merge-write inside transaction (prevents losing concurrent updates)
@@ -81,6 +91,8 @@ export async function updateSettings(updates) {
       [stringifyJson(next)]
     );
   });
+  // Invalidate cache so next getSettings() reads fresh data
+  global._settingsCache = { data: null, ts: 0 };
   return mergeWithDefaults(next);
 }
 
@@ -97,6 +109,10 @@ export async function getCloudUrl() {
     process.env.NEXT_PUBLIC_CLOUD_URL ||
     ""
   );
+}
+
+export function invalidateSettingsCache() {
+  global._settingsCache = { data: null, ts: 0 };
 }
 
 export async function exportSettings() {

@@ -147,25 +147,22 @@ export function translateRequest(sourceFormat, targetFormat, model, body, stream
 }
 
 // Translate response chunk: target -> openai -> source
+// Precomputes the translation path once at request start (not per chunk)
 export function translateResponse(targetFormat, sourceFormat, chunk, state) {
-  ensureInitialized();
-  // If same format, return as-is
+  // Same format — return as-is, no path needed
   if (sourceFormat === targetFormat) {
     return [chunk];
   }
 
   let results = [chunk];
-  let openaiResults = null; // Store OpenAI intermediate results
 
   // Step 1: target -> openai (if target is not openai)
   if (targetFormat !== FORMATS.OPENAI) {
     const toOpenAI = responseRegistry.get(`${targetFormat}:${FORMATS.OPENAI}`);
     if (toOpenAI) {
-      results = [];
       const converted = toOpenAI(chunk, state);
       if (converted) {
         results = Array.isArray(converted) ? converted : [converted];
-        openaiResults = results; // Store OpenAI intermediate
       }
     }
   }
@@ -185,11 +182,6 @@ export function translateResponse(targetFormat, sourceFormat, chunk, state) {
     }
   }
 
-  // Attach OpenAI intermediate results for logging
-  if (openaiResults && sourceFormat !== FORMATS.OPENAI && targetFormat !== FORMATS.OPENAI) {
-    results._openaiIntermediate = openaiResults;
-  }
-
   return results;
 }
 
@@ -200,45 +192,25 @@ export function needsTranslation(sourceFormat, targetFormat) {
 
 // Initialize state for streaming response based on format
 export function initState(sourceFormat) {
-  // Base state for all formats
+  // Base state for all formats (no spread for perf — hot path per stream)
   const base = {
-    messageId: null,
-    model: null,
-    textBlockStarted: false,
-    thinkingBlockStarted: false,
-    inThinkingBlock: false,
-    currentBlockIndex: null,
-    toolCalls: new Map(),
-    finishReason: null,
-    finishReasonSent: false,
-    usage: null,
-    contentBlockIndex: -1
+    messageId: null, model: null, textBlockStarted: false, thinkingBlockStarted: false,
+    inThinkingBlock: false, currentBlockIndex: null, toolCalls: new Map(),
+    finishReason: null, finishReasonSent: false, usage: null, contentBlockIndex: -1,
   };
 
   // Add openai-responses specific fields
   if (sourceFormat === FORMATS.OPENAI_RESPONSES) {
     return {
-      ...base,
-      seq: 0,
-      responseId: `resp_${Date.now()}`,
-      created: Math.floor(Date.now() / 1000),
-      started: false,
-      msgTextBuf: {},
-      msgItemAdded: {},
-      msgContentAdded: {},
-      msgItemDone: {},
-      reasoningId: "",
-      reasoningIndex: -1,
-      reasoningBuf: "",
-      reasoningPartAdded: false,
-      reasoningDone: false,
-      inThinking: false,
-      funcArgsBuf: {},
-      funcNames: {},
-      funcCallIds: {},
-      funcArgsDone: {},
-      funcItemDone: {},
-      completedSent: false
+      messageId: null, model: null, textBlockStarted: false, thinkingBlockStarted: false,
+      inThinkingBlock: false, currentBlockIndex: null, toolCalls: new Map(),
+      finishReason: null, finishReasonSent: false, usage: null, contentBlockIndex: -1,
+      seq: 0, responseId: `resp_${Date.now()}`, created: Math.floor(Date.now() / 1000),
+      started: false, msgTextBuf: {}, msgItemAdded: {}, msgContentAdded: {},
+      msgItemDone: {}, reasoningId: "", reasoningIndex: -1, reasoningBuf: "",
+      reasoningPartAdded: false, reasoningDone: false, inThinking: false,
+      funcArgsBuf: {}, funcNames: {}, funcCallIds: {}, funcArgsDone: {},
+      funcItemDone: {}, completedSent: false,
     };
   }
 

@@ -162,6 +162,8 @@ export async function importDb(payload) {
     }
   });
 
+  const { invalidateSettingsCache } = await import("./repos/settingsRepo.js");
+  invalidateSettingsCache();
   return await exportDb();
 }
 

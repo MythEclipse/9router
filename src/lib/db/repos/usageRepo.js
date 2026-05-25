@@ -1,12 +1,15 @@
 import { EventEmitter } from "events";
 import { getAdapter } from "../driver.js";
 import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
-import { getMeta, setMeta } from "../helpers/metaStore.js";
 
 const PENDING_TIMEOUT_MS = 60 * 1000;
 const RING_CAP = 50;
 const CONN_CACHE_TTL_MS = 30 * 1000;
 const PERIOD_MS = { "24h": 86400000, "7d": 604800000, "30d": 2592000000, "60d": 5184000000 };
+/** Max entries to batch-write in a single transaction */
+const USAGE_BATCH_MAX = 30;
+/** Flush interval in ms when buffer is non-empty */
+const USAGE_BATCH_FLUSH_MS = 200;
 
 // In-memory state shared across Next.js modules
 if (!global._pendingRequests) global._pendingRequests = { byModel: {}, byAccount: {} };
@@ -240,10 +243,68 @@ export async function getActiveRequests() {
   return { activeRequests, recentRequests, errorProvider };
 }
 
+// Bounded batch writer: reduces SQLite write lock contention by flushing
+// multiple usage entries in a single transaction instead of one-per-request.
+if (!global._usageBatchWriteState) {
+  global._usageBatchWriteState = { buffer: [], timer: null, flushing: false };
+}
+
+function _flushUsageBatch() {
+  const st = global._usageBatchWriteState;
+  if (st.flushing || st.buffer.length === 0) return;
+  st.flushing = true;
+  const batch = st.buffer.splice(0);
+  st.timer = null;
+
+  getAdapter()
+    .then((db) => {
+      db.transaction(() => {
+        for (const entry of batch) {
+          const { timestamp, provider, model, connectionId, apiKey, endpoint,
+                  promptTokens, completionTokens, cost, status, tokensJson, metaJson, dateKey } = entry;
+
+          db.run(
+            `INSERT INTO usageHistory(timestamp, provider, model, connectionId, apiKey, endpoint, promptTokens, completionTokens, cost, status, tokens, meta) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [timestamp, provider, model, connectionId, apiKey, endpoint, promptTokens, completionTokens, cost, status, tokensJson, metaJson]
+          );
+
+          const row = db.get(`SELECT data FROM usageDaily WHERE dateKey = ?`, [dateKey]);
+          const day = row ? parseJson(row.data, {}) : {
+            requests: 0, promptTokens: 0, completionTokens: 0, cost: 0,
+            byProvider: {}, byModel: {}, byAccount: {}, byApiKey: {}, byEndpoint: {},
+          };
+          aggregateEntryToDay(day, entry);
+          db.run(`INSERT INTO usageDaily(dateKey, data) VALUES(?, ?) ON CONFLICT(dateKey) DO UPDATE SET data = excluded.data`, [dateKey, stringifyJson(day)]);
+
+          const cur = db.get(`SELECT value FROM _meta WHERE key = 'totalRequestsLifetime'`);
+          const next = (cur ? parseInt(cur.value, 10) : 0) + 1;
+          db.run(`INSERT INTO _meta(key, value) VALUES('totalRequestsLifetime', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, [String(next)]);
+        }
+      });
+    })
+    .catch((e) => console.error("[usageRepo] Batch write failed:", e.message))
+    .finally(() => { st.flushing = false; });
+}
+
+function _enqueueUsageEntry(entry) {
+  const st = global._usageBatchWriteState;
+  st.buffer.push(entry);
+  pushToRing(entry);
+  statsEmitter.emit("update");
+
+  if (st.buffer.length >= USAGE_BATCH_MAX) {
+    if (st.timer) { clearTimeout(st.timer); st.timer = null; }
+    _flushUsageBatch();
+  } else if (!st.timer) {
+    st.timer = setTimeout(() => {
+      st.timer = null;
+      _flushUsageBatch();
+    }, USAGE_BATCH_FLUSH_MS);
+  }
+}
+
 export async function saveRequestUsage(entry) {
   try {
-    const db = await getAdapter();
-
     if (!entry.timestamp) entry.timestamp = new Date().toISOString();
     entry.cost = await calculateCost(entry.provider, entry.model, entry.tokens);
 
@@ -251,36 +312,22 @@ export async function saveRequestUsage(entry) {
     const promptTokens = tokens.prompt_tokens || tokens.input_tokens || 0;
     const completionTokens = tokens.completion_tokens || tokens.output_tokens || 0;
 
-    // All 3 writes (history insert, daily upsert, lifetime counter) in ONE transaction.
-    // better-sqlite3 is sync → no JS yield mid-transaction → no race in same process.
-    db.transaction(() => {
-      db.run(
-        `INSERT INTO usageHistory(timestamp, provider, model, connectionId, apiKey, endpoint, promptTokens, completionTokens, cost, status, tokens, meta) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          entry.timestamp, entry.provider || null, entry.model || null,
-          entry.connectionId || null, entry.apiKey || null, entry.endpoint || null,
-          promptTokens, completionTokens, entry.cost || 0, entry.status || "ok",
-          stringifyJson(tokens), stringifyJson({}),
-        ]
-      );
-
-      const dateKey = getLocalDateKey(entry.timestamp);
-      const row = db.get(`SELECT data FROM usageDaily WHERE dateKey = ?`, [dateKey]);
-      const day = row ? parseJson(row.data, {}) : {
-        requests: 0, promptTokens: 0, completionTokens: 0, cost: 0,
-        byProvider: {}, byModel: {}, byAccount: {}, byApiKey: {}, byEndpoint: {},
-      };
-      aggregateEntryToDay(day, entry);
-      db.run(`INSERT INTO usageDaily(dateKey, data) VALUES(?, ?) ON CONFLICT(dateKey) DO UPDATE SET data = excluded.data`, [dateKey, stringifyJson(day)]);
-
-      // Atomic counter increment in same transaction
-      const cur = db.get(`SELECT value FROM _meta WHERE key = 'totalRequestsLifetime'`);
-      const next = (cur ? parseInt(cur.value, 10) : 0) + 1;
-      db.run(`INSERT INTO _meta(key, value) VALUES('totalRequestsLifetime', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, [String(next)]);
+    _enqueueUsageEntry({
+      timestamp: entry.timestamp,
+      provider: entry.provider || null,
+      model: entry.model || null,
+      connectionId: entry.connectionId || null,
+      apiKey: entry.apiKey || null,
+      endpoint: entry.endpoint || null,
+      promptTokens,
+      completionTokens,
+      cost: entry.cost || 0,
+      status: entry.status || "ok",
+      tokens,
+      tokensJson: stringifyJson(tokens),
+      metaJson: stringifyJson({}),
+      dateKey: getLocalDateKey(entry.timestamp),
     });
-
-    pushToRing(entry);
-    statsEmitter.emit("update");
   } catch (e) {
     console.error("Failed to save usage stats:", e);
   }
@@ -549,6 +596,7 @@ export async function getUsageStats(period = "all") {
       const completionTokens = tokens.completion_tokens || 0;
       const entryCost = r.cost || 0;
       const providerDisplayName = providerNodeNameMap[r.provider] || r.provider;
+      const ts = new Date(r.timestamp).getTime();
 
       stats.totalPromptTokens += promptTokens;
       stats.totalCompletionTokens += completionTokens;
@@ -562,25 +610,31 @@ export async function getUsageStats(period = "all") {
 
       const modelKey = r.provider ? `${r.model} (${r.provider})` : r.model;
       if (!stats.byModel[modelKey]) {
-        stats.byModel[modelKey] = { requests: 0, promptTokens: 0, completionTokens: 0, cost: 0, rawModel: r.model, provider: providerDisplayName, lastUsed: r.timestamp };
+        stats.byModel[modelKey] = { requests: 0, promptTokens: 0, completionTokens: 0, cost: 0, rawModel: r.model, provider: providerDisplayName, lastUsed: r.timestamp, _lastUsedTs: ts };
       }
       stats.byModel[modelKey].requests++;
       stats.byModel[modelKey].promptTokens += promptTokens;
       stats.byModel[modelKey].completionTokens += completionTokens;
       stats.byModel[modelKey].cost += entryCost;
-      if (new Date(r.timestamp) > new Date(stats.byModel[modelKey].lastUsed)) stats.byModel[modelKey].lastUsed = r.timestamp;
+      if (ts > (stats.byModel[modelKey]._lastUsedTs || 0)) {
+        stats.byModel[modelKey].lastUsed = r.timestamp;
+        stats.byModel[modelKey]._lastUsedTs = ts;
+      }
 
       if (r.connectionId) {
         const accountName = connectionMap[r.connectionId] || `Account ${r.connectionId.slice(0, 8)}...`;
         const accountKey = `${r.model} (${r.provider} - ${accountName})`;
         if (!stats.byAccount[accountKey]) {
-          stats.byAccount[accountKey] = { requests: 0, promptTokens: 0, completionTokens: 0, cost: 0, rawModel: r.model, provider: providerDisplayName, connectionId: r.connectionId, accountName, lastUsed: r.timestamp };
+          stats.byAccount[accountKey] = { requests: 0, promptTokens: 0, completionTokens: 0, cost: 0, rawModel: r.model, provider: providerDisplayName, connectionId: r.connectionId, accountName, lastUsed: r.timestamp, _lastUsedTs: ts };
         }
         stats.byAccount[accountKey].requests++;
         stats.byAccount[accountKey].promptTokens += promptTokens;
         stats.byAccount[accountKey].completionTokens += completionTokens;
         stats.byAccount[accountKey].cost += entryCost;
-        if (new Date(r.timestamp) > new Date(stats.byAccount[accountKey].lastUsed)) stats.byAccount[accountKey].lastUsed = r.timestamp;
+        if (ts > (stats.byAccount[accountKey]._lastUsedTs || 0)) {
+          stats.byAccount[accountKey].lastUsed = r.timestamp;
+          stats.byAccount[accountKey]._lastUsedTs = ts;
+        }
       }
 
       if (r.apiKey && typeof r.apiKey === "string") {
@@ -588,32 +642,35 @@ export async function getUsageStats(period = "all") {
         const keyName = keyInfo?.name || r.apiKey.slice(0, 8) + "...";
         const akKey = `${r.apiKey}|${r.model}|${r.provider || "unknown"}`;
         if (!stats.byApiKey[akKey]) {
-          stats.byApiKey[akKey] = { requests: 0, promptTokens: 0, completionTokens: 0, cost: 0, rawModel: r.model, provider: providerDisplayName, apiKey: r.apiKey, keyName, apiKeyKey: r.apiKey, lastUsed: r.timestamp };
+          stats.byApiKey[akKey] = { requests: 0, promptTokens: 0, completionTokens: 0, cost: 0, rawModel: r.model, provider: providerDisplayName, apiKey: r.apiKey, keyName, apiKeyKey: r.apiKey, lastUsed: r.timestamp, _lastUsedTs: ts };
         }
         const ake = stats.byApiKey[akKey];
         ake.requests++; ake.promptTokens += promptTokens; ake.completionTokens += completionTokens; ake.cost += entryCost;
-        if (new Date(r.timestamp) > new Date(ake.lastUsed)) ake.lastUsed = r.timestamp;
+        if (ts > (ake._lastUsedTs || 0)) { ake.lastUsed = r.timestamp; ake._lastUsedTs = ts; }
       } else {
         if (!stats.byApiKey["local-no-key"]) {
-          stats.byApiKey["local-no-key"] = { requests: 0, promptTokens: 0, completionTokens: 0, cost: 0, rawModel: r.model, provider: providerDisplayName, apiKey: null, keyName: "Local (No API Key)", apiKeyKey: "local-no-key", lastUsed: r.timestamp };
+          stats.byApiKey["local-no-key"] = { requests: 0, promptTokens: 0, completionTokens: 0, cost: 0, rawModel: r.model, provider: providerDisplayName, apiKey: null, keyName: "Local (No API Key)", apiKeyKey: "local-no-key", lastUsed: r.timestamp, _lastUsedTs: ts };
         }
         const ake = stats.byApiKey["local-no-key"];
         ake.requests++; ake.promptTokens += promptTokens; ake.completionTokens += completionTokens; ake.cost += entryCost;
-        if (new Date(r.timestamp) > new Date(ake.lastUsed)) ake.lastUsed = r.timestamp;
+        if (ts > (ake._lastUsedTs || 0)) { ake.lastUsed = r.timestamp; ake._lastUsedTs = ts; }
       }
 
       const endpoint = r.endpoint || "Unknown";
       const epKey = `${endpoint}|${r.model}|${r.provider || "unknown"}`;
       if (!stats.byEndpoint[epKey]) {
-        stats.byEndpoint[epKey] = { requests: 0, promptTokens: 0, completionTokens: 0, cost: 0, endpoint, rawModel: r.model, provider: providerDisplayName, lastUsed: r.timestamp };
+        stats.byEndpoint[epKey] = { requests: 0, promptTokens: 0, completionTokens: 0, cost: 0, endpoint, rawModel: r.model, provider: providerDisplayName, lastUsed: r.timestamp, _lastUsedTs: ts };
       }
       const epe = stats.byEndpoint[epKey];
       epe.requests++; epe.promptTokens += promptTokens; epe.completionTokens += completionTokens; epe.cost += entryCost;
-      if (new Date(r.timestamp) > new Date(epe.lastUsed)) epe.lastUsed = r.timestamp;
+      if (ts > (epe._lastUsedTs || 0)) { epe.lastUsed = r.timestamp; epe._lastUsedTs = ts; }
     }
   }
 
   stats.totalRequests = Object.values(stats.byProvider).reduce((sum, p) => sum + (p.requests || 0), 0);
+  for (const group of [stats.byModel, stats.byAccount, stats.byApiKey, stats.byEndpoint]) {
+    for (const item of Object.values(group)) delete item._lastUsedTs;
+  }
   return stats;
 }
 
@@ -729,3 +786,13 @@ export async function getRecentLogs(limit = 200) {
     return [];
   }
 }
+
+// Flush any pending usage writes on shutdown
+const _usageShutdown = () => {
+  const st = global._usageBatchWriteState;
+  if (st?.timer) { clearTimeout(st.timer); st.timer = null; }
+  if (st?.buffer?.length) _flushUsageBatch();
+};
+process.on("beforeExit", _usageShutdown);
+process.on("SIGINT", () => { _usageShutdown(); process.exit(0); });
+process.on("SIGTERM", () => { _usageShutdown(); process.exit(0); });
