@@ -122,8 +122,15 @@ export class CodexExecutor extends BaseExecutor {
     return super.execute(args);
   }
 
-  // Parse Codex usage_limit_reached to extract precise resetsAtMs; fallback to default otherwise
+  // Parse Codex-specific upstream failures; fallback to default otherwise
   parseError(response, bodyText) {
+    if (response.headers?.get?.("cf-mitigated") === "challenge") {
+      return {
+        status: 503,
+        message: "Codex upstream blocked by Cloudflare challenge. configure a proxy pool for provider codex or use a non-Codex provider.",
+      };
+    }
+
     if (response.status === 429 && bodyText) {
       try {
         const json = JSON.parse(bodyText);
