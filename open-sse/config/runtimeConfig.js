@@ -32,7 +32,8 @@ export const MEMORY_CONFIG = {
 };
 
 // Stream stall timeout: abort if no chunk received within this duration
-export const STREAM_STALL_TIMEOUT_MS = 3 * 60 * 1000;
+// Must be < 120s (Cloudflare front proxy timeout) to detect upstream hang before CF 524
+export const STREAM_STALL_TIMEOUT_MS = 90 * 1000;
 
 // Default token limits
 export const DEFAULT_MAX_TOKENS = 64000;
