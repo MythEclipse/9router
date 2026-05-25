@@ -27,16 +27,30 @@ afterEach(() => {
 describe("Schema migrations", () => {
   it("fresh DB → applies migrations & stamps schemaVersion", async () => {
     const { getAdapter } = await import("@/lib/db/driver.js");
-    const { latestVersion } = await import("@/lib/db/migrations/index.js");
+    const { latestVersion, MIGRATIONS } = await import("@/lib/db/migrations/index.js");
     const db = await getAdapter();
     const row = db.get(`SELECT value FROM _meta WHERE key='schemaVersion'`);
     expect(parseInt(row.value, 10)).toBe(latestVersion());
+    expect(latestVersion()).toBe(2);
+    expect(MIGRATIONS).toHaveLength(2);
 
     const tables = db.all(`SELECT name FROM sqlite_master WHERE type='table'`).map(t => t.name);
     expect(tables).toEqual(expect.arrayContaining([
       "_meta", "settings", "providerConnections", "providerNodes",
       "proxyPools", "apiKeys", "combos", "kv", "usageHistory", "usageDaily", "requestDetails",
     ]));
+
+    const usageIndexes = db.all(`PRAGMA index_list(usageHistory)`).map(i => i.name);
+    expect(usageIndexes).toEqual(expect.arrayContaining([
+      "idx_uh_provider_ts",
+      "idx_uh_model_ts",
+      "idx_uh_conn_ts",
+      "idx_uh_api_key_ts",
+      "idx_uh_endpoint_ts",
+    ]));
+
+    const requestDetailIndexes = db.all(`PRAGMA index_list(requestDetails)`).map(i => i.name);
+    expect(requestDetailIndexes).toContain("idx_rd_status_ts");
   });
 
   it("existing DB at older schemaVersion → re-applies pending migrations on restart", async () => {
@@ -86,15 +100,15 @@ describe("Schema migrations", () => {
   it("auto-sync re-creates missing index when DB lacks it", async () => {
     const { getAdapter } = await import("@/lib/db/driver.js");
     const db = await getAdapter();
-    db.exec(`DROP INDEX IF EXISTS idx_pn_type`);
-    expect(db.all(`PRAGMA index_list(providerNodes)`).map(i => i.name)).not.toContain("idx_pn_type");
+    db.exec(`DROP INDEX IF EXISTS idx_uh_provider_ts`);
+    expect(db.all(`PRAGMA index_list(usageHistory)`).map(i => i.name)).not.toContain("idx_uh_provider_ts");
     db.close?.();
 
     delete global._dbAdapter;
     vi.resetModules();
     const { getAdapter: getAdapter2 } = await import("@/lib/db/driver.js");
     const db2 = await getAdapter2();
-    const idx = db2.all(`PRAGMA index_list(providerNodes)`).map(i => i.name);
-    expect(idx).toContain("idx_pn_type");
+    const idx = db2.all(`PRAGMA index_list(usageHistory)`).map(i => i.name);
+    expect(idx).toContain("idx_uh_provider_ts");
   });
 });
