@@ -197,10 +197,6 @@ export async function updateProviderCredentials(connectionId, newCredentials) {
  * Check whether the provider token (and, for GitHub, the Copilot token) is
  * about to expire and refresh it proactively.
  *
- * @param {string} provider
- * @param {object} credentials
- * @returns {Promise<object>} updated credentials object
- */
 export async function checkAndRefreshToken(provider, credentials) {
   let creds = { ...credentials };
 
@@ -212,36 +208,52 @@ export async function checkAndRefreshToken(provider, credentials) {
 
     const refreshLead = _getRefreshLeadMs(provider);
     if (remaining < refreshLead) {
-      log.info("TOKEN_REFRESH", "Token expiring soon, refreshing proactively", {
-        provider,
-        expiresIn: Math.round(remaining / 1000),
-        refreshLeadMs: refreshLead,
-      });
+      const isStrictlyExpired = remaining <= 0;
+      
+      const refreshTask = async () => {
+        try {
+          const newCreds = await getAccessToken(provider, creds);
+          if (newCreds?.accessToken) {
+            const mergedCreds = {
+              ...newCreds,
+              existingProviderSpecificData: creds.providerSpecificData,
+            };
 
-      const newCreds = await getAccessToken(provider, creds);
-      if (newCreds?.accessToken) {
-        const mergedCreds = {
-          ...newCreds,
-          existingProviderSpecificData: creds.providerSpecificData,
-        };
+            await updateProviderCredentials(creds.connectionId, mergedCreds);
 
-        // Persist to DB (non-blocking path continues below)
-        await updateProviderCredentials(creds.connectionId, mergedCreds);
+            const updated = {
+              ...creds,
+              accessToken:  newCreds.accessToken,
+              refreshToken: newCreds.refreshToken ?? creds.refreshToken,
+              providerSpecificData: newCreds.providerSpecificData
+                ? { ...creds.providerSpecificData, ...newCreds.providerSpecificData }
+                : creds.providerSpecificData,
+              expiresAt:    newCreds.expiresIn
+                ? toExpiresAt(newCreds.expiresIn)
+                : normalizeExpiresAt(newCreds.expiresAt) || creds.expiresAt,
+            };
 
-        creds = {
-          ...creds,
-          accessToken:  newCreds.accessToken,
-          refreshToken: newCreds.refreshToken ?? creds.refreshToken,
-          providerSpecificData: newCreds.providerSpecificData
-            ? { ...creds.providerSpecificData, ...newCreds.providerSpecificData }
-            : creds.providerSpecificData,
-          expiresAt:    newCreds.expiresIn
-            ? toExpiresAt(newCreds.expiresIn)
-            : normalizeExpiresAt(newCreds.expiresAt) || creds.expiresAt,
-        };
+            _refreshProjectId(provider, creds.connectionId, updated.accessToken);
+            return updated;
+          }
+        } catch (err) {
+          log.error("TOKEN_REFRESH", "Refresh task failed", { provider, error: err.message });
+        }
+        return null;
+      };
 
-        // Non-blocking: refresh projectId with the new access token
-        _refreshProjectId(provider, creds.connectionId, creds.accessToken);
+      if (isStrictlyExpired) {
+        log.info("TOKEN_REFRESH", "Token expired, blocking to refresh", { provider });
+        const refreshed = await refreshTask();
+        if (refreshed) creds = refreshed;
+      } else {
+        log.info("TOKEN_REFRESH", "Token expiring soon, refreshing proactively in background", {
+          provider,
+          expiresIn: Math.round(remaining / 1000),
+          refreshLeadMs: refreshLead,
+        });
+        // Fire and forget background refresh
+        refreshTask().catch(() => {});
       }
     }
   }
@@ -253,25 +265,45 @@ export async function checkAndRefreshToken(provider, credentials) {
     const remaining        = copilotExpiresAt - now;
 
     if (remaining < TOKEN_EXPIRY_BUFFER_MS) {
-      log.info("TOKEN_REFRESH", "Copilot token expiring soon, refreshing proactively", {
-        provider,
-        expiresIn: Math.round(remaining / 1000),
-      });
+      const isStrictlyExpired = remaining <= 0;
+      
+      const refreshCopilotTask = async () => {
+        try {
+          const copilotToken = await refreshCopilotToken(creds.accessToken);
+          if (copilotToken) {
+            const updatedSpecific = {
+              ...creds.providerSpecificData,
+              copilotToken:          copilotToken.token,
+              copilotTokenExpiresAt: copilotToken.expiresAt,
+            };
 
-      const copilotToken = await refreshCopilotToken(creds.accessToken);
-      if (copilotToken) {
-        const updatedSpecific = {
-          ...creds.providerSpecificData,
-          copilotToken:          copilotToken.token,
-          copilotTokenExpiresAt: copilotToken.expiresAt,
-        };
+            await updateProviderCredentials(creds.connectionId, {
+              providerSpecificData: updatedSpecific,
+            });
 
-        await updateProviderCredentials(creds.connectionId, {
-          providerSpecificData: updatedSpecific,
+            return {
+              ...creds,
+              providerSpecificData: updatedSpecific,
+              copilotToken: copilotToken.token
+            };
+          }
+        } catch (err) {
+          log.error("TOKEN_REFRESH", "Copilot refresh task failed", { provider, error: err.message });
+        }
+        return null;
+      };
+
+      if (isStrictlyExpired) {
+        log.info("TOKEN_REFRESH", "Copilot token expired, blocking to refresh", { provider });
+        const refreshed = await refreshCopilotTask();
+        if (refreshed) creds = refreshed;
+      } else {
+        log.info("TOKEN_REFRESH", "Copilot token expiring soon, refreshing proactively in background", {
+          provider,
+          expiresIn: Math.round(remaining / 1000),
         });
-
-        creds.providerSpecificData = updatedSpecific;
-        creds.copilotToken = copilotToken.token;
+        // Fire and forget background refresh
+        refreshCopilotTask().catch(() => {});
       }
     }
   }

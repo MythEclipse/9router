@@ -164,12 +164,19 @@ async function getBypassDispatcher(realIP) {
   return bypassDispatchers.get(realIP);
 }
 
+let cachedUndiciFetch = null;
+
 /**
  * Executes a fetch request using pure undici to guarantee dispatcher configuration is respected.
  * (Next.js's wrapped fetch ignores dispatchers, breaking proxies)
  */
 export async function proxyAwareFetch(url, options = {}, proxyOptions = null) {
-  const { fetch: undiciFetch } = await import("undici");
+  if (!cachedUndiciFetch) {
+    const { fetch } = await import("undici");
+    cachedUndiciFetch = fetch;
+  }
+  const undiciFetch = cachedUndiciFetch;
+  
   const targetUrl = typeof url === "string" ? url : url.toString();
 
   // Vercel relay: forward request via relay headers

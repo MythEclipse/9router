@@ -63,9 +63,11 @@ function writeJsonFile(sessionPath, filename, data) {
   
   try {
     const filePath = path.join(sessionPath, filename);
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+    fs.writeFile(filePath, JSON.stringify(data, null, 2), (err) => {
+      if (err) console.error(`[LOG] Failed to write async ${filename}:`, err.message);
+    });
   } catch (err) {
-    console.log(`[LOG] Failed to write ${filename}:`, err.message);
+    console.log(`[LOG] Failed to serialize ${filename}:`, err.message);
   }
 }
 
@@ -73,21 +75,6 @@ function writeJsonFile(sessionPath, filename, data) {
 function maskSensitiveHeaders(headers) {
   if (!headers) return {};
   return { ...headers };
-  
-  // Old masking code (disabled):
-  // const masked = { ...headers };
-  // const sensitiveKeys = ["authorization", "x-api-key", "cookie", "token"];
-  // 
-  // for (const key of Object.keys(masked)) {
-  //   const lowerKey = key.toLowerCase();
-  //   if (sensitiveKeys.some(sk => lowerKey.includes(sk))) {
-  //     const value = masked[key];
-  //     if (value && value.length > 20) {
-  //       masked[key] = value.slice(0, 10) + "..." + value.slice(-5);
-  //     }
-  //   }
-  // }
-  // return masked;
 }
 
 // No-op logger when logging is disabled
@@ -180,7 +167,7 @@ export async function createRequestLogger(sourceFormat, targetFormat, model) {
       if (!fs || !sessionPath) return;
       try {
         const filePath = path.join(sessionPath, "5_res_provider.txt");
-        fs.appendFileSync(filePath, chunk);
+        fs.appendFile(filePath, chunk, () => {});
       } catch (err) {
         // Ignore append errors
       }
@@ -191,7 +178,7 @@ export async function createRequestLogger(sourceFormat, targetFormat, model) {
       if (!fs || !sessionPath) return;
       try {
         const filePath = path.join(sessionPath, "6_res_openai.txt");
-        fs.appendFileSync(filePath, chunk);
+        fs.appendFile(filePath, chunk, () => {});
       } catch (err) {
         // Ignore append errors
       }
@@ -210,7 +197,7 @@ export async function createRequestLogger(sourceFormat, targetFormat, model) {
       if (!fs || !sessionPath) return;
       try {
         const filePath = path.join(sessionPath, "7_res_client.txt");
-        fs.appendFileSync(filePath, chunk);
+        fs.appendFile(filePath, chunk, () => {});
       } catch (err) {
         // Ignore append errors
       }
@@ -253,7 +240,7 @@ export function logError(provider, { error, url, model, requestBody }) {
       requestBody
     };
     
-    fs.appendFileSync(logPath, JSON.stringify(logEntry) + "\n");
+    fs.appendFile(logPath, JSON.stringify(logEntry) + "\n", () => {});
   } catch (err) {
     console.log("[LOG] Failed to write error log:", err.message);
   }
