@@ -1,8 +1,7 @@
-import { Readable } from "stream";
 import { MEMORY_CONFIG } from "../config/runtimeConfig.js";
 
-const originalFetch = globalThis.fetch;
 const proxyDispatchers = new Map();
+const bypassDispatchers = new Map();
 
 // DNS cache — use Map to avoid prototype pollution via malformed hostnames
 const DNS_CACHE = new Map();
@@ -15,9 +14,6 @@ const MITM_BYPASS_HOSTS = [
   "api2.cursor.sh",
 ];
 const GOOGLE_DNS_SERVERS = ["8.8.8.8", "8.8.4.4"];
-const HTTPS_PORT = 443;
-const HTTP_SUCCESS_MIN = 200;
-const HTTP_SUCCESS_MAX = 300;
 
 function normalizeString(value) {
   if (value === undefined || value === null) return "";
@@ -52,8 +48,10 @@ async function resolveRealIP(hostname) {
 function shouldBypassMitmDns(url) {
   try {
     const hostname = new URL(url).hostname;
-    return MITM_BYPASS_HOSTS.some(host => hostname.includes(host));
-  } catch { return false; }
+    return MITM_BYPASS_HOSTS.some((host) => hostname.includes(host));
+  } catch {
+    return false;
+  }
 }
 
 function shouldBypassByNoProxy(targetUrl, noProxyValue) {
@@ -61,7 +59,11 @@ function shouldBypassByNoProxy(targetUrl, noProxyValue) {
   if (!noProxy) return false;
 
   let hostname;
-  try { hostname = new URL(targetUrl).hostname.toLowerCase(); } catch { return false; }
+  try {
+    hostname = new URL(targetUrl).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
   const patterns = noProxy.split(",").map((p) => p.trim().toLowerCase()).filter(Boolean);
 
   return patterns.some((pattern) => {
@@ -79,15 +81,17 @@ function getEnvProxyUrl(targetUrl) {
   if (shouldBypassByNoProxy(targetUrl, noProxy)) return null;
 
   let protocol;
-  try { protocol = new URL(targetUrl).protocol; } catch { return null; }
-
-  if (protocol === "https:") {
-    return process.env.HTTPS_PROXY || process.env.https_proxy ||
-      process.env.ALL_PROXY || process.env.all_proxy;
+  try {
+    protocol = new URL(targetUrl).protocol;
+  } catch {
+    return null;
   }
 
-  return process.env.HTTP_PROXY || process.env.http_proxy ||
-    process.env.ALL_PROXY || process.env.all_proxy;
+  if (protocol === "https:") {
+    return process.env.HTTPS_PROXY || process.env.https_proxy || process.env.ALL_PROXY || process.env.all_proxy;
+  }
+
+  return process.env.HTTP_PROXY || process.env.http_proxy || process.env.ALL_PROXY || process.env.all_proxy;
 }
 
 /**
@@ -98,11 +102,9 @@ function normalizeProxyUrl(proxyUrl) {
   if (!normalizedInput) return null;
 
   try {
-
     new URL(normalizedInput);
     return normalizedInput;
   } catch {
-    // Allow "127.0.0.1:7890" style values
     return `http://${normalizedInput}`;
   }
 }
@@ -140,65 +142,34 @@ async function getDispatcher(proxyUrl) {
 }
 
 /**
- * Create HTTPS request with manual socket connection (bypass DNS)
+ * Get a connection-pooled dispatcher that connects directly to a specific IP,
+ * bypassing DNS while preserving the original SNI hostname.
  */
-async function createBypassRequest(parsedUrl, realIP, options) {
-  const httpsModule = await import("https");
-  const netModule = await import("net");
-  // CJS modules expose exports via .default in ESM dynamic import context
-  const https = httpsModule.default ?? httpsModule;
-  const net = netModule.default ?? netModule;
-
-  return new Promise((resolve, reject) => {
-    const socket = new net.Socket();
-
-    socket.connect(HTTPS_PORT, realIP, () => {
-      const reqOptions = {
-        socket,
-        // SNI + cert hostname are validated against the hostname the caller
-        // asked for, not the IP we connected to. This keeps the DNS-bypass
-        // (avoiding /etc/hosts MITM) while still rejecting on-path attackers
-        // that present a different cert. The MITM_BYPASS_HOSTS targets are
-        // all public-CA-issued (Google / GitHub / AWS / Cursor) so default
-        // verification works without any extra trust store.
-        servername: parsedUrl.hostname,
-        path: parsedUrl.pathname + parsedUrl.search,
-        method: options.method || "POST",
-        headers: {
-          ...options.headers,
-          Host: parsedUrl.hostname,
-        },
-      };
-
-      const req = https.request(reqOptions, (res) => {
-        const response = {
-          ok: res.statusCode >= HTTP_SUCCESS_MIN && res.statusCode < HTTP_SUCCESS_MAX,
-          status: res.statusCode,
-          statusText: res.statusMessage,
-          headers: new Map(Object.entries(res.headers)),
-          body: Readable.toWeb(res),
-          text: async () => {
-            const chunks = [];
-            for await (const chunk of res) chunks.push(chunk);
-            return Buffer.concat(chunks).toString();
-          },
-          json: async () => JSON.parse(await response.text()),
-        };
-        resolve(response);
-      });
-
-      req.on("error", reject);
-      if (options.body) {
-        req.write(typeof options.body === "string" ? options.body : JSON.stringify(options.body));
+async function getBypassDispatcher(realIP) {
+  if (!bypassDispatchers.has(realIP)) {
+    const { Agent, buildConnector } = await import("undici");
+    const connector = buildConnector();
+    const agent = new Agent({
+      connect(opts, cb) {
+        if (!opts.servername) {
+          opts.servername = opts.host; // preserve original host for SNI
+        }
+        opts.host = realIP;
+        opts.hostname = realIP;
+        connector(opts, cb);
       }
-      req.end();
     });
-
-    socket.on("error", reject);
-  });
+    bypassDispatchers.set(realIP, agent);
+  }
+  return bypassDispatchers.get(realIP);
 }
 
+/**
+ * Executes a fetch request using pure undici to guarantee dispatcher configuration is respected.
+ * (Next.js's wrapped fetch ignores dispatchers, breaking proxies)
+ */
 export async function proxyAwareFetch(url, options = {}, proxyOptions = null) {
+  const { fetch: undiciFetch } = await import("undici");
   const targetUrl = typeof url === "string" ? url : url.toString();
 
   // Vercel relay: forward request via relay headers
@@ -210,7 +181,7 @@ export async function proxyAwareFetch(url, options = {}, proxyOptions = null) {
       "x-relay-target": `${parsed.protocol}//${parsed.host}`,
       "x-relay-path": `${parsed.pathname}${parsed.search}`,
     };
-    return originalFetch(vercelRelayUrl, { ...options, headers: relayHeaders });
+    return undiciFetch(vercelRelayUrl, { ...options, headers: relayHeaders });
   }
 
   const connectionProxyUrl = resolveConnectionProxyUrl(targetUrl, proxyOptions);
@@ -220,10 +191,10 @@ export async function proxyAwareFetch(url, options = {}, proxyOptions = null) {
   // MITM DNS bypass: for known MITM-intercepted hosts, resolve real IP to avoid DNS spoof
   if (shouldBypassMitmDns(targetUrl)) {
     if (proxyUrl) {
-      // Proxy resolves DNS externally (not affected by /etc/hosts) — use proxy directly
+      // Proxy resolves DNS externally (not affected by local DNS MITM) — use proxy directly
       try {
         const dispatcher = await getDispatcher(proxyUrl);
-        return await originalFetch(url, { ...options, dispatcher });
+        return await undiciFetch(url, { ...options, dispatcher });
       } catch (proxyError) {
         if (proxyOptions?.strictProxy === true) {
           throw new Error(`[ProxyFetch] Proxy required but failed (strictProxy=true): ${proxyError.message}`);
@@ -231,11 +202,14 @@ export async function proxyAwareFetch(url, options = {}, proxyOptions = null) {
         console.warn(`[ProxyFetch] Proxy failed, falling back to direct bypass: ${proxyError.message}`);
       }
     }
-    // No proxy — manually resolve real IP to bypass DNS spoof
+    // No proxy — manually resolve real IP to bypass DNS spoof with pooled custom agent
     try {
       const parsedUrl = new URL(targetUrl);
       const realIP = await resolveRealIP(parsedUrl.hostname);
-      if (realIP) return await createBypassRequest(parsedUrl, realIP, options);
+      if (realIP) {
+        const dispatcher = await getBypassDispatcher(realIP);
+        return await undiciFetch(url, { ...options, dispatcher });
+      }
     } catch (error) {
       console.warn(`[ProxyFetch] MITM bypass failed: ${error.message}`);
     }
@@ -244,18 +218,18 @@ export async function proxyAwareFetch(url, options = {}, proxyOptions = null) {
   if (proxyUrl) {
     try {
       const dispatcher = await getDispatcher(proxyUrl);
-      return await originalFetch(url, { ...options, dispatcher });
+      return await undiciFetch(url, { ...options, dispatcher });
     } catch (proxyError) {
       // If strictProxy is enabled, fail hard instead of falling back to direct
       if (proxyOptions?.strictProxy === true) {
         throw new Error(`[ProxyFetch] Proxy required but failed (strictProxy=true): ${proxyError.message}`);
       }
       console.warn(`[ProxyFetch] Proxy failed, falling back to direct: ${proxyError.message}`);
-      return originalFetch(url, options);
+      return undiciFetch(url, options);
     }
   }
 
-  return originalFetch(url, options);
+  return undiciFetch(url, options);
 }
 
 /**
