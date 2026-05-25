@@ -1,14 +1,42 @@
 import fs from "node:fs";
 import path from "node:path";
+import { execSync } from "node:child_process";
 
 let cachedVersion = null;
+
+function getGitCommitCount() {
+  try {
+    return execSync("git rev-list --count HEAD", {
+      cwd: process.cwd(),
+      encoding: "utf-8",
+      timeout: 3000,
+    }).trim();
+  } catch {
+    return "0";
+  }
+}
+
+function getGitShortSha() {
+  try {
+    return execSync("git rev-parse --short=7 HEAD", {
+      cwd: process.cwd(),
+      encoding: "utf-8",
+      timeout: 3000,
+    }).trim();
+  } catch {
+    return "unknown";
+  }
+}
 
 export function getAppVersion() {
   if (cachedVersion) return cachedVersion;
   try {
     const pkgPath = path.join(process.cwd(), "package.json");
     const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
-    cachedVersion = pkg.version || "0.0.0";
+    const base = pkg.version || "0.0.0";
+    const count = getGitCommitCount();
+    const sha = getGitShortSha();
+    cachedVersion = `${base}.${count}+${sha}`;
   } catch {
     cachedVersion = "0.0.0";
   }
