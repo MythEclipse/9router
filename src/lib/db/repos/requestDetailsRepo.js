@@ -68,6 +68,16 @@ function truncateField(obj, maxSize) {
   return obj || {};
 }
 
+function pruneIfNeeded(db, config, insertedCount) {
+  const threshold = config.maxRecords + Math.max(config.batchSize * 10, insertedCount);
+  const cnt = db.get(`SELECT COUNT(*) as c FROM requestDetails`);
+  if (!cnt || cnt.c <= threshold) return;
+  db.run(
+    `DELETE FROM requestDetails WHERE id IN (SELECT id FROM requestDetails ORDER BY timestamp ASC LIMIT ?)`,
+    [cnt.c - config.maxRecords]
+  );
+}
+
 async function flushToDatabase() {
   if (isFlushing) return;
   if (writeBuffer.length === 0) return;
@@ -106,13 +116,7 @@ async function flushToDatabase() {
           );
         }
 
-        const cnt = db.get(`SELECT COUNT(*) as c FROM requestDetails`);
-        if (cnt && cnt.c > config.maxRecords) {
-          db.run(
-            `DELETE FROM requestDetails WHERE id IN (SELECT id FROM requestDetails ORDER BY timestamp ASC LIMIT ?)`,
-            [cnt.c - config.maxRecords]
-          );
-        }
+        pruneIfNeeded(db, config, items.length);
       });
     }
   } catch (e) {
@@ -178,6 +182,20 @@ export async function getRequestDetailById(id) {
   const db = await getAdapter();
   const row = db.get(`SELECT data FROM requestDetails WHERE id = ?`, [id]);
   return row ? parseJson(row.data, null) : null;
+}
+
+export async function __flushRequestDetailsForTest() {
+  if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+  await flushToDatabase();
+}
+
+export function __resetConfigCacheForTest() {
+  cachedConfig = null;
+  cachedConfigTs = 0;
+}
+
+export async function __getConfigForTest() {
+  return getObservabilityConfig();
 }
 
 const _shutdownHandler = async () => {

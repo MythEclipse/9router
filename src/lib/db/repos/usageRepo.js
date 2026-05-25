@@ -286,6 +286,21 @@ function _flushUsageBatch() {
     .finally(() => { st.flushing = false; });
 }
 
+export async function __flushUsageBatchForTest() {
+  return new Promise((resolve) => {
+    const st = global._usageBatchWriteState;
+    const checkDone = () => {
+      if (!st.flushing && st.buffer.length === 0) {
+        resolve();
+      } else {
+        setTimeout(checkDone, 10);
+      }
+    };
+    _flushUsageBatch();
+    checkDone();
+  });
+}
+
 function _enqueueUsageEntry(entry) {
   const st = global._usageBatchWriteState;
   st.buffer.push(entry);
@@ -757,7 +772,7 @@ export async function appendRequestLog() {}
 
 export async function getRecentLogs(limit = 200) {
   try {
-    const db = getAdapter();
+    const db = await getAdapter();
     const rows = db.all(
       `SELECT timestamp, provider, model, connectionId, promptTokens, completionTokens, status, tokens FROM usageHistory ORDER BY id DESC LIMIT ?`,
       [limit],
