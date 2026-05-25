@@ -1,5 +1,3 @@
-"use server";
-
 import { NextResponse } from "next/server";
 import { startDaemonWithPassword } from "@/lib/tunnel/tailscale";
 import { getCachedPassword, loadEncryptedPassword, initDbHooks } from "@/mitm/manager";
