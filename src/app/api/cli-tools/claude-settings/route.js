@@ -9,6 +9,21 @@ import os from "os";
 
 const execAsync = promisify(exec);
 
+const ALLOWED_ENV_KEYS = new Set([
+  "ANTHROPIC_BASE_URL",
+  "ANTHROPIC_AUTH_TOKEN",
+  "ANTHROPIC_DEFAULT_OPUS_MODEL",
+  "ANTHROPIC_DEFAULT_SONNET_MODEL",
+  "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+  "API_TIMEOUT_MS",
+]);
+
+function sanitizeClaudeEnv(env) {
+  return Object.fromEntries(
+    Object.entries(env || {}).filter(([key, value]) => ALLOWED_ENV_KEYS.has(key) && typeof value === "string")
+  );
+}
+
 // Get claude settings path based on OS
 const getClaudeSettingsPath = () => {
   const homeDir = os.homedir();
@@ -84,15 +99,16 @@ export async function GET() {
 // POST - Backup old fields and write new settings
 export async function POST(request) {
   try {
-    const { env } = await request.json();
-    
-    if (!env || typeof env !== "object") {
+    const { env: rawEnv } = await request.json();
+
+    if (!rawEnv || typeof rawEnv !== "object") {
       return NextResponse.json(
         { error: "Invalid env object" },
         { status: 400 }
       );
     }
 
+    const env = sanitizeClaudeEnv(rawEnv);
     const settingsPath = getClaudeSettingsPath();
     const claudeDir = path.dirname(settingsPath);
 
@@ -154,6 +170,8 @@ const RESET_ENV_KEYS = [
 ];
 
 // DELETE - Reset settings (remove env fields)
+export const __test__ = { sanitizeClaudeEnv };
+
 export async function DELETE() {
   try {
     const settingsPath = getClaudeSettingsPath();

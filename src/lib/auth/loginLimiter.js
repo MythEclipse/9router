@@ -45,8 +45,15 @@ export function recordSuccess(ip) {
   attempts.delete(ip);
 }
 
+function isTrustedProxyAddress(value) {
+  const address = String(value || "").replace(/^::ffff:/, "");
+  return address === "127.0.0.1" || address === "::1" || address === "localhost";
+}
+
 export function getClientIp(request) {
+  const directIp = request.ip || request.headers.get("x-real-ip") || "unknown";
+  if (!isTrustedProxyAddress(directIp)) return directIp;
   const xff = request.headers.get("x-forwarded-for");
   if (xff) return xff.split(",")[0].trim();
-  return request.headers.get("x-real-ip") || "unknown";
+  return directIp;
 }

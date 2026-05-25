@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import PropTypes from "prop-types";
 import { marked } from "marked";
 import { GITHUB_CONFIG } from "@/shared/constants/config";
+import { sanitizeHtml } from "@/shared/utils/sanitizeHtml";
 
 marked.setOptions({ gfm: true, breaks: true });
 
@@ -16,16 +17,29 @@ export default function ChangelogModal({ isOpen, onClose }) {
 
   useEffect(() => {
     if (!isOpen || html) return;
-    setLoading(true);
-    setError("");
-    fetch(GITHUB_CONFIG.changelogUrl)
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.text();
-      })
-      .then((md) => setHtml(marked.parse(md)))
-      .catch((err) => setError(err.message || "Failed to load"))
-      .finally(() => setLoading(false));
+    let cancelled = false;
+
+    Promise.resolve().then(() => {
+      if (cancelled) return;
+      setLoading(true);
+      setError("");
+      fetch(GITHUB_CONFIG.changelogUrl)
+        .then((res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.text();
+        })
+        .then((md) => {
+          if (!cancelled) setHtml(sanitizeHtml(marked.parse(md)));
+        })
+        .catch((err) => {
+          if (!cancelled) setError(err.message || "Failed to load");
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    });
+
+    return () => { cancelled = true; };
   }, [isOpen, html]);
 
   useEffect(() => {

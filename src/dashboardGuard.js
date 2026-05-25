@@ -90,8 +90,20 @@ function isLoopbackHostname(h) {
   return LOOPBACK_HOSTS.has(name);
 }
 
+function isLocalAddress(value) {
+  if (!value) return false;
+  const address = String(value).replace(/^::ffff:/, "");
+  return address === "127.0.0.1" || address === "::1" || address === "localhost";
+}
+
+function getRemoteAddress(request) {
+  return request.ip || request.headers.get("x-real-ip") || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "";
+}
+
 function isLocalRequest(request) {
   if (!isLoopbackHostname(request.headers.get("host"))) return false;
+  const remoteAddress = getRemoteAddress(request);
+  if (remoteAddress && !isLocalAddress(remoteAddress)) return false;
   const origin = request.headers.get("origin");
   if (origin) {
     try {
@@ -160,6 +172,7 @@ export const __test__ = {
   isLocalRequest,
   isPublicLlmApi,
   extractApiKey,
+  hasValidCliToken,
   canAccessPublicLlmApi,
   canAccessLocalOnlyRoute,
 };
