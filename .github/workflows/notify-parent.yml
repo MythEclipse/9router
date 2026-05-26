@@ -10,15 +10,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger root monorepo build
-        uses: peter-evans/repository-dispatch@v4
-        with:
-          token: ${{ secrets.DISPATCH_TOKEN }}
-          repository: MythEclipse/ultimate-asepharyana.tech
-          event-type: submodule-updated
-          client-payload: |
-            {
-              "service": "9router",
-              "ref": "${{ github.ref }}",
-              "sha": "${{ github.sha }}",
-              "actor": "${{ github.actor }}"
-            }
+        env:
+          DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
+          REF: ${{ github.ref }}
+          SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          curl --fail-with-body \
+            --request POST \
+            --url https://api.github.com/repos/MythEclipse/ultimate-asepharyana.tech/dispatches \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer ${DISPATCH_TOKEN}" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            --data "$(jq -n \
+              --arg event_type "submodule-updated" \
+              --arg service "9router" \
+              --arg ref "${REF}" \
+              --arg sha "${SHA}" \
+              --arg actor "${ACTOR}" \
+              '{event_type: $event_type, client_payload: {service: $service, ref: $ref, sha: $sha, actor: $actor}}')"
