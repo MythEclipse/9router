@@ -242,7 +242,7 @@ async function getDispatcher(proxyUrl) {
 async function getBypassDispatcher(realIP) {
   if (!bypassDispatchers.has(realIP)) {
     const { Agent, buildConnector } = await import("undici");
-    const connector = buildConnector();
+    const connector = buildConnector({});
     const agent = new Agent({
       connect(opts, cb) {
         if (!opts.servername) {
