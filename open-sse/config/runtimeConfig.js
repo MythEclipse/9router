@@ -32,8 +32,7 @@ export const MEMORY_CONFIG = {
 };
 
 // Stream stall timeout: abort if no chunk received within this duration
-// Must be < 120s (Cloudflare front proxy timeout) to detect upstream hang before CF 524
-export const STREAM_STALL_TIMEOUT_MS = 90 * 1000;
+export const STREAM_STALL_TIMEOUT_MS = 35 * 1000;
 
 // Fetch connect timeout: abort if upstream doesn't return response headers within this duration
 export const FETCH_CONNECT_TIMEOUT_MS = 20 * 1000;
