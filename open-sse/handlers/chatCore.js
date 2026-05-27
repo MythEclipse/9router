@@ -20,6 +20,10 @@ import { dedupeTools } from "../utils/toolDeduper.js";
 import { injectCaveman } from "../rtk/caveman.js";
 import { compressMessages, formatRtkLog } from "../rtk/index.js";
 
+export async function cancelProviderResponseBody(providerResponse) {
+  await providerResponse?.body?.cancel?.().catch(() => {});
+}
+
 /**
  * Core chat handler - shared between SSE and Worker
  * @param {object} options.body - Request body
@@ -217,7 +221,11 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
         }
         try {
           const retryResult = await executor.execute({ model, body: translatedBody, stream, credentials, signal: streamController.signal, log, proxyOptions });
-          if (retryResult.response.ok) { providerResponse = retryResult.response; providerUrl = retryResult.url; }
+          if (retryResult.response.ok) {
+            await cancelProviderResponseBody(providerResponse);
+            providerResponse = retryResult.response;
+            providerUrl = retryResult.url;
+          }
         } catch { log?.warn?.("TOKEN", `${provider.toUpperCase()} | retry after refresh failed`); }
       } else {
         log?.warn?.("TOKEN", `${provider.toUpperCase()} | refresh failed`);

@@ -3,11 +3,28 @@ import { needsTranslation } from "../../translator/index.js";
 import { ollamaBodyToOpenAI } from "../../translator/response/ollama-to-openai.js";
 import { addBufferToUsage, filterUsageForFormat } from "../../utils/usageTracking.js";
 import { createErrorResult } from "../../utils/error.js";
-import { HTTP_STATUS } from "../../config/runtimeConfig.js";
+import { HTTP_STATUS, STREAM_STALL_TIMEOUT_MS } from "../../config/runtimeConfig.js";
 import { parseSSEToOpenAIResponse } from "./sseToJsonHandler.js";
 import { buildRequestDetail, extractRequestConfig, extractUsageFromResponse, saveUsageStats } from "./requestDetail.js";
 import { appendRequestLog, saveRequestDetail } from "@/lib/usageDb.js";
 import { decloakToolNames } from "../../utils/claudeCloaking.js";
+
+export async function readProviderResponseBody(providerResponse, method, timeoutMs = STREAM_STALL_TIMEOUT_MS) {
+  let timer = null;
+  try {
+    return await Promise.race([
+      providerResponse[method](),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          providerResponse.body?.cancel?.().catch(() => {});
+          reject(new Error("provider response body timeout"));
+        }, timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 /**
  * Translate non-streaming response body from provider format → OpenAI format.
@@ -134,7 +151,7 @@ export async function handleNonStreamingResponse({ providerResponse, provider, m
   let responseBody;
 
   if (contentType.includes("text/event-stream")) {
-    const sseText = await providerResponse.text();
+    const sseText = await readProviderResponseBody(providerResponse, "text");
     const parsed = parseSSEToOpenAIResponse(sseText, model);
     if (!parsed) {
       appendLog({ status: `FAILED ${HTTP_STATUS.BAD_GATEWAY}` });
@@ -143,7 +160,7 @@ export async function handleNonStreamingResponse({ providerResponse, provider, m
     responseBody = parsed;
   } else {
     try {
-      responseBody = await providerResponse.json();
+      responseBody = await readProviderResponseBody(providerResponse, "json");
     } catch (err) {
       appendLog({ status: `FAILED ${HTTP_STATUS.BAD_GATEWAY}` });
       console.error(`[ChatCore] Failed to parse JSON from ${provider}:`, err.message);

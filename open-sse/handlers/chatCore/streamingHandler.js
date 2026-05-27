@@ -43,7 +43,10 @@ export function handleStreamingResponse({ providerResponse, provider, model, sou
   if (onRequestSuccess) onRequestSuccess();
 
   const transformStream = buildTransformStream({ provider, sourceFormat, targetFormat, userAgent, reqLogger, toolNameMap, model, connectionId, body, onStreamComplete, apiKey });
-  const transformedBody = pipeWithDisconnect(providerResponse, transformStream, streamController);
+  const encoder = new TextEncoder();
+  const transformedBody = pipeWithDisconnect(providerResponse, transformStream, streamController, {
+    onFlushTimeout: (controller) => controller.enqueue(encoder.encode("data: [DONE]\n\n"))
+  });
 
   const streamDetailId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
   saveRequestDetail(buildRequestDetail({

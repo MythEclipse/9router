@@ -61,6 +61,7 @@ export function createSSEStream(options = {}) {
   let ttftAt = null;
   let sseLineCount = 0;
   let sseEmittedCount = 0;
+  let sawDone = false;
   const eventTypeCounts = {};
 
   return new TransformStream({
@@ -87,6 +88,8 @@ export function createSSEStream(options = {}) {
         if (mode === STREAM_MODE.PASSTHROUGH) {
           let output;
           let injectedUsage = false;
+
+          if (trimmed.startsWith("data:") && trimmed.slice(5).trim() === "[DONE]") sawDone = true;
 
           if (trimmed.startsWith("data:") && trimmed.slice(5).trim() !== "[DONE]") {
             try {
@@ -320,9 +323,11 @@ export function createSSEStream(options = {}) {
           // Some clients (e.g. OpenClaw) expect the OpenAI-style sentinel:
           //   data: [DONE]\n\n
           // Without it they can hang until timeout and trigger failover.
-          const doneOutput = "data: [DONE]\n\n";
-          reqLogger?.appendConvertedChunk?.(doneOutput);
-          controller.enqueue(sharedEncoder.encode(doneOutput));
+          if (!sawDone) {
+            const doneOutput = "data: [DONE]\n\n";
+            reqLogger?.appendConvertedChunk?.(doneOutput);
+            controller.enqueue(sharedEncoder.encode(doneOutput));
+          }
 
           if (onStreamComplete) {
             onStreamComplete({

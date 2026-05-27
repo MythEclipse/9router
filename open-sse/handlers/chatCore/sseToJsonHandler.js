@@ -1,9 +1,26 @@
 import { convertResponsesStreamToJson } from "../../transformer/streamToJsonConverter.js";
 import { createErrorResult } from "../../utils/error.js";
-import { HTTP_STATUS } from "../../config/runtimeConfig.js";
+import { HTTP_STATUS, STREAM_STALL_TIMEOUT_MS } from "../../config/runtimeConfig.js";
 import { FORMATS } from "../../translator/formats.js";
 import { buildRequestDetail, extractRequestConfig, saveUsageStats } from "./requestDetail.js";
 import { saveRequestDetail, appendRequestLog } from "@/lib/usageDb.js";
+
+async function readTextWithTimeout(providerResponse, timeoutMs = STREAM_STALL_TIMEOUT_MS) {
+  let timer = null;
+  try {
+    return await Promise.race([
+      providerResponse.text(),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          providerResponse.body?.cancel?.().catch(() => {});
+          reject(new Error("provider response body timeout"));
+        }, timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 function textFromResponsesMessageItem(item) {
   if (!item?.content || !Array.isArray(item.content)) return "";
@@ -187,7 +204,7 @@ export async function handleForcedSSEToJson({ providerResponse, sourceFormat, pr
 
   // Standard Chat Completions SSE path
   try {
-    const sseText = await providerResponse.text();
+    const sseText = await readTextWithTimeout(providerResponse);
     const parsed = parseSSEToOpenAIResponse(sseText, model);
     if (!parsed) return createErrorResult(HTTP_STATUS.BAD_GATEWAY, "Invalid SSE response for non-streaming request");
 

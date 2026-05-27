@@ -94,7 +94,7 @@ export function createStreamController({ onDisconnect, onError, log, provider, m
  * for long periods while raw bytes still flow (e.g. Kiro EventStream
  * binary frames buffering, Claude reasoning streams).
  */
-export function createDisconnectAwareStream(transformStream, streamController, timeoutSignal = null) {
+export function createDisconnectAwareStream(transformStream, streamController, timeoutSignal = null, options = {}) {
   const reader = transformStream.readable.getReader();
   const writer = transformStream.writable.getWriter();
 
@@ -102,12 +102,14 @@ export function createDisconnectAwareStream(transformStream, streamController, t
     if (!timeoutSignal) return reader.read();
     if (timeoutSignal.aborted) return Promise.resolve({ timedOut: true });
 
-    return Promise.race([
-      reader.read(),
-      new Promise((resolve) => {
-        timeoutSignal.addEventListener("abort", () => resolve({ timedOut: true }), { once: true });
-      })
-    ]);
+    let onAbort;
+    const timeoutPromise = new Promise((resolve) => {
+      onAbort = () => resolve({ timedOut: true });
+      timeoutSignal.addEventListener("abort", onAbort, { once: true });
+    });
+
+    return Promise.race([reader.read(), timeoutPromise])
+      .finally(() => timeoutSignal.removeEventListener("abort", onAbort));
   };
 
   return new ReadableStream({
@@ -121,6 +123,7 @@ export function createDisconnectAwareStream(transformStream, streamController, t
         const result = await readWithTimeout();
         if (result?.timedOut) {
           const error = new Error("stream flush timeout");
+          options.onFlushTimeout?.(controller);
           streamController.handleError(error);
           reader.cancel().catch(() => {});
           writer.abort().catch(() => {});
@@ -195,7 +198,7 @@ export function createDisconnectAwareStream(transformStream, streamController, t
  * @param {TransformStream} transformStream - Transform stream for SSE
  * @param {object} streamController - Stream controller from createStreamController
  */
-export function pipeWithDisconnect(providerResponse, transformStream, streamController) {
+export function pipeWithDisconnect(providerResponse, transformStream, streamController, options = {}) {
   let stallTimer = null;
   let flushTimer = null;
   const flushTimeoutController = new AbortController();
@@ -265,7 +268,8 @@ export function pipeWithDisconnect(providerResponse, transformStream, streamCont
   return createDisconnectAwareStream(
     { readable: transformedBody, writable: { getWriter: () => ({ abort: () => Promise.resolve() }) } },
     wrappedController,
-    flushTimeoutController.signal
+    flushTimeoutController.signal,
+    options
   );
 }
 
