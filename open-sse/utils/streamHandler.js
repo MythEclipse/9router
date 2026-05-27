@@ -94,9 +94,21 @@ export function createStreamController({ onDisconnect, onError, log, provider, m
  * for long periods while raw bytes still flow (e.g. Kiro EventStream
  * binary frames buffering, Claude reasoning streams).
  */
-export function createDisconnectAwareStream(transformStream, streamController) {
+export function createDisconnectAwareStream(transformStream, streamController, timeoutSignal = null) {
   const reader = transformStream.readable.getReader();
   const writer = transformStream.writable.getWriter();
+
+  const readWithTimeout = () => {
+    if (!timeoutSignal) return reader.read();
+    if (timeoutSignal.aborted) return Promise.resolve({ timedOut: true });
+
+    return Promise.race([
+      reader.read(),
+      new Promise((resolve) => {
+        timeoutSignal.addEventListener("abort", () => resolve({ timedOut: true }), { once: true });
+      })
+    ]);
+  };
 
   return new ReadableStream({
     async pull(controller) {
@@ -106,7 +118,17 @@ export function createDisconnectAwareStream(transformStream, streamController) {
       }
 
       try {
-        const { done, value } = await reader.read();
+        const result = await readWithTimeout();
+        if (result?.timedOut) {
+          const error = new Error("stream flush timeout");
+          streamController.handleError(error);
+          reader.cancel().catch(() => {});
+          writer.abort().catch(() => {});
+          controller.close();
+          return;
+        }
+
+        const { done, value } = result;
 
         if (done) {
           streamController.handleComplete();
@@ -175,6 +197,8 @@ export function createDisconnectAwareStream(transformStream, streamController) {
  */
 export function pipeWithDisconnect(providerResponse, transformStream, streamController) {
   let stallTimer = null;
+  let flushTimer = null;
+  const flushTimeoutController = new AbortController();
   let chunkCount = 0;
   let totalBytes = 0;
   let lastChunkAt = Date.now();
@@ -182,6 +206,9 @@ export function pipeWithDisconnect(providerResponse, transformStream, streamCont
   const tag = "STREAM";
   const clearStall = () => {
     if (stallTimer) { clearTimeout(stallTimer); stallTimer = null; }
+  };
+  const clearFlushTimer = () => {
+    if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
   };
   const armStall = () => {
     clearStall();
@@ -200,10 +227,10 @@ export function pipeWithDisconnect(providerResponse, transformStream, streamCont
     signal: streamController.signal,
     startTime: streamController.startTime,
     isConnected: () => streamController.isConnected(),
-    handleComplete: () => { dbg(tag, `complete | chunks=${chunkCount} | bytes=${totalBytes} | dur=${Date.now() - t0}ms`); clearStall(); streamController.handleComplete(); },
-    handleError: (e) => { dbg(tag, `error: ${e?.message} | chunks=${chunkCount} | bytes=${totalBytes} | dur=${Date.now() - t0}ms`); clearStall(); streamController.handleError(e); },
-    handleDisconnect: (r) => { dbg(tag, `disconnect: ${r} | chunks=${chunkCount} | bytes=${totalBytes} | dur=${Date.now() - t0}ms`); clearStall(); streamController.handleDisconnect(r); },
-    abort: () => { clearStall(); streamController.abort(); }
+    handleComplete: () => { dbg(tag, `complete | chunks=${chunkCount} | bytes=${totalBytes} | dur=${Date.now() - t0}ms`); clearStall(); clearFlushTimer(); streamController.handleComplete(); },
+    handleError: (e) => { dbg(tag, `error: ${e?.message} | chunks=${chunkCount} | bytes=${totalBytes} | dur=${Date.now() - t0}ms`); clearStall(); clearFlushTimer(); streamController.handleError(e); },
+    handleDisconnect: (r) => { dbg(tag, `disconnect: ${r} | chunks=${chunkCount} | bytes=${totalBytes} | dur=${Date.now() - t0}ms`); clearStall(); clearFlushTimer(); streamController.handleDisconnect(r); },
+    abort: () => { clearStall(); clearFlushTimer(); streamController.abort(); }
   };
 
   armStall();
@@ -223,7 +250,12 @@ export function pipeWithDisconnect(providerResponse, transformStream, streamCont
       armStall();
       controller.enqueue(chunk);
     },
-    flush() { dbg(tag, `upstream EOF | chunks=${chunkCount} | bytes=${totalBytes} | dur=${Date.now() - t0}ms`); clearStall(); }
+    flush() {
+      dbg(tag, `upstream EOF | chunks=${chunkCount} | bytes=${totalBytes} | dur=${Date.now() - t0}ms`);
+      clearStall();
+      clearFlushTimer();
+      flushTimer = setTimeout(() => flushTimeoutController.abort(), STREAM_STALL_TIMEOUT_MS);
+    }
   });
 
   const transformedBody = providerResponse.body
@@ -232,7 +264,8 @@ export function pipeWithDisconnect(providerResponse, transformStream, streamCont
 
   return createDisconnectAwareStream(
     { readable: transformedBody, writable: { getWriter: () => ({ abort: () => Promise.resolve() }) } },
-    wrappedController
+    wrappedController,
+    flushTimeoutController.signal
   );
 }
 
