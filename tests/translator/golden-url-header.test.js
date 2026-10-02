@@ -36,6 +36,12 @@ function sanitize(headers) {
           // whichever machine generated it and fail on every other host (CI
           // runners, contributors). Pin it to a placeholder.
           .replace(new RegExp(`\\b${escapeRe(os.hostname())}\\b`, "g"), "<HOST>")
+          // X-PLATFORM-VERSION is process.version for cline/clinepass, so the
+          // snapshot would pin the Node build that recorded it and fail on every
+          // other runtime. Replace the exact current value — a generic version
+          // regex would also clobber X-Stainless-Runtime-Version, which is a
+          // hardcoded constant that should stay locked.
+          .split(process.version).join("<NODE>")
       : v;
   }
   return out;
