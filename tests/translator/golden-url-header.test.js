@@ -2,6 +2,7 @@
 // Sinh snapshot lần đầu (baseline) → sau refactor chạy lại phải khớp y hệt.
 // Mock proxyFetch + uuid-heavy executors KHÔNG cần ở đây vì chỉ gọi buildUrl/buildHeaders (pure).
 import { describe, it, expect } from "vitest";
+import os from "os";
 import { PROVIDERS } from "../../open-sse/config/providers.js";
 import { DefaultExecutor } from "../../open-sse/executors/default.js";
 
@@ -29,11 +30,19 @@ function sanitize(headers) {
   for (const [k, v] of Object.entries(headers)) {
     out[k] = typeof v === "string"
       ? v.replace(/Bearer .+/, "Bearer <TOK>")
-          .replace(/sk-test-APIKEY|tok-test-ACCESS/g, "<CRED>")
+          .replace(/«redacted:sk-…»|tok-test-ACCESS/g, "<CRED>")
           .replace(/kimi-\d{10,}/g, "kimi-<TS>")
+          // X-Msh-Device-Name is os.hostname(), so the snapshot would embed
+          // whichever machine generated it and fail on every other host (CI
+          // runners, contributors). Pin it to a placeholder.
+          .replace(new RegExp(`\\b${escapeRe(os.hostname())}\\b`, "g"), "<HOST>")
       : v;
   }
   return out;
+}
+
+function escapeRe(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 const providerIds = Object.keys(PROVIDERS).filter((p) => !SPECIALIZED.has(p)).sort();
