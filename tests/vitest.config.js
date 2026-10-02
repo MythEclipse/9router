@@ -17,6 +17,9 @@ export default defineConfig({
     maxConcurrency: 60,
     // Suppress noisy console output from handlers under test
     silent: false,
+    // Point DATA_DIR at a throwaway temp dir before any module reads it, so the
+    // suite can never write to the developer's real ~/.9router database.
+    setupFiles: ["./setup/isolateDataDir.js"],
   },
   resolve: {
     // Use array form so subpath aliases (e.g. "@/lib/db/index.js") resolve correctly.

@@ -1,0 +1,266 @@
+name: Build & Deploy (Nix)
+
+# Deploy 9router to the VPS the same way GMW does it:
+#   1. build the flake on the runner
+#   2. push the closure to the Attic binary cache over HTTPS
+#   3. the VPS realises it from the cache and flips its nix-env profile
+# No scp, no rsync, no artifact upload of the store path.
+#
+# The one unavoidable SSH call is running `nix-env --set` + `systemctl restart`
+# on the VPS — that is a control-plane command, not a file transfer. The build
+# product itself always travels over the binary cache.
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: 9router-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  VPS_HOST: ${{ secrets.VPS_HOST }}
+  VPS_USER: ${{ secrets.VPS_USER }}
+  # Attic binary cache on attic.asepharyana.my.id.
+  #
+  # One-time setup (already done for this repo):
+  #   sudo attic cache create 9router
+  #   sudo attic cache configure 9router --public   # REQUIRED
+  #
+  # The cache MUST be public: nix substitutes over plain HTTPS with no
+  # credentials, so a private cache answers 401 and the VPS can never fetch.
+  # The signing key is public (safe in the repo); the push token stays in
+  # secrets.
+  ATTIC_CACHE: 9router
+  ATTIC_ENDPOINT: https://attic.asepharyana.my.id
+  ATTIC_PUBLIC_KEY: 9router:afHQzD4418dtxPCchhc1EDvxLcIPvFR+DM/nCJO3h/A=
+  # Port 9router listens on (systemd unit bws-exec -> profile binary).
+  PORT: 4014
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      # node_modules must include devDependencies: the Next build resolves
+      # @tailwindcss/postcss, which lives in devDependencies. setup-bun does
+      # not inherit NODE_ENV=production, so this installs them by default.
+      - name: Install deps
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        run: bun run build
+
+      # The suite is NOT expected to be all-green (see CLAUDE.md).
+      # Gate on NEW regressions against tests/__baseline__/known-fails.txt
+      # rather than a raw green run.
+      #
+      # vitest is a devDependency of tests/package.json (NOT the root), so it
+      # must be installed and invoked from tests/. Running `npx vitest` at the
+      # repo root finds no binary and fails.
+      - name: Install test deps
+        working-directory: tests
+        run: bun install --frozen-lockfile || bun install
+
+      - name: Run test suite
+        working-directory: tests
+        # `|| true`: the suite exits non-zero on known failures; the regression
+        # gate below is the real pass/fail signal.
+        # Write the report to the runner temp dir, not the repo — otherwise the
+        # JSON lands in tests/ and gets committed by the next push.
+        run: npx vitest run --reporter=json --outputFile="$RUNNER_TEMP/results.json" || true
+
+      - name: Check for regressions
+        run: |
+          node tests/__baseline__/verify-no-regression.mjs "$RUNNER_TEMP/results.json"
+
+      - name: Verify provider/alias/oauth baselines
+        run: |
+          node tests/__baseline__/verify-providers.mjs
+          node tests/__baseline__/verify-oauth-urls.mjs
+          node tests/__baseline__/verify-alias.mjs
+
+  build-and-deploy:
+    name: Build & deploy
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # shortRev is only defined for a clean git checkout — the flake
+          # derives the build identity (store path suffix) from it.
+          fetch-depth: 0
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v22
+        with:
+          determinate: false
+          extra-conf: |
+            sandbox = false
+            accept-flake-config = true
+            # Attic as an HTTPS substituter on the runner: lets CI pull the
+            # prebuilt attic client closure over the network, no SSH needed.
+            # extra-substituters (NOT extra-trusted-substituters) is required —
+            # Determinate Nix never merges trusted-* for nix-store CLI clients.
+            extra-substituters = https://attic.asepharyana.my.id/9router
+            extra-trusted-public-keys = 9router:afHQzD4418dtxPCchhc1EDvxLcIPvFR+DM/nCJO3h/A=
+
+      - name: Cache Nix
+        uses: DeterminateSystems/magic-nix-cache-action@v14
+        with:
+          use-flakehub: false
+
+      - name: Build 9router
+        id: build
+        run: |
+          nix build .# --impure --option sandbox false --print-build-logs
+          STORE_PATH=$(readlink result)
+          echo "store-path=$STORE_PATH" >> "$GITHUB_OUTPUT"
+          echo "Build OK: $STORE_PATH"
+
+      - name: Setup SSH key
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          sed -i 's/\r$//' ~/.ssh/id_ed25519
+          ssh-keygen -y -f ~/.ssh/id_ed25519 >/dev/null 2>&1 || { echo "SSH key invalid"; exit 1; }
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      # Ship the closure through the Attic binary cache. The attic client is
+      # not in nixpkgs and has no prebuilt releases, so we realise the same
+      # prebuilt closure the VPS uses (it was pushed to the cache once from
+      # the VPS) over HTTPS via the substituter configured above.
+      - name: Push to Attic cache
+        env:
+          ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
+        run: |
+          if [ -z "$ATTIC_TOKEN" ]; then
+            echo "::warning::ATTIC_TOKEN not set; deploy will fall back to nix copy over ssh"
+            exit 0
+          fi
+          STORE_PATH="${{ steps.build.outputs.store-path }}"
+          ATTIC_DIR="/nix/store/fygyy3yk4rqdknxkiwkqambpnhyax0k4-attic-0.1.0"
+
+          ATTIC_BIN=""
+          if command -v attic >/dev/null 2>&1; then
+            ATTIC_BIN="$(command -v attic)"
+          elif nix-store --realise "$ATTIC_DIR" 2>/tmp/attic-bootstrap.err; then
+            echo "Pulled attic client from cache (HTTPS substituter)"
+            ATTIC_BIN="$ATTIC_DIR/bin/attic"
+          else
+            echo "::error::attic client unavailable on runner; cannot push closure"
+            tail -5 /tmp/attic-bootstrap.err || true
+            exit 1
+          fi
+
+          mkdir -p "$HOME/.config/attic"
+          cat > "$HOME/.config/attic/config.toml" <<EOF
+          default-server = "pub"
+
+          [servers.pub]
+          endpoint = "$ATTIC_ENDPOINT"
+          token = "$ATTIC_TOKEN"
+          EOF
+
+          # --ignore-upstream-cache-filter forces the narinfo write even when
+          # the path's chunks already exist in upstream cache.nixos.org —
+          # without it attic skips the write and the path 404s on our cache,
+          # so the VPS can never substitute it.
+          push_ok=""
+          for attempt in 1 2 3; do
+            if "$ATTIC_BIN" push "pub:$ATTIC_CACHE" "$STORE_PATH" --jobs 4 --ignore-upstream-cache-filter; then
+              echo "Pushed $STORE_PATH to attic"
+              push_ok=1
+              break
+            fi
+            echo "::warning::attic push attempt $attempt/3 failed; retrying in 10s"
+            sleep 10
+          done
+          if [ -z "$push_ok" ]; then
+            echo "::error::attic push failed after 3 attempts"
+            exit 1
+          fi
+
+      # NOTE: env comes from Bitwarden Secrets Manager via the bws-exec
+      # wrapper already wired into the systemd unit (ExecStart), so there is
+      # no .env file to manage here — CI only builds and flips the profile.
+      - name: Deploy to VPS
+        run: |
+          STORE_PATH="${{ steps.build.outputs.store-path }}"
+          NIX="/nix/var/nix/profiles/default/bin"
+          PROFILE="/nix/var/nix/profiles/9router"
+
+          echo "=== Realising $STORE_PATH on the VPS ==="
+          if ! ssh "$VPS_USER@$VPS_HOST" "sudo $NIX/nix-store --realise '$STORE_PATH'"; then
+            echo "::error::VPS could not realise the store path (cache miss?)"
+            exit 1
+          fi
+
+          echo "=== Switching profile ==="
+          ssh "$VPS_USER@$VPS_HOST" \
+            "sudo $NIX/nix-env --profile $PROFILE --set '$STORE_PATH'"
+
+          echo "=== Restarting service ==="
+          ssh "$VPS_USER@$VPS_HOST" \
+            "sudo systemctl restart 9router && for i in \$(seq 1 15); do state=\$(sudo systemctl is-active 9router 2>/dev/null || echo inactive); [ \"\$state\" = \"active\" ] && break; sleep 2; done; echo \"final-state=\$state\"; [ \"\$state\" = \"active\" ]"
+
+          echo "Deployed: $STORE_PATH"
+
+      # Health check. /v1/models requires auth (401 without a key), so probe it
+      # from INSIDE the VPS over loopback where a key is unnecessary — and
+      # accept any HTTP response as "the server is up". A bare `curl -sf` from
+      # the runner against the public IP would 401 and retry pointlessly.
+      - name: Verify service
+        run: |
+          for i in $(seq 1 10); do
+            code=$(ssh "$VPS_USER@$VPS_HOST" \
+              "curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:${{ env.PORT }}/v1/models || echo 000")
+            echo "attempt $i: /v1/models -> $code"
+            case "$code" in
+              200|401) echo "::notice::9router is serving on 127.0.0.1:${{ env.PORT }} (HTTP $code)"; exit 0 ;;
+            esac
+            sleep 3
+          done
+          echo "::warning::9router did not answer /v1/models on the VPS in time"
+
+  cleanup:
+    name: Nix GC on VPS
+    needs: build-and-deploy
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup SSH key
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          sed -i 's/\r$//' ~/.ssh/id_ed25519
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      # Old profile generations + unreachable store paths. The generation
+      # currently symlinked from the profile is not collected.
+      - name: Nix GC
+        run: |
+          ssh "$VPS_USER@$VPS_HOST" \
+            "sudo /nix/var/nix/profiles/default/bin/nix-collect-garbage -d" \
+            || echo "::warning::nix GC failed (non-fatal)"

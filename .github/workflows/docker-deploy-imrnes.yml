@@ -1,0 +1,401 @@
+name: Build & Deploy Docker to imrnes
+
+# Build 9router as a container image and ship it to the imrnes VPS, replacing
+# OmniRoute as the app behind https://omniroute.imrnes.team/.
+#
+# Why Docker here while orange uses Nix: the Hermes config on imrnes
+# (/root/.hermes/config.yaml) points its *primary* LLM provider at 9router on
+# orange (100.79.111.61:4014) and its *fallback* at OmniRoute on imrnes
+# (127.0.0.1:20128). Running 9router containerised on imrnes keeps it managed
+# like every other long-lived service on that box, and ships one artifact.
+#
+# Port: 9router serves the dashboard AND /v1 on a single port, so it binds 2028.
+# 20128/20129 stay bound by OmniRoute — that keeps the Hermes fallback working
+# during the migration window and makes rollback a one-line Traefik revert.
+#
+# Traefik (file provider, /data/coolify/proxy/dynamic/9router.yaml) is what maps
+# omniroute.imrnes.team to the container. The Let's Encrypt cert already exists
+# in acme.json, so pointing the router at 2028 is the only change needed.
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+# One deploy at a time. cancel-in-progress: false — never abandon a half-pulled
+# image mid-restart.
+concurrency:
+  group: 9router-docker-imrnes
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/asepharyana/9router
+  # Dedicated secrets, NOT the shared VPS_HOST/VPS_USER. Those point at orange
+  # (user `code`, 9router already on :4014) and were originally used here by
+  # mistake — the deploy landed on orange and failed on `mkdir /root/...`.
+  VPS_HOST: ${{ secrets.IMRNES_HOST }}
+  VPS_USER: ${{ secrets.IMRNES_USER }}
+  PORT: 2028
+  DEPLOY_DIR: /root/9router-docker
+  PUBLIC_HOST: omniroute.imrnes.team
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    name: Build image
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve tag
+        id: meta
+        run: |
+          set -euo pipefail
+          tag="$(node -p "require('./package.json').version")"
+          echo "Building ${tag} from $(git rev-parse --short HEAD)"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # linux/amd64 only: imrnes is x86_64. Multi-arch would double build time
+      # for an image only this one VPS pulls.
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.meta.outputs.tag }}
+            ${{ env.IMAGE }}:latest
+          build-args: |
+            APP_VERSION=${{ steps.meta.outputs.tag }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  test:
+    name: Regression gate
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install deps
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        run: bun run build
+
+      # vitest is a devDependency of tests/package.json (NOT the root), so it
+      # must be installed and invoked from tests/.
+      - name: Install test deps
+        working-directory: tests
+        run: bun install --frozen-lockfile || bun install
+
+      # The suite is NOT expected to be all-green (see CLAUDE.md);
+      # verify-no-regression.mjs against known-fails.txt is the real gate.
+      - name: Run test suite
+        working-directory: tests
+        run: npx vitest run --reporter=json --outputFile="$RUNNER_TEMP/results.json" || true
+
+      - name: Check for regressions
+        run: node tests/__baseline__/verify-no-regression.mjs "$RUNNER_TEMP/results.json"
+
+  smoke:
+    name: Smoke-test image
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run image and wait for health
+        env:
+          IMAGE: ${{ env.IMAGE }}
+          TAG: ${{ needs.build.outputs.tag }}
+        run: |
+          set -Eeuo pipefail
+          container="9router-smoke-${GITHUB_RUN_ID}"
+          trap 'docker logs "$container" || true; docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+
+          docker run --detach --name "$container" \
+            --publish 2028:2028 \
+            -e PORT=2028 -e HOSTNAME=0.0.0.0 -e DATA_DIR=/app/data \
+            "${IMAGE}:${TAG}"
+
+          for attempt in {1..45}; do
+            if body="$(curl --fail --silent --show-error http://127.0.0.1:2028/api/health)"; then
+              echo "health OK: ${body}"
+              exit 0
+            fi
+            (( attempt % 5 == 0 )) && echo "waiting for health (${attempt}/45)" >&2
+            sleep 2
+          done
+
+          echo "health check never returned 200" >&2
+          exit 1
+
+  deploy:
+    name: Deploy to imrnes
+    # Gated on test as well as build+smoke, matching deploy.yml: a regression in
+    # this push must not reach the production hostname.
+    needs: [build, test, smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Setup SSH key
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # CI secrets are stored with CRLF endings; a stray \r makes ssh reject
+          # the key with an unhelpful "invalid format" error.
+          sed -i 's/\r$//' ~/.ssh/id_ed25519
+          ssh-keygen -y -f ~/.ssh/id_ed25519 >/dev/null
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      # Guard against deploying to the wrong machine. This repo has two hosts:
+      # orange (9router via Nix on :4014) and imrnes (this workflow, :2028). A
+      # shared secret pointing at the wrong one previously sent this deploy to
+      # orange, where it failed only by luck (`mkdir /root` denied for user
+      # `code`). Assert the host identity before writing anything to it.
+      - name: Verify target host
+        run: |
+          set -euo pipefail
+          expected="VM-8-131-ubuntu"
+          actual="$(ssh -T "$VPS_USER@$VPS_HOST" 'hostname')"
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::Refusing to deploy: expected host '$expected' but $VPS_HOST is '$actual'."
+            echo "Check the IMRNES_HOST / IMRNES_USER secrets."
+            exit 1
+          fi
+          echo "Target confirmed: $actual ($VPS_HOST)"
+
+      # The GHCR package is private, and it must stay that way: a GITHUB_TOKEN can
+      # push to it but cannot change package visibility (that requires a PAT with
+      # write:packages), so "just make the package public" is not available from
+      # CI. The VPS therefore gets its own read-only registry credential, written
+      # to a root-only docker config. The token is never printed.
+      - name: Authorize VPS to pull from GHCR
+        env:
+          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GHCR_READ_TOKEN" ]; then
+            echo "::error::Secret GHCR_READ_TOKEN is not set."
+            echo "Create a classic PAT for asepharyana with scope 'read:packages' and add it as GHCR_READ_TOKEN."
+            exit 1
+          fi
+          auth="$(printf '%s' "asepharyana:$GHCR_READ_TOKEN" | base64 -w0)"
+
+          # $auth expands HERE, inside the double-quoted ssh argument, so the
+          # base64 credential travels over the encrypted channel instead of
+          # through the runner log. The JSON body below is a quoted heredoc, so
+          # nothing on the wire is re-expanded by the remote shell.
+          ssh -T "$VPS_USER@$VPS_HOST" "umask 077 && mkdir -p /root/.docker && cat > /root/.docker/config.json" <<JSON
+          {"auths":{"ghcr.io":{"auth":"$auth"}}}
+          JSON
+
+          ssh -T "$VPS_USER@$VPS_HOST" "chmod 600 /root/.docker/config.json && echo 'docker credential installed'"
+
+      # Runs BEFORE the compose file is written: docker compose reads .env from
+      # the project directory to interpolate ${JWT_SECRET} etc. in the compose
+      # file itself, and fails on a missing .env.
+      #
+      # Idempotent by design — the secrets are generated exactly once. Rotating
+      # them on redeploy would invalidate every stored provider credential.
+      # 'REMOTE' is quoted so $(openssl ...) runs on the VPS, not here.
+      - name: Bootstrap secrets
+        run: |
+          set -euo pipefail
+          ssh -T "$VPS_USER@$VPS_HOST" bash -s <<'REMOTE'
+          set -euo pipefail
+          mkdir -p /root/9router-docker
+          cd /root/9router-docker
+
+          if [ -f .env ]; then
+            echo "Reusing existing .env (secrets preserved)"
+          else
+            umask 077
+            {
+              echo "JWT_SECRET=$(openssl rand -hex 32)"
+              echo "API_KEY_SECRET=$(openssl rand -hex 32)"
+              echo "MACHINE_ID_SALT=$(openssl rand -hex 16)"
+              # Human-readable so the operator can actually log in; the other
+              # three are never read by a human. Change it from the dashboard
+              # Profile page after the first login.
+              #
+              # tr -dc strips the base64 newline, and head -c 16 then takes a
+              # fixed-length alphanumeric password. Reading base64 with
+              # `head -c 20` would embed a literal \n in the .env value.
+              echo "INITIAL_PASSWORD=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 16)"
+            } > .env
+            chmod 600 .env
+            echo "Generated .env with fresh secrets"
+            echo "  dashboard login password: $(grep '^INITIAL_PASSWORD=' .env | cut -d= -f2)"
+          fi
+          REMOTE
+
+      # Unquoted heredoc on purpose: ${IMAGE_TAG} must expand HERE (runner) so
+      # the file lands with a concrete tag. The secret names are escaped so they
+      # survive to the VPS and are expanded by docker compose from .env instead.
+      - name: Write compose file
+        env:
+          IMAGE_TAG: ${{ needs.build.outputs.tag }}
+        run: |
+          set -euo pipefail
+          ssh -T "$VPS_USER@$VPS_HOST" "cat > '$DEPLOY_DIR/docker-compose.yml'" <<COMPOSE
+          services:
+            9router:
+              image: ${{ env.IMAGE }}:${IMAGE_TAG}
+              container_name: 9router
+              restart: unless-stopped
+              stop_grace_period: 30s
+              ports:
+                - "$PORT:$PORT"
+              volumes:
+                - ./data:/app/data
+              environment:
+                PORT: "$PORT"
+                HOSTNAME: "0.0.0.0"
+                DATA_DIR: /app/data
+                NODE_ENV: production
+                NEXT_TELEMETRY_DISABLED: "1"
+                # Interpolated by docker compose from .env on the VPS.
+                JWT_SECRET: \${JWT_SECRET}
+                API_KEY_SECRET: \${API_KEY_SECRET}
+                MACHINE_ID_SALT: \${MACHINE_ID_SALT}
+                INITIAL_PASSWORD: \${INITIAL_PASSWORD}
+                # The dashboard is served over HTTPS at the public hostname, so
+                # the session cookie must be marked Secure.
+                AUTH_COOKIE_SECURE: "true"
+                # NOTE: /v1 is NOT open. 9router gates /v1 on an API key created
+                # in the dashboard (src/dashboardGuard.js), regardless of
+                # REQUIRE_API_KEY — that env var is listed in .env.example but is
+                # never read by the v1 code path, so setting it is misleading.
+                # Consumers (e.g. omniguard's ANTHROPIC_BASE_URL) must present
+                # `Authorization: Bearer <key>`. Create one at
+                # https://omniroute.imrnes.team/dashboard/keys after first deploy.
+                BASE_URL: https://$PUBLIC_HOST
+                NEXT_PUBLIC_BASE_URL: https://$PUBLIC_HOST
+          COMPOSE
+
+      # Single service: 9router serves both /v1 and the dashboard on 2028.
+      # The Let's Encrypt cert for this host already exists in acme.json.
+      - name: Write Traefik router
+        run: |
+          set -euo pipefail
+          ssh -T "$VPS_USER@$VPS_HOST" "cat > /data/coolify/proxy/dynamic/9router.yaml" <<'TRAEFIK'
+          http:
+            routers:
+              9router-router:
+                rule: "Host(`omniroute.imrnes.team`)"
+                service: 9router-service
+                entryPoints:
+                  - https
+                tls:
+                  certResolver: letsencrypt
+            services:
+              9router-service:
+                loadBalancer:
+                  servers:
+                    - url: "http://host.docker.internal:2028"
+          TRAEFIK
+
+          # Roll back instantly if Traefik rejects the file — a malformed router
+          # takes the whole dynamic config down, not just this one host.
+          ssh -T "$VPS_USER@$VPS_HOST" \
+            "docker logs --since 30s coolify-proxy 2>&1 | tail -5"
+
+      - name: Pull and start
+        run: |
+          set -euo pipefail
+          ssh -T "$VPS_USER@$VPS_HOST" bash -s <<'REMOTE'
+          set -euo pipefail
+          cd /root/9router-docker
+          docker compose config --quiet      # fail fast on bad interpolation
+          docker compose pull
+          docker compose up -d
+          docker compose ps
+          REMOTE
+
+      - name: Verify container serves
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 20); do
+            code="$(ssh -T "$VPS_USER@$VPS_HOST" "curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:$PORT/api/health || echo 000")"
+            echo "attempt ${attempt}: /api/health -> ${code}"
+            if [ "$code" = "200" ]; then
+              echo "9router is serving on imrnes:$PORT"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "::error::9router did not answer /api/health on imrnes in time"
+          ssh -T "$VPS_USER@$VPS_HOST" "cd $DEPLOY_DIR && docker compose logs --tail 50" || true
+          exit 1
+
+      # Proves the public hostname, the TLS cert, and the Traefik cutover all
+      # work from outside the VPS — the thing users actually depend on.
+      - name: Verify public URL
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 10); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "https://$PUBLIC_HOST/api/health" || echo 000)"
+            echo "attempt ${attempt}: https://$PUBLIC_HOST/api/health -> ${code}"
+            if [ "$code" = "200" ]; then
+              echo "Public URL is serving 9router"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::https://$PUBLIC_HOST/api/health did not return 200"
+          exit 1
+
+      - name: Summary
+        run: |
+          {
+            echo "### 9router deployed to imrnes"
+            echo "- Image: \`$IMAGE:${{ needs.build.outputs.tag }}\`"
+            echo "- Port: $PORT (OmniRoute still on 20128/20129)"
+            echo "- Public: https://$PUBLIC_HOST"
+            echo "- Manage: \`cd $DEPLOY_DIR && docker compose {ps,logs,restart}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

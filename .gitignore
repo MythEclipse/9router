@@ -21,6 +21,7 @@ cli/.build-home/
 product
 # production
 /build
+result
 .idea/
 
 # misc
