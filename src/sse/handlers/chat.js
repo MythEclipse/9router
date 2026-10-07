@@ -21,10 +21,25 @@ import { augmentModelsWithCapacityAdapter, withCapacityAdapterStripping, getActi
 import { handleBypassRequest } from "open-sse/utils/bypassHandler.js";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig.js";
 import { detectFormatByEndpoint } from "open-sse/translator/formats.js";
+import { FORMATS } from "open-sse/translator/formats.js";
+import { isClaudeEndpoint, validateClaudeMessageBody } from "../protocol/claudeValidation.js";
+import { isResponsesEndpoint, validateResponsesBody } from "../protocol/responsesValidation.js";
 import * as log from "../utils/logger.js";
 import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh.js";
 import { getProjectIdForConnection } from "open-sse/services/projectId.js";
 import { stripModelContextMarker } from "open-sse/utils/modelMarkers.js";
+
+/**
+ * Pathname of a request URL, or "" when it cannot be parsed.
+ * Every protocol decision in this handler keys off this one value.
+ */
+function pathnameOf(request) {
+  try {
+    return new URL(request.url).pathname;
+  } catch {
+    return "";
+  }
+}
 
 /**
  * Handle chat completion request
@@ -32,19 +47,38 @@ import { stripModelContextMarker } from "open-sse/utils/modelMarkers.js";
  * Format detection and translation handled by translator
  */
 export async function handleChat(request, clientRawRequest = null) {
+  // Parsed once: it decides which protocol's error envelope every validation
+  // and auth failure below must speak.
+  const requestPathname = pathnameOf(request);
+  const clientFormat = isClaudeEndpoint(requestPathname) ? FORMATS.CLAUDE : null;
+
   let body;
   try {
     body = await request.json();
   } catch {
     log.warn("CHAT", "Invalid JSON body");
-    return errorResponse(HTTP_STATUS.BAD_REQUEST, "Invalid JSON body");
+    return errorResponse(HTTP_STATUS.BAD_REQUEST, "Invalid JSON body", null, clientFormat);
+  }
+
+  // Protocol-specific required-field checks. Officially reject violations with
+  // a protocol-shaped 400 instead of forwarding a doomed body upstream.
+  // Anthropic Messages: max_tokens is mandatory, messages must be non-empty.
+  if (isClaudeEndpoint(requestPathname)) {
+    const validationError = validateClaudeMessageBody(body);
+    if (validationError) return validationError;
+  }
+
+  // OpenAI Responses: `input` is mandatory. The translator would otherwise pass
+  // it through and the pipeline would 502.
+  if (isResponsesEndpoint(requestPathname)) {
+    const validationError = validateResponsesBody(body);
+    if (validationError) return validationError;
   }
 
   // Build clientRawRequest for logging (if not provided)
   if (!clientRawRequest) {
-    const url = new URL(request.url);
     clientRawRequest = {
-      endpoint: url.pathname,
+      endpoint: requestPathname,
       body,
       headers: Object.fromEntries(request.headers.entries())
     };
@@ -72,18 +106,18 @@ export async function handleChat(request, clientRawRequest = null) {
   if (settings.requireApiKey) {
     if (!apiKey) {
       log.warn("AUTH", "Missing API key (requireApiKey=true)");
-      return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Missing API key");
+      return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Missing API key", null, clientFormat);
     }
     const valid = await isValidApiKey(apiKey);
     if (!valid) {
       log.warn("AUTH", "Invalid API key (requireApiKey=true)");
-      return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Invalid API key");
+      return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Invalid API key", null, clientFormat);
     }
   }
 
   if (!modelStr) {
     log.warn("CHAT", "Missing model");
-    return errorResponse(HTTP_STATUS.BAD_REQUEST, "Missing model");
+    return errorResponse(HTTP_STATUS.BAD_REQUEST, "Missing model", null, clientFormat);
   }
 
   // Bypass naming/warmup requests before combo rotation to avoid wasting rotation slots
@@ -165,6 +199,8 @@ export async function handleChat(request, clientRawRequest = null) {
  * Handle single model chat request
  */
 async function handleSingleModelChat(body, modelStr, clientRawRequest = null, request = null, apiKey = null, requestedModel = null) {
+  // Error envelope this client's endpoint expects (Anthropic vs OpenAI).
+  const clientFormat = isClaudeEndpoint(clientRawRequest?.endpoint) ? FORMATS.CLAUDE : null;
   const modelInfo = await getModelInfo(modelStr);
 
   // If provider is null, this might be a combo name - check and handle
@@ -216,7 +252,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       });
     }
     log.warn("CHAT", "Invalid model format", { model: modelStr });
-    return errorResponse(HTTP_STATUS.BAD_REQUEST, "Invalid model format");
+    return errorResponse(HTTP_STATUS.BAD_REQUEST, "Invalid model format", null, clientFormat);
   }
 
   const { provider, model } = modelInfo;
@@ -241,14 +277,14 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
         const errorMsg = lastError || credentials.lastError || "Unavailable";
         const status = HTTP_STATUS.SERVICE_UNAVAILABLE;
         log.warn("CHAT", `[${provider}/${model}] ${errorMsg} (${credentials.retryAfterHuman})`);
-        return unavailableResponse(status, `[${provider}/${model}] ${errorMsg}`, credentials.retryAfter, credentials.retryAfterHuman, lastHeaders);
+        return unavailableResponse(status, `[${provider}/${model}] ${errorMsg}`, credentials.retryAfter, credentials.retryAfterHuman, lastHeaders, clientFormat);
       }
       if (excludeConnectionIds.size === 0) {
         log.warn("AUTH", `No active credentials for provider: ${provider}`);
-        return errorResponse(HTTP_STATUS.NOT_FOUND, `No active credentials for provider: ${provider}`);
+        return errorResponse(HTTP_STATUS.NOT_FOUND, `No active credentials for provider: ${provider}`, null, clientFormat);
       }
       log.warn("CHAT", "No more accounts available", { provider });
-      return errorResponse(lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE, lastError || "All accounts unavailable", lastHeaders);
+      return errorResponse(lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE, lastError || "All accounts unavailable", lastHeaders, clientFormat);
     }
 
     // Account selection shown in the unified "▶" line (acc:...)
@@ -297,6 +333,8 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       providerOverrides: (chatSettings.providerOverrides || {})[provider] || null,
       // Detect source format by endpoint + body
       sourceFormatOverride: request?.url ? detectFormatByEndpoint(new URL(request.url).pathname, body) : null,
+      // Error envelope the client's endpoint expects (Anthropic vs OpenAI)
+      clientFormat,
       onCredentialsRefreshed: async (newCreds) => {
         await updateProviderCredentials(credentials.connectionId, {
           ...newCreds,

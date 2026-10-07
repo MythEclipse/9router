@@ -1,4 +1,5 @@
 import { PROVIDER_MODELS } from "open-sse/config/providerModels.js";
+import { buildErrorBody } from "open-sse/utils/error.js";
 import { AI_PROVIDERS, ALIAS_TO_ID } from "@/shared/constants/providers";
 import { getModelKind } from "@/shared/constants/models";
 
@@ -23,6 +24,10 @@ function buildInfo({ alias, providerId, model, kind, providerInfo }) {
     owned_by: alias,
     endpoint: KIND_ENDPOINT[kind] || null,
   };
+  // Deterministic `created` seed (mirrors /v1/models list entries).
+  let hash = 0;
+  for (const ch of out.id) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  out.created = 1704067200 + (hash % (365 * 24 * 3600 * 2));
   if (model.params) out.params = model.params;
   if (model.capabilities) out.capabilities = model.capabilities;
   if (model.options) out.options = model.options;
@@ -89,14 +94,14 @@ export async function GET(request) {
   const kind = searchParams.get("kind");
   if (!id) {
     return Response.json(
-      { error: { message: "Missing required query param: id (e.g. ?id=openai/dall-e-3)", type: "invalid_request_error" } },
+      buildErrorBody(400, "Missing required query param: id (e.g. ?id=openai/dall-e-3)"),
       { status: 400, headers: { "Access-Control-Allow-Origin": "*" } },
     );
   }
   const info = lookup(id, kind);
   if (!info) {
     return Response.json(
-      { error: { message: `Model not found: ${id}`, type: "not_found" } },
+      buildErrorBody(404, `Model not found: ${id}`),
       { status: 404, headers: { "Access-Control-Allow-Origin": "*" } },
     );
   }

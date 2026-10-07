@@ -1,3 +1,6 @@
+import { FORMATS } from "open-sse/translator/formats.js";
+import { buildErrorBody } from "open-sse/utils/error.js";
+
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -77,7 +80,7 @@ export async function POST(request) {
   try {
     body = await request.json();
   } catch {
-    return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+    return new Response(JSON.stringify(buildErrorBody(400, "Invalid request body", FORMATS.CLAUDE)), {
       status: 400,
       headers: { "Content-Type": "application/json", ...CORS_HEADERS }
     });

@@ -373,6 +373,18 @@ export async function buildModelsList(kindFilter, options = {}) {
   // Lookup map so aggregateComboCapabilities can recursively resolve nested combos
   const comboByName = Object.fromEntries(combos.map((c) => [c.name, c.models]));
 
+  // Stable per-model epoch seed for the OpenAI `created` field. A hash of the
+  // model id keeps the list deterministic across restarts (golden snapshots,
+  // cache keys, diffing tools) while giving strict OpenAI clients the required
+  // field on every entry. Deterministic beats "current time" here: `created`
+  // has no behavioral meaning for a gateway model catalog.
+  const modelCreatedAt = (modelId) => {
+    let hash = 0;
+    for (const ch of String(modelId)) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+    // 2024-01-01T00:00:00Z + hash-derived seconds
+    return 1704067200 + (hash % (365 * 24 * 3600 * 2));
+  };
+
   // Combos first (filtered by kind). Web combos expose `kind` so AI knows search vs fetch.
   for (const combo of combos) {
     if (!comboMatchesKinds(combo, kindFilter)) continue;
@@ -380,6 +392,7 @@ export async function buildModelsList(kindFilter, options = {}) {
       id: combo.name,
       object: "model",
       owned_by: "combo",
+      created: modelCreatedAt(combo.name),
     };
     if (combo.kind === "webSearch" || combo.kind === "webFetch") {
       entry.kind = combo.kind;
@@ -409,6 +422,7 @@ export async function buildModelsList(kindFilter, options = {}) {
           id: `${alias}/${model.id}`,
           object: "model",
           owned_by: alias,
+          created: modelCreatedAt(`${alias}/${model.id}`),
           capabilities: getCapabilitiesForModel(alias, model.id),
         });
       }
@@ -428,6 +442,7 @@ export async function buildModelsList(kindFilter, options = {}) {
         id: `${providerAlias}/${modelId}`,
         object: "model",
         owned_by: providerAlias,
+        created: modelCreatedAt(`${providerAlias}/${modelId}`),
       });
     }
   } else {
@@ -565,6 +580,7 @@ export async function buildModelsList(kindFilter, options = {}) {
           id: `${outputAlias}/${modelId}`,
           object: "model",
           owned_by: outputAlias,
+          created: modelCreatedAt(`${outputAlias}/${modelId}`),
         };
         // Live-catalog resolvers (kiro/qoder/github/clinepass) mostly only return
         // { id, name } — no per-model capability data. Fall back to the same
@@ -606,6 +622,7 @@ export async function buildModelsList(kindFilter, options = {}) {
           object: "model",
           kind: "webSearch",
           owned_by: outputAlias,
+          created: modelCreatedAt(`${outputAlias}/search`),
         });
       }
       if (kindFilter.includes("webFetch") && providerInfo?.fetchConfig) {
@@ -614,6 +631,7 @@ export async function buildModelsList(kindFilter, options = {}) {
           object: "model",
           kind: "webFetch",
           owned_by: outputAlias,
+          created: modelCreatedAt(`${outputAlias}/fetch`),
         });
       }
     }

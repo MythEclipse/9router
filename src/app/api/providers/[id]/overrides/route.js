@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSettings, updateSettings } from "@/lib/localDb";
 import { PROVIDERS } from "open-sse/config/providers.js";
 import { resolveProviderAlias } from "open-sse/services/model.js";
+import { CACHE_MAX_MARKERS } from "open-sse/translator/formats/claudeCache.js";
 
 export const dynamic = "force-dynamic";
 
@@ -23,10 +24,25 @@ const BLOCKED_HEADERS = new Set([
 
 /**
  * Validate + normalize an override payload. Returns { override } or { error }.
- * An override with no headers is normalized to null (= delete).
+ * An override with no keys is normalized to null (= delete).
  */
-function normalizeOverride({ headers }) {
+function normalizeOverride({ headers, cacheSupported, maxMarkers, newContextReason }) {
   const out = {};
+
+  if (cacheSupported !== undefined && cacheSupported !== null) {
+    if (typeof cacheSupported !== "boolean") return { error: "cacheSupported must be a boolean" };
+    out.cacheSupported = cacheSupported;
+  }
+  if (maxMarkers !== undefined && maxMarkers !== null) {
+    if (!Number.isInteger(maxMarkers) || maxMarkers < 0 || maxMarkers > CACHE_MAX_MARKERS) {
+      return { error: `maxMarkers must be an integer between 0 and ${CACHE_MAX_MARKERS}` };
+    }
+    out.maxMarkers = maxMarkers;
+  }
+  if (newContextReason !== undefined && newContextReason !== null) {
+    if (typeof newContextReason !== "boolean") return { error: "newContextReason must be a boolean" };
+    out.newContextReason = newContextReason;
+  }
 
   if (headers !== undefined && headers !== null) {
     if (typeof headers !== "object" || Array.isArray(headers)) {
@@ -63,6 +79,15 @@ async function readOverrides() {
   return settings.providerOverrides || {};
 }
 
+/** Cache budget portion of an override, shaped for the UI (absent = proxy default). */
+function cacheShape(override) {
+  return {
+    ...(override?.cacheSupported !== undefined ? { supported: override.cacheSupported } : {}),
+    ...(override?.maxMarkers !== undefined ? { maxMarkers: override.maxMarkers } : {}),
+    ...(override?.newContextReason !== undefined ? { newContextReason: override.newContextReason } : {}),
+  };
+}
+
 /**
  * GET /api/providers/[id]/overrides — user override for this provider
  */
@@ -77,6 +102,7 @@ export async function GET(request, { params }) {
     return NextResponse.json({
       headers: override.headers || {},
       builtinHeaders: PROVIDERS[canonical]?.headers || {},
+      cache: cacheShape(override),
     });
   } catch (error) {
     console.log("Error getting provider overrides:", error);
@@ -102,7 +128,7 @@ export async function PUT(request, { params }) {
     if (override) next[canonical] = override;
     else delete next[canonical];
     await updateSettings({ providerOverrides: next });
-    return NextResponse.json({ headers: override?.headers || {} });
+    return NextResponse.json({ headers: override?.headers || {}, cache: cacheShape(override) });
   } catch (error) {
     console.log("Error saving provider overrides:", error);
     return NextResponse.json({ error: "Failed to save overrides" }, { status: 500 });

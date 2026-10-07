@@ -9,6 +9,11 @@ import { PROVIDERS } from "../../providers/index.js";
 import { getCapabilitiesForModel } from "../../providers/capabilities.js";
 import { isDeepSeekModel } from "../../providers/models/helpers.js";
 import { DEFAULT_MAX_TOKENS } from "../../config/runtimeConfig.js";
+import {
+  CACHE_DEFAULT_MARKERS,
+  applyClaudeCacheLimits,
+  countCacheControlBlocks,
+} from "./claudeCache.js";
 
 const CACHE_CONTROL_5M = { type: "ephemeral" };
 const CACHE_CONTROL_1H = { type: "ephemeral", ttl: "1h" };
@@ -68,47 +73,9 @@ function normalizeMessageContent(msg) {
   return msg;
 }
 
-// Total blocks carrying cache_control across system, tools, and messages — the
-// upstream Messages API allows at most 4 markers per request.
-function countCacheControlBlocks(body) {
-  let n = 0;
-  if (Array.isArray(body?.system)) for (const b of body.system) if (b?.cache_control) n++;
-  if (Array.isArray(body?.tools)) for (const t of body.tools) if (t?.cache_control) n++;
-  if (Array.isArray(body?.messages)) {
-    for (const m of body.messages) {
-      if (Array.isArray(m?.content)) {
-        for (const b of m.content) if (b?.cache_control) n++;
-      } else if (m?.content && typeof m.content === "object" && m.content.cache_control) n++;
-    }
-  }
-  return n;
-}
-// Trim every marker past the 4-marker budget. The head anchors (last system
-// block, last cacheable tool) are held; the remaining slots go to the tail-most
-// of the other markers in document order. A plain "keep the last 4 in document
-// order" rule would drop the head anchors first — they lead document order, yet
-// they are exactly what re-anchoring exists to pin.
-function capCacheControlBlocks(body) {
-  const isHead = (b) => {
-    const sys = Array.isArray(body?.system) ? body.system : [];
-    if (sys.length && sys[sys.length - 1] === b) return true;
-    const tools = Array.isArray(body?.tools) ? body.tools : [];
-    const lastTool = lastCacheableToolIndex(tools);
-    return lastTool >= 0 && tools[lastTool] === b;
-  };
-  const marked = [];
-  if (Array.isArray(body?.system)) for (const b of body.system) if (b?.cache_control) marked.push(b);
-  if (Array.isArray(body?.tools)) for (const t of body.tools) if (t?.cache_control) marked.push(t);
-  if (Array.isArray(body?.messages)) {
-    for (const m of body.messages) {
-      if (Array.isArray(m?.content)) for (const b of m.content) if (b?.cache_control) marked.push(b);
-    }
-  }
-  const head = marked.filter(isHead);
-  const rest = marked.filter(b => !isHead(b));
-  const keep = Math.max(0, 4 - head.length);
-  for (const b of rest.slice(0, Math.max(0, rest.length - keep))) delete b.cache_control;
-}
+// Marker counting and budget trimming live in ./claudeCache.js — they are a
+// protocol constraint of their own (the API caps cache_control blocks per
+// request), and the budget varies by model/config rather than being fixed at 4.
 
 // Fix tool_use/tool_result ordering for Claude API
 // 1. Assistant message with tool_use: remove text AFTER tool_use (Claude doesn't allow)
@@ -373,7 +340,7 @@ function markFinalToolResults(body) {
   if (last?.role !== ROLE.USER || !Array.isArray(last.content)) return false;
   if (!last.content.some((block) => block?.type === CLAUDE_BLOCK.TOOL_RESULT)) return false;
   if (last.content.some((block) => block?.cache_control)) return false;
-  if (countCacheControlBlocks(body) >= 4) return false;
+  if (countCacheControlBlocks(body) >= CACHE_DEFAULT_MARKERS) return false;
   return markLastCacheableBlock(last);
 }
 
@@ -418,11 +385,11 @@ export function anchorClaudeCache(body) {
   }
 
   // Budget guard AFTER the head anchors: with the last system block and last
-  // tool pinned, at most 2 slots remain. At >= 4 markers the client has spent
-  // the rest of the budget and every remaining marker is itself a valid
-  // breakpoint — re-anchoring the tail could only exceed 4, so trim instead.
-  if (countCacheControlBlocks(body) >= 4) {
-    capCacheControlBlocks(body);
+  // tool pinned, at most 2 slots remain. At the full budget the client has
+  // spent the rest and every remaining marker is itself a valid breakpoint —
+  // re-anchoring the tail could only exceed the budget, so trim instead.
+  if (countCacheControlBlocks(body) >= CACHE_DEFAULT_MARKERS) {
+    applyClaudeCacheLimits(body, { maxMarkers: CACHE_DEFAULT_MARKERS });
     return body;
   }
 
