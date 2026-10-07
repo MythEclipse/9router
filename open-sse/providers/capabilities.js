@@ -620,7 +620,32 @@ function isCommandCodeTextOnly(model) {
   }
   return false;
 }
-export function getCapabilitiesForModel(provider, model) {
+// Memo for the table/pattern resolution below. /v1/models resolves every
+// catalog entry per request, and each resolution walks ~106 glob patterns —
+// about 98 ms for the full catalog. Results are pure functions of the static
+// tables plus the catalog overlay, so they are cached until that overlay
+// changes.
+//
+// The entry lives on globalThis for the same reason catalogSource does: this
+// module is bundled into several route chunks, and a memo installed in one copy
+// must be visible (and invalidatable) from the others. Validity is tied to the
+// catalog source's identity, so setCatalogSource() from any copy invalidates
+// every copy; catalogOverride.invalidateCatalog() nulls it directly after the
+// catalog file is re-read, because the source object itself does not change
+// then. Values are stored once and handed back as fresh shallow copies so a
+// caller mutating its result cannot poison the cache.
+const CAPS_MEMO_MAX = 20000;
+
+function capsMemo() {
+  const source = getCatalogSource();
+  const memo = globalThis.__9rCapsMemo;
+  if (memo && memo.source === source) return memo;
+  const fresh = { source, entries: new Map() };
+  globalThis.__9rCapsMemo = fresh;
+  return fresh;
+}
+
+function resolveCapabilities(provider, model) {
   if (!model) return { ...DEFAULT_CAPABILITIES };
 
   // Canonical exact lookup strips vendor prefix: "anthropic/claude-opus-4.7" -> "claude-opus-4.7".
@@ -664,4 +689,26 @@ export function getCapabilitiesForModel(provider, model) {
 
   // 4. Floor
   return refine(null, provider, model);
+}
+
+/**
+ * Resolve a model's capabilities: provider override -> exact id -> glob
+ * pattern -> safe floor, refined by the synced catalog and the name
+ * heuristic. Pure, so the answer is memoized per (provider, model) until the
+ * catalog changes; a fresh shallow copy is returned on every call.
+ *
+ * @param {string|null} provider - Provider id in the local id space
+ * @param {string} model - Model id (vendor prefix stripped for exact lookup)
+ * @returns {object} capabilities merged over DEFAULT_CAPABILITIES
+ */
+export function getCapabilitiesForModel(provider, model) {
+  const memo = capsMemo();
+  const key = `${provider || ""}\u0000${model}`;
+  const cached = memo.entries.get(key);
+  if (cached) return { ...cached };
+
+  const resolved = resolveCapabilities(provider, model);
+  if (memo.entries.size >= CAPS_MEMO_MAX) memo.entries.clear();
+  memo.entries.set(key, resolved);
+  return { ...resolved };
 }

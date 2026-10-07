@@ -72,6 +72,10 @@ export function getCatalogLimits(provider, model) {
 // Force a re-read on the next lookup (called right after a sync writes the file).
 export function invalidateCatalog() {
   cachedMtime = -1;
+  // Capabilities derived from this file were memoized while it was read — drop
+  // them too. The source object identity does not change here (installCatalogSource
+  // already ran), so the memo's own source check cannot catch this case.
+  globalThis.__9rCapsMemo = null;
 }
 
 // Hand the reader to capabilities.js. That module is bundled into the browser

@@ -387,12 +387,25 @@ export const PATTERN_PRICING = [
   { pattern: "grok-*",          pricing: { input: 0.50,  output: 2.00,  cached: 0.25,  reasoning: 3.00,   cache_creation: 0.50  } },
 ];
 
+// Glob patterns come from static config tables, so compiling a RegExp for every
+// (pattern, model) pair was pure overhead: /v1/models runs ~106 patterns across
+// the whole catalog on every request. Compile once per distinct pattern — the
+// entries are few (config constants), and the size guard keeps an adversarial
+// caller from growing the map.
+const patternRegexCache = new Map();
+const PATTERN_REGEX_CACHE_MAX = 4096;
+
 /**
  * Match a model ID against a glob pattern (* = wildcard). Case-insensitive:
  * registry ids mix casing (e.g. "MiniMax-M2.5" vs "minimax-m2.5").
  */
 export function matchPattern(pattern, model) {
-  const regex = new RegExp("^" + pattern.split("*").map(s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".*") + "$", "i");
+  let regex = patternRegexCache.get(pattern);
+  if (!regex) {
+    regex = new RegExp("^" + pattern.split("*").map(s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".*") + "$", "i");
+    if (patternRegexCache.size >= PATTERN_REGEX_CACHE_MAX) patternRegexCache.clear();
+    patternRegexCache.set(pattern, regex);
+  }
   return regex.test(model);
 }
 
