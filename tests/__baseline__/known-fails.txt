@@ -26,8 +26,6 @@ tests/unit/db-concurrent.test.js :: DB Concurrency — atomic safety 100 paralle
 tests/unit/db-concurrent.test.js :: DB Concurrency — atomic safety daily summary aggregates correctly under parallel writes
 tests/unit/db-concurrent.test.js :: DB Concurrency — atomic safety mixed concurrent: usage + details + connections + aliases
 tests/unit/executor-const-guard.test.js :: antigravity retry (intentional change: 429=6, 503=3) 429 attempts = 6
-tests/unit/force-stream-config.test.js :: forceStream provider config keeps forced-stream providers streaming for JSON clients when body.stream is false
-tests/unit/force-stream-config.test.js :: forceStream provider config keeps forced-stream providers streaming for JSON clients when body.stream is undefined
 tests/unit/image-fetch-hardening.test.js :: fetchImageAsBase64 hardening accepts valid PNG from public host
 tests/unit/image-generation.test.js :: handleImageGenerationCore generates image with Codex gpt-5.5-image using current Codex version header
 tests/unit/image-generation.test.js :: handleImageGenerationCore generates image with Codex gpt-5.6-luna-image using current Codex version header
