@@ -77,7 +77,7 @@ describe("dashboard guard public LLM API access", () => {
     }));
 
     expect(response.status).toBe(401);
-    expect(response.body.error).toBe("API key required for remote API access");
+    expect(response.body.error.message).toBe("API key required for remote API access");
   });
 
   it("allows loopback peer IP regardless of Host", async () => {
@@ -94,7 +94,7 @@ describe("dashboard guard public LLM API access", () => {
     const response = await proxy(request("/api/v1/chat/completions", { host: "router.example.com" }));
 
     expect(response.status).toBe(401);
-    expect(response.body.error).toBe("API key required for remote API access");
+    expect(response.body.error.message).toBe("API key required for remote API access");
   });
 
   it("allows loopback rewritten public LLM API without API key", async () => {
@@ -108,28 +108,28 @@ describe("dashboard guard public LLM API access", () => {
     const response = await proxy(request("/v1beta/models", { host: "router.example.com" }));
 
     expect(response.status).toBe(401);
-    expect(response.body.error).toBe("API key required for remote API access");
+    expect(response.body.error.message).toBe("API key required for remote API access");
   });
 
   it("rejects remote rewritten beta public LLM API without API key", async () => {
     const response = await proxy(request("/api/v1beta/models", { host: "router.example.com" }));
 
     expect(response.status).toBe(401);
-    expect(response.body.error).toBe("API key required for remote API access");
+    expect(response.body.error.message).toBe("API key required for remote API access");
   });
 
   it("rejects remote codex rewrite without API key", async () => {
     const response = await proxy(request("/codex/x", { host: "router.example.com" }));
 
     expect(response.status).toBe(401);
-    expect(response.body.error).toBe("API key required for remote API access");
+    expect(response.body.error.message).toBe("API key required for remote API access");
   });
 
   it("rejects remote /responses rewrite without API key", async () => {
     const response = await proxy(request("/responses", { host: "router.example.com" }));
 
     expect(response.status).toBe(401);
-    expect(response.body.error).toBe("API key required for remote API access");
+    expect(response.body.error.message).toBe("API key required for remote API access");
   });
 
   it("allows remote /responses rewrite with a valid API key", async () => {
@@ -304,5 +304,46 @@ describe("dashboard guard helpers", () => {
     });
 
     expect(__test__.extractApiKey(apiRequest)).toBe("header-key");
+  });
+});
+
+describe("dashboard guard error envelopes by protocol", () => {
+  it("answers Anthropic paths with the Messages error envelope", async () => {
+    const response = await proxy(request("/v1/messages", { host: "router.example.com" }));
+
+    expect(response.status).toBe(401);
+    expect(response.body.type).toBe("error");
+    expect(response.body.error.type).toBe("authentication_error");
+    expect(response.body.error.message).toBe("API key required for remote API access");
+    // Anthropic envelopes carry no `code`
+    expect(response.body.error.code).toBeUndefined();
+  });
+
+  it("answers count_tokens the same way", async () => {
+    const response = await proxy(request("/v1/messages/count_tokens", { host: "router.example.com" }));
+
+    expect(response.status).toBe(401);
+    expect(response.body.type).toBe("error");
+    expect(response.body.error.type).toBe("authentication_error");
+  });
+
+  it("keeps the OpenAI envelope on chat completions", async () => {
+    const response = await proxy(request("/v1/chat/completions", { host: "router.example.com" }));
+
+    expect(response.status).toBe(401);
+    expect(response.body.type).toBeUndefined();
+    expect(response.body.error.message).toBe("API key required for remote API access");
+    expect(response.body.error.type).toBe("authentication_error");
+    expect(response.body.error.code).toBe("invalid_api_key");
+  });
+
+  it("keeps the OpenAI envelope on /responses and /codex", async () => {
+    for (const path of ["/responses", "/codex/x"]) {
+      const response = await proxy(request(path, { host: "router.example.com" }));
+
+      expect(response.status, path).toBe(401);
+      expect(response.body.type, path).toBeUndefined();
+      expect(response.body.error.type, path).toBe("authentication_error");
+    }
   });
 });

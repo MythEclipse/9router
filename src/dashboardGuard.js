@@ -3,6 +3,8 @@ import { getSettings, validateApiKey } from "@/lib/localDb";
 import { getConsistentMachineId } from "@/shared/utils/machineId";
 import { verifyDashboardAuthToken } from "@/lib/auth/dashboardSession";
 import { hasTrustedPeerHeaders } from "@/lib/auth/trustedPeer";
+import { buildErrorBody } from "open-sse/utils/error.js";
+import { FORMATS } from "open-sse/translator/formats.js";
 
 const CLI_TOKEN_HEADER = "x-9r-cli-token";
 const CLI_TOKEN_SALT = "9r-cli-auth";
@@ -36,6 +38,17 @@ const PUBLIC_API_PATHS = [
 // Public top-level prefixes (LLM API endpoints with their own API key auth).
 // Keep root-level rewrites here too: middleware runs before Next.js rewrites.
 const PUBLIC_PREFIXES = ["/v1", "/v1beta", "/api/v1", "/api/v1beta", "/codex", "/responses"];
+
+// Anthropic clients only ever call these paths, and their SDK parses the
+// response as a Messages error envelope — an OpenAI-shaped (or flat) body comes
+// back as a generic APIConnectionError that hides the real 401. This guard runs
+// before any route handler, so it has to speak the caller's protocol too.
+const CLAUDE_API_PREFIXES = ["/v1/messages", "/v1beta/messages", "/api/v1/messages"];
+
+function llmApiAuthErrorBody(pathname, message) {
+  const clientFormat = CLAUDE_API_PREFIXES.some((p) => pathname.startsWith(p)) ? FORMATS.CLAUDE : null;
+  return buildErrorBody(401, message, clientFormat);
+}
 
 // Always require JWT token regardless of requireLogin setting
 const ALWAYS_PROTECTED = [
@@ -223,7 +236,7 @@ export async function proxy(request) {
 
   if (isPublicLlmApi(pathname)) {
     if (await canAccessPublicLlmApi(request)) return NextResponse.next();
-    return NextResponse.json({ error: "API key required for remote API access" }, { status: 401 });
+    return NextResponse.json(llmApiAuthErrorBody(pathname, "API key required for remote API access"), { status: 401 });
   }
 
   // Deny-by-default for /api/* — public allow-list bypasses, everything else requires auth.
