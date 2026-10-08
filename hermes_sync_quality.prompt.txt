@@ -1,0 +1,47 @@
+The fork asepharyana/9router just merged decolua/9router (branch master) into its
+default branch. The merge itself is already committed and correct.
+
+Files the merge changed:
+  - CHANGELOG.md
+  - cli/README.md
+  - cli/cli.js
+  - cli/package.json
+  - cli/src/cli/api/client.js
+  - cli/src/cli/commands/connect.js
+  - cli/src/cli/commands/connectTools.js
+  - cli/src/cli/commands/show.js
+  - cli/src/cli/menus/cliTools.js
+  - cli/src/cli/menus/combos.js
+  - cli/src/cli/menus/providers.js
+  - cli/src/cli/utils/comboModelId.js
+  - next.config.mjs
+  - open-sse/config/awsConstants.js
+  - open-sse/config/providerModels.js
+  - open-sse/executors/antigravity.js
+  - open-sse/executors/bedrock.js
+  - open-sse/executors/codex.js
+  - open-sse/executors/cursor.js
+  - open-sse/executors/default.js
+  - open-sse/executors/index.js
+  - open-sse/executors/kiro.js
+  - open-sse/executors/minimax-code.js
+  - open-sse/handlers/chatCore.js
+  - open-sse/handlers/chatCore/requestDetail.js
+  - open-sse/handlers/imageGenerationCore.js
+  - open-sse/handlers/imageProviders/codex.js
+  - open-sse/handlers/sttCore.js
+  - open-sse/handlers/systemoneCore.js
+  - open-sse/providers/capabilities.js
+  ... and 133 more
+
+TASK: improve code quality of ONLY these files — naming, DRY, error
+handling, missing types, docstrings, clear anti-patterns.
+
+RULES:
+- Behavior must stay identical. Do NOT add features or change logic.
+- Do NOT rewrite the upstream architecture; this is a fresh merge.
+- Run the repository's checks when they exist, using the package manager its
+  lockfile implies (pnpm-lock.yaml -> pnpm, bun.lock -> bun,
+  package-lock.json -> npm), else `cargo test`/`pytest -q`. Keep them green.
+- Commit exactly one commit: `git add -A && git commit --message="fix: auto-fix code quality [skip ci]"`
+- Do NOT push — the harness pushes after you finish.
