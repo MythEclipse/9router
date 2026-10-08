@@ -60,6 +60,11 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       const resolvedProxy = await resolveConnectionProxyConfig({ proxyPoolId: pickedId || "" });
       return {
         id: "noauth",
+        // Every handler reports failures with markAccountUnavailable(credentials.connectionId).
+        // Without this field that call hits its `!connectionId` guard and the no-auth
+        // branch below never runs, so a 429 on a public provider was handed to the
+        // client instead of rotating the proxy and retrying.
+        connectionId: "noauth",
         connectionName: "Public",
         isActive: true,
         accessToken: "public",

@@ -47,6 +47,34 @@ async function normalizeProxyPoolId(proxyPoolId) {
   return { proxyPoolId: normalizedId };
 }
 
+/**
+ * Next free ordinal for an unnamed API key on this provider, so repeated adds
+ * produce distinct, human-readable identities ("Gemini #1", "Gemini #2", …)
+ * instead of colliding on the provider label.
+ *
+ * Reuses the exact key when it is already stored: re-adding an existing key is an
+ * edit of that entry, not the arrival of a new one, and must keep its name.
+ */
+async function nextKeyOrdinal(provider, apiKey) {
+  const existing = await getProviderConnections({ provider });
+  const sameKey = apiKey ? existing.find((c) => c.apiKey === apiKey) : null;
+  if (sameKey?.name) {
+    const match = / #(\d+)$/.exec(sameKey.name);
+    if (match) return Number(match[1]);
+  }
+  const taken = new Set(
+    existing
+      .map((c) => {
+        const match = / #(\d+)$/.exec(c.name || "");
+        return match ? Number(match[1]) : null;
+      })
+      .filter((n) => Number.isInteger(n))
+  );
+  let ordinal = 1;
+  while (taken.has(ordinal)) ordinal++;
+  return ordinal;
+}
+
 // GET /api/providers - List all connections
 export async function GET() {
   try {
@@ -121,10 +149,13 @@ export async function POST(request) {
     if (!apiKey && provider !== "ollama-local" && !hasApiKeySubstitute) {
       return NextResponse.json({ error: `${isWebCookieProvider ? "Cookie value" : "API Key"} is required` }, { status: 400 });
     }
-    const connectionName = name || displayName || AI_PROVIDERS[provider]?.name;
-    if (!connectionName) {
-      return NextResponse.json({ error: "Name is required" }, { status: 400 });
-    }
+    // Key pools: several keys for one provider is the normal case, so the router
+    // can fail over when one is rate-limited. Identity must therefore come from the
+    // key, not the provider label — two keys both named "Gemini" collide and the
+    // second POST is refused with 409, leaving a one-key pool that cannot fall back.
+    // An explicit name from the caller still wins.
+    const explicitName = typeof name === "string" && name.trim() ? name.trim() : displayName;
+    const connectionName = explicitName || `${AI_PROVIDERS[provider]?.name || provider} #${await nextKeyOrdinal(provider, apiKey)}`;
 
     let providerSpecificData = normalizeProviderSpecificData(provider, body, body.providerSpecificData);
 
