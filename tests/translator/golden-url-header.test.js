@@ -17,11 +17,15 @@ const SPECIAL_CRED = {
 
 // Provider cần executor riêng (buildUrl/buildHeaders không nằm ở DefaultExecutor) → bỏ qua ở golden này.
 // Chúng được lock riêng ở 11-provider edge tests / unit test chuyên biệt.
+// bedrock*/minimax-code* have their own executors (and their own suites:
+// bedrock-provider.test.js, minimax-code.test.js) — DefaultExecutor cannot build
+// their headers, so keeping them here would only pin "THROW: …" as expected output.
 const SPECIALIZED = new Set([
   "antigravity", "azure", "gemini-cli", "github", "iflow", "qoder", "kiro",
   "codex", "cursor", "vertex", "vertex-partner", "opencode",
   "opencode-go", "grok-web", "perplexity-web", "ollama-local", "commandcode",
   "xiaomi-tokenplan", "mimo-free",
+  "bedrock", "bedrock-xai", "minimax-code", "minimax-code-global",
 ]);
 
 // Sanitize header: khử token + field thời gian động (kimi X-Msh-Device-Id) để snapshot ổn định.
@@ -32,6 +36,10 @@ function sanitize(headers) {
       ? v.replace(/Bearer .+/, "Bearer <TOK>")
           .replace(/«redacted:sk-…»|tok-test-ACCESS/g, "<CRED>")
           .replace(/kimi-\d{10,}/g, "kimi-<TS>")
+          // X-Mavis-Session-Id is a fresh randomUUID() per request (default.js),
+          // so the snapshot would differ on every run — and across hosts. Pin it
+          // to a placeholder like the host/version pins below.
+          .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "<UUID>")
           // X-Msh-Device-Name is os.hostname(), so the snapshot would embed
           // whichever machine generated it and fail on every other host (CI
           // runners, contributors). Pin it to a placeholder.

@@ -17,8 +17,10 @@ describe("aggregateComboCapabilities: resolveCaps override", () => {
 
   it("falls back to the pattern default without a resolver", () => {
     const caps = aggregateComboCapabilities(models);
-    // glm-5.3 has no exact entry, so the *glm-5.3* pattern gives 200k and caps the combo.
-    expect(caps.contextWindow).toBe(200_000);
+    // Local tables own the answer when no resolver is supplied. glm-5.3 has an
+    // exact entry at 1M (the stale 200k *glm-5* pattern no longer applies), so
+    // the combo resolves to 1M — matching what /v1/models reports server-side.
+    expect(caps.contextWindow).toBe(1_000_000);
   });
 
   it("uses the fed limits when a resolver supplies them", () => {
