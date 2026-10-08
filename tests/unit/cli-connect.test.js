@@ -194,10 +194,16 @@ describe("connect run()", () => {
   beforeEach(() => {
     home = fs.mkdtempSync(path.join(os.tmpdir(), "9r-connect-run-"));
     vi.spyOn(os, "homedir").mockReturnValue(home);
+    // crushPath() prefers $XDG_CONFIG_HOME over homedir(), so a runner that
+    // exports it (GitHub Actions does) would write outside the temp HOME and
+    // every assertion below would read the wrong file. The sibling
+    // "connect tool writers" describe already stubs this; keep them in sync.
+    vi.stubEnv("XDG_CONFIG_HOME", "");
     vi.spyOn(console, "log").mockImplementation(() => {});
   });
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
     fs.rmSync(home, { recursive: true, force: true });
   });
 
