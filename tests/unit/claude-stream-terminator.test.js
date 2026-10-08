@@ -95,4 +95,27 @@ describe("claude SSE stream termination when the upstream dies mid-stream", () =
     expect(out).toContain('"input_tokens":');
     expect(out).toContain('"output_tokens":0');
   });
+
+  it("emits a structured error frame when the upstream yields ZERO events", async () => {
+    // A 200 SSE body with nothing in it is the SDK's StreamNoEventsError /
+    // "empty or malformed response (HTTP 200)". Closing silently leaves the
+    // client with nothing to act on; it must get a real error event.
+    const out = await runUpstream(["data: [DONE]\n\n"]);
+
+    const types = eventTypes(out);
+    expect(types).toContain("error");
+    expect(out).toContain('"type":"error"');
+    expect(types).not.toContain("message_start");
+  });
+
+  it("does not append an error frame to a stream that did emit events", async () => {
+    const out = await runUpstream([
+      'data: {"id":"chatcmpl-ok2","object":"chat.completion.chunk","model":"big-pickle","choices":[{"index":0,"delta":{"role":"assistant","content":"Yo"},"finish_reason":null}]}\n\n',
+      "data: [DONE]\n\n"
+    ]);
+
+    const types = eventTypes(out);
+    expect(types).toContain("message_stop");
+    expect(types).not.toContain("error");
+  });
 });

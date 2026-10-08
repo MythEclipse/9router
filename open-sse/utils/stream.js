@@ -2,7 +2,8 @@ import { translateResponse, initState } from "../translator/index.js";
 import { FORMATS } from "../translator/formats.js";
 import { trackPendingRequest, appendRequestLog } from "@/lib/usageDb.js";
 import { extractUsage, mergeUsage, hasValidUsage, estimateUsage, logUsage, addBufferToUsage, filterUsageForFormat, COLORS } from "./usageTracking.js";
-import { parseSSELine, hasValuableContent, fixInvalidId, formatSSE } from "./streamHelpers.js";
+import { parseSSELine, hasValuableContent, fixInvalidId, formatSSE, buildStreamErrorBytes } from "./streamHelpers.js";
+import { HTTP_STATUS } from "../config/runtimeConfig.js";
 import { getOpenAIResponsesEventName, isOpenAIResponsesTerminalEvent, formatIncompleteOpenAIResponsesStreamFailure } from "./responsesStreamHelpers.js";
 import { dbg, isDebugEnabled } from "./debugLog.js";
 
@@ -486,6 +487,7 @@ export function createSSEStream(options = {}) {
                 const output = formatSSE(item, sourceFormat);
                 reqLogger?.appendConvertedChunk?.(output);
                 controller.enqueue(sharedEncoder.encode(output));
+                sseEmittedCount++;
               }
             }
           }
@@ -506,7 +508,25 @@ export function createSSEStream(options = {}) {
             const output = formatSSE(item, sourceFormat);
             reqLogger?.appendConvertedChunk?.(output);
             controller.enqueue(sharedEncoder.encode(output));
+            sseEmittedCount++;
           }
+        }
+
+        // Anthropic client + a translate stream that never produced a single
+        // event (sseEmittedCount stayed at 0) is an HTTP 200 body with ZERO
+        // events — the SDK's StreamNoEventsError / "API returned an empty or
+        // malformed response (HTTP 200)". Close silently and the client can
+        // only guess; emit a structured error frame instead, mirroring the 502
+        // the non-streaming path returns for the same empty upstream.
+        // Keyed on emitted frames rather than messageStartSent so it stays
+        // correct for whichever response translator ran.
+        if (mode === STREAM_MODE.TRANSLATE && sourceFormat === FORMATS.CLAUDE &&
+            sseEmittedCount === 0) {
+          const emptyOutput = new TextDecoder().decode(
+            buildStreamErrorBytes(HTTP_STATUS.BAD_GATEWAY, "Upstream returned an empty stream", sourceFormat)
+          );
+          reqLogger?.appendConvertedChunk?.(emptyOutput);
+          controller.enqueue(sharedEncoder.encode(emptyOutput));
         }
 
         // Synthesize response.failed if a Responses passthrough stream never reached a terminal event
