@@ -12,6 +12,38 @@ export function getQuotaCooldown(backoffLevel = 0) {
   return Math.min(cooldown, BACKOFF_CONFIG.max);
 }
 
+// Statuses that make the *IP* the suspect rather than the request: a limit, a
+// deny, or the upstream (or the proxy itself) failing. 400/404/422 are about
+// the body or the model id — nothing a different address would fix.
+const PROXY_FAILURE_STATUSES = new Set([401, 402, 403, 429]);
+
+/**
+ * Should a PROXY be rotated after this response?
+ *
+ * Separate from checkFallbackError on purpose: that one decides whether to cool
+ * an *account* down (and locks 404, because a dead credential answering 404 is
+ * still a dead credential). Rotating a proxy is a different axis — burning a
+ * clean IP because a client asked for a model that does not exist would exhaust
+ * the pool over a typo. So: limits, IP-level denies, upstream/proxy failures and
+ * the limit wording in ERROR_RULES' backoff rules; nothing else.
+ *
+ * @param {number} status - HTTP status (0 / undefined = connect-level failure)
+ * @param {string} errorText
+ * @returns {boolean}
+ */
+export function shouldRotateProxy(status, errorText) {
+  const code = Number(status) || 0;
+  if (code === 0) return true;                 // DNS/connect/TLS/timeout via the proxy
+  if (code >= 500) return true;                // upstream blew up, or the proxy 502/504'd
+  if (PROXY_FAILURE_STATUSES.has(code)) return true;
+
+  const lower = typeof errorText === "string" ? errorText.toLowerCase()
+    : errorText ? JSON.stringify(errorText).toLowerCase() : "";
+  if (!lower) return false;
+  // Config-driven: the same limit wording that drives account backoff.
+  return ERROR_RULES.some((rule) => rule.backoff && rule.text && lower.includes(rule.text));
+}
+
 /**
  * Check if error should trigger account fallback (switch to next account)
  * Config-driven: matches ERROR_RULES top-to-bottom (text rules first, then status)

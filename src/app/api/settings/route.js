@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSettings, updateSettings } from "@/lib/localDb";
 import { applyOutboundProxyEnv } from "@/lib/network/outboundProxy";
 import { resetComboRotation } from "open-sse/services/combo.js";
+import { resetProxyHealth } from "@/lib/network/proxyHealth";
 import bcrypt from "bcryptjs";
 
 export const dynamic = "force-dynamic";
@@ -94,6 +95,12 @@ export async function PATCH(request) {
       Object.prototype.hasOwnProperty.call(body, "comboStrategies")
     ) {
       resetComboRotation();
+    }
+
+    // Same for proxy rotation: a changed strategy must start from a clean slate
+    // instead of inheriting the previous strategy's pinned pool / cooldowns.
+    if (Object.prototype.hasOwnProperty.call(body, "providerStrategies")) {
+      resetProxyHealth();
     }
 
     if (

@@ -1,4 +1,5 @@
 import { getProxyPoolById } from "@/models";
+import { pickSmartProxyPoolId } from "./proxyHealth.js";
 
 // Safely normalize any value into a trimmed string.
 function normalizeString(value) {
@@ -11,23 +12,40 @@ const rotateState = new Map(); // providerId → { index }
 
 /**
  * Pick one proxy pool ID from a list based on strategy.
+ * smart:       sticky — the same pool until it reports a limit/error, then
+ *              rotate (see proxyHealth.js). Nothing else moves it.
  * round-robin: cycle sequentially (in-memory, resets on restart)
  * random:      uniform random pick
  * none/single: return first entry
+ *
+ * `options.excludePoolIds` (a Set) removes pools already tried in THIS request,
+ * so a failure retry can never hand back the pool that just failed.
  */
-export function pickProxyPoolId(poolIds, strategy, providerId) {
+export function pickProxyPoolId(poolIds, strategy, providerId, options = {}) {
   if (!poolIds || poolIds.length === 0) return null;
   if (poolIds.length === 1) return poolIds[0];
 
+  const exclude = options.excludePoolIds instanceof Set && options.excludePoolIds.size > 0
+    ? options.excludePoolIds
+    : null;
+  // Never return nothing: if every pool is already excluded, fall back to the
+  // full list so the caller still gets *a* proxy instead of going out direct.
+  const candidates = exclude ? poolIds.filter((id) => !exclude.has(id)) : poolIds;
+  const list = candidates.length > 0 ? candidates : poolIds;
+
+  if (strategy === "smart") {
+    return pickSmartProxyPoolId(list, providerId, exclude);
+  }
+
   if (strategy === "round-robin") {
     const state = rotateState.get(providerId) || { index: -1 };
-    state.index = (state.index + 1) % poolIds.length;
+    state.index = (state.index + 1) % list.length;
     rotateState.set(providerId, state);
-    return poolIds[state.index];
+    return list[state.index];
   }
 
   if (strategy === "random") {
-    return poolIds[Math.floor(Math.random() * poolIds.length)];
+    return list[Math.floor(Math.random() * list.length)];
   }
 
   return poolIds[0]; // "none" or unknown

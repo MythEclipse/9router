@@ -46,6 +46,37 @@ function startBackgroundTokenRefreshFromCustomServer() {
     });
 }
 
+// Route prewarm: every route pays a one-off module load + JIT on its first
+// request (measured on this repo: 45-554ms cold vs 4ms warm), and the first
+// request comes from a real client. Pull that cost into boot instead. GET only
+// and public paths only — no bodies, no credentials, nothing that can reach an
+// upstream provider; a POST-only route still loads its chunk before answering
+// 405. Fire-and-forget: boot never waits on it and a failure is not fatal.
+const WARMUP_ROUTES = [
+  "/api/health",
+  "/api/auth/status",
+  "/api/init",
+  "/api/version",
+  "/v1/models",
+  "/v1/models/info",
+  "/v1/chat/completions",
+  "/v1/messages",
+  "/v1/responses",
+  "/v1/embeddings",
+  "/v1/images/generations",
+  "/v1/audio/speech",
+  "/v1/search",
+];
+
+function warmUpRoutes(address) {
+  const port = address && typeof address === "object" ? address.port : null;
+  if (!port) return;
+  const origin = `http://127.0.0.1:${port}`;
+  for (const path of WARMUP_ROUTES) {
+    fetch(origin + path, { method: "GET", signal: AbortSignal.timeout(10000) }).catch(() => {});
+  }
+}
+
 // Wrap Next standalone HTTP server: derive client IP from the TCP socket
 // (unspoofable) and strip client-supplied forwarding headers so downstream
 // rate-limiting keys on the real peer address instead of attacker-controlled XFF.
@@ -75,6 +106,7 @@ http.createServer = (...args) => {
   const server = origCreate(...rest, wrapped);
   server.once("listening", () => {
     startBackgroundTokenRefreshFromCustomServer();
+    warmUpRoutes(server.address());
   });
   const origEmit = server.emit;
   // JBR 25 sends h2c upgrades that the HTTP/1.1 server would otherwise close.

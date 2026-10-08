@@ -83,11 +83,13 @@ export async function handleSystemone(request) {
 
   // Credential + fallback loop (mirrors handleEmbeddings)
   const excludeConnectionIds = new Set();
+  // Proxy pools already tried in THIS request (no-auth rotation strategies).
+  const excludePoolIds = new Set();
   let lastError = null;
   let lastStatus = null;
 
   while (true) {
-    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model);
+    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model, { excludePoolIds });
 
     // All accounts unavailable
     if (!credentials || credentials.allRateLimited) {
@@ -137,11 +139,17 @@ export async function handleSystemone(request) {
       return result.response;
     }
 
-    const { shouldFallback } = await markAccountUnavailable(credentials.connectionId, result.status, result.error, provider, model);
+    const { shouldFallback } = await markAccountUnavailable(credentials.connectionId, result.status, result.error, provider, model, null, {
+      excludePoolIds,
+      proxyPoolId: credentials.providerSpecificData?.connectionProxyPoolId || null,
+    });
 
     if (shouldFallback) {
       log.warn("AUTH", `Account ${credentials.connectionName} unavailable (${result.status}), trying fallback`);
       excludeConnectionIds.add(credentials.connectionId);
+      // Never hand this request the proxy that just failed again (no-auth rotation).
+      const failedPoolId = credentials.providerSpecificData?.connectionProxyPoolId;
+      if (failedPoolId) excludePoolIds.add(failedPoolId);
       lastError = result.error;
       lastStatus = result.status;
       continue;

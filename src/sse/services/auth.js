@@ -1,6 +1,7 @@
 import { getProviderConnections, validateApiKey, updateProviderConnection, getSettings, getProxyPools } from "@/lib/localDb";
 import { resolveConnectionProxyConfig, pickProxyPoolId } from "@/lib/network/connectionProxy";
-import { formatRetryAfter, checkFallbackError, isModelLockActive, buildModelLockUpdate, getEarliestModelLockUntil } from "open-sse/services/accountFallback.js";
+import { markProxyUnhealthy } from "@/lib/network/proxyHealth";
+import { formatRetryAfter, checkFallbackError, isModelLockActive, buildModelLockUpdate, getEarliestModelLockUntil, shouldRotateProxy } from "open-sse/services/accountFallback.js";
 import { MAX_RATE_LIMIT_COOLDOWN_MS } from "open-sse/config/errorConfig.js";
 import { resolveProviderId, FREE_PROVIDERS } from "@/shared/constants/providers.js";
 import { getAntigravityQuotaCache } from "./antigravityQuota.js";
@@ -52,7 +53,9 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       if (strategy !== "none") {
         const allPools = await getProxyPools({ isActive: true });
         const poolIds = allPools.filter(p => p.proxyUrl).map(p => p.id);
-        pickedId = pickProxyPoolId(poolIds, strategy, providerId);
+        // excludePoolIds = pools this request already tried after a limit/error,
+        // so "smart" can never hand back the pool that just failed.
+        pickedId = pickProxyPoolId(poolIds, strategy, providerId, { excludePoolIds: options.excludePoolIds });
       }
       const resolvedProxy = await resolveConnectionProxyConfig({ proxyPoolId: pickedId || "" });
       return {
@@ -230,6 +233,54 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
 }
 
 /**
+ * No-auth providers (OpenCode Free, …) have no account to lock: the limit hits
+ * the PROXY's IP. Under a rotation strategy this cools the failing pool down and
+ * returns shouldFallback so the caller retries on another proxy; with strategy
+ * "none", a single pool, or a caller that does not track exclusions, the upstream
+ * error is handed straight back — no rotation and no retry loop.
+ *
+ * @param {number} status
+ * @param {string} errorText
+ * @param {string|null} provider
+ * @param {number|null} resetsAtMs - Upstream-supplied exact reset time
+ * @param {{ excludePoolIds?: Set<string>, proxyPoolId?: string|null }} options
+ * @returns {Promise<{ shouldFallback: boolean, cooldownMs: number, proxyPoolId?: string }>}
+ */
+async function markNoAuthProxyUnavailable(status, errorText, provider, resetsAtMs, options) {
+  const excludePoolIds = options.excludePoolIds;
+  const currentPoolId = options.proxyPoolId;
+  if (!(excludePoolIds instanceof Set) || !currentPoolId) return { shouldFallback: false, cooldownMs: 0 };
+
+  const providerId = resolveProviderId(provider);
+  const settings = await getSettings();
+  const strategy = (settings.providerStrategies || {})[providerId]?.rotateStrategy || "none";
+  if (strategy === "none") return { shouldFallback: false, cooldownMs: 0 };
+
+  // Same classifier the account path uses: 429/403/402 + quota wording, 5xx and
+  // network failures fall through as retryable; request-scoped 4xx (400/404/422)
+  // do not — those say nothing about the IP, so the proxy must NOT rotate.
+  const shouldRotate = resetsAtMs && resetsAtMs > Date.now()
+    ? true
+    : shouldRotateProxy(status, errorText);
+  if (!shouldRotate) return { shouldFallback: false, cooldownMs: 0 };
+
+  const cooldownMs = resetsAtMs && resetsAtMs > Date.now()
+    ? Math.min(resetsAtMs - Date.now(), MAX_RATE_LIMIT_COOLDOWN_MS)
+    : 30 * 1000;
+
+  // Rotate only when another pool is actually available — otherwise return the
+  // error instead of looping over the same dead pool.
+  const allPools = await getProxyPools({ isActive: true });
+  const poolIds = allPools.filter(p => p.proxyUrl).map(p => p.id);
+  const remaining = poolIds.filter(id => !excludePoolIds.has(id) && id !== currentPoolId);
+  if (remaining.length === 0) return { shouldFallback: false, cooldownMs: 0 };
+
+  markProxyUnhealthy(providerId, currentPoolId, cooldownMs);
+  log.warn("PROXY", `${providerId} | pool ${String(currentPoolId).slice(0, 8)} hit a limit [${status}] → switch (${remaining.length} pool(s) left)`);
+  return { shouldFallback: true, cooldownMs, proxyPoolId: currentPoolId };
+}
+
+/**
  * Mark account+model as unavailable — locks modelLock_${model} in DB.
  * All errors (429, 401, 5xx, etc.) lock per model, not per account.
  * @param {string} connectionId
@@ -237,10 +288,12 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
  * @param {string} errorText
  * @param {string|null} provider
  * @param {string|null} model - The specific model that triggered the error
+ * @param {{ excludePoolIds?: Set<string>, proxyPoolId?: string|null }} [options] - No-auth proxy rotation
  * @returns {{ shouldFallback: boolean, cooldownMs: number }}
  */
-export async function markAccountUnavailable(connectionId, status, errorText, provider = null, model = null, resetsAtMs = null) {
-  if (!connectionId || connectionId === "noauth") return { shouldFallback: false, cooldownMs: 0 };
+export async function markAccountUnavailable(connectionId, status, errorText, provider = null, model = null, resetsAtMs = null, options = {}) {
+  if (!connectionId) return { shouldFallback: false, cooldownMs: 0 };
+  if (connectionId === "noauth") return await markNoAuthProxyUnavailable(status, errorText, provider, resetsAtMs, options);
   const connections = await getProviderConnections({ provider });
   const conn = connections.find(c => c.id === connectionId);
   const backoffLevel = conn?.backoffLevel || 0;

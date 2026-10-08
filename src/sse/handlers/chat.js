@@ -264,12 +264,14 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
 
   // Try with available accounts (fallback on errors)
   const excludeConnectionIds = new Set();
+  // Proxy pools already tried in THIS request (no-auth rotation strategies).
+  const excludePoolIds = new Set();
   let lastError = null;
   let lastStatus = null;
   let lastHeaders = null;
 
   while (true) {
-    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model, { requestedModel: requestedModel || model });
+    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model, { requestedModel: requestedModel || model, excludePoolIds });
 
     // All accounts unavailable
     if (!credentials || credentials.allRateLimited) {
@@ -366,11 +368,17 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
     // Do not persist a modelLock_* for this path.
     const shouldFallback = provider === "antigravity" && quotaResetMs
       ? true
-      : (await markAccountUnavailable(credentials.connectionId, result.status, result.error, provider, model, resetsAtMs)).shouldFallback;
+      : (await markAccountUnavailable(credentials.connectionId, result.status, result.error, provider, model, resetsAtMs, {
+          excludePoolIds,
+          proxyPoolId: credentials.providerSpecificData?.connectionProxyPoolId || null,
+        })).shouldFallback;
 
     if (shouldFallback) {
       log.warn("FALLBACK", `⇄ ACC:${credentials.connectionName} UNAVAILABLE (${result.status}) → NEXT ACCOUNT`);
       excludeConnectionIds.add(credentials.connectionId);
+      // Never hand this request the proxy that just failed again (no-auth rotation).
+      const failedPoolId = credentials.providerSpecificData?.connectionProxyPoolId;
+      if (failedPoolId) excludePoolIds.add(failedPoolId);
       lastError = result.error;
       lastStatus = result.status;
       lastHeaders = upstreamResponseHeaders(result.response?.headers);
