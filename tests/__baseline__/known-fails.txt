@@ -43,7 +43,6 @@ tests/unit/oauth-cursor-auto-import.test.js :: GET /api/oauth/cursor/auto-import
 tests/unit/oauth-cursor-auto-import.test.js :: GET /api/oauth/cursor/auto-import returns not-found when no macOS cursor db paths are accessible
 tests/unit/oauth-cursor-auto-import.test.js :: GET /api/oauth/cursor/auto-import unsupported platform returns 400
 tests/unit/oauth-cursor-auto-import.test.js :: GET /api/oauth/cursor/auto-import unwraps JSON-encoded string values
-tests/unit/openai-to-claude.test.js :: openaiToClaudeResponse omits empty Read pages tool argument before emitting Claude input deltas
 tests/unit/openai-to-commandcode.test.js :: openaiToCommandCodeRequest — native image blocks maps Claude/OpenAI base64 image source to a data-URI image block
 tests/unit/openai-to-commandcode.test.js :: openaiToCommandCodeRequest — native image blocks maps OpenAI image_url data URI to CommandCode {type:image,image,mimeType}
 tests/unit/openai-to-kiro.test.js :: openaiToKiroRequest thinking budget clamps OpenAI Responses reasoning.effort xhigh to max_thinking_length 32000

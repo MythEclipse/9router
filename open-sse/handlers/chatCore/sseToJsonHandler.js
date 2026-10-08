@@ -6,6 +6,7 @@ import { FORMATS } from "../../translator/formats.js";
 import { PROVIDERS } from "../../config/providers.js";
 import { buildRequestDetail, extractRequestConfig, saveUsageStats, formatDoneLine } from "./requestDetail.js";
 import { ROLE, RESPONSES_ITEM } from "../../translator/schema/index.js";
+import { fromOpenAIFinish } from "../../translator/concerns/finishReason.js";
 
 // Responses-API providers (e.g. codex) may emit SSE without content-type + use Responses output shape
 const isResponsesProvider = (p) => PROVIDERS[p]?.format === FORMATS.OPENAI_RESPONSES;
@@ -103,6 +104,78 @@ function chatCompletionToResponses(responseBody, customToolNames = null) {
       output_tokens: usage.completion_tokens || usage.output_tokens || 0,
       total_tokens: usage.total_tokens || (usage.prompt_tokens || 0) + (usage.completion_tokens || 0),
     },
+  };
+}
+
+function parseToolArguments(value) {
+  if (!value) return {};
+  if (typeof value === "object") return value;
+  try { return JSON.parse(value); } catch { return {}; }
+}
+
+/**
+ * Convert a consolidated OpenAI Chat Completions body into an Anthropic
+ * `message` body. Exported so nonStreamingHandler.js shares this ONE
+ * implementation (it already imports parseSSEToOpenAIResponse from here) —
+ * the forced-streaming branch of THIS module used to skip the conversion
+ * entirely and leak a `chat.completion` body at the Anthropic endpoint.
+ *
+ * Without it, a `stream:false` request against a forceStream provider (the
+ * OpenCode zen relay) made Claude Code report "API returned an empty or
+ * malformed response (HTTP 200) ... body is JSON but not a Message".
+ *
+ * Usage follows Anthropic's contract (same maths as
+ * translator/response/openai-to-claude.js): `input_tokens` EXCLUDES the cache
+ * tokens, which are reported alongside as cache_read/cache_creation — OpenAI's
+ * `prompt_tokens` includes them, so it must be subtracted or the client
+ * double-counts.
+ */
+export function openAICompletionToClaudeMessage(responseBody) {
+  if (!responseBody?.choices?.[0]) return responseBody;
+  const choice = responseBody.choices[0];
+  const message = choice.message || {};
+  const content = [];
+
+  const reasoning = message.reasoning_content || message.provider_specific_fields?.reasoning_content || "";
+  if (reasoning) content.push({ type: "thinking", thinking: reasoning });
+  if (typeof message.content === "string" && message.content.length > 0) {
+    content.push({ type: "text", text: message.content });
+  }
+  for (const toolCall of message.tool_calls || []) {
+    const fn = toolCall.function || {};
+    content.push({
+      type: "tool_use",
+      id: toolCall.id || `toolu_${Date.now()}_${content.length}`,
+      name: fn.name || toolCall.name || "",
+      input: parseToolArguments(fn.arguments || toolCall.arguments),
+    });
+  }
+  if (content.length === 0) content.push({ type: "text", text: "" });
+
+  const usage = responseBody.usage || {};
+  const promptTokens = usage.prompt_tokens || usage.input_tokens || 0;
+  const cacheRead = usage.prompt_tokens_details?.cached_tokens ?? usage.cache_read_input_tokens;
+  const cacheCreate = usage.prompt_tokens_details?.cache_creation_tokens ?? usage.cache_creation_input_tokens;
+  const cacheReadTokens = typeof cacheRead === "number" && cacheRead > 0 ? cacheRead : 0;
+  const cacheCreateTokens = typeof cacheCreate === "number" && cacheCreate > 0 ? cacheCreate : 0;
+
+  const usageOut = {
+    input_tokens: Math.max(0, promptTokens - cacheReadTokens - cacheCreateTokens),
+    output_tokens: usage.completion_tokens || usage.output_tokens || 0,
+    // Anthropic clients account cache spend off these.
+    ...(cacheReadTokens > 0 ? { cache_read_input_tokens: cacheReadTokens } : {}),
+    ...(cacheCreateTokens > 0 ? { cache_creation_input_tokens: cacheCreateTokens } : {}),
+  };
+
+  return {
+    id: String(responseBody.id || `msg_${Date.now()}`).replace(/^chatcmpl-/, ""),
+    type: "message",
+    role: "assistant",
+    model: responseBody.model || "unknown",
+    content,
+    stop_reason: fromOpenAIFinish(choice.finish_reason, FORMATS.CLAUDE),
+    stop_sequence: null,
+    usage: usageOut,
   };
 }
 
@@ -368,9 +441,17 @@ export async function handleForcedSSEToJson({ providerResponse, sourceFormat, ta
     // lost on the non-streaming return path. Inlined (not imported from
     // nonStreamingHandler.js) to avoid a circular import: nonStreamingHandler
     // already imports parseSSEToOpenAIResponse from this module.
+    //
+    // Same for an Anthropic client (Claude Code): `stream:false` against a
+    // forceStream provider takes THIS branch, and returning the raw
+    // `chat.completion` body made the SDK reject it with "body is JSON but not
+    // a Message". handleNonStreamingResponse (the true non-streaming path)
+    // already applies the same conversion; the forced-streaming path did not.
     const finalBody = sourceFormat === FORMATS.OPENAI_RESPONSES
       ? chatCompletionToResponses(parsed, customToolNames)
-      : parsed;
+      : sourceFormat === FORMATS.CLAUDE
+        ? openAICompletionToClaudeMessage(parsed)
+        : parsed;
 
     return { success: true, response: new Response(JSON.stringify(restoreToolNames(finalBody, toolNameMap)), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }) };
   } catch (err) {

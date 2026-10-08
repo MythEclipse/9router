@@ -193,7 +193,19 @@ describe("openaiToClaudeResponse", () => {
       }]
     };
 
-    const result = openaiToClaudeResponse(chunk, state);
+    // Tool args are BUFFERED (not streamed) and only flushed when the
+    // finish_reason arrives — that is what gives sanitizeToolArgs a chance to
+    // drop bad params like an empty `pages` on Read. The finish frame used to
+    // be missing from this test, so it asserted on a chunk that could not
+    // possibly emit input_json_delta yet.
+    const finishChunk = {
+      id: "chatcmpl-test",
+      model: "gpt-test",
+      choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }]
+    };
+
+    openaiToClaudeResponse(chunk, state);
+    const result = openaiToClaudeResponse(finishChunk, state);
     const inputDelta = result.find(event => event.delta?.type === "input_json_delta");
 
     expect(inputDelta).toBeDefined();
