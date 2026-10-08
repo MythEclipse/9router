@@ -203,4 +203,81 @@ describe("openaiToClaudeResponse", () => {
       limit: 120
     });
   });
+
+  it("synthesizes a complete empty message for a usage-only terminal frame (choices: [])", () => {
+    // Real shape observed from the OpenCode zen relay / poolside upstream: a
+    // stream whose first-and-only data frame has no choices at all, just usage.
+    // Pre-fix this produced zero Claude events -> client StreamNoEventsError /
+    // "empty or malformed response (HTTP 200)".
+    const state = {};
+    const chunk = {
+      id: "chatcmpl-mai-api-empty",
+      model: "big-pickle",
+      choices: [],
+      usage: {
+        prompt_tokens: 135,
+        completion_tokens: 0,
+        total_tokens: 135,
+        prompt_tokens_details: { cached_tokens: 70 }
+      }
+    };
+
+    const result = openaiToClaudeResponse(chunk, state);
+    expect(result).not.toBeNull();
+
+    const types = result.map(e => e.type);
+    expect(types[0]).toBe("message_start");
+    expect(types).toContain("message_delta");
+    expect(types).toContain("message_stop");
+
+    // The synthesized message must carry the upstream usage (cache included).
+    const delta = result.find(e => e.type === "message_delta");
+    expect(delta.usage.input_tokens).toBe(65); // 135 - 70 cached
+    expect(delta.usage.output_tokens).toBe(0);
+    expect(delta.usage.cache_read_input_tokens).toBe(70);
+    expect(delta.delta.stop_reason).toBe("end_turn");
+
+    // Same chunk again must be a no-op (message already finished).
+    const again = openaiToClaudeResponse(chunk, state);
+    expect(again).toBeNull();
+  });
+
+  it("handles a usage-only interleaved frame after real content without corrupting the stream", () => {
+    const state = { toolCalls: new Map() };
+    const first = openaiToClaudeResponse({
+      id: "chatcmpl-x",
+      model: "m",
+      choices: [{ index: 0, delta: { content: "hi" }, finish_reason: null }]
+    }, state);
+    expect(first.map(e => e.type)).toEqual([
+      "message_start",
+      "content_block_start",
+      "content_block_delta"
+    ]);
+
+    const second = openaiToClaudeResponse({
+      id: "chatcmpl-x",
+      model: "m",
+      choices: [],
+      usage: { prompt_tokens: 12, completion_tokens: 4, total_tokens: 16 }
+    }, state);
+    // message_delta + message_stop must be emitted so the client sees a terminal.
+    const secondTypes = second.map(e => e.type);
+    expect(secondTypes).toContain("message_delta");
+    expect(secondTypes).toContain("message_stop");
+  });
+
+  it("handles a choices[0] with null delta (keep-alive frame) without dropping the stream", () => {
+    const state = {};
+    const result = openaiToClaudeResponse({
+      id: "chatcmpl-k",
+      model: "m",
+      choices: [{ index: 0, delta: null, finish_reason: null }],
+      usage: { prompt_tokens: 5, completion_tokens: 1, total_tokens: 6 }
+    }, state);
+    // A delta-less frame is not terminal, but must not crash and may synthesize
+    // message_start so an empty first frame still yields a valid message.
+    expect(result).not.toBeNull();
+    expect(result.map(e => e.type)[0]).toBe("message_start");
+  });
 });

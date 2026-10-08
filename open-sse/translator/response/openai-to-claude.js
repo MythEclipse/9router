@@ -69,7 +69,143 @@ function stopTextBlock(state, results) {
 
 // Convert OpenAI stream chunk to Claude format
 export function openaiToClaudeResponse(chunk, state) {
-  if (!chunk || !chunk.choices?.[0]) return null;
+  // End-of-stream flush: stream.js calls translateResponse(..., null, state)
+  // when the upstream body closes ([DONE], final buffer flush, or a relay that
+  // dropped the connection mid-stream — e.g. the Vercel relays' 25s
+  // FUNCTION_INVOCATION_TIMEOUT). If the upstream never sent a finish frame,
+  // everything we emitted so far may be just message_start, and the client
+  // then aborts with "Streaming response ended before any complete data was
+  // received" / StreamNoEventsError ("1 stream event received... none in the
+  // final 5 ms") because no message_stop ever arrived. Close the message
+  // ourselves: stop any open block, emit message_delta + message_stop, and
+  // return null if the message was never opened (nothing to salvage).
+  if (!chunk) {
+    if (!state?.messageStartSent || state.messageStopped) return null;
+
+    const results = [];
+    if (state.textBlockStarted) {
+      results.push({ type: "content_block_stop", index: state.textBlockIndex });
+      state.textBlockStarted = false;
+      state.textBlockClosed = true;
+    }
+    if (state.thinkingBlockStarted) {
+      results.push({ type: "content_block_stop", index: state.thinkingBlockIndex });
+      state.thinkingBlockStarted = false;
+      state.thinkingBlockClosed = true;
+    }
+
+    state.messageStopped = true;
+    state.finishReason = state.finishReason || "stop";
+    results.push({
+      type: "message_delta",
+      delta: { stop_reason: convertFinishReason(state.finishReason) },
+      usage: state.usage || { input_tokens: 0, output_tokens: 0 }
+    });
+    results.push({ type: "message_stop" });
+    return results;
+  }
+
+  // OpenAI-compatible upstreams (notably the OpenCode zen relay / poolside)
+  // sometimes emit a usage-only terminal frame as the FIRST and ONLY frame of
+  // a stream:  data: {"id":"mai-api-...","object":"chat.completion.chunk",
+  // "choices":[],"usage":{...}}
+  // when the model produced no content at all (empty completion, immediate
+  // stop). With `chunk.choices?.[0]` nil this short-circuited below, so the
+  // translate mode emitted nothing — the client saw an HTTP 200 SSE stream
+  // with zero events and Anthropic SDKs failed with StreamNoEventsError
+  // ("no_events, ... 1 stream event received") / "empty or malformed response
+  // (HTTP 200)". Treat it as a legitimate empty completion: synthesize the
+  // full message (message_start → empty text block → message_delta → stop)
+  // with the tracked usage so the client gets a complete, well-formed message.
+  //
+  // A delta-less keep-alive frame (choices[0].delta == null, no finish_reason)
+  // is NOT terminal: it only synthesizes message_start when nothing has been
+  // emitted yet (again so an empty first frame can't become a no_events
+  // failure) and is otherwise a no-op.
+  if (!chunk.choices?.length || !chunk.choices[0].delta) {
+    const results = [];
+
+    // Track usage from OpenAI chunk if available
+    if (chunk.usage && typeof chunk.usage === "object") {
+      const promptTokens = typeof chunk.usage.prompt_tokens === "number" ? chunk.usage.prompt_tokens : 0;
+      const outputTokens = typeof chunk.usage.completion_tokens === "number" ? chunk.usage.completion_tokens : 0;
+      const cachedTokens = chunk.usage.prompt_tokens_details?.cached_tokens;
+      const cacheCreationTokens = chunk.usage.prompt_tokens_details?.cache_creation_tokens;
+      const cacheReadTokens = typeof cachedTokens === "number" ? cachedTokens : 0;
+      const cacheCreateTokens = typeof cacheCreationTokens === "number" ? cacheCreationTokens : 0;
+      const inputTokens = promptTokens - cacheReadTokens - cacheCreateTokens;
+      state.usage = {
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        ...(cacheReadTokens > 0 ? { cache_read_input_tokens: cacheReadTokens } : {}),
+        ...(cacheCreateTokens > 0 ? { cache_creation_input_tokens: cacheCreateTokens } : {})
+      };
+    }
+
+    const emptyChoicesTerminal = !chunk.choices?.length;
+    const alreadyStopped = state.finishReason || state.messageStopped;
+
+    // First chunk - ALWAYS send message_start first
+    if (!state.messageStartSent) {
+      state.messageStartSent = true;
+      state.messageId = chunk.id?.replace("chatcmpl-", "") || `msg_${Date.now()}`;
+      if (!state.messageId || state.messageId === "chat" || state.messageId.length < 8) {
+        state.messageId = chunk.extend_fields?.requestId ||
+          chunk.extend_fields?.traceId ||
+          `msg_${Date.now()}`;
+      }
+      state.model = chunk.model || MODEL_FALLBACK;
+      state.nextBlockIndex = 0;
+      results.push({
+        type: "message_start",
+        message: {
+          id: state.messageId,
+          type: "message",
+          role: ROLE.ASSISTANT,
+          model: state.model,
+          content: [],
+          stop_reason: null,
+          stop_sequence: null,
+          usage: { input_tokens: 0, output_tokens: 0 }
+        }
+      });
+    }
+
+    // Empty-choices = terminal usage frame: close the message cleanly with an
+    // empty text block + stop so the client has a complete, zero-content turn.
+    if (emptyChoicesTerminal) {
+      if (!alreadyStopped && !state.textBlockStarted && !state.thinkingBlockStarted) {
+        state.textBlockIndex = state.nextBlockIndex++;
+        state.textBlockStarted = true;
+        state.textBlockClosed = false;
+        results.push({
+          type: "content_block_start",
+          index: state.textBlockIndex,
+          content_block: { type: CLAUDE_BLOCK.TEXT, text: "" }
+        });
+        state.textBlockClosed = true;
+        state.textBlockStarted = false;
+        results.push({
+          type: "content_block_stop",
+          index: state.textBlockIndex
+        });
+      }
+
+      if (!alreadyStopped) {
+        state.finishReason = "stop";
+        state.messageStopped = true;
+        const finalUsage = state.usage || { input_tokens: 0, output_tokens: 0 };
+        results.push({
+          type: "message_delta",
+          delta: { stop_reason: convertFinishReason("stop") },
+          usage: finalUsage
+        });
+        results.push({ type: "message_stop" });
+      }
+    }
+
+    return results.length > 0 ? results : null;
+  }
 
   const results = [];
   const choice = chunk.choices[0];
@@ -245,6 +381,7 @@ export function openaiToClaudeResponse(chunk, state) {
 
     // Mark finish for later usage injection in stream.js
     state.finishReason = choice.finish_reason;
+    state.messageStopped = true;
 
     // Use tracked usage (will be estimated in stream.js if not valid)
     const finalUsage = state.usage || { input_tokens: 0, output_tokens: 0 };

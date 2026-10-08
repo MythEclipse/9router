@@ -129,11 +129,23 @@ export function parseSSEToOpenAIResponse(rawSSE, fallbackModel) {
   if (streamError) return { error: streamError };
   if (chunks.length === 0) return null;
 
+  // OpenAI-compatible upstreams (the OpenCode zen relay / poolside) may emit a
+  // usage-only terminal frame as the FIRST and ONLY frame of a stream —
+  //   data: {"id":"mai-api-...","object":"chat.completion.chunk","choices":[],
+  //          "usage":{...}}
+  // for an empty completion (immediate stop, zero output tokens). Previously
+  // the loop below never set finishReason (no choices), so the client got a
+  // Message-shaped body with content:"" AND stop_reason null — and the
+  // non-streaming retry path (Claude Code "Retrying without streaming") then
+  // failed with "API returned an empty or malformed response (HTTP 200) ...
+  // body is JSON but not a Message". A usage frame is a legitimate, complete
+  // (if empty) response: treat it as finish_reason "stop".
+  let finishReason = "stop";
+
   const first = chunks[0];
   const contentParts = [];
   const reasoningParts = [];
   const toolCallMap = new Map(); // index -> { id, type, function: { name, arguments } }
-  let finishReason = "stop";
   let usage = null;
 
   for (const chunk of chunks) {
