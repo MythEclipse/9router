@@ -303,3 +303,86 @@ describe("injectWebSearchIntoStream", () => {
     }) + "\n\n");
   });
 });
+
+describe("real Claude Code tool-call sequence", () => {
+  const plan = { active: true, lane: "bridge", maxUses: 5, defaultMaxResults: 5, allowedDomains: [], blockedDomains: [] };
+
+  /** The exact frame order Anthropic emits for a web_search tool call. */
+  const claudeFrames = (id, partials) => [
+    `event: content_block_start\ndata: ${JSON.stringify({
+      type: "content_block_start", index: 1,
+      content_block: { type: "tool_use", id, name: "web_search", input: {} },
+    })}\n\n`,
+    ...partials.map((p) => `event: content_block_delta\ndata: ${JSON.stringify({
+      type: "content_block_delta", index: 1,
+      delta: { type: "input_json_delta", partial_json: p },
+    })}\n\n`),
+    `event: content_block_stop\ndata: ${JSON.stringify({ type: "content_block_stop", index: 1 })}\n\n`,
+  ];
+
+  const readAll = async (stream) => {
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    let out = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      out += decoder.decode(value, { stream: true });
+    }
+    return out;
+  };
+
+  it("captures the query from a split-argument tool call", async () => {
+    // Anthropic streams tool arguments in fragments; the query only exists
+    // after the last fragment is merged.
+    const runSearch = vi.fn().mockResolvedValue([{ title: "T", url: "https://a.test" }]);
+    const wrapped = injectWebSearchIntoStream({
+      stream: sseStream(claudeFrames("toolu_01Realistic", ['{"que', 'ry":"latest AI ', 'news"}'])),
+      webSearchPlan: plan,
+      runSearch,
+    });
+
+    const out = await readAll(wrapped);
+    expect(runSearch).toHaveBeenCalledOnce();
+    expect(runSearch.mock.calls[0][0].query).toBe("latest AI news");
+    expect(parseSse(out).some((p) => p.content_block?.type === SERVER_TOOL_USE_BLOCK)).toBe(true);
+  });
+
+  it("carries search_type through when the client asks for news", async () => {
+    const runSearch = vi.fn().mockResolvedValue([]);
+    const wrapped = injectWebSearchIntoStream({
+      stream: sseStream(claudeFrames("toolu_02News", ['{"query":"ai","search_type":"news"}'])),
+      webSearchPlan: plan,
+      runSearch,
+    });
+
+    await readAll(wrapped);
+    expect(runSearch.mock.calls[0][0].searchType).toBe("news");
+  });
+
+  it("emits a usable id, not the model's raw toolu_ id", async () => {
+    const runSearch = vi.fn().mockResolvedValue([{ title: "T", url: "https://a.test" }]);
+    const wrapped = injectWebSearchIntoStream({
+      stream: sseStream(claudeFrames("toolu_01Weird_id", ['{"query":"q"}'])),
+      webSearchPlan: plan,
+      runSearch,
+    });
+
+    const payloads = parseSse(await readAll(wrapped));
+    const serverUse = payloads.find((p) => p.content_block?.type === SERVER_TOOL_USE_BLOCK);
+    expect(serverUse.content_block.id).toMatch(SERVER_TOOL_USE_ID_RE);
+    expect(serverUse.content_block.id).not.toBe("toolu_01Weird_id");
+  });
+
+  it("survives a stream that closes with no tool call at all", async () => {
+    const runSearch = vi.fn();
+    const wrapped = injectWebSearchIntoStream({
+      stream: sseStream([textDelta("just prose")]),
+      webSearchPlan: plan,
+      runSearch,
+    });
+
+    await expect(readAll(wrapped)).resolves.toContain("just prose");
+    expect(runSearch).not.toHaveBeenCalled();
+  });
+});
