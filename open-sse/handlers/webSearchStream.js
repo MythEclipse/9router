@@ -48,6 +48,8 @@ export function createWebSearchStreamState() {
     openAiCalls: new Map(),
     /** content_block index → true once its tool_use start frame was suppressed. */
     suppressedIndexes: new Set(),
+    /** Highest content_block index seen upstream; injected blocks continue after it. */
+    nextBlockIndex: 0,
   };
 }
 
@@ -235,17 +237,30 @@ export function pendingSearchCalls(state) {
 }
 
 /** Serialize the Anthropic block pair into SSE frames. */
-function buildBlocksSse(serverToolUse, toolResult) {
+function buildBlocksSse(serverToolUse, toolResult, startIndex = 0) {
+  // Anthropic's stream protocol numbers content blocks strictly increasing from
+  // 0 and opens/closes each one on its own index. Hardcoding 0 made every
+  // injected block collide with the blocks already on the wire, and Claude Code
+  // rejected the whole turn with "The model's tool call could not be parsed".
+  let i = startIndex;
   const frames = [
-    `event: content_block_start\ndata: ${JSON.stringify({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } })}\n\n`,
-    `event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "" } })}\n\n`,
-    `event: content_block_stop\ndata: ${JSON.stringify({ type: "content_block_stop", index: 0 })}\n\n`,
-    `data: ${JSON.stringify({ type: "content_block_start", index: 0, content_block: serverToolUse })}\n\n`,
-    `data: ${JSON.stringify({ type: "content_block_delta", index: 0, delta: { type: "input_json_delta", partial_json: JSON.stringify(serverToolUse.input) } })}\n\n`,
-    `data: ${JSON.stringify({ type: "content_block_stop", index: 0 })}\n\n`,
-    `data: ${JSON.stringify({ type: "content_block_start", index: 0, content_block: toolResult })}\n\n`,
-    `data: ${JSON.stringify({ type: "content_block_stop", index: 0 })}\n\n`,
+    `event: content_block_start\ndata: ${JSON.stringify({ type: "content_block_start", index: i, content_block: { type: "text", text: "" } })}\n\n`,
+    `event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", index: i, delta: { type: "text_delta", text: "" } })}\n\n`,
+    `event: content_block_stop\ndata: ${JSON.stringify({ type: "content_block_stop", index: i })}\n\n`,
   ];
+  i += 1;
+
+  frames.push(
+    `event: content_block_start\ndata: ${JSON.stringify({ type: "content_block_start", index: i, content_block: serverToolUse })}\n\n`,
+    `event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", index: i, delta: { type: "input_json_delta", partial_json: JSON.stringify(serverToolUse.input) } })}\n\n`,
+    `event: content_block_stop\ndata: ${JSON.stringify({ type: "content_block_stop", index: i })}\n\n`,
+  );
+  i += 1;
+
+  frames.push(
+    `event: content_block_start\ndata: ${JSON.stringify({ type: "content_block_start", index: i, content_block: toolResult })}\n\n`,
+    `event: content_block_stop\ndata: ${JSON.stringify({ type: "content_block_stop", index: i })}\n\n`,
+  );
   return frames.join("");
 }
 
@@ -276,7 +291,8 @@ export async function buildStreamWebSearchInjection({ webSearchPlan, state, log,
         errorCode: RESULT_ERROR_QUERY_TOO_LONG,
         message: "web_search call did not include a query",
       });
-      chunks.push(buildBlocksSse(serverToolUse, toolResult));
+      chunks.push(buildBlocksSse(serverToolUse, toolResult, state.nextBlockIndex));
+      state.nextBlockIndex += 3;
       continue;
     }
     const query = call.query;
@@ -290,7 +306,8 @@ export async function buildStreamWebSearchInjection({ webSearchPlan, state, log,
         toolUseId: call.normalizedId,
         results,
       });
-      chunks.push(buildBlocksSse(serverToolUse, toolResult));
+      chunks.push(buildBlocksSse(serverToolUse, toolResult, state.nextBlockIndex));
+      state.nextBlockIndex += 3;
     } catch (error) {
       // Fail-safe: surface the failure in Anthropic's own vocabulary rather
       // than silently dropping the call — a missing tool_result leaves the
@@ -302,7 +319,8 @@ export async function buildStreamWebSearchInjection({ webSearchPlan, state, log,
         errorCode: RESULT_ERROR_UNAVAILABLE,
         message: error?.message || String(error),
       });
-      chunks.push(buildBlocksSse(serverToolUse, toolResult));
+      chunks.push(buildBlocksSse(serverToolUse, toolResult, state.nextBlockIndex));
+      state.nextBlockIndex += 3;
       chunks.push(`data: ${JSON.stringify({ type: "text_delta", text: searchFailureNotice(error?.message) })}\n\n`);
     }
   }
@@ -352,6 +370,10 @@ function suppressSearchToolUseFrames(text, state) {
   for (const frame of text.split(/(?<=\n\n)/)) {
     if (!frame) continue;
     const parsed = parseSseFrame(frame);
+
+    if (parsed?.type === "content_block_start" && typeof parsed.index === "number") {
+      state.nextBlockIndex = Math.max(state.nextBlockIndex, parsed.index + 1);
+    }
 
     if (parsed?.type === "content_block_start" && isSearchToolUseBlock(parsed.content_block)) {
       // Remember the index so the delta/stop frames of this same block, which

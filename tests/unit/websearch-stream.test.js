@@ -629,6 +629,50 @@ describe("suppressing the model's own search tool_use on the bridge lane", () =>
     expect(buf).toContain("server_tool_use");
   });
 
+  it("numbers injected blocks after the highest index already on the wire", async () => {
+    // Anthropic numbers content blocks strictly increasing. Hardcoding index 0
+    // collided with the blocks already emitted and Claude Code rejected the
+    // turn with "The model's tool call could not be parsed".
+    const buf = await collect([
+      f({ type: "message_start", message: { id: "m", role: "assistant", content: [] } }),
+      f({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } }),
+      f({ type: "content_block_stop", index: 0 }),
+      f({ type: "content_block_start", index: 1, content_block: { type: "text", text: "" } }),
+      f({ type: "content_block_stop", index: 1 }),
+      f({ type: "content_block_start", index: 2, content_block: { type: "tool_use", id: "toolu_a", name: "WebSearch", input: { query: "q" } } }),
+      f({ type: "content_block_stop", index: 2 }),
+    ]);
+
+    const idxs = buf.split("\n")
+      .filter((l) => l.startsWith("data: "))
+      .map((l) => { try { const e = JSON.parse(l.slice(6)); return e.type === "content_block_start" ? e.index : null; } catch { return null; } })
+      .filter((v) => v !== null);
+
+    expect(idxs.length).toBeGreaterThan(2);
+    expect(idxs.every((v, i) => i === 0 || v > idxs[i - 1])).toBe(true);
+    // Must not collide with the last upstream block.
+    expect(Math.min(...idxs.slice(-2))).toBeGreaterThan(2);
+  });
+
+  it("keeps indices increasing across two searches", async () => {
+    const buf = await collect([
+      f({ type: "message_start", message: { id: "m", role: "assistant", content: [] } }),
+      f({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } }),
+      f({ type: "content_block_stop", index: 0 }),
+      f({ type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "toolu_a", name: "WebSearch", input: { query: "one" } } }),
+      f({ type: "content_block_stop", index: 1 }),
+      f({ type: "content_block_start", index: 2, content_block: { type: "tool_use", id: "toolu_b", name: "WebSearch", input: { query: "two" } } }),
+      f({ type: "content_block_stop", index: 2 }),
+    ]);
+
+    const idxs = buf.split("\n")
+      .filter((l) => l.startsWith("data: "))
+      .map((l) => { try { const e = JSON.parse(l.slice(6)); return e.type === "content_block_start" ? e.index : null; } catch { return null; } })
+      .filter((v) => v !== null);
+
+    expect(idxs.every((v, i) => i === 0 || v > idxs[i - 1])).toBe(true);
+  });
+
   it("never drops anything on the passthrough lane", async () => {
     const frames = [
       f({ type: "message_start", message: { id: "m", role: "assistant", content: [] } }),

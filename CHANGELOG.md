@@ -25,6 +25,11 @@ applies combo fallback. A combo name like `search-combo-1` is not in
   calling `/v1/search` with a provider that cannot search.
 - A pinned target that is a combo name is not run through provider-id selection
   (combos are not in `AI_PROVIDERS`); the endpoint handles it.
+- **Injected stream blocks are now numbered after the highest index already on
+  the wire.** `buildBlocksSse` hardcoded `index: 0` for every block it emitted,
+  so the server-tool pair collided with the blocks upstream had already sent.
+  Anthropic numbers content blocks strictly increasing, and Claude Code rejected
+  the whole turn with "The model's tool call could not be parsed".
 - **The streaming bridge now suppresses the model's own search `tool_use`.**
   This is why live Claude Code reported "Did 0 searches" even with the bridge
   returning 5 results: the response contained both the model's original
