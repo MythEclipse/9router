@@ -102,7 +102,14 @@ async function runSearchViaSearchEndpoint({ model, query, max_results, search_ty
   return parsed;
 }
 
-async function listProvidersWithCredentials() {
+/**
+ * Providers that are connected and can serve web search.
+ *
+ * Used by the Claude Code CCR worker route to pick a search engine: the chat
+ * provider is often not one (claude-opus-5-5 resolves to `antigravity`, which
+ * has no search access), so a fallback to it yields zero results.
+ */
+export async function listProvidersWithCredentials() {
   try {
     const conns = await getProviderConnections({ isActive: true });
     const ids = new Set();

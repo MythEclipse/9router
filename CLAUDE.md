@@ -40,7 +40,7 @@ npx vitest run unit/capabilities.test.js   # single file (path relative to tests
 ```
 > The committed `tests/package.json` `test` script hardcodes Unix paths (`NODE_PATH=/tmp/node_modules …`) — a shared-install workaround from upstream. On Windows (or anywhere), ignore it and use the `npx vitest` form above; `vitest.config.js` resolves the `open-sse`/`@/` aliases from the repo root regardless of where vitest lives.
 >
-> **The suite IS all-green on a plain checkout** — 3962 passing, 0 failing assertions, 0 non-passing files. Gate it after every change:
+> **The suite IS all-green on a plain checkout** — 3975 passing, 0 failing assertions, 0 non-passing files. Gate it after every change:
 > ```bash
 > cd tests && npx vitest run --reporter=json --outputFile=/tmp/r.json && node __baseline__/verify-no-regression.mjs /tmp/r.json
 > ```
@@ -88,6 +88,15 @@ State is **no longer `db.json`**. It's a SQLite layer under `src/lib/db/` with a
 - `src/lib/localDb.js` is a **backward-compat shim** re-exporting `src/lib/db/index.js`. New code should import from `@/lib/db/index.js`; per-entity logic lives in `src/lib/db/repos/*`. Schema/migrations in `src/lib/db/migrations/`.
 - DB file location resolves via `src/lib/db/paths.js` (`DATA_DIR`, else `~/.9router/`).
 - Usage/logs (`src/lib/usageDb.js`, `usage.json` + `log.txt`) still live under `~/.9router` and do **not** follow `DATA_DIR`.
+
+### Claude Code WebSearch is NOT the Anthropic protocol (`src/app/api/v1/code/...`)
+Claude Code's own `WebSearch` client tool posts to
+`/v1/code/sessions/{ccrSessionId}/worker/web-search` and expects
+`{results:[{title,url,snippet?}]}` — it never reads `server_tool_use` /
+`web_search_tool_result`, which is the separate Anthropic *server-tool* lane.
+Its default path is a local stub that returns zero results ("Did 0 searches"),
+so a 404 on that route looks like a broken search even when the bridge is fine.
+Gated behind `CLAUDE_CODE_WEBSEARCH_USE_CCR_PROXY` + a CCR session id.
 
 ### Web search for the Anthropic protocol (`open-sse/handlers/webSearch*.js`)
 Claude Code declares Anthropic's `web_search_20250910` server tool. 9router picks a lane per request: **passthrough** when the upstream runs the search itself (Anthropic-family providers — `tools` untouched), **bridge** otherwise, where 9router runs the search through its own `/v1/search` path and splices a `server_tool_use` + `web_search_tool_result` block pair into the response.

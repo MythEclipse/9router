@@ -108,6 +108,38 @@ Also:
   domain filters as schema rather than values.
 
 
+### Claude Code WebSearch: the CCR worker route
+
+Claude Code's own `WebSearch` client tool does **not** use the Anthropic Messages
+tool-call protocol. Reading the installed 2.1.296 binary, it has two paths:
+
+- **gateway path** — `POST {base}/v1/code/sessions/{ccrSessionId}/worker/web-search`
+  expecting `{ results: [{ title, url, snippet? }] }`, gated behind
+  `CLAUDE_CODE_WEBSEARCH_USE_CCR_PROXY` **and** a CCR session id;
+- **local path** (the default) — synthesises `Web search results for query: "…"`
+  plus the `REMINDER: You MUST include the sources above` suffix, with **zero**
+  results. That is the "Did 0 searches" / empty-placeholder behaviour.
+
+So none of the Anthropic-protocol bridge work below reaches this tool: the
+`server_tool_use`/`web_search_tool_result` pair is the *server-tool* lane, a
+different protocol that this client does not read. With the route absent (404)
+the client silently takes the local stub.
+
+New `POST /api/v1/code/sessions/[id]/worker/[worker]` route serves it:
+
+- reuses the one supported `/v1/search` path, so combo expansion, per-key access
+  and combo fallback behave exactly as for a direct call;
+- forwards the caller's key so per-key access still applies;
+- picks a connected engine that can actually search, never the chat provider
+  (`claude-opus-5-5` resolves to `antigravity`, which has no search access);
+- honours `allowed_domains` / `blocked_domains` using `/v1/search`'s own fields;
+- preserves `snippet`, which the client needs — with
+  `CLAUDE_CODE_WEBSEARCH_CITATIONS` set it builds the model's tool_result text
+  from `content[].snippet` and drops hits that have none.
+
+Enabling this in Claude Code additionally requires
+`CLAUDE_CODE_WEBSEARCH_USE_CCR_PROXY=1` and a `CLAUDE_CODE_SESSION_ID`.
+
 ### Web search for the Anthropic protocol (Claude Code)
 
 Claude Code connecting to 9router over the Anthropic protocol now gets working
