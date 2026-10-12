@@ -1,4 +1,5 @@
 import { EventEmitter } from "events";
+import { createHash } from "crypto";
 import { getAdapter } from "../driver.js";
 import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
 import { getMeta, setMeta } from "../helpers/metaStore.js";
@@ -8,6 +9,24 @@ function maskApiKey(key) {
   if (key.length <= 12) return key.charAt(0) + "***";
   // Keep the tail: keys sharing a machine-id prefix (team keys) must not collide.
   return key.slice(0, 8) + "***" + key.slice(-4);
+}
+
+/**
+ * Stable, non-reversible bucket id for a raw api key.
+ *
+ * `byApiKey` is keyed by raw api key (fix(usage) 4a57df8b) because keys minted
+ * from the same machine id share their first 8 characters, so maskApiKey alone
+ * collapsed every key of an instance into one bucket. But byApiKey is returned
+ * verbatim by GET /api/usage/stats, so a raw key as a JSON *object key* leaks
+ * the secret to any authenticated dashboard reader — the exact exposure
+ * AUDIT-002 (#1962) closed.
+ *
+ * A digest keeps buckets distinct while putting nothing reversible on the wire.
+ * SHA-256 over the raw key, truncated to 16 hex chars: collision-free for any
+ * realistic key count, and the digest cannot be replayed against any upstream.
+ */
+function apiKeyBucketId(key) {
+  return createHash("sha256").update(key).digest("hex").slice(0, 16);
 }
 
 const PENDING_TIMEOUT_MS = 60 * 1000;
@@ -90,7 +109,7 @@ function aggregateEntryToDay(day, entry) {
   }
 
   const apiKeyVal = entry.apiKey && typeof entry.apiKey === "string" ? entry.apiKey : "local-no-key";
-  const akModelKey = `${apiKeyVal}|${entry.model}|${entry.provider || "unknown"}`;
+  const akModelKey = `${apiKeyBucketId(apiKeyVal)}|${entry.model}|${entry.provider || "unknown"}`;
   addToCounter(day.byApiKey, akModelKey, { ...vals, meta: { rawModel: entry.model, provider: entry.provider, apiKey: entry.apiKey || null } });
 
   const endpoint = entry.endpoint || "Unknown";
@@ -563,7 +582,7 @@ export async function getUsageStats(period = "all") {
       }
 
       const apiKeyKey = (e.apiKey && typeof e.apiKey === "string")
-        ? `${e.apiKey}|${e.model}|${e.provider || "unknown"}`
+        ? `${apiKeyBucketId(e.apiKey)}|${e.model}|${e.provider || "unknown"}`
         : "local-no-key";
       if (stats.byApiKey[apiKeyKey] && new Date(ts) > new Date(stats.byApiKey[apiKeyKey].lastUsed)) stats.byApiKey[apiKeyKey].lastUsed = ts;
 
@@ -635,9 +654,9 @@ export async function getUsageStats(period = "all") {
         const keyInfo = apiKeyMap[r.apiKey];
         const keyName = keyInfo?.name || r.apiKey.slice(0, 8) + "...";
         const apiKeyMasked = maskApiKey(r.apiKey);
-        // Key by the FULL api key (same as the daily rollup + lastUsed overlay)
-        // — masking here collided all keys sharing a prefix into one bucket.
-        const akKey = `${r.apiKey}|${r.model}|${r.provider || "unknown"}`;
+        // Bucket by digest, not the raw key: byApiKey is returned verbatim by
+        // /api/usage/stats, so a raw key here would be a JSON object key.
+        const akKey = `${apiKeyBucketId(r.apiKey)}|${r.model}|${r.provider || "unknown"}`;
         if (!stats.byApiKey[akKey]) {
           stats.byApiKey[akKey] = { requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0, rawModel: r.model, provider: providerDisplayName, apiKeyMasked, keyName, apiKeyKey: apiKeyMasked, lastUsed: r.timestamp };
         }

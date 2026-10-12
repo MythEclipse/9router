@@ -3,6 +3,9 @@
 ## Features
 - **Claude Code auto mode**: implement the `dangerous_tool_use` safeguard protocol so 9router answers Claude Code's server-side classifier reviews. Forwards the `safeguards` request field with its paired `dangerous-tool-use-2026-09-03` beta, and returns `safeguard_results` on both non-streaming bodies and the final `message_delta` of a stream. When the routed upstream cannot run the review itself, 9router bridges it with the System One decision engine (`safeguardsClassifierModel` setting overrides the reviewer). Verdicts are keyed by `tool_use.id`; an engine outage reports `unavailable`/`unsupported` so Claude Code re-classifies with its own classifier rather than treating the failure as approval.
 
+## Security
+- **Usage stats**: stop using raw API keys as `byApiKey` JSON object keys. `GET /api/usage/stats` returns that map verbatim, so every key the instance had ever used was readable as a property name by any authenticated dashboard session — the exact exposure AUDIT-002 (#1962) closed, reintroduced by the team-key collision fix (4a57df8b). Buckets are now keyed by a truncated SHA-256 digest of the key, which keeps the distinctness that fix bought (keys sharing a machine-id prefix no longer collapse) while putting nothing reversible on the wire. Applies to the live path, the daily rollup and the `lastUsed` overlay, which all three now share one digest key so the freshness update still matches its bucket.
+
 ## Fixes
 - **Streaming**: close the SSE controller on the normal end-of-stream path in the safeguard stream wrapper (an unclosed controller left Claude Code clients hanging forever) and pump in `pull` so upstream backpressure is preserved
 - **Streaming**: observe Claude tool ids from the accumulated frame rather than the raw chunk — a chunk boundary falling mid-JSON silently dropped the tool_use frame and its verdict
