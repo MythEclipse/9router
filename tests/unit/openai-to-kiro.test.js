@@ -11,7 +11,11 @@ import { openaiToKiroRequest } from "../../open-sse/translator/request/openai-to
 
 const contentOf = (result) =>
   result.conversationState.currentMessage.userInputMessage.content;
-const systemPromptOf = (result) => result.systemPrompt || "";
+
+// Since fix(kiro) never send a top-level systemPrompt (400 REQUEST_BODY_INVALID),
+// the system prompt travels inside the first user turn's content. Read it from
+// the wire field that actually carries it.
+const systemPromptOf = (result) => contentOf(result);
 
 describe("openaiToKiroRequest", () => {
   describe("basic message conversion", () => {
@@ -532,7 +536,9 @@ describe("openaiToKiroRequest", () => {
       const result = openaiToKiroRequest("claude-sonnet-4.6", body, true, {});
 
       expect(systemPromptOf(result)).toContain("<max_thinking_length>32000</max_thinking_length>");
-      expect(result.additionalModelRequestFields?.output_config?.effort).toBe("high");
+      // fix(thinking) made max a valid Kiro effort tier; it used to be silently
+      // clamped to high, which made reasoning_effort:"max" a no-op on Kiro.
+      expect(result.additionalModelRequestFields?.output_config?.effort).toBe("max");
     });
 
     it("clamps OpenAI Responses reasoning.effort xhigh to max_thinking_length 32000", () => {
@@ -568,7 +574,7 @@ describe("openaiToKiroRequest", () => {
       expect(systemPromptOf(result)).toContain("<max_thinking_length>16000</max_thinking_length>");
     });
 
-    it("keeps top-level systemPrompt stable across turns", () => {
+    it("keeps the replayable system prefix stable across turns while current time stays fresh", () => {
       const first = openaiToKiroRequest(
         "claude-sonnet-4.6-thinking",
         { messages: [{ role: "user", content: "first" }] },
@@ -582,8 +588,15 @@ describe("openaiToKiroRequest", () => {
         {}
       );
 
-      expect(first.systemPrompt).toBe(second.systemPrompt);
-      expect(first.systemPrompt).not.toContain("Current time");
+      // There is no top-level systemPrompt on the wire (kiro rejects it); the
+      // replayable prefix is the part of the current turn that precedes the
+      // volatile current-time context.
+      const prefixOf = (result) => {
+        const content = result.conversationState.currentMessage.userInputMessage.content;
+        return content.slice(0, content.indexOf("[Context: Current time is"));
+      };
+      expect(prefixOf(first)).toBe(prefixOf(second));
+      expect(prefixOf(first)).not.toContain("Current time");
       expect(first.conversationState.currentMessage.userInputMessage.content).toContain("Current time");
     });
 
