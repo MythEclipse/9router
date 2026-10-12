@@ -600,7 +600,14 @@ describe("suppressing the model's own search tool_use on the bridge lane", () =>
       f({ type: "content_block_stop", index: 1 }),
     ]);
 
-    expect(buf).not.toContain('"index":1');
+    // The triple must be gone entirely: no start, no delta, no stop for the
+    // suppressed block. Indices are remapped, so assert on the frames instead.
+    expect(buf).not.toContain('"name":"WebSearch"');
+    const stops = buf.split("\n")
+      .filter((l) => l.startsWith("data: "))
+      .map((l) => { try { return JSON.parse(l.slice(6)).type; } catch { return null; } });
+    // Exactly the blocks we inject plus the opening message_start.
+    expect(stops.filter((t) => t === "content_block_start")).toHaveLength(3);
   });
 
   it("keeps a non-search tool_use intact", async () => {
@@ -629,6 +636,27 @@ describe("suppressing the model's own search tool_use on the bridge lane", () =>
     expect(buf).toContain("server_tool_use");
   });
 
+  it("renumbers blocks so a suppressed one leaves no hole", async () => {
+    // Upstream used index 1 for the search call, which is suppressed. The client
+    // must still see 0,1,2,... with no gap.
+    const buf = await collect([
+      f({ type: "message_start", message: { id: "m", role: "assistant", content: [] } }),
+      f({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } }),
+      f({ type: "content_block_stop", index: 0 }),
+      f({ type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "toolu_a", name: "WebSearch", input: { query: "q" } } }),
+      f({ type: "content_block_stop", index: 1 }),
+      f({ type: "content_block_start", index: 2, content_block: { type: "text", text: "" } }),
+      f({ type: "content_block_stop", index: 2 }),
+    ]);
+
+    const idxs = buf.split("\n")
+      .filter((l) => l.startsWith("data: "))
+      .map((l) => { try { const e = JSON.parse(l.slice(6)); return e.type === "content_block_start" ? e.index : null; } catch { return null; } })
+      .filter((v) => v !== null);
+
+    expect(idxs).toEqual(idxs.map((_, i) => i));
+  });
+
   it("numbers injected blocks after the highest index already on the wire", async () => {
     // Anthropic numbers content blocks strictly increasing. Hardcoding index 0
     // collided with the blocks already emitted and Claude Code rejected the
@@ -650,8 +678,9 @@ describe("suppressing the model's own search tool_use on the bridge lane", () =>
 
     expect(idxs.length).toBeGreaterThan(2);
     expect(idxs.every((v, i) => i === 0 || v > idxs[i - 1])).toBe(true);
-    // Must not collide with the last upstream block.
-    expect(Math.min(...idxs.slice(-2))).toBeGreaterThan(2);
+    // Contiguous 0..n: suppressing a block must not leave a hole, which is what
+    // made Claude Code report an unparseable tool call.
+    expect(idxs).toEqual(idxs.map((_, i) => i));
   });
 
   it("keeps indices increasing across two searches", async () => {

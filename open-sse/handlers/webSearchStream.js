@@ -48,8 +48,10 @@ export function createWebSearchStreamState() {
     openAiCalls: new Map(),
     /** content_block index → true once its tool_use start frame was suppressed. */
     suppressedIndexes: new Set(),
-    /** Highest content_block index seen upstream; injected blocks continue after it. */
+    /** Highest content_block index the client has seen; injected blocks continue after it. */
     nextBlockIndex: 0,
+    /** Original content_block index → the contiguous index the client receives. */
+    indexMap: new Map(),
     /**
      * True once the upstream has sent message_stop. Injection must land BEFORE
      * that frame: Claude Code closes the turn at message_stop and treats
@@ -377,38 +379,62 @@ function suppressSearchToolUseFrames(text, state) {
   for (const frame of text.split(/(?<=\n\n)/)) {
     if (!frame) continue;
     const parsed = parseSseFrame(frame);
+    if (!parsed) { out.push(frame); continue; }
 
-    if (parsed?.type === "message_stop") state.sawMessageStop = true;
-
-    if (parsed?.type === "content_block_start" && typeof parsed.index === "number") {
-      state.nextBlockIndex = Math.max(state.nextBlockIndex, parsed.index + 1);
-    }
-
-    if (parsed?.type === "content_block_start" && isSearchToolUseBlock(parsed.content_block)) {
+    if (parsed.type === "content_block_start" && isSearchToolUseBlock(parsed.content_block)) {
       // Remember the index so the delta/stop frames of this same block, which
-      // arrive in later chunks, are recognised as already suppressed.
+      // may arrive in later chunks, are recognised as already suppressed.
       state.suppressedIndexes.add(parsed.index);
       continue;
     }
-    if (parsed
-      && (parsed.type === "content_block_delta" || parsed.type === "content_block_stop")
-      && state.suppressedIndexes.has(parsed.index)) {
-      continue;
-    }
-    if (parsed?.type === "message_stop") {
+    if (parsed.type === "message_stop") {
       // Held back: the search blocks must ride inside the turn, before it ends.
       state.sawMessageStop = true;
       continue;
     }
-    if (parsed?.type === "message_delta" && parsed.delta?.stop_reason) {
+    if (parsed.type === "message_delta" && parsed.delta?.stop_reason) {
       // Also terminal — stop_reason ends the turn for a Claude client, so the
       // search blocks have to be injected ahead of it too.
       state.heldMessageDelta = frame;
       continue;
     }
+
+    // Renumber content blocks so the client sees a contiguous 0..n sequence.
+    // Dropping a block leaves a hole, and a Claude client rejects the stream when
+    // block indices skip — the exact failure that surfaced as "The model's tool
+    // call could not be parsed".
+    if (parsed.type === "content_block_start" && typeof parsed.index === "number") {
+      if (state.suppressedIndexes.has(parsed.index)) continue;
+      const mapped = state.indexMap.get(parsed.index) ?? state.nextBlockIndex;
+      state.indexMap.set(parsed.index, mapped);
+      state.nextBlockIndex = Math.max(state.nextBlockIndex, mapped + 1);
+      parsed.index = mapped;
+      out.push(renderFrame(frame, parsed));
+      continue;
+    }
+    if ((parsed.type === "content_block_delta" || parsed.type === "content_block_stop")
+      && typeof parsed.index === "number") {
+      if (state.suppressedIndexes.has(parsed.index)) continue;
+      const mapped = state.indexMap.get(parsed.index);
+      if (mapped === undefined) { out.push(frame); continue; }
+      parsed.index = mapped;
+      out.push(renderFrame(frame, parsed));
+      continue;
+    }
+
     out.push(frame);
   }
   return out.join("");
+}
+
+/** Re-serialise an SSE frame, preserving its `event:` line. */
+function renderFrame(frame, payload) {
+  const data = `data: ${JSON.stringify(payload)}`;
+  if (/^event: /m.test(frame)) {
+    const ev = frame.match(/^event: (\w+)/m)[1];
+    return `event: ${ev}\n${data}\n\n`;
+  }
+  return `${data}\n\n`;
 }
 
 /** Parse one SSE frame's JSON payload, or null if it carries none. */

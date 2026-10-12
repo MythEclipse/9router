@@ -25,6 +25,10 @@ applies combo fallback. A combo name like `search-combo-1` is not in
   calling `/v1/search` with a provider that cannot search.
 - A pinned target that is a combo name is not run through provider-id selection
   (combos are not in `AI_PROVIDERS`); the endpoint handles it.
+- **Suppressed blocks are renumbered so indices stay contiguous.** Dropping a
+  block left a hole in the `index` sequence, and a Claude client rejects a stream
+  whose content-block indices skip. Forwarded blocks are now remapped to a dense
+  `0..n`, with the injected pair continuing from the end.
 - **Search results are injected before the turn's terminal frames.** Deferring
   `message_stop` alone was not enough: the upstream's final `message_delta`
   carries `stop_reason`, and a Claude client treats that as end-of-turn too, so

@@ -40,7 +40,7 @@ npx vitest run unit/capabilities.test.js   # single file (path relative to tests
 ```
 > The committed `tests/package.json` `test` script hardcodes Unix paths (`NODE_PATH=/tmp/node_modules …`) — a shared-install workaround from upstream. On Windows (or anywhere), ignore it and use the `npx vitest` form above; `vitest.config.js` resolves the `open-sse`/`@/` aliases from the repo root regardless of where vitest lives.
 >
-> **The suite IS all-green on a plain checkout** — 3955 passing, 0 failing assertions, 0 non-passing files. Gate it after every change:
+> **The suite IS all-green on a plain checkout** — 3956 passing, 0 failing assertions, 0 non-passing files. Gate it after every change:
 > ```bash
 > cd tests && npx vitest run --reporter=json --outputFile=/tmp/r.json && node __baseline__/verify-no-regression.mjs /tmp/r.json
 > ```
@@ -101,10 +101,10 @@ Claude Code declares Anthropic's `web_search_20250910` server tool. 9router pick
   client ends the turn at either one and treats the remainder as unparseable.
   Hold both back and replay them, in order, once the append is done. A
   `message_delta` with no `stop_reason` (a safeguard verdict) is not terminal.
-- **Streamed content blocks must carry strictly increasing `index` values**,
-  continuing past the highest index already sent. Claude Code parses the whole
-  turn and fails with "The model's tool call could not be parsed" on a
-  duplicate index — a skipped (suppressed) index is fine, a reused one is not.
+- **Streamed content blocks must be numbered contiguously from 0.** Claude Code
+  parses the whole turn and fails with "The model's tool call could not be
+  parsed" on a duplicate OR a skipped index, so any block dropped from a stream
+  must renumber the ones after it.
 - **A bridged search must NOT leave the model's original `tool_use` in the
   response.** Claude Code executes a client `tool_use` locally, so a leftover one
   makes it run WebSearch itself and report "Did 0 searches" while the bridged
