@@ -9,8 +9,10 @@ import {
 } from "../services/auth.js";
 import { handleAntigravityQuotaError, clearAntigravityStrikes } from "../services/antigravityQuota.js";
 import { getSettings } from "@/lib/localDb";
+import { getProviderConnections } from "@/lib/db/repos/connectionsRepo";
 import { getModelInfo, getComboModels } from "../services/model.js";
 import { handleChatCore } from "open-sse/handlers/chatCore.js";
+import { supportsSearch } from "open-sse/handlers/webSearchCredentials.js";
 import { DEFAULT_HEADROOM_URL } from "@/lib/headroom/detect";
 import { getTransform as getPxpipeTransform } from "@/lib/pxpipe/loader.js";
 import { appendPxpipeEvent } from "@/lib/pxpipe/events.js";
@@ -47,6 +49,30 @@ function pathnameOf(request) {
  * Supports: OpenAI, Claude, Gemini, OpenAI Responses API formats
  * Format detection and translation handled by translator
  */
+/**
+ * Providers that can run a web search and hold an active connection.
+ *
+ * Feeds web search auto-selection: without a candidate list, a request whose
+ * own provider cannot search has nothing to fall back to. Ordered by the
+ * registry's own preference list (via supportsSearch/resolveSearchProvider), so
+ * connection priority does not override which engine is preferred.
+ */
+async function listProvidersWithCredentials() {
+  try {
+    const conns = await getProviderConnections({ isActive: true });
+    const ids = new Set();
+    for (const c of conns) {
+      const id = c.provider || c.providerId;
+      if (id && supportsSearch(id)) ids.add(id);
+    }
+    return [...ids];
+  } catch {
+    // Credential enumeration is a convenience; failure must not block the chat
+    // request, which falls back to the request's own provider.
+    return [];
+  }
+}
+
 export async function handleChat(request, clientRawRequest = null) {
   // Parsed once: it decides which protocol's error envelope every validation
   // and auth failure below must speak.
@@ -346,6 +372,25 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       providerOverrides: (chatSettings.providerOverrides || {})[provider] || null,
       // Decision model used to answer Claude Code auto-mode safeguard reviews
       safeguardsClassifierModel: chatSettings.safeguardsClassifierModel || null,
+      // Claude Code web search: which search provider runs the bridged lookup,
+      // and whether the feature is on at all (unset = auto-detect).
+      webSearchEnabled: chatSettings.webSearchEnabled,
+      webSearchProvider: chatSettings.webSearchProvider || null,
+      // Credentials for the search provider are resolved from the provider
+      // store at call time — never the chat lane's credentials, since the
+      // search provider is a different account.
+      //
+      // getProviderCredentials' third positional arg is `model`, not a lock
+      // key, so the namespaced lock key travels in `options` and is ignored
+      // there. Passing the lock key positionally would filter credentials by a
+      // model named "websearch:<id>" and match nothing.
+      searchCredentialResolver: (searchProviderId, excludeIds) =>
+        getProviderCredentials(searchProviderId, excludeIds, null, {
+          lockKey: `websearch:${searchProviderId}`,
+        }),
+      // Providers holding live credentials, so auto-selection has candidates to
+      // choose from when no search provider is pinned in settings.
+      searchProviderResolver: listProvidersWithCredentials,
       // Detect source format by endpoint + body
       sourceFormatOverride: request?.url ? detectFormatByEndpoint(new URL(request.url).pathname, body) : null,
       // Error envelope the client's endpoint expects (Anthropic vs OpenAI)

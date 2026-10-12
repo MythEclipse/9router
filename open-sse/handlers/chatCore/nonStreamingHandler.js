@@ -12,6 +12,7 @@ import { appendRequestLog, saveRequestDetail } from "@/lib/usageDb.js";
 import { decloakToolNames } from "../../utils/claudeCloaking.js";
 import { restoreToolNames } from "../../utils/opencodeFingerprint.js";
 import { attachSafeguardResults, collectToolUseIds, buildUnavailableResults } from "../safeguardsProtocol.js";
+import { attachWebSearchToClaudeBody } from "../webSearchBody.js";
 import { reviewAndBuildSafeguardResults } from "../safeguardsBridge.js";
 import { resolveDecisionCredentials } from "../safeguardsCredentials.js";
 import { SAFEGUARD_STATUS_UNAVAILABLE } from "../../config/safeguardsConstants.js";
@@ -299,7 +300,7 @@ export async function attachReviewToClaudeBody({ responseBody, safeguardsPlan, l
 /**
  * Handle non-streaming response from provider.
  */
-export async function handleNonStreamingResponse({ providerResponse, provider, model, sourceFormat, targetFormat, body, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, clientRawRequest, onRequestSuccess, reqLogger, toolNameMap, customToolNames, trackDone, appendLog, pxpipe, reqTag, log, clientFormat = null, safeguardsPlan = null }) {
+export async function handleNonStreamingResponse({ providerResponse, provider, model, sourceFormat, targetFormat, body, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, clientRawRequest, onRequestSuccess, reqLogger, toolNameMap, customToolNames, trackDone, appendLog, pxpipe, reqTag, log, clientFormat = null, safeguardsPlan = null, webSearchPlan = null, runSearch = null }) {
   trackDone();
   const contentType = providerResponse.headers.get("content-type") || "";
   let responseBody;
@@ -344,6 +345,13 @@ export async function handleNonStreamingResponse({ providerResponse, provider, m
   const isClaudeClient = clientFormat === FORMATS.CLAUDE;
   if (isClaudeClient) {
     await attachReviewToClaudeBody({ responseBody, safeguardsPlan, log });
+
+    // Web search bridge: also after decloaking, and only when 9router is the one
+    // running the search. The model's `web_search` function call is replaced by
+    // the Anthropic server_tool_use + web_search_tool_result pair in place.
+    if (webSearchPlan?.active && webSearchPlan.lane === "bridge" && runSearch) {
+      await attachWebSearchToClaudeBody({ responseBody, webSearchPlan, runSearch, log });
+    }
   }
 
   const usage = extractUsageFromResponse(responseBody);

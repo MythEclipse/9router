@@ -12,6 +12,7 @@ import { saveRequestDetail } from "@/lib/usageDb.js";
 import { SSE_HEADERS_CORS as SSE_HEADERS } from "../../utils/sseConstants.js";
 import { upstreamResponseHeaders } from "../../utils/upstreamHeaders.js";
 import { injectSafeguardsIntoStream } from "../safeguardsStream.js";
+import { injectWebSearchIntoStream } from "../webSearchStream.js";
 
 // Codex returns Responses API SSE → which client format to translate INTO, by request sourceFormat.
 // Gemini-family all map to ANTIGRAVITY decoder; unknown sources fall back to OPENAI.
@@ -47,7 +48,7 @@ function buildTransformStream({ provider, sourceFormat, targetFormat, userAgent,
 /**
  * Handle streaming response — pipe provider SSE through transform stream to client.
  */
-export async function handleStreamingResponse({ providerResponse, provider, model, sourceFormat, targetFormat, userAgent, body, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, clientRawRequest, onRequestSuccess, reqLogger, toolNameMap, customToolNames, streamController, onStreamComplete, streamDetailId, pxpipe, reqTag, log, credentials, clientFormat = null, safeguardsPlan = null }) {
+export async function handleStreamingResponse({ providerResponse, provider, model, sourceFormat, targetFormat, userAgent, body, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, clientRawRequest, onRequestSuccess, reqLogger, toolNameMap, customToolNames, streamController, onStreamComplete, streamDetailId, pxpipe, reqTag, log, credentials, clientFormat = null, safeguardsPlan = null, webSearchPlan = null, runSearch = null }) {
   if (onRequestSuccess) {
     Promise.resolve()
       .then(onRequestSuccess)
@@ -105,6 +106,14 @@ export async function handleStreamingResponse({ providerResponse, provider, mode
     ? injectSafeguardsIntoStream({ stream: transformedBody, safeguardsPlan, log })
     : transformedBody;
 
+  // Web search bridge: wraps AFTER the review stream so a searched turn still
+  // gets its safeguard verdict, and only for a Claude-protocol client — the
+  // server_tool_use/web_search_tool_result pair means nothing on other wires.
+  const searchedStream = webSearchPlan?.active && webSearchPlan.lane === "bridge"
+    && claudeClient && runSearch
+    ? injectWebSearchIntoStream({ stream: reviewStream, webSearchPlan, runSearch, log })
+    : reviewStream;
+
   saveRequestDetail(buildRequestDetail({
     provider, model, connectionId,
     latency: { ttft: 0, total: Date.now() - requestStartTime },
@@ -121,7 +130,7 @@ export async function handleStreamingResponse({ providerResponse, provider, mode
 
   return {
     success: true,
-    response: new Response(reviewStream, { headers: { ...SSE_HEADERS, ...upstreamResponseHeaders(providerResponse.headers) } })
+    response: new Response(searchedStream, { headers: { ...SSE_HEADERS, ...upstreamResponseHeaders(providerResponse.headers) } })
   };
 }
 

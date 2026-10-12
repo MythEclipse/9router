@@ -1,5 +1,37 @@
 # Unreleased
 
+### Web search for the Anthropic protocol (Claude Code)
+
+Claude Code connecting to 9router over the Anthropic protocol now gets working
+web search. Two lanes, chosen automatically per request:
+
+- **passthrough** — the upstream runs the search (Anthropic-family providers);
+  `tools` is left untouched.
+- **bridge** — 9router runs the search through its own `/v1/search` path and
+  splices the Anthropic `server_tool_use` + `web_search_tool_result` block pair
+  into the response, so the client cannot tell the difference.
+
+Details:
+
+- Bridge search bodies reuse the existing `/v1/search` contract: `query`,
+  `max_results`, `search_type`, and `allowed_domains` mapped to `domain_filter`.
+- Tool-use ids are normalised to Anthropic's `srvtoolu_*` shape on both the
+  streaming and non-streaming paths; an unnormalised id is rejected upstream.
+- The bridge tool declaration is emitted in the body format's own shape
+  (`{type,name,input_schema}` for Claude, `{type:"function",function}` for
+  OpenAI) so the provider can actually invoke it.
+- Streaming: `input_json_delta` frames are parsed and merged into the pending
+  call, since Anthropic sends tool arguments out-of-band from the block start.
+- Domain filters are enforced locally as well as forwarded to the engine, with
+  block taking precedence over allow.
+- Credentials resolve at call time through an injected resolver (never inlined)
+  and are namespaced per search provider, so a search failure cannot lock the
+  chat lane's account. Lookup failures degrade to "no credentials" instead of
+  failing the turn.
+- New settings: `webSearchEnabled` (unset = auto-activate on tool declaration,
+  `false` = force off) and `webSearchProvider` (pin the search engine).
+
+
 ## Fixes
 - **GLM-5.2 lost `reasoning_effort`**: `resolveCapabilities` returns from an exact `MODEL_CAPABILITIES` entry before it reaches `PATTERN_CAPABILITIES`, so the exact `glm-5.2` entry silently shadowed the `*glm-5.2*` pattern that sets `thinkingEffortSupported`. GLM-5.2 requests went out without the effort level z.ai expects. The flag is now declared on the exact entry, with a regression test pinning that the gate stays version-exact (pre-5.2 GLM still ignores the field).
 - Kiro integrity retry: a retryable status (e.g. 401) walks every base URL before the response is returned, and a caller that assumed a single response per retry could crash on the exhausted queue instead of seeing the retry error.

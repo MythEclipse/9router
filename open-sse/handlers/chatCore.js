@@ -34,6 +34,8 @@ import { prefetchRemoteImages } from "../translator/concerns/prefetch.js";
 import { defaultClaudeToolType, shouldDefaultClaudeToolType } from "../translator/concerns/toolCall.js";
 import { resolveSessionId } from "../utils/sessionManager.js";
 import { resolveSafeguardsReviewPlan, ensureSafeguardsForwarded } from "./safeguardsReview.js";
+import { resolveWebSearchPlan, installBridgeTool } from "./webSearchProtocol.js";
+import { createSearchRunner } from "./webSearchRunner.js";
 
 /**
  * Core chat handler - shared between SSE and Worker
@@ -62,7 +64,7 @@ export function stripContinuityFields(body) {
   return body;
 }
 
-export async function handleChatCore({ body, modelInfo, credentials, log, onCredentialsRefreshed, onRequestSuccess, onDisconnect, clientRawRequest, connectionId, userAgent, apiKey, ccFilterNaming, rtkEnabled, headroomEnabled, headroomUrl, headroomCompressUserMessages, headroomTimeoutMs, cavemanEnabled, cavemanLevel, ponytailEnabled, ponytailLevel, pxpipeEnabled, pxpipeMinChars, pxpipeTimeoutMs, pxpipeTransform, onPxpipeEvent, sourceFormatOverride, providerThinking, providerOverrides, safeguardsClassifierModel, clientFormat = null }) {
+export async function handleChatCore({ body, modelInfo, credentials, log, onCredentialsRefreshed, onRequestSuccess, onDisconnect, clientRawRequest, connectionId, userAgent, apiKey, ccFilterNaming, rtkEnabled, headroomEnabled, headroomUrl, headroomCompressUserMessages, headroomTimeoutMs, cavemanEnabled, cavemanLevel, ponytailEnabled, ponytailLevel, pxpipeEnabled, pxpipeMinChars, pxpipeTimeoutMs, pxpipeTransform, onPxpipeEvent, sourceFormatOverride, providerThinking, providerOverrides, safeguardsClassifierModel, webSearchEnabled, webSearchProvider, searchCredentialResolver, searchProviderResolver, clientFormat = null }) {
   const { provider, model } = modelInfo;
   const requestStartTime = Date.now();
   // Stable per-session color so all lines of one CLI conversation share a tag
@@ -251,6 +253,35 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
       "SAFEGUARD",
       `auto-mode review requested · lane=${safeguardsPlan.lane}` +
       (safeguardsPlan.reviewer ? ` · reviewer=${safeguardsPlan.reviewer.provider}/${safeguardsPlan.reviewer.model}` : " · upstream review")
+    );
+  }
+
+  // Claude Code web search: resolve BEFORE dispatch so the server tool can be
+  // swapped for the bridge tool on the same body the request is sent with.
+  // Passthrough lane leaves `tools` untouched — the upstream runs the search.
+  const webSearchPlan = resolveWebSearchPlan({
+    body,
+    translatedBody,
+    provider,
+    settings: { webSearchEnabled, searchProviderId: webSearchProvider },
+  });
+  let runSearch = null;
+  if (webSearchPlan.active) {
+    // targetFormat is the format translatedBody is already in, so the bridge
+    // tool must be declared in that same shape (Anthropic's
+    // {type,name,input_schema} vs OpenAI's {type:"function",function}).
+    if (installBridgeTool(translatedBody, webSearchPlan, targetFormat)) {
+      runSearch = createSearchRunner({
+        webSearchPlan,
+        requestProvider: provider,
+        getProviderCredentials: searchCredentialResolver,
+        listCandidateProviders: searchProviderResolver,
+        log,
+      });
+    }
+    log?.debug?.(
+      "WEBSEARCH",
+      `web search requested · lane=${webSearchPlan.lane} · maxUses=${webSearchPlan.maxUses}`
     );
   }
 
@@ -546,14 +577,14 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
 
   // True non-streaming response
   if (!stream) {
-    const result = await handleNonStreamingResponse({ ...sharedCtx, providerResponse, sourceFormat, targetFormat: providerResponseFormat, reqLogger, toolNameMap, customToolNames, trackDone, appendLog, safeguardsPlan });
+    const result = await handleNonStreamingResponse({ ...sharedCtx, providerResponse, sourceFormat, targetFormat: providerResponseFormat, reqLogger, toolNameMap, customToolNames, trackDone, appendLog, safeguardsPlan, webSearchPlan, runSearch });
     streamController.handleComplete();
     return result;
   }
 
   // Streaming response
   const { onStreamComplete, streamDetailId } = buildOnStreamComplete({ ...sharedCtx });
-  return handleStreamingResponse({ ...sharedCtx, providerResponse, sourceFormat, targetFormat: providerResponseFormat, userAgent, reqLogger, toolNameMap, customToolNames, streamController, onStreamComplete, streamDetailId, credentials, safeguardsPlan });
+  return handleStreamingResponse({ ...sharedCtx, providerResponse, sourceFormat, targetFormat: providerResponseFormat, userAgent, reqLogger, toolNameMap, customToolNames, streamController, onStreamComplete, streamDetailId, credentials, safeguardsPlan, webSearchPlan, runSearch });
 }
 
 export function isTokenExpiringSoon(expiresAt, bufferMs = 5 * 60 * 1000) {

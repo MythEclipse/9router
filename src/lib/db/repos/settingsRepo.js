@@ -67,6 +67,12 @@ const DEFAULT_SETTINGS = {
   // Decision model (provider/model) that answers Claude Code auto-mode safeguard
   // reviews. Empty = pick the cheapest configured System One lane.
   safeguardsClassifierModel: "",
+  // Claude Code web search. Unset/null = auto: activate when the request
+  // declares a web_search tool. Set false to force the off switch even when the
+  // client asks for search. webSearchProvider pins which provider runs a bridged
+  // lookup; empty = auto-select from the providers holding live credentials.
+  webSearchEnabled: null,
+  webSearchProvider: "",
 };
 
 async function readRaw() {
