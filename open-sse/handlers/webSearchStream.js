@@ -136,13 +136,17 @@ function visitToolCallDeltas(json, state) {
         pending.args = (pending.args ?? "") + call.function.arguments;
       }
 
-      // The call is only complete once its arguments parse as an object.
-      let args = {};
-      try { args = JSON.parse(pending.args || "{}"); } catch { continue; }
-      if (typeof args !== "object" || args === null || Array.isArray(args)) continue;
-
       const isSearch = pending.name === WEB_SEARCH_TOOL_NAME || isClaudeCodeSearchTool({ name: pending.name });
       if (!isSearch || !pending.id) continue;
+
+      // Wait for the arguments to actually parse. The first chunk of an OpenAI
+      // tool call carries `arguments: ""`, which parses to `{}` — recording on
+      // that yields a call with an EMPTY query and the search is then rejected
+      // as query_too_long. The call is only real once its JSON has an argument.
+      let args;
+      try { args = JSON.parse(pending.args || ""); } catch { continue; }
+      if (typeof args !== "object" || args === null || Array.isArray(args)) continue;
+      if (!args.query) continue;
 
       record(state, pending.id, pending.name, args.query, choice.index, args.search_type);
       state.openAiCalls.delete(slot);

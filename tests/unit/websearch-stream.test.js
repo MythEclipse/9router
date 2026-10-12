@@ -452,9 +452,44 @@ describe("OpenAI-shaped upstream tool_calls (the path Claude Code actually takes
     ]);
 
     // The query only exists once the fragments are joined; a partial JSON parse
-    // must not be treated as the call.
+    // must not be treated as the call. The first chunk's `arguments: ""` parses
+    // to `{}`, so recording on it yields an empty query and the search is then
+    // rejected as query_too_long — the end-to-end symptom of this bug.
     expect(raw).toContain("server_tool_use");
     expect(raw).toContain("web_search_tool_result");
+    expect(raw).not.toContain("query_too_long");
+  });
+
+  it("does not record the call from the empty-arguments opening chunk", async () => {
+    const state = createWebSearchStreamState();
+    observeWebSearchFrame(state, chunk({ tool_calls: [{ index: 0, id: "call_empty", type: "function", function: { name: "WebSearch", arguments: "" } }] }));
+
+    // An empty argument string parses to {}; treating that as a finished call
+    // records a query-less search.
+    expect(state.calls).toHaveLength(0);
+  });
+
+  it("passes the fully reassembled query to the runner", async () => {
+    const runSearch = vi.fn().mockResolvedValue([{ title: "T", url: "https://e.test/1" }]);
+    const out = injectWebSearchIntoStream({
+      stream: sseStream([
+        chunk({ tool_calls: [{ index: 0, id: "call_full", type: "function", function: { name: "WebSearch", arguments: "" } }] }),
+        chunk({ tool_calls: [{ index: 0, function: { arguments: '{"query":"anthropic web search ' } }] }),
+        chunk({ tool_calls: [{ index: 0, function: { arguments: 'pricing"}' } }] }),
+        chunk({}, { finish_reason: "tool_calls" }),
+      ]),
+      webSearchPlan: plan, runSearch,
+    });
+
+    const reader = out.getReader();
+    const dec = new TextDecoder();
+    for (;;) {
+      const { done } = await reader.read();
+      if (done) break;
+    }
+
+    expect(runSearch).toHaveBeenCalled();
+    expect(runSearch.mock.calls[0][0].query).toBe("anthropic web search pricing");
   });
 
   it("normalises the tool_use id to Anthropic's srvtoolu_ shape", async () => {
