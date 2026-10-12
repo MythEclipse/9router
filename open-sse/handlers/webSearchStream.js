@@ -50,6 +50,13 @@ export function createWebSearchStreamState() {
     suppressedIndexes: new Set(),
     /** Highest content_block index seen upstream; injected blocks continue after it. */
     nextBlockIndex: 0,
+    /**
+     * True once the upstream has sent message_stop. Injection must land BEFORE
+     * that frame: Claude Code closes the turn at message_stop and treats
+     * anything after it as unparseable, which surfaced as
+     * "The model's tool call could not be parsed".
+     */
+    sawMessageStop: false,
   };
 }
 
@@ -371,6 +378,8 @@ function suppressSearchToolUseFrames(text, state) {
     if (!frame) continue;
     const parsed = parseSseFrame(frame);
 
+    if (parsed?.type === "message_stop") state.sawMessageStop = true;
+
     if (parsed?.type === "content_block_start" && typeof parsed.index === "number") {
       state.nextBlockIndex = Math.max(state.nextBlockIndex, parsed.index + 1);
     }
@@ -381,11 +390,14 @@ function suppressSearchToolUseFrames(text, state) {
       state.suppressedIndexes.add(parsed.index);
       continue;
     }
-    // A frame with no index (message_start, message_delta, ping) is never part
-    // of a block triple, so it is always forwarded.
     if (parsed
       && (parsed.type === "content_block_delta" || parsed.type === "content_block_stop")
       && state.suppressedIndexes.has(parsed.index)) {
+      continue;
+    }
+    if (parsed?.type === "message_stop") {
+      // Held back: the search blocks must ride inside the turn, before it ends.
+      state.sawMessageStop = true;
       continue;
     }
     out.push(frame);
@@ -476,6 +488,12 @@ export function injectWebSearchIntoStream({ stream, webSearchPlan, log, runSearc
         const injection = await buildStreamWebSearchInjection({ webSearchPlan, state, log, runSearch });
         if (injection) {
           try { controller.enqueue(new TextEncoder().encode(injection)); } catch { /* client gone */ }
+        }
+        // Close the turn now that the results are inside it. Held back from the
+        // upstream stream, so the client never sees an early message_stop.
+        if (state.sawMessageStop) {
+          const end = `event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n\n`;
+          try { controller.enqueue(new TextEncoder().encode(end)); } catch { /* client gone */ }
         }
         try { terminate?.(); } catch { /* ignore */ }
         try { controller.close(); } catch { /* ignore */ }

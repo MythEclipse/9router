@@ -673,6 +673,76 @@ describe("suppressing the model's own search tool_use on the bridge lane", () =>
     expect(idxs.every((v, i) => i === 0 || v > idxs[i - 1])).toBe(true);
   });
 
+  it("injects before message_stop, not after it", async () => {
+    // Claude Code closes the turn at message_stop and treats anything after it
+    // as unparseable — which surfaced as "The model's tool call could not be
+    // parsed" even though the blocks themselves were well-formed.
+    const buf = await collect([
+      f({ type: "message_start", message: { id: "m", role: "assistant", content: [] } }),
+      f({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } }),
+      f({ type: "content_block_stop", index: 0 }),
+      f({ type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "toolu_a", name: "WebSearch", input: { query: "q" } } }),
+      f({ type: "content_block_stop", index: 1 }),
+      f({ type: "message_delta", delta: { stop_reason: "tool_use" } }),
+      f({ type: "message_stop" }),
+    ]);
+
+    const order = buf.split("\n")
+      .filter((l) => l.startsWith("data: "))
+      .map((l) => {
+        try {
+          const e = JSON.parse(l.slice(6));
+          if (e.type === "content_block_start") return e.content_block.type;
+          if (e.type === "message_stop") return "MESSAGE_STOP";
+          return null;
+        } catch { return null; }
+      })
+      .filter(Boolean);
+
+    expect(order).toContain("MESSAGE_STOP");
+    const stopAt = order.indexOf("MESSAGE_STOP");
+    expect(stopAt).toBeGreaterThan(order.indexOf("web_search_tool_result"));
+    expect(order[order.length - 1]).toBe("MESSAGE_STOP");
+  });
+
+  it("still emits exactly one message_stop", async () => {
+    const buf = await collect([
+      f({ type: "message_start", message: { id: "m", role: "assistant", content: [] } }),
+      f({ type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "toolu_a", name: "WebSearch", input: { query: "q" } } }),
+      f({ type: "content_block_stop", index: 1 }),
+      f({ type: "message_stop" }),
+    ]);
+
+    const stops = buf.split("\n")
+      .filter((l) => l.startsWith("data: "))
+      .map((l) => { try { return JSON.parse(l.slice(6)).type; } catch { return null; } })
+      .filter((t) => t === "message_stop");
+
+    expect(stops).toHaveLength(1);
+  });
+
+  it("does not defer message_stop when nothing is injected", async () => {
+    const stream = new ReadableStream({
+      start(c) {
+        c.enqueue(new TextEncoder().encode(`event: message_stop
+data: ${JSON.stringify({ type: "message_stop" })}
+
+`));
+        c.close();
+      },
+    });
+    const reader = injectWebSearchIntoStream({
+      stream, webSearchPlan: plan, runSearch,
+    }).getReader();
+    let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += new TextDecoder().decode(value, { stream: true });
+    }
+    expect(buf).toContain("message_stop");
+  });
+
   it("never drops anything on the passthrough lane", async () => {
     const frames = [
       f({ type: "message_start", message: { id: "m", role: "assistant", content: [] } }),
