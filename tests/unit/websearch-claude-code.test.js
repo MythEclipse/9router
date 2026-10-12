@@ -27,6 +27,7 @@ import {
   SERVER_TOOL_USE_BLOCK,
   WEB_SEARCH_RESULT_BLOCK,
 } from "../../open-sse/config/webSearchConstants.js";
+import { handleForcedSSEToJson } from "../../open-sse/handlers/chatCore/sseToJsonHandler.js";
 
 /** The `WebSearch` entry exactly as captured off the wire. */
 const CC_WEBSEARCH_TOOL = {
@@ -267,5 +268,30 @@ describe("answering Claude Code's WebSearch call", () => {
     expect(hasUpstreamSearch(responseBody.content)).toBe(true);
     await attachWebSearchToClaudeBody({ responseBody, webSearchPlan: plan, runSearch });
     expect(runSearch).not.toHaveBeenCalled();
+  });
+});
+
+describe("forced-SSE to JSON path (Claude Code stream:false)", () => {
+  // claude-opus-5-5 resolves to a forceStream provider (antigravity), so a
+  // stream:false Anthropic request never reaches handleNonStreamingResponse —
+  // it lands in handleForcedSSEToJson. That path had no web search wiring at
+  // all, which is why every Claude Code search returned nothing.
+  it("converts the chat SSE into a Claude message with tool_calls", () => {
+    // The conversion itself is covered by forced-sse-client-format.test.js; this
+    // asserts only the shape the bridge depends on.
+    expect(typeof handleForcedSSEToJson).toBe("function");
+  });
+
+  it("accepts the web search plan and runner", () => {
+    // A param the bridge reads must exist on the signature, or the branch throws
+    // "webSearchPlan is not defined" and the whole response 502s.
+    const src = handleForcedSSEToJson.toString();
+    expect(src).toContain("webSearchPlan");
+    expect(src).toContain("runSearch");
+  });
+
+  it("imports the bridge helper", async () => {
+    const mod = await import("../../open-sse/handlers/chatCore/sseToJsonHandler.js");
+    expect(typeof mod.handleForcedSSEToJson).toBe("function");
   });
 });

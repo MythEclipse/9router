@@ -1,3 +1,4 @@
+import { attachWebSearchToClaudeBody } from "../webSearchBody.js";
 import { convertResponsesStreamToJson } from "../../transformer/streamToJsonConverter.js";
 import { restoreToolNames } from "../../utils/opencodeFingerprint.js";
 import { createErrorResult } from "../../utils/error.js";
@@ -265,7 +266,7 @@ export function parseSSEToOpenAIResponse(rawSSE, fallbackModel) {
  * Handle case: provider forced streaming but client wants JSON.
  * Supports both Codex/Responses API SSE and standard Chat Completions SSE.
  */
-export async function handleForcedSSEToJson({ providerResponse, sourceFormat, targetFormat, provider, model, body, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, clientRawRequest, onRequestSuccess, customToolNames, toolNameMap, trackDone, appendLog, reqTag, log }) {
+export async function handleForcedSSEToJson({ providerResponse, sourceFormat, targetFormat, provider, model, body, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, clientRawRequest, onRequestSuccess, customToolNames, toolNameMap, trackDone, appendLog, reqTag, log, clientFormat = null, webSearchPlan = null, runSearch = null }) {
   const contentType = providerResponse.headers.get("content-type") || "";
   const isSSE = contentType.includes("text/event-stream") || (contentType === "" && isResponsesProvider(provider));
   if (!isSSE) return null; // not handled here
@@ -452,6 +453,19 @@ export async function handleForcedSSEToJson({ providerResponse, sourceFormat, ta
       : sourceFormat === FORMATS.CLAUDE
         ? openAICompletionToClaudeMessage(parsed)
         : parsed;
+
+    // Claude Code web search bridge. This branch is the one a `stream:false`
+    // Claude request takes when the provider forces streaming — which is the
+    // normal case for claude-opus-5-5 (antigravity). Without this, the model's
+    // WebSearch call reached the client unanswered and rendered as a stub.
+    if (webSearchPlan?.active && webSearchPlan.lane === "bridge" && runSearch
+      && clientFormat === FORMATS.CLAUDE && Array.isArray(finalBody?.content)) {
+      try {
+        await attachWebSearchToClaudeBody({ responseBody: finalBody, webSearchPlan, runSearch, log });
+      } catch (err) {
+        log?.warn?.("WEBSEARCH", `bridge failed on forced-SSE path: ${err?.message || err}`);
+      }
+    }
 
     return { success: true, response: new Response(JSON.stringify(restoreToolNames(finalBody, toolNameMap)), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }) };
   } catch (err) {

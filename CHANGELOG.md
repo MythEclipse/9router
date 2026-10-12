@@ -25,6 +25,13 @@ applies combo fallback. A combo name like `search-combo-1` is not in
   calling `/v1/search` with a provider that cannot search.
 - A pinned target that is a combo name is not run through provider-id selection
   (combos are not in `AI_PROVIDERS`); the endpoint handles it.
+- **The bridge now runs on the forced-SSE-to-JSON path.** A `stream:false`
+  Anthropic request whose provider requires streaming never reaches the normal
+  non-streaming handler — it goes through `handleForcedSSEToJson`, which had no
+  web search wiring at all. Since `claude-opus-5-5` resolves to a force-stream
+  provider, *every* Claude Code search took this path and returned an unanswered
+  tool call. The plan and runner are now passed through and the bridge runs
+  before the Claude body is serialized.
 
 
 ### Fix: Claude Code's WebSearch tool returned empty results
