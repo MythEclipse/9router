@@ -158,8 +158,27 @@ from `snippet` and drops hits that have none, so a snippet-less engine looks
 identical to a broken search. `contents` is now sent, and `normalizeExa` accepts
 both the nested and flat response shapes.
 
-Enabling this in Claude Code additionally requires
-`CLAUDE_CODE_WEBSEARCH_USE_CCR_PROXY=1` and a `CLAUDE_CODE_SESSION_ID`.
+### Bringing it up in Claude Code (three client-side traps)
+
+Served and verified working in production, but the client gates this on state
+that is easy to get wrong:
+
+1. **`CLAUDE_CODE_WEBSEARCH_USE_CCR_PROXY=1`** — otherwise the local stub wins
+   and returns zero results no matter what the gateway does.
+2. **`CLAUDE_CODE_SESSION_ID`** matching `/^(session_|cse_)/`. A value that fails
+   this check is silently ignored by the gate.
+3. **`CLAUDE_CODE_SESSION_ACCESS_TOKEN`** must carry the gateway key. The worker
+   request is authenticated with this token, **not** `ANTHROPIC_API_KEY`; without
+   it the client sends no `Authorization` header and the route answers 401.
+
+The trap that cost the most time: **these must be in the real process
+environment, not `settings.json`'s `env` block.** The `CLAUDE_CODE_*` config is
+snapshotted before settings env is applied, so settings.json silently does
+nothing for the CCR gate — while `ANTHROPIC_BASE_URL`/`ANTHROPIC_API_KEY` from
+the same block work fine. Exported via `.bashrc`/`.profile`.
+
+Verified against production through a plain `bash -lc` shell: all three queries
+that previously returned "Did 0 searches" now return real titles and URLs.
 
 ### Web search for the Anthropic protocol (Claude Code)
 

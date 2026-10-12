@@ -96,6 +96,17 @@ Claude Code's own `WebSearch` client tool posts to
 `web_search_tool_result`, which is the separate Anthropic *server-tool* lane.
 Its default path is a local stub that returns zero results ("Did 0 searches"),
 so a 404 on that route looks like a broken search even when the bridge is fine.
+Client-side gating has two traps, both hit during bring-up:
+- `settings.json` `env` reaches the model calls but **not** the CCR gate
+  (`CLAUDE_CODE_*` is snapshotted into the config object before settings env is
+  applied), so these must be exported in the real process environment
+  (`.bashrc`/`.profile`). `ANTHROPIC_BASE_URL`/`ANTHROPIC_API_KEY` from settings.json
+  work fine — the split is only on the `CLAUDE_CODE_*` side.
+- The worker request is authenticated with `CLAUDE_CODE_SESSION_ACCESS_TOKEN`,
+  **not** `ANTHROPIC_API_KEY`. Without it the client sends no `Authorization`
+  header at all and the route 401s with "API key required for remote API access".
+- `CLAUDE_CODE_SESSION_ID` must match `/^(session_|cse_)/` or the gate ignores it.
+
 Gated behind `CLAUDE_CODE_WEBSEARCH_USE_CCR_PROXY` + a CCR session id, and its
 contract differs from the API's in three ways that are easy to get wrong: the
 error envelope is `{error:{error_type,error_message}}` (NOT `{error:{type,message}}`
