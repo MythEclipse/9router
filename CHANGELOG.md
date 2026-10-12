@@ -25,6 +25,14 @@ applies combo fallback. A combo name like `search-combo-1` is not in
   calling `/v1/search` with a provider that cannot search.
 - A pinned target that is a combo name is not run through provider-id selection
   (combos are not in `AI_PROVIDERS`); the endpoint handles it.
+- **The streaming bridge now suppresses the model's own search `tool_use`.**
+  This is why live Claude Code reported "Did 0 searches" even with the bridge
+  returning 5 results: the response contained both the model's original
+  `tool_use` *and* the native server-tool pair. Claude Code executes a client
+  `tool_use` itself, locally, so it ran WebSearch locally and ignored the
+  results already sent for the same call. Only the native pair is emitted now.
+  The whole `content_block_start`/`delta`/`stop` triple is dropped together, and
+  non-search tool calls (Read, Bash, …) are still forwarded untouched.
 - **The streaming bridge now recognises OpenAI-shaped `tool_calls`.** It wraps
   the *provider* response, so for any OpenAI-compatible upstream (antigravity,
   and every provider Claude Code traffic uses) the frames are chat-completions

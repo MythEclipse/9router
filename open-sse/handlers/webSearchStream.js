@@ -46,6 +46,8 @@ export function createWebSearchStreamState() {
      * is what lets the query be reconstructed at all.
      */
     openAiCalls: new Map(),
+    /** content_block index → true once its tool_use start frame was suppressed. */
+    suppressedIndexes: new Set(),
   };
 }
 
@@ -315,24 +317,115 @@ export async function buildStreamWebSearchInjection({ webSearchPlan, state, log,
  * Byte-level tee: every chunk is forwarded unchanged; parsing is observation
  * only, so a parse failure cannot corrupt the response.
  */
+/**
+ * Remove the model's own search tool_use frames from a chunk on the bridge lane.
+ *
+ * The bridge answers a search call with Anthropic's NATIVE server-tool pair
+ * (`server_tool_use` + `web_search_tool_result`). The model's original
+ * `tool_use` for that call must therefore not reach the client: Claude Code
+ * executes a client `tool_use` itself, locally, and reports "Did 0 searches"
+ * while ignoring the native pair that was already emitted for the same call.
+ * The non-streaming path has always spliced the original call out for the same
+ * reason — this brings the streaming path in line with it.
+ *
+ * Only search tool_use blocks are dropped; every other tool_use (Read, Bash,
+ * …) is forwarded byte-for-byte so multi-tool turns keep working.
+ */
+
+/**
+ * Drop the model's own search `tool_use` from an already-translated Claude
+ * stream, so the client never sees a call the bridge has already answered.
+ *
+ * The injector wraps the client's-format stream, so by the time a frame reaches
+ * here the upstream `tool_calls` delta has already been translated into
+ * Anthropic's `content_block_start` / `content_block_delta*` /
+ * `content_block_stop` triple keyed by `index`. The whole triple must be
+ * suppressed together: dropping only the start frame would leave orphaned
+ * deltas and a stop frame for a block that never opened.
+ *
+ * Only search calls are touched. Every other tool_use is forwarded byte-for-byte,
+ * so a turn calling WebSearch alongside Read/Bash still delivers those.
+ */
+function suppressSearchToolUseFrames(text, state) {
+  const out = [];
+
+  for (const frame of text.split(/(?<=\n\n)/)) {
+    if (!frame) continue;
+    const parsed = parseSseFrame(frame);
+
+    if (parsed?.type === "content_block_start" && isSearchToolUseBlock(parsed.content_block)) {
+      // Remember the index so the delta/stop frames of this same block, which
+      // arrive in later chunks, are recognised as already suppressed.
+      state.suppressedIndexes.add(parsed.index);
+      continue;
+    }
+    // A frame with no index (message_start, message_delta, ping) is never part
+    // of a block triple, so it is always forwarded.
+    if (parsed
+      && (parsed.type === "content_block_delta" || parsed.type === "content_block_stop")
+      && state.suppressedIndexes.has(parsed.index)) {
+      continue;
+    }
+    out.push(frame);
+  }
+  return out.join("");
+}
+
+/** Parse one SSE frame's JSON payload, or null if it carries none. */
+function parseSseFrame(frame) {
+  for (const line of frame.split("\n")) {
+    if (!line.startsWith("data:")) continue;
+    const payload = line.slice(5).trim();
+    if (!payload || payload === SSE_DONE) continue;
+    try { return JSON.parse(payload); } catch { return null; }
+  }
+  return null;
+}
+
+/** A translated `tool_use` block that is the search call the bridge answers. */
+function isSearchToolUseBlock(block) {
+  if (!block || block.type !== "tool_use") return false;
+  return block.name === WEB_SEARCH_TOOL_NAME || isClaudeCodeSearchTool(block);
+}
+
 export function injectWebSearchIntoStream({ stream, webSearchPlan, log, runSearch, terminate }) {
   if (!webSearchPlan?.active || webSearchPlan.lane === "passthrough") return stream;
 
   const state = createWebSearchStreamState();
   const decoder = new TextDecoder();
   const reader = stream.getReader();
-  let buffer = "";
   let doneReading = false;
+  // Frames are the unit of both observation and suppression, so complete frames
+  // are buffered until their terminating blank line arrives. An incomplete
+  // trailing frame is never forwarded (it would be dropped mid-parse) and never
+  // judged (its content_block_start may still be half-written).
+  let pending = "";
 
-  const observe = (text, final = false) => {
-    buffer += text;
-    const frames = buffer.split("\n\n");
-    const tail = final ? "" : (frames.pop() || "");
-    for (const frame of [...frames, tail]) {
+  /**
+   * Consume `text`, returning what may safely be forwarded now.
+   * @param {boolean} final flush the trailing partial frame on end-of-stream
+   */
+  const consume = (text, final = false) => {
+    pending += text;
+    const parts = pending.split("\n\n");
+    // Hold back a trailing fragment that has no terminating blank line yet;
+    // on end-of-stream it is complete whether or not it ends in one.
+    const tail = final ? "" : (parts.pop() || "");
+    pending = final ? "" : tail;
+
+    const whole = [];
+    for (const frame of parts) {
       if (!frame) continue;
-      observeWebSearchFrame(state, frame);
+      const complete = `${frame}\n\n`;
+      observeWebSearchFrame(state, complete);
+      whole.push(suppressSearchToolUseFrames(complete, state));
     }
-    buffer = final ? "" : tail;
+    if (final && pending) {
+      observeWebSearchFrame(state, pending);
+      whole.push(suppressSearchToolUseFrames(pending, state));
+      pending = "";
+    }
+    return whole.join("");
   };
 
   return new ReadableStream({
@@ -350,8 +443,13 @@ export function injectWebSearchIntoStream({ stream, webSearchPlan, log, runSearc
 
       if (result.done) {
         doneReading = true;
-        try { observe(decoder.decode(), true); } catch { /* ignore */ }
+        let tail = "";
+        try { tail = consume(decoder.decode(), true); } catch { /* ignore */ }
         try { reader.releaseLock(); } catch { /* already released */ }
+
+        if (tail) {
+          try { controller.enqueue(new TextEncoder().encode(tail)); } catch { /* client gone */ }
+        }
 
         const injection = await buildStreamWebSearchInjection({ webSearchPlan, state, log, runSearch });
         if (injection) {
@@ -362,9 +460,19 @@ export function injectWebSearchIntoStream({ stream, webSearchPlan, log, runSearc
         return;
       }
 
-      // Forward the upstream chunk untouched, observing as it passes.
-      controller.enqueue(result.value);
-      try { observe(decoder.decode(result.value, { stream: true })); } catch { /* ignore */ }
+      // Forward the chunk with the model's own search tool_use held back: the
+      // bridge answers that call with Anthropic's native server-tool pair, and
+      // Claude Code would otherwise execute the leftover call locally and report
+      // "Did 0 searches" while ignoring the results already sent for it.
+      let text = "";
+      try { text = consume(decoder.decode(result.value, { stream: true })); } catch { /* ignore */ }
+
+      // A chunk that held nothing but a suppressed block must still enqueue:
+      // returning without enqueueing would leave the ReadableStream with nothing
+      // to do and it would never call pull() again, stalling the response until
+      // the client gave up. An empty enqueue is the correct "kept nothing, keep
+      // reading" signal.
+      try { controller.enqueue(new TextEncoder().encode(text)); } catch { /* client gone */ }
     },
     cancel(reason) {
       doneReading = true;

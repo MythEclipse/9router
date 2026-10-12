@@ -532,3 +532,121 @@ describe("OpenAI-shaped upstream tool_calls (the path Claude Code actually takes
     expect(starts).toContain("web_search_tool_result");
   });
 });
+
+
+describe("suppressing the model's own search tool_use on the bridge lane", () => {
+  // The bridge answers a search call with Anthropic's NATIVE server-tool pair.
+  // The model's original `tool_use` must not reach the client: Claude Code
+  // executes a client tool_use itself, locally, and reported "Did 0 searches"
+  // while ignoring the native pair already emitted for the same call. Captured
+  // from a live Claude Code 2.1.296 session through 9router.
+  const plan = {
+    active: true, lane: "bridge", maxUses: 5,
+    defaultMaxResults: 5, allowedDomains: [], blockedDomains: [],
+  };
+  const runSearch = async () => [{ title: "T", url: "https://e.test/1" }];
+
+  const f = (o) => `event: ${o.type}\ndata: ${JSON.stringify(o)}\n\n`;
+
+  async function collect(frames) {
+    const stream = new ReadableStream({
+      start(c) {
+        for (const fr of frames) c.enqueue(new TextEncoder().encode(fr));
+        c.close();
+      },
+    });
+    const reader = injectWebSearchIntoStream({ stream, webSearchPlan: plan, runSearch }).getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+    }
+    return buf;
+  }
+
+  const startsOf = (buf) => buf.split("\n")
+    .filter((l) => l.startsWith("data: "))
+    .map((l) => { try { return JSON.parse(l.slice(6)).content_block; } catch { return null; } })
+    .filter(Boolean);
+
+  it("drops the search tool_use and keeps only the native pair", async () => {
+    const buf = await collect([
+      f({ type: "message_start", message: { id: "m", role: "assistant", content: [] } }),
+      f({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } }),
+      f({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Looking." } }),
+      f({ type: "content_block_stop", index: 0 }),
+      f({ type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "toolu_a", name: "WebSearch", input: {} } }),
+      f({ type: "content_block_delta", index: 1, delta: { type: "input_json_delta", partial_json: '{"query":"release notes"}' } }),
+      f({ type: "content_block_stop", index: 1 }),
+      f({ type: "message_delta", delta: { stop_reason: "tool_use" } }),
+    ]);
+
+    const types = startsOf(buf).map((b) => b.type);
+    expect(types).not.toContain("tool_use");
+    expect(types).toContain("server_tool_use");
+    expect(types).toContain("web_search_tool_result");
+    expect(buf).toContain("Looking.");
+  });
+
+  it("drops the whole block triple, not just the start frame", async () => {
+    // Leaving the delta/stop behind produces orphaned frames and a mismatched
+    // stop for a block that never opened.
+    const buf = await collect([
+      f({ type: "message_start", message: { id: "m", role: "assistant", content: [] } }),
+      f({ type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "toolu_a", name: "WebSearch", input: { query: "q" } } }),
+      f({ type: "content_block_delta", index: 1, delta: { type: "input_json_delta", partial_json: '{"query":"q"}' } }),
+      f({ type: "content_block_stop", index: 1 }),
+    ]);
+
+    expect(buf).not.toContain('"index":1');
+  });
+
+  it("keeps a non-search tool_use intact", async () => {
+    // A turn calling WebSearch alongside Read must still deliver the Read call.
+    const buf = await collect([
+      f({ type: "message_start", message: { id: "m", role: "assistant", content: [] } }),
+      f({ type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "toolu_r", name: "Read", input: { file_path: "/x" } } }),
+      f({ type: "content_block_stop", index: 1 }),
+      f({ type: "content_block_start", index: 2, content_block: { type: "tool_use", id: "toolu_w", name: "WebSearch", input: { query: "q" } } }),
+      f({ type: "content_block_stop", index: 2 }),
+    ]);
+
+    expect(buf).toContain('"name":"Read"');
+    expect(buf).not.toContain('"name":"WebSearch","input"');
+  });
+
+  it("does not stall when a chunk contains only the suppressed block", async () => {
+    // Regression: returning without enqueueing leaves the ReadableStream with
+    // no work and pull() is never called again, so the response hangs until the
+    // client times out. This is the exact shape a one-block chunk has.
+    const buf = await collect([
+      f({ type: "message_start", message: { id: "m", role: "assistant", content: [] } }),
+      f({ type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "toolu_a", name: "WebSearch", input: { query: "q" } } }),
+    ]);
+
+    expect(buf).toContain("server_tool_use");
+  });
+
+  it("never drops anything on the passthrough lane", async () => {
+    const frames = [
+      f({ type: "message_start", message: { id: "m", role: "assistant", content: [] } }),
+      f({ type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "toolu_a", name: "WebSearch", input: { query: "q" } } }),
+    ];
+    const stream = new ReadableStream({
+      start(c) { for (const fr of frames) c.enqueue(new TextEncoder().encode(fr)); c.close(); },
+    });
+    const out = injectWebSearchIntoStream({
+      stream, webSearchPlan: { ...plan, lane: "passthrough" }, runSearch,
+    });
+    const reader = out.getReader();
+    let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += new TextDecoder().decode(value, { stream: true });
+    }
+    expect(buf).toContain('"name":"WebSearch"');
+  });
+});

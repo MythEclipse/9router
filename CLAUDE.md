@@ -40,7 +40,7 @@ npx vitest run unit/capabilities.test.js   # single file (path relative to tests
 ```
 > The committed `tests/package.json` `test` script hardcodes Unix paths (`NODE_PATH=/tmp/node_modules …`) — a shared-install workaround from upstream. On Windows (or anywhere), ignore it and use the `npx vitest` form above; `vitest.config.js` resolves the `open-sse`/`@/` aliases from the repo root regardless of where vitest lives.
 >
-> **The suite IS all-green on a plain checkout** — 3940 passing, 0 failing assertions, 0 non-passing files. Gate it after every change:
+> **The suite IS all-green on a plain checkout** — 3947 passing, 0 failing assertions, 0 non-passing files. Gate it after every change:
 > ```bash
 > cd tests && npx vitest run --reporter=json --outputFile=/tmp/r.json && node __baseline__/verify-no-regression.mjs /tmp/r.json
 > ```
@@ -96,6 +96,14 @@ Claude Code declares Anthropic's `web_search_20250910` server tool. 9router pick
 - Bridge search bodies reuse the existing `/v1/search` contract (`query`, `max_results`, `search_type`, `allowed_domains` → `domain_filter`) — do not invent a new shape.
 - The bridge tool declaration is emitted in **the body's own format** (`{type,name,input_schema}` vs `{type:"function",function}`): `installBridgeTool` runs on `translatedBody`, which is already provider-format.
 - Tool-use ids must be normalised with `normalizeToolUseId` to Anthropic's `srvtoolu_*` shape on **both** the streaming and non-streaming paths; a raw model id is rejected upstream.
+- **A bridged search must NOT leave the model's original `tool_use` in the
+  response.** Claude Code executes a client `tool_use` locally, so a leftover one
+  makes it run WebSearch itself and report "Did 0 searches" while the bridged
+  results sit unread in the response.
+- **In a ReadableStream `pull`, always enqueue — even an empty chunk.** Returning
+  without enqueueing leaves nothing to do and `pull` is never called again, so
+  the response hangs until the client times out. This bit when suppression made a
+  chunk empty.
 - **The stream injector sees the PROVIDER's frames, not the client's.** For an
   OpenAI-compatible upstream that means `choices[].delta.tool_calls`, never
   Anthropic `content_block` events — any new stream-shape check must cover both.
