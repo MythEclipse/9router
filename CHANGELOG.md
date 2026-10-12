@@ -137,7 +137,14 @@ New `POST /api/v1/code/sessions/[id]/worker/[worker]` route serves it:
 - honours `allowed_domains` / `blocked_domains` using `/v1/search`'s own fields;
 - preserves `snippet`, which the client needs — with
   `CLAUDE_CODE_WEBSEARCH_CITATIONS` set it builds the model's tool_result text
-  from `content[].snippet` and drops hits that have none.
+  from `content[].snippet` and drops hits that have none;
+- uses the client's own error envelope, `{error:{error_type,error_message}}`. The
+  API-wide `{error:{type,message}}` shape leaves both fields undefined, so a real
+  failure reaches the user as an empty message;
+- derives the result cap from `search_profile` (`standard` → 5, `extended` → 10).
+  `max_uses` is the field the client's *internal* search subrequest uses; the
+  worker route never receives it;
+- returns `{results: []}` for a genuinely empty search instead of an error.
 
 Enabling this in Claude Code additionally requires
 `CLAUDE_CODE_WEBSEARCH_USE_CCR_PROXY=1` and a `CLAUDE_CODE_SESSION_ID`.

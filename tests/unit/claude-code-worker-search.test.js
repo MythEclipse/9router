@@ -153,6 +153,7 @@ describe("Claude Code CCR worker web-search route", () => {
     listProvidersWithCredentials.mockResolvedValue(["antigravity"]);
     const res = await POST(request({ query: "q" }), { params });
     expect(res.status).toBe(503);
+    expect((await res.json()).error.error_type).toBe("no_search_provider");
     expect(handleSearch).not.toHaveBeenCalled();
   });
 
@@ -162,7 +163,7 @@ describe("Claude Code CCR worker web-search route", () => {
     );
     const res = await POST(request({ query: "q" }), { params });
     expect(res.status).toBe(502);
-    expect((await res.json()).error.message).toBe("engine down");
+    expect((await res.json()).error.error_message).toBe("engine down");
   });
 
   it("rejects a missing query", async () => {
@@ -179,6 +180,36 @@ describe("Claude Code CCR worker web-search route", () => {
     await POST(request({ query: "q" }), { params });
     const sent = JSON.parse(await handleSearch.mock.calls[0][0].text());
     expect(sent.model).toBe("tinyfish");
+  });
+
+  it("uses the client's error envelope, not the API-wide one", async () => {
+    // The client reads data.error.error_type / data.error.error_message. With the
+    // {error:{type,message}} shape both are undefined and the user sees an
+    // empty failure message instead of the real one.
+    handleSearch.mockRejectedValue(new Error("socket hang up"));
+    const body = (await (await POST(request({ query: "q" }), { params })).json());
+    expect(Object.keys(body.error).sort()).toEqual(["error_message", "error_type"]);
+    expect(body.error.error_message).toBe("socket hang up");
+  });
+
+  it("answers a genuinely empty search with results: [], not an error", async () => {
+    // A search that found nothing is a success with zero hits; the client drops
+    // url-less entries itself, so an envelope here would be a false failure.
+    handleSearch.mockResolvedValue(searchOk([]));
+    const res = await POST(request({ query: "q" }), { params });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ results: [] });
+  });
+
+  it("derives the result cap from search_profile, not max_uses", async () => {
+    // The worker route sends a profile name; max_uses belongs to the client's
+    // internal search_subrequest path and never arrives here.
+    await POST(request({ query: "q", search_profile: "standard" }), { params });
+    expect(JSON.parse(await handleSearch.mock.calls[0][0].text()).max_results).toBe(5);
+    vi.clearAllMocks();
+    handleSearch.mockResolvedValue(searchOk([searchResult()]));
+    await POST(request({ query: "q", search_profile: "extended" }), { params });
+    expect(JSON.parse(await handleSearch.mock.calls[0][0].text()).max_results).toBe(10);
   });
 
   it("404s an unknown worker route", async () => {

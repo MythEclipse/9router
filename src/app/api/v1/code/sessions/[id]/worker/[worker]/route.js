@@ -31,6 +31,19 @@ export const dynamic = "force-dynamic";
 /** Routes this worker exposes. Anything else is a 404. */
 const WORKERS = new Set(["web-search"]);
 
+/**
+ * Error envelope matching Claude Code's worker contract.
+ *
+ * The client parses the 200 body with a schema of
+ *   { results?: [{title?, url?, snippet?}], error?: {error_type, error_message} | null }
+ * and reports `data.error.error_type` / `data.error.error_message`. Using the
+ * API-wide `{error:{type,message}}` shape instead makes both fields undefined,
+ * so a real failure surfaces to the user as an empty message.
+ */
+function errorResponse(status, errorType, message) {
+  return jsonResponse({ error: { error_type: errorType, error_message: message } }, status);
+}
+
 function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -87,33 +100,38 @@ function toWorkerResult(result) {
 /**
  * POST /v1/code/sessions/[id]/worker/web-search
  *
- * Claude Code sends `{ query, allowed_domains?, blocked_domains?, search_profile? }`
- * and expects `{ results: [{ title, url, snippet? }] }`.
+ * Request  `{ query, allowed_domains?, blocked_domains?, search_profile? }`
+ * Response `{ results?: [{ title?, url?, snippet? }], error?: {error_type, error_message} }`
+ *
+ * Note `search_profile`, not `max_uses`: the client's own search_subrequest uses
+ * `max_uses`, but the worker route sends a profile name ("standard"|"extended"),
+ * which only reaches here on the CCR-proxy lane. So the result cap is derived
+ * from the profile rather than read from a `max_uses` field that never arrives.
  */
 export async function POST(request, { params }) {
   const { id, worker } = await params;
   if (!WORKERS.has(worker)) {
-    return jsonResponse({ error: { type: "not_found_error", message: `unknown worker: ${worker}` } }, 404);
+    return errorResponse(404, "not_found", `unknown worker: ${worker}`);
   }
 
   let body;
   try {
     body = await request.json();
   } catch {
-    return jsonResponse({ error: { type: "invalid_request_error", message: "Invalid JSON body" } }, 400);
+    return errorResponse(400, "invalid_request", "Invalid JSON body");
   }
 
   const query = typeof body?.query === "string" ? body.query.trim() : "";
   if (!query) {
-    return jsonResponse({ error: { type: "invalid_request_error", message: "query is required" } }, 400);
+    return errorResponse(400, "invalid_request", "query is required");
   }
+
+  // "extended" is the client's default; it buys a deeper result set.
+  const maxResults = body?.search_profile === "standard" ? 5 : 10;
 
   const target = await resolveSearchTarget();
   if (!target) {
-    return jsonResponse(
-      { error: { type: "api_error", message: "no connected web search provider" } },
-      503,
-    );
+    return errorResponse(503, "no_search_provider", "no connected web search provider");
   }
 
   // Reuse the one supported search path so combo expansion, per-key access and
@@ -121,6 +139,7 @@ export async function POST(request, { params }) {
   const searchBody = {
     model: target,
     query,
+    max_results: maxResults,
     ...(Array.isArray(body.allowed_domains) && body.allowed_domains.length
       ? { allowed_domains: body.allowed_domains }
       : {}),
@@ -144,15 +163,12 @@ export async function POST(request, { params }) {
     const res = await handleSearch(inner);
     payload = await res.json();
   } catch (error) {
-    return jsonResponse(
-      { error: { type: "api_error", message: error?.message || "search failed" } },
-      502,
-    );
+    return errorResponse(502, "search_failed", error?.message || "search failed");
   }
 
   if (!payload || payload.error) {
     const message = payload?.error?.message || payload?.error || "search failed";
-    return jsonResponse({ error: { type: "api_error", message: String(message) } }, 502);
+    return errorResponse(502, "search_failed", String(message));
   }
 
   const results = (payload.results || [])

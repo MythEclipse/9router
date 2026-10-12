@@ -40,7 +40,7 @@ npx vitest run unit/capabilities.test.js   # single file (path relative to tests
 ```
 > The committed `tests/package.json` `test` script hardcodes Unix paths (`NODE_PATH=/tmp/node_modules …`) — a shared-install workaround from upstream. On Windows (or anywhere), ignore it and use the `npx vitest` form above; `vitest.config.js` resolves the `open-sse`/`@/` aliases from the repo root regardless of where vitest lives.
 >
-> **The suite IS all-green on a plain checkout** — 3976 passing, 0 failing assertions, 0 non-passing files. Gate it after every change:
+> **The suite IS all-green on a plain checkout** — 3979 passing, 0 failing assertions, 0 non-passing files. Gate it after every change:
 > ```bash
 > cd tests && npx vitest run --reporter=json --outputFile=/tmp/r.json && node __baseline__/verify-no-regression.mjs /tmp/r.json
 > ```
@@ -96,7 +96,12 @@ Claude Code's own `WebSearch` client tool posts to
 `web_search_tool_result`, which is the separate Anthropic *server-tool* lane.
 Its default path is a local stub that returns zero results ("Did 0 searches"),
 so a 404 on that route looks like a broken search even when the bridge is fine.
-Gated behind `CLAUDE_CODE_WEBSEARCH_USE_CCR_PROXY` + a CCR session id.
+Gated behind `CLAUDE_CODE_WEBSEARCH_USE_CCR_PROXY` + a CCR session id, and its
+contract differs from the API's in three ways that are easy to get wrong: the
+error envelope is `{error:{error_type,error_message}}` (NOT `{error:{type,message}}`
+— wrong names reach the user as an empty failure message); the result cap comes
+from a `search_profile` name, not `max_uses`; and a genuinely empty search must
+return `{results:[]}`, not an error.
 
 ### Web search for the Anthropic protocol (`open-sse/handlers/webSearch*.js`)
 Claude Code declares Anthropic's `web_search_20250910` server tool. 9router picks a lane per request: **passthrough** when the upstream runs the search itself (Anthropic-family providers — `tools` untouched), **bridge** otherwise, where 9router runs the search through its own `/v1/search` path and splices a `server_tool_use` + `web_search_tool_result` block pair into the response.
