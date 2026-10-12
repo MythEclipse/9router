@@ -1,3 +1,4 @@
+let WS_DEBUG_STATE = null;
 import { FORMATS } from "../../translator/formats.js";
 import { needsTranslation } from "../../translator/index.js";
 import { ollamaBodyToOpenAI } from "../../translator/response/ollama-to-openai.js";
@@ -343,6 +344,14 @@ export async function handleNonStreamingResponse({ providerResponse, provider, m
   // Claude Code auto-mode review: run AFTER decloaking so verdicts key on the
   // tool_use.id the CLIENT sees (the cloaked name is renamed, the id is not).
   const isClaudeClient = clientFormat === FORMATS.CLAUDE;
+  WS_DEBUG_STATE = JSON.stringify({
+    cf: clientFormat, icc: isClaudeClient,
+    a: !!webSearchPlan?.active, l: webSearchPlan?.lane,
+    ic: !!webSearchPlan?.isClaudeCodeClientTool,
+    t: webSearchPlan?.searchTargetModel ?? null,
+    rs: !!runSearch,
+    b: (responseBody?.content || []).map((b) => b?.type).join(","),
+  });
   if (isClaudeClient) {
     await attachReviewToClaudeBody({ responseBody, safeguardsPlan, log });
 
@@ -430,7 +439,12 @@ export async function handleNonStreamingResponse({ providerResponse, provider, m
   return {
     success: true,
     response: new Response(JSON.stringify(restoreToolNames(translatedResponse, toolNameMap)), {
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", ...upstreamResponseHeaders(providerResponse.headers) }
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+        ...(WS_DEBUG_STATE ? { "x-ws-debug": WS_DEBUG_STATE } : {}),
+        ...upstreamResponseHeaders(providerResponse.headers),
+      }
     })
   };
 }
