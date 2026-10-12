@@ -116,12 +116,28 @@ describe("commandcode-to-openai — finish", () => {
 });
 
 describe("commandcode-to-openai — error event", () => {
-  it("stringifies object errors so client sees readable message", () => {
-    const { chunks } = feed([
-      { type: "error", error: { type: "server_error", message: "Boom" } },
-    ]);
-    const text = chunks[0].choices[0].delta.content;
-    expect(text).toContain("Boom");
-    expect(text).not.toContain("[object Object]");
+  it("throws a readable error instead of emitting it as fake content", () => {
+    // A mid-stream error must abort the stream (the downstream handler then
+    // marks it errored), so it is thrown rather than emitted as a delta with
+    // finish_reason:"stop" — which would look like a successful empty answer.
+    expect(() =>
+      feed([{ type: "error", error: { type: "server_error", message: "Boom" } }]),
+    ).toThrow(/Boom/);
+
+    // The object error must be serialized, not coerced to "[object Object]".
+    let caught;
+    try {
+      feed([{ type: "error", error: { type: "server_error", message: "Boom" } }]);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught.message).not.toContain("[object Object]");
+    expect(caught.message).toContain("server_error");
+  });
+
+  it("keeps a plain string error verbatim", () => {
+    expect(() => feed([{ type: "error", error: "plain failure" }])).toThrow(
+      /plain failure/,
+    );
   });
 });
