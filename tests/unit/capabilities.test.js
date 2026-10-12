@@ -249,4 +249,19 @@ describe("getCapabilitiesForModel — codebuddy-cn provider overrides", () => {
     expect(caps.vision).toBe(true);
     expect(caps.thinkingFormat).toBe("deepseek");
   });
+  // Regression: resolveCapabilities returns from an exact MODEL_CAPABILITIES
+  // entry before it ever consults PATTERN_CAPABILITIES, so an exact entry that
+  // omits a flag silently loses it even when the matching pattern sets it.
+  // GLM-5.2 lost reasoning_effort this way (#4409).
+  it("exact entry shadows the pattern — flags must be repeated, not inherited", () => {
+    for (const provider of ["glm-cn", "glm", "zai"]) {
+      expect(getCapabilitiesForModel(provider, "glm-5.2").thinkingEffortSupported).toBe(true);
+    }
+    // The gate is still version-exact: pre-5.2 GLM keeps ignoring the field.
+    for (const model of ["glm-4.7", "glm-5-turbo", "glm-5", "glm-4.6v"]) {
+      expect(getCapabilitiesForModel("glm-cn", model).thinkingEffortSupported).toBe(false);
+    }
+    // 5.3 keeps its own canDisable:false.
+    expect(getCapabilitiesForModel("glm-cn", "glm-5.3").thinkingCanDisable).toBe(false);
+  });
 });
