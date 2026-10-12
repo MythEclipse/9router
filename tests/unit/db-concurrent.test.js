@@ -25,12 +25,16 @@ afterAll(() => {
 
 describe("DB Concurrency — atomic safety", () => {
   it("100 parallel saveRequestUsage → no count loss", async () => {
+    // Each write must be distinguishable: saveRequestUsage() dedupes entries
+    // matching on (timestamp, provider, model, connectionId, apiKey, tokens) —
+    // 100 byte-identical calls in one millisecond are one request by design
+    // (0d216689), so this would collapse to a single row.
     const N = 100;
     const promises = [];
     for (let i = 0; i < N; i++) {
       promises.push(db.saveRequestUsage({
         provider: "openai", model: "gpt-4", connectionId: "c1",
-        tokens: { prompt_tokens: 10, completion_tokens: 5 },
+        tokens: { prompt_tokens: 10 + i, completion_tokens: 5 },
         endpoint: "/v1/chat", status: "ok",
       }));
     }
@@ -39,10 +43,40 @@ describe("DB Concurrency — atomic safety", () => {
     const stats = await db.getUsageStats("24h");
     expect(stats.totalRequests).toBe(N);
     expect(stats.byProvider.openai.requests).toBe(N);
-    expect(stats.byProvider.openai.promptTokens).toBe(N * 10);
+    expect(stats.byProvider.openai.promptTokens).toBe(
+      Array.from({ length: N }, (_, i) => 10 + i).reduce((a, b) => a + b, 0)
+    );
 
     const hist = await db.getUsageHistory({ provider: "openai" });
     expect(hist.length).toBe(N);
+  });
+
+  it("saveRequestUsage dedupes byte-identical retries but keeps distinct writes", async () => {
+    const entry = {
+      provider: "openai", model: "gpt-4-dedupe", connectionId: "c-dedupe",
+      tokens: { prompt_tokens: 7, completion_tokens: 3 },
+      endpoint: "/v1/chat", status: "ok",
+    };
+
+    // The dedupe key is (timestamp, provider, model, connectionId, apiKey,
+    // tokens). Fixing the timestamp makes the write byte-identical, which is
+    // exactly the retry case: one logical request, one row.
+    const frozen = "2026-01-01T00:00:00.000Z";
+    await db.saveRequestUsage({ ...entry, timestamp: frozen });
+    await db.saveRequestUsage({ ...entry, timestamp: frozen });
+    await db.saveRequestUsage({ ...entry, timestamp: frozen });
+
+    // "all": the frozen timestamp sits outside the 24h window.
+    const stats = await db.getUsageStats("all");
+    expect(stats.byModel["gpt-4-dedupe (openai)"].requests).toBe(1);
+
+    // A different timestamp or different tokens is a different request.
+    await db.saveRequestUsage({
+      ...entry, timestamp: frozen, tokens: { prompt_tokens: 8, completion_tokens: 3 },
+    });
+    await db.saveRequestUsage({ ...entry, timestamp: "2026-01-01T00:00:00.001Z" });
+    const after = await db.getUsageStats("all");
+    expect(after.byModel["gpt-4-dedupe (openai)"].requests).toBe(3);
   });
 
   it("200 parallel saveRequestDetail → all flushed", async () => {
@@ -71,7 +105,8 @@ describe("DB Concurrency — atomic safety", () => {
     for (let i = 0; i < 50; i++) {
       ops.push(db.saveRequestUsage({
         provider: "anthropic", model: `m-${i % 3}`, connectionId: "c2",
-        tokens: { prompt_tokens: 20 }, status: "ok",
+        // distinct token counts keep the dedupe from merging concurrent writes
+        tokens: { prompt_tokens: 20 + i }, status: "ok",
       }));
       ops.push(db.setModelAlias(`a-${i}`, `target-${i}`));
       ops.push(db.disableModels("openai", [`d-${i}`]));
@@ -153,9 +188,11 @@ describe("DB Concurrency — atomic safety", () => {
     const N = 50;
     const promises = [];
     for (let i = 0; i < N; i++) {
+      // distinct per-iteration tokens: identical concurrent writes are deduped
+      // into one request by design, which would not test aggregation at all
       promises.push(db.saveRequestUsage({
         provider: "google", model: "gemini-pro", connectionId: "cG",
-        tokens: { prompt_tokens: 100, completion_tokens: 50 },
+        tokens: { prompt_tokens: 100 + i, completion_tokens: 50 },
         status: "ok",
       }));
     }
@@ -165,7 +202,9 @@ describe("DB Concurrency — atomic safety", () => {
     const g = stats.byProvider.google;
     expect(g).toBeDefined();
     expect(g.requests).toBe(N);
-    expect(g.promptTokens).toBe(N * 100);
+    expect(g.promptTokens).toBe(
+      Array.from({ length: N }, (_, i) => 100 + i).reduce((a, b) => a + b, 0)
+    );
     expect(g.completionTokens).toBe(N * 50);
   });
 });
