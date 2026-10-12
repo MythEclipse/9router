@@ -40,7 +40,7 @@ npx vitest run unit/capabilities.test.js   # single file (path relative to tests
 ```
 > The committed `tests/package.json` `test` script hardcodes Unix paths (`NODE_PATH=/tmp/node_modules …`) — a shared-install workaround from upstream. On Windows (or anywhere), ignore it and use the `npx vitest` form above; `vitest.config.js` resolves the `open-sse`/`@/` aliases from the repo root regardless of where vitest lives.
 >
-> **The suite IS all-green on a plain checkout** — 3979 passing, 0 failing assertions, 0 non-passing files. Gate it after every change:
+> **The suite IS all-green on a plain checkout** — 3986 passing, 0 failing assertions, 0 non-passing files. Gate it after every change:
 > ```bash
 > cd tests && npx vitest run --reporter=json --outputFile=/tmp/r.json && node __baseline__/verify-no-regression.mjs /tmp/r.json
 > ```
@@ -141,6 +141,13 @@ Claude Code declares Anthropic's `web_search_20250910` server tool. 9router pick
 - `CC_DECOY_TOOLS` must NOT list `WebSearch`: the "currently unavailable" description makes the model emit a stub answer instead of surfacing a real failure.
 - `installBridgeTool` must leave CC's declaration alone (its schema carries the domain filters).
 - Settings: `webSearchEnabled` (unset = auto-activate when the tool is declared, `false` = force off) and `webSearchProvider` (pin the engine).
+
+### Exa moved its content options under `contents`
+`buildExaRequest` used to send top-level `text: true` / `highlights: true`. Exa
+still accepts them but **ignores** them, so every hit came back with an empty
+snippet — and Claude Code's citations render from `snippet`, dropping hits without
+one. The request now sends `contents: {text, highlights}`, and `normalizeExa`
+accepts content nested under `contents` as well as the flat legacy shape.
 
 ### RTK token saver (`open-sse/rtk/`)
 Pre-translate hooks that compress `tool_result` content in-place to cut tokens. **Fail-open**: any error returns null and leaves the body untouched — never throw out of them. Skips `is_error`/`status:"error"` results to preserve traces.

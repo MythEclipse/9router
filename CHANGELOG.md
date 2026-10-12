@@ -146,6 +146,18 @@ New `POST /api/v1/code/sessions/[id]/worker/[worker]` route serves it:
   worker route never receives it;
 - returns `{results: []}` for a genuinely empty search instead of an error.
 
+### Exa: snippets silently dropped by upstream API drift
+
+`buildExaRequest` sent `text: true` / `highlights: true` at the top level. Exa
+still accepts that shape but no longer honours it — content options now live under
+a `contents` object — so **every** Exa result came back with an empty `snippet`.
+
+This is what left the CCR worker route returning bare `{title, url}`: with
+`CLAUDE_CODE_WEBSEARCH_CITATIONS` set, Claude Code builds the model's tool_result
+from `snippet` and drops hits that have none, so a snippet-less engine looks
+identical to a broken search. `contents` is now sent, and `normalizeExa` accepts
+both the nested and flat response shapes.
+
 Enabling this in Claude Code additionally requires
 `CLAUDE_CODE_WEBSEARCH_USE_CCR_PROXY=1` and a `CLAUDE_CODE_SESSION_ID`.
 

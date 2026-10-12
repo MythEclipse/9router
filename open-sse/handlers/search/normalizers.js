@@ -72,20 +72,28 @@ function normalizeExa(data, _query, _searchType) {
   const now = new Date().toISOString();
   const items = data.results;
   if (!Array.isArray(items)) return { results: [], totalResults: null };
-  const results = items.map((item, idx) =>
-    makeResult("exa", {
+  const results = items.map((item, idx) => {
+    // Responses may wrap content under `contents`; accept both shapes so a
+    // snippet is never dropped just because the response was re-shaped upstream.
+    const content = item.contents && typeof item.contents === "object" ? item.contents : item;
+    const highlights = content.highlights ?? item.highlights;
+    const text = content.text ?? item.text;
+    const summary = content.summary ?? item.summary;
+    return makeResult("exa", {
       title: item.title,
       url: item.url,
-      snippet: item.highlights?.[0] || item.text?.slice(0, 300) || "",
+      snippet: highlights?.[0] || summary || text?.slice(0, 300) || "",
+      highlights,
+      summary,
       score: item.score,
       published_at: item.publishedDate,
       favicon_url: item.favicon,
       author: item.author,
       image_url: item.image,
-      full_text: item.text,
+      full_text: text,
       text_format: "text",
-    }, idx, now)
-  );
+    }, idx, now);
+  });
   return { results, totalResults: results.length };
 }
 

@@ -152,12 +152,14 @@ function buildPerplexityRequest(config, params) {
 
 function buildExaRequest(config, params) {
   const { includes, excludes } = parseDomainFilter(params.domainFilter);
+  // Exa moved the content options under a `contents` object; the top-level
+  // `text` / `highlights` booleans are still accepted but silently ignored, so
+  // every hit came back with an empty snippet.
   const body = {
     query: params.query,
     numResults: params.maxResults,
     type: "auto",
-    text: true,
-    highlights: true,
+    contents: { text: true, highlights: true },
   };
   if (includes.length) body.includeDomains = includes;
   if (excludes.length) body.excludeDomains = excludes;
