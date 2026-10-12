@@ -39,6 +39,13 @@ export function createWebSearchStreamState() {
     sawUpstreamSearch: false,
     /** content_block index → tool_use id, so a later input delta finds its call. */
     byIndex: new Map(),
+    /**
+     * OpenAI tool_calls slot (by `index`) → { id, name, args } under
+     * construction. An OpenAI-shaped upstream splits one call across chunks:
+     * id + name in the first, argument fragments in the rest. Accumulating here
+     * is what lets the query be reconstructed at all.
+     */
+    openAiCalls: new Map(),
   };
 }
 
@@ -52,6 +59,7 @@ export function createWebSearchStreamState() {
  */
 function frameCanCarrySearch(frame) {
   return frame.includes("tool_use")
+    || frame.includes("tool_calls")
     || frame.includes(SERVER_TOOL_USE_BLOCK)
     || frame.includes(WEB_SEARCH_RESULT_BLOCK)
     || frame.includes("input_json_delta");
@@ -72,6 +80,7 @@ export function observeWebSearchFrame(state, frame) {
     try { json = JSON.parse(payload); } catch { continue; }
 
     visitBlocks(json, state);
+    visitToolCallDeltas(json, state);
     mergeInputDelta(state, json);
   }
 }
@@ -90,6 +99,55 @@ function collectBlocks(json) {
   if (Array.isArray(json?.content)) return json.content;
   if (json?.content_block && typeof json.content_block === "object") return [json.content_block];
   return [];
+}
+
+/**
+ * Walk OpenAI chat-completions `tool_calls` deltas.
+ *
+ * The bridge is wired around the provider response, NOT the client response, so
+ * when the provider is OpenAI-shaped (antigravity, any OpenAI-compatible
+ * upstream) the frames arriving here carry `choices[].delta.tool_calls`, not
+ * Anthropic `content_block` events. Anthropic arrives only later, after
+ * translation. Recognising only the Anthropic shape means the bridge silently
+ * does nothing for every OpenAI-shaped provider — which is every provider most
+ * Claude Code traffic actually uses.
+ */
+function visitToolCallDeltas(json, state) {
+  const deltas = json?.choices;
+  if (!Array.isArray(deltas)) return;
+
+  for (const choice of deltas) {
+    const calls = choice?.delta?.tool_calls;
+    if (!Array.isArray(calls)) continue;
+
+    for (const call of calls) {
+      // OpenAI splits a tool call across chunks: the first carries id + name,
+      // later ones carry only `arguments` fragments. Accumulate by index so the
+      // name learned in chunk 1 survives the fragments in chunks 2..n.
+      const slot = call.index ?? 0;
+      let pending = state.openAiCalls.get(slot);
+      if (!pending) {
+        pending = { id: null, name: null, args: "" };
+        state.openAiCalls.set(slot, pending);
+      }
+      if (call.id) pending.id = call.id;
+      if (call.function?.name) pending.name = call.function.name;
+      if (typeof call.function?.arguments === "string") {
+        pending.args = (pending.args ?? "") + call.function.arguments;
+      }
+
+      // The call is only complete once its arguments parse as an object.
+      let args = {};
+      try { args = JSON.parse(pending.args || "{}"); } catch { continue; }
+      if (typeof args !== "object" || args === null || Array.isArray(args)) continue;
+
+      const isSearch = pending.name === WEB_SEARCH_TOOL_NAME || isClaudeCodeSearchTool({ name: pending.name });
+      if (!isSearch || !pending.id) continue;
+
+      record(state, pending.id, pending.name, args.query, choice.index, args.search_type);
+      state.openAiCalls.delete(slot);
+    }
+  }
 }
 
 /** Walk every block container a Claude frame may use. */

@@ -25,6 +25,17 @@ applies combo fallback. A combo name like `search-combo-1` is not in
   calling `/v1/search` with a provider that cannot search.
 - A pinned target that is a combo name is not run through provider-id selection
   (combos are not in `AI_PROVIDERS`); the endpoint handles it.
+- **The streaming bridge now recognises OpenAI-shaped `tool_calls`.** It wraps
+  the *provider* response, so for any OpenAI-compatible upstream (antigravity,
+  and every provider Claude Code traffic uses) the frames are chat-completions
+  deltas — Anthropic `content_block` events only appear after translation.
+  Recognising only the Anthropic shape made the bridge a no-op on every such
+  provider. Arguments split across chunks are reassembled per `index`, and the
+  call is only recorded once its accumulated JSON parses.
+- **`isClaudeCodeSearchTool` no longer requires a falsy `type`.** A streamed
+  block always carries `type: "tool_use"`, so the old check rejected every real
+  Claude Code `WebSearch` block — only a `web_search_*` server-tool type should
+  disqualify the match.
 - **The bridge now runs on the forced-SSE-to-JSON path.** A `stream:false`
   Anthropic request whose provider requires streaming never reaches the normal
   non-streaming handler — it goes through `handleForcedSSEToJson`, which had no

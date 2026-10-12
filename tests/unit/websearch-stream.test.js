@@ -386,3 +386,114 @@ describe("real Claude Code tool-call sequence", () => {
     expect(runSearch).not.toHaveBeenCalled();
   });
 });
+
+
+describe("OpenAI-shaped upstream tool_calls (the path Claude Code actually takes)", () => {
+  // The bridge wraps the PROVIDER response. For an OpenAI-compatible upstream
+  // (antigravity, and every provider Claude Code traffic uses) the frames are
+  // chat-completions `tool_calls`, not Anthropic content_block events — those
+  // only appear after translation. Recognising only the Anthropic shape made the
+  // bridge a no-op for every such provider.
+  const runSearch = async () => [{ title: "Docs", url: "https://example.com/docs", content: "body" }];
+
+  const plan = {
+    active: true,
+    lane: "bridge",
+    maxUses: 5,
+    defaultMaxResults: 5,
+    allowedDomains: [],
+    blockedDomains: [],
+    isClaudeCodeClientTool: true,
+  };
+
+  const chunk = (delta, extra = {}) =>
+    `data: ${JSON.stringify({ id: "c1", choices: [{ index: 0, delta, ...extra }] })}\n\n`;
+
+  async function collect(frames) {
+    const out = injectWebSearchIntoStream({ stream: sseStream(frames), webSearchPlan: plan, runSearch });
+    const reader = out.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+    }
+    const starts = [];
+    for (const line of buf.split("\n")) {
+      if (!line.startsWith("data: ")) continue;
+      try {
+        const e = JSON.parse(line.slice(6));
+        if (e.type === "content_block_start") starts.push(e.content_block?.type);
+      } catch { /* not a frame */ }
+    }
+    return { starts, raw: buf };
+  }
+
+  it("converts a split tool_call into server_tool_use + web_search_tool_result", async () => {
+    const { starts } = await collect([
+      chunk({ role: "assistant", content: "Checking. " }),
+      chunk({ tool_calls: [{ index: 0, id: "call_abc", type: "function", function: { name: "WebSearch", arguments: "" } }] }),
+      chunk({ tool_calls: [{ index: 0, function: { arguments: '{"query":"anthropic pricing"}' } }] }),
+      chunk({}, { finish_reason: "tool_calls" }),
+    ]);
+
+    expect(starts).toContain("server_tool_use");
+    expect(starts).toContain("web_search_tool_result");
+  });
+
+  it("reassembles arguments split across several chunks", async () => {
+    const { raw } = await collect([
+      chunk({ tool_calls: [{ index: 0, id: "call_split", type: "function", function: { name: "WebSearch", arguments: "" } }] }),
+      chunk({ tool_calls: [{ index: 0, function: { arguments: '{"que' } }] }),
+      chunk({ tool_calls: [{ index: 0, function: { arguments: 'ry":"a b' } }] }),
+      chunk({ tool_calls: [{ index: 0, function: { arguments: 'c"}' } }] }),
+      chunk({}, { finish_reason: "tool_calls" }),
+    ]);
+
+    // The query only exists once the fragments are joined; a partial JSON parse
+    // must not be treated as the call.
+    expect(raw).toContain("server_tool_use");
+    expect(raw).toContain("web_search_tool_result");
+  });
+
+  it("normalises the tool_use id to Anthropic's srvtoolu_ shape", async () => {
+    const { raw } = await collect([
+      chunk({ tool_calls: [{ index: 0, id: "call_rawid", type: "function", function: { name: "WebSearch", arguments: '{"query":"q"}' } }] }),
+      chunk({}, { finish_reason: "tool_calls" }),
+    ]);
+
+    expect(raw).toContain("srvtoolu_");
+    // The upstream frame may legitimately pass through untouched; what matters is
+    // that the block we INJECT carries the normalised id Claude Code requires.
+    const injected = [...raw.matchAll(/"type":"server_tool_use","id":"([^"]+)"/g)].map((m) => m[1]);
+    expect(injected.length).toBeGreaterThan(0);
+    expect(injected.every((id) => id.startsWith("srvtoolu_"))).toBe(true);
+  });
+
+  it("leaves a non-search tool call alone", async () => {
+    const { starts } = await collect([
+      chunk({ tool_calls: [{ index: 0, id: "call_other", type: "function", function: { name: "Read", arguments: '{"path":"/x"}' } }] }),
+      chunk({}, { finish_reason: "tool_calls" }),
+    ]);
+
+    expect(starts).not.toContain("server_tool_use");
+    expect(starts).not.toContain("web_search_tool_result");
+  });
+
+  it("still handles Anthropic-shaped frames unchanged", async () => {
+    // Claude Code's own client tool shape: a `tool_use` named WebSearch, with
+    // the query inline. Added alongside the OpenAI cases to prove recognising
+    // `tool_calls` did not regress the Anthropic path.
+    const { starts } = await collect([
+      `event: content_block_start\ndata: ${JSON.stringify({
+        type: "content_block_start", index: 0,
+        content_block: { type: "tool_use", id: "toolu_a", name: "WebSearch", input: { query: "anthropic" } },
+      })}\n\n`,
+      `data: ${JSON.stringify({ type: "content_block_stop", index: 0 })}\n\n`,
+    ]);
+
+    expect(starts).toContain("server_tool_use");
+    expect(starts).toContain("web_search_tool_result");
+  });
+});

@@ -106,8 +106,12 @@ export const CLAUDE_CODE_SEARCH_TOOL_NAME = "WebSearch";
 
 export function isClaudeCodeSearchTool(tool) {
   if (!tool || typeof tool !== "object") return false;
-  // A server tool (has `type`) is handled by the other path.
-  if (tool.type) return false;
+  // A server tool is handled by the other path. A stream block always has
+  // `type: "tool_use"`, so that value must NOT disqualify the match — only a
+  // `web_search_*` server-tool type does. Requiring a falsy `type` meant a
+  // streamed WebSearch block was never recognised, which is the shape every
+  // Claude Code search actually arrives in.
+  if (typeof tool.type === "string" && /^web_search_/.test(tool.type)) return false;
   return tool.name === CLAUDE_CODE_SEARCH_TOOL_NAME;
 }
 
