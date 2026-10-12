@@ -23,6 +23,7 @@ import {
   WEB_SEARCH_TOOL_NAME,
   CLAUDE_SUPPORTED_TOOL_TYPE_RE,
   isWebSearchTool,
+  findClaudeCodeSearchTool,
   clampMaxUses,
   DEFAULT_MAX_RESULTS,
 } from "../config/webSearchConstants.js";
@@ -65,17 +66,28 @@ export function upstreamRunsWebSearch(provider) {
  * Resolve the search tool's declared options into a normalized plan.
  * Clamps every knob so a client cannot ask for an unbounded fan-out.
  */
+/**
+ * Read the tool declaration's limits and domain filters.
+ *
+ * Anthropic's server tool carries them at the top level (`max_uses`,
+ * `allowed_domains`, ...). Claude Code's client tool declares them only as
+ * *schema* — `{input_schema: {properties: {query, allowed_domains, ...}}}`, with
+ * no values at all (the filters arrive per-call in the tool input). So both
+ * places are read, and defaults apply when neither carries a value.
+ */
 function readToolOptions(tool) {
-  const maxUses = clampMaxUses(tool?.max_uses);
+  const props = tool?.input_schema?.properties || {};
+  const maxUses = clampMaxUses(tool?.max_uses ?? tool?.maxUses);
   const maxResults = Math.min(
     Math.max(1, Number(tool?.max_results) || DEFAULT_MAX_RESULTS),
     Number.MAX_SAFE_INTEGER,
   );
+  const domains = (value) => (Array.isArray(value) ? value.filter(Boolean) : []);
   return {
     maxUses,
     defaultMaxResults: Math.min(maxResults, DEFAULT_MAX_RESULTS),
-    allowedDomains: Array.isArray(tool?.allowed_domains) ? tool.allowed_domains.filter(Boolean) : [],
-    blockedDomains: Array.isArray(tool?.blocked_domains) ? tool.blocked_domains.filter(Boolean) : [],
+    allowedDomains: domains(tool?.allowed_domains ?? props.allowed_domains),
+    blockedDomains: domains(tool?.blocked_domains ?? props.blocked_domains),
   };
 }
 
@@ -93,17 +105,36 @@ export function resolveWebSearchPlan({ body, provider, settings = {} }) {
     return { ...inactive, reason: "disabled by settings" };
   }
 
-  const tool = findWebSearchTool(body);
-  if (!tool) return { ...inactive, reason: "no web_search tool declared" };
+  // Two shapes to support, both real on the wire:
+  //   1. Anthropic's server tool (`type: "web_search_2025xxxx"`) — declared by
+  //      API clients and by CC's own internal search sub-request.
+  //   2. Claude Code's client tool `WebSearch` (no `type`) — CC executes it
+  //      locally and returns an ordinary tool_result. Keying only off (1) is why
+  //      CC's own searches came back empty: it never declares (1).
+  const serverTool = findWebSearchTool(body);
+  const clientTool = serverTool ? null : findClaudeCodeSearchTool(body?.tools);
 
-  const options = readToolOptions(tool);
-  const lane = upstreamRunsWebSearch(provider) ? LANE_PASSTHROUGH : LANE_BRIDGE;
+  if (!serverTool && !clientTool) return { ...inactive, reason: "no web_search tool declared" };
+
+  const tool = serverTool || clientTool;
+  const options = readToolOptions(clientTool || serverTool);
+
+  // Claude Code's client tool is always executed by us: there is no upstream
+  // server tool to forward, so passthrough would silently return nothing.
+  const lane = (!clientTool && upstreamRunsWebSearch(provider))
+    ? LANE_PASSTHROUGH
+    : LANE_BRIDGE;
 
   return {
     active: true,
     lane,
-    reason: lane === LANE_PASSTHROUGH ? "upstream runs web search" : "9router bridges web search",
+    reason: clientTool
+      ? "Claude Code client WebSearch, bridged"
+      : lane === LANE_PASSTHROUGH
+        ? "upstream runs web search"
+        : "9router bridges web search",
     tool,
+    isClaudeCodeClientTool: !!clientTool,
     ...options,
   };
 }
@@ -120,6 +151,11 @@ export function resolveWebSearchPlan({ body, provider, settings = {} }) {
  */
 export function installBridgeTool(body, plan, targetFormat = "openai") {
   if (!plan?.active || plan.lane !== LANE_BRIDGE) return false;
+
+  // Claude Code's client tool is already a callable function declaration the
+  // model can use as-is. Replacing it with our bridge declaration would drop
+  // allowed_domains/blocked_domains from its schema and rewrite its name.
+  if (plan.isClaudeCodeClientTool) return true;
 
   const others = (body.tools || []).filter((t) => !isWebSearchTool(t));
   const [bridgeTool] = createBridgeToolDefinition(plan, targetFormat);

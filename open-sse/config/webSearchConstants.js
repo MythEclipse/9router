@@ -90,6 +90,33 @@ export function isWebSearchTool(tool) {
   return isWebSearchToolType(tool?.type) && tool?.name === WEB_SEARCH_TOOL_NAME;
 }
 
+/**
+ * Claude Code's OWN client-side search tool.
+ *
+ * Distinct from `web_search`: Claude Code declares `WebSearch` as a plain
+ * client tool (no `type`) carrying query/allowed_domains/blocked_domains, then
+ * executes it locally and returns an ordinary `tool_result` — it never declares
+ * Anthropic's `web_search_2025xxxx` server tool. Verified against a live
+ * Claude Code 2.1.296 request captured on the wire.
+ *
+ * Recognising it is what lets 9router answer the call with real results instead
+ * of leaving an empty tool_result that the model renders as a stub.
+ */
+export const CLAUDE_CODE_SEARCH_TOOL_NAME = "WebSearch";
+
+export function isClaudeCodeSearchTool(tool) {
+  if (!tool || typeof tool !== "object") return false;
+  // A server tool (has `type`) is handled by the other path.
+  if (tool.type) return false;
+  return tool.name === CLAUDE_CODE_SEARCH_TOOL_NAME;
+}
+
+/** Locate Claude Code's client-side WebSearch tool in a request's `tools[]`. */
+export function findClaudeCodeSearchTool(tools) {
+  if (!Array.isArray(tools)) return null;
+  return tools.find(isClaudeCodeSearchTool) || null;
+}
+
 /** Anthropic only accepts these values; anything else is coerced down. */
 export function clampMaxUses(value) {
   const n = Number(value);

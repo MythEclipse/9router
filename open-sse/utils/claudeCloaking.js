@@ -177,7 +177,9 @@ const CC_DECOY_TOOLS = [
   { name: "Write", description: "This tool is currently unavailable.", input_schema: { type: "object", properties: {} } },
   { name: "NotebookEdit", description: "This tool is currently unavailable.", input_schema: { type: "object", properties: {} } },
   { name: "WebFetch", description: "This tool is currently unavailable.", input_schema: { type: "object", properties: {} } },
-  { name: "WebSearch", description: "This tool is currently unavailable.", input_schema: { type: "object", properties: {} } },
+  // WebSearch is intentionally NOT a decoy: 9router answers it with real
+  // results (see handlers/webSearchProtocol.js). Declaring it unavailable made
+  // the model narrate a search that never returned anything.
   { name: "AskUserQuestion", description: "This tool is currently unavailable.", input_schema: { type: "object", properties: {} } },
   { name: "Skill", description: "This tool is currently unavailable.", input_schema: { type: "object", properties: {} } },
   { name: "EnterPlanMode", description: "This tool is currently unavailable.", input_schema: { type: "object", properties: {} } },

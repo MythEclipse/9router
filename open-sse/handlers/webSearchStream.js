@@ -23,6 +23,7 @@ import {
   SERVER_TOOL_USE_BLOCK,
   RESULT_ERROR_QUERY_TOO_LONG,
   RESULT_ERROR_UNAVAILABLE,
+  isClaudeCodeSearchTool,
 } from "../config/webSearchConstants.js";
 import { buildSearchBlocks, buildSearchErrorBlocks, searchFailureNotice } from "./webSearchBridge.js";
 import { SSE_DONE } from "../utils/sseConstants.js";
@@ -99,7 +100,8 @@ function visitBlocks(json, state) {
     if (block.type === SERVER_TOOL_USE_BLOCK) {
       state.sawUpstreamSearch = true;
       record(state, block.id, WEB_SEARCH_TOOL_NAME, block.input?.query, index, block.input?.search_type);
-    } else if (block.type === "tool_use" && block.name === WEB_SEARCH_TOOL_NAME) {
+    } else if (block.type === "tool_use"
+      && (block.name === WEB_SEARCH_TOOL_NAME || isClaudeCodeSearchTool(block))) {
       record(state, block.id, block.name, block.input?.query, index, block.input?.search_type);
     } else if (block.type === WEB_SEARCH_RESULT_BLOCK && block.tool_use_id) {
       // Upstream answered this one; re-running it would duplicate the results.

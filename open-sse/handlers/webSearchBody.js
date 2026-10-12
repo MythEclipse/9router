@@ -17,7 +17,12 @@
 
 import { buildSearchBlocks, buildSearchErrorBlocks } from "./webSearchBridge.js";
 import { normalizeToolUseId } from "./webSearchStream.js";
-import { SERVER_TOOL_USE_BLOCK, WEB_SEARCH_RESULT_BLOCK, WEB_SEARCH_TOOL_NAME } from "../config/webSearchConstants.js";
+import {
+  SERVER_TOOL_USE_BLOCK,
+  WEB_SEARCH_RESULT_BLOCK,
+  WEB_SEARCH_TOOL_NAME,
+  isClaudeCodeSearchTool,
+} from "../config/webSearchConstants.js";
 
 /** True when this assistant turn already carries upstream search output. */
 export function hasUpstreamSearch(content) {
@@ -27,9 +32,18 @@ export function hasUpstreamSearch(content) {
 }
 
 /** Locate the model's `web_search` function call in an assistant turn. */
+/**
+ * Find the model's search call in an assistant turn.
+ *
+ * Matches BOTH shapes seen on the wire:
+ *   - `name: "web_search"` — Anthropic's server tool (API clients).
+ *   - `name: "WebSearch"` — Claude Code's own client tool.
+ */
 export function findWebSearchCall(content) {
   if (!Array.isArray(content)) return null;
-  return content.find((b) => b?.type === "tool_use" && b?.name === WEB_SEARCH_TOOL_NAME) || null;
+  return content.find((b) =>
+    b?.type === "tool_use"
+    && (b?.name === WEB_SEARCH_TOOL_NAME || isClaudeCodeSearchTool({ name: b.name }))) || null;
 }
 
 /**

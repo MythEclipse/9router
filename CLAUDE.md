@@ -40,7 +40,7 @@ npx vitest run unit/capabilities.test.js   # single file (path relative to tests
 ```
 > The committed `tests/package.json` `test` script hardcodes Unix paths (`NODE_PATH=/tmp/node_modules …`) — a shared-install workaround from upstream. On Windows (or anywhere), ignore it and use the `npx vitest` form above; `vitest.config.js` resolves the `open-sse`/`@/` aliases from the repo root regardless of where vitest lives.
 >
-> **The suite IS all-green on a plain checkout** — 3898 passing, 0 failing assertions, 0 non-passing files. Gate it after every change:
+> **The suite IS all-green on a plain checkout** — 3920 passing, 0 failing assertions, 0 non-passing files. Gate it after every change:
 > ```bash
 > cd tests && npx vitest run --reporter=json --outputFile=/tmp/r.json && node __baseline__/verify-no-regression.mjs /tmp/r.json
 > ```
@@ -97,6 +97,9 @@ Claude Code declares Anthropic's `web_search_20250910` server tool. 9router pick
 - `frameCanCarrySearch` must accept `input_json_delta` frames — Anthropic streams tool arguments out-of-band from the block start, and gating those frames away loses the query.
 - Credentials come from an **injected** resolver (`searchCredentialResolver` in `src/sse/handlers/chat.js`); `open-sse/` must not import the app layer. The lock key travels in the resolver's `options`, not positionally — `getProviderCredentials`'s 3rd positional arg is `model`.
 - Streaming injection runs **after** the safeguards wrap, so a searched turn still gets its safeguard verdict.
+- **Two tool shapes must both be recognised.** Anthropic's server tool (`type: "web_search_2025xxxx"`, name `web_search`) *and* Claude Code's own client tool `WebSearch` (no `type`). CC never declares the server tool, so matching only the first leaves its searches silently empty. The client-tool shape always takes the bridge lane — passthrough would return nothing.
+- `CC_DECOY_TOOLS` must NOT list `WebSearch`: the "currently unavailable" description makes the model emit a stub answer instead of surfacing a real failure.
+- `installBridgeTool` must leave CC's declaration alone (its schema carries the domain filters).
 - Settings: `webSearchEnabled` (unset = auto-activate when the tool is declared, `false` = force off) and `webSearchProvider` (pin the engine).
 
 ### RTK token saver (`open-sse/rtk/`)

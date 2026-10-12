@@ -1,5 +1,36 @@
 # Unreleased
 
+### Fix: Claude Code's WebSearch tool returned empty results
+
+Claude Code calling Web Search through 9router got `Did 0 searches` and a stub
+("I'll run a few complementary searches in parallel") with no sources, on every
+query. Two independent causes, both confirmed against a live Claude Code 2.1.296
+request captured on the wire:
+
+1. **The decoy told the model search was dead.** `CC_DECOY_TOOLS` declared
+   `WebSearch` with "This tool is currently unavailable.", so the model narrated
+   a search that never returned anything instead of surfacing an error.
+   WebSearch is no longer a decoy.
+
+2. **The plan keyed off a tool Claude Code never sends.** `resolveWebSearchPlan`
+   only activated on Anthropic's server tool (`type: "web_search_2025xxxx"`).
+   Claude Code declares its own client tool `WebSearch` with **no `type`** and
+   emits `name: "WebSearch"` — a shape the matcher did not recognise, so the
+   bridge never ran. Now both shapes are recognised, and the client-tool shape
+   always takes the bridge lane: there is no upstream server tool to forward,
+   so passthrough would return nothing.
+
+Also:
+
+- `findWebSearchCall` and the streaming observer match `WebSearch` as well as
+  `web_search`.
+- `installBridgeTool` leaves CC's own declaration intact (replacing it would
+  drop `allowed_domains`/`blocked_domains` from the schema and rename a tool the
+  client expects to call itself).
+- `readToolOptions` also reads `input_schema.properties`, where CC keeps the
+  domain filters as schema rather than values.
+
+
 ### Web search for the Anthropic protocol (Claude Code)
 
 Claude Code connecting to 9router over the Anthropic protocol now gets working
