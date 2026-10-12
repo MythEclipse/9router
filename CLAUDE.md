@@ -40,15 +40,21 @@ npx vitest run unit/capabilities.test.js   # single file (path relative to tests
 ```
 > The committed `tests/package.json` `test` script hardcodes Unix paths (`NODE_PATH=/tmp/node_modules …`) — a shared-install workaround from upstream. On Windows (or anywhere), ignore it and use the `npx vitest` form above; `vitest.config.js` resolves the `open-sse`/`@/` aliases from the repo root regardless of where vitest lives.
 >
-> **The suite IS all-green on a plain checkout** — 3655 pass, 0 fail. `tests/__baseline__/known-fails.txt` is empty, and `verify-no-regression.mjs` is the gate to keep it that way: after any change, run
+> **The suite IS all-green on a plain checkout** — 3660 passing, 0 failing assertions, 0 non-passing files. Gate it after every change:
 > ```bash
 > cd tests && npx vitest run --reporter=json --outputFile=/tmp/r.json && node __baseline__/verify-no-regression.mjs /tmp/r.json
 > ```
-> and expect `No regression`. If a fix lands, **delete the entry** from `known-fails.txt` in the same commit; a stale entry is how a suite rots, by asserting values a later deliberate change moved.
+> expect `No regression`, then run the `node:test` suites too (vitest cannot see them — see below):
+> ```bash
+> for f in unit/kimchi.test.js unit/kimchi-strip-reasoning.test.js unit/cline-auth.test.js; do node --test --test-reporter=tap "$f"; done
+> ```
+> If a fix lands, **delete the entry** from `known-fails.txt` in the same commit; a stale entry is how a suite rots, by asserting values a later deliberate change moved.
 >
-> Two things legitimately need attention on a bare checkout (neither is a regression):
-> - `unit/embeddings.cloud.test.js` imports `cloud/src/handlers/embeddings.js` — the `cloud/` worker dir is **not in this repo**, so it is skipped here.
-> - `real/*.real.test.js` make live provider calls — need credentials, skip otherwise. `unit/mimo-free.live.test.js` hits MiMo's real endpoints and will go red if that upstream changes its contract again; assert the behaviour you actually care about (see the anti-abuse gate test), not a bare status code.
+> **Three files are `node:test`, not vitest** (`kimchi`, `kimchi-strip-reasoning`, `cline-auth`). Vitest collects them by glob, runs none of their assertions, and fails each file with "No test suite found" — so they are excluded in `vitest.config.js` and executed by the "Run node:test suites" step in `deploy.yml`. Do not "fix" one by converting it back into the vitest include glob; that silently removes it from CI. A new `node:test` file needs the same two edits.
+>
+> `real/*.real.test.js` make live provider calls — need credentials, skip otherwise. `unit/mimo-free.live.test.js` hits MiMo's real endpoints and goes red if that upstream changes its contract again; assert the behaviour you actually care about (see the anti-abuse gate test), not a bare status code.
+>
+> Note the gate counts **collection failures too**, not just failed assertions. A file that dies on `import("lowdb")` or "No test suite found" has an empty `assertionResults`, so assertion-only counting reports 0 failures while whole files are broken — that blind spot hid six broken files here.
 - `*.real.test.js` under `tests/translator/real/` make live provider calls — skip unless credentials are set.
 - Regression baselines: `tests/__baseline__/verify-*.mjs` compare against committed snapshots (providers, aliases, OAuth URLs). Run these after touching provider registry / alias logic.
 

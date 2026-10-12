@@ -11,9 +11,20 @@ describe("kimchi registry entry", () => {
     kimchiEntry = (await import("../../open-sse/providers/registry/kimchi.js")).default;
   });
 
-  it("is an oauth provider auto-listed via byCategory", () => {
+  it("is listed under a category the dashboard renders", () => {
+    // `category` is UI grouping (src/shared/constants/providers.js byCategory →
+    // FREE_PROVIDERS / FREE_TIER_PROVIDERS), not the auth model. Kimchi moved to
+    // "freeTier" in 6d96e24b and later gained API-key support (e02bde4a), so
+    // asserting category === "oauth" here only re-pinned a value that had
+    // already legitimately moved. Auth is asserted via authModes below.
     assert.equal(kimchiEntry.id, "kimchi");
-    assert.equal(kimchiEntry.category, "oauth");
+    assert.ok(
+      ["free", "freeTier", "oauth", "apikey"].includes(kimchiEntry.category),
+      `unexpected category: ${kimchiEntry.category}`,
+    );
+    // Dual OAuth + API key (e02bde4a): the gateway is OpenAI-compatible, so an
+    // API key is accepted alongside the OAuth token.
+    assert.deepEqual(kimchiEntry.authModes, ["oauth", "apikey"]);
   });
 
   it("points at the OpenAI-compatible gateway with an authenticated UA", () => {

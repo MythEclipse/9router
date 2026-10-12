@@ -31,12 +31,23 @@ const nowFails = r.testResults.flatMap(f =>
     .map(a => relPath(f.name) + " :: " + a.fullName)
 );
 
+// A file can fail WITHOUT any failing assertion: collection errors ("Cannot
+// find package", "No test suite found in file") mark testResults[].status as
+// "failed" while leaving assertionResults empty. Counting only assertions let
+// those through silently — a suite could report 0 failures with whole files
+// broken. Surface them as `file :: <status> - <message>` so they are gated too.
+const nowFileFails = r.testResults
+  .filter(f => f.status === "failed" && !(f.assertionResults || []).some(a => a.status === "failed"))
+  .map(f => relPath(f.name) + " :: [collection] " + (f.message || "unknown collection error").split("\n")[0].trim());
+
+const allFails = [...nowFails, ...nowFileFails];
+
 // Regression = fail bây giờ NHƯNG không có trong baseline known-fails
-const regressions = nowFails.filter(f => !knownFails.has(f));
+const regressions = allFails.filter(f => !knownFails.has(f));
 
 if (regressions.length) {
   console.error(`\n❌ REGRESSION: ${regressions.length} test pass→fail:\n`);
   regressions.forEach(f => console.error("  - " + f));
   process.exit(1);
 }
-console.log(`✅ No regression. (now fails=${nowFails.length}, baseline known=${knownFails.size}, all known)`);
+console.log(`✅ No regression. (now fails=${allFails.length} [${nowFails.length} assertion, ${nowFileFails.length} collection], baseline known=${knownFails.size}, all known)`);

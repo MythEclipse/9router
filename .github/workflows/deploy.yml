@@ -88,6 +88,17 @@ jobs:
         run: |
           node tests/__baseline__/verify-no-regression.mjs "$RUNNER_TEMP/results.json"
 
+      - name: Run node:test suites
+        # These use node:test, not vitest: vitest collects them by glob, runs none
+        # of their assertions, and fails the file with "No test suite found", so
+        # they are excluded in vitest.config.js and executed here instead.
+        # Without this step they are not gated by anything.
+        run: |
+          for f in unit/kimchi.test.js unit/kimchi-strip-reasoning.test.js \
+                   unit/cline-auth.test.js; do
+            node --test --test-reporter=tap "$f"
+          done
+
       - name: Verify provider/alias/oauth baselines
         run: |
           node tests/__baseline__/verify-providers.mjs

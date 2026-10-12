@@ -5,7 +5,12 @@
 - Kiro integrity retry: a retryable status (e.g. 401) walks every base URL before the response is returned, and a caller that assumed a single response per retry could crash on the exhausted queue instead of seeing the retry error.
 
 ## Tests
-- **Suite is fully green: 97 → 0 failures** (3655 passing). Every entry in `known-fails.txt` was resolved by fixing a real defect, never by rebaselining; the file is now empty and `verify-no-regression.mjs` is a green gate rather than a way to absorb breakage.
+- **Suite is fully green: 97 → 0 failures** (3660 passing, 0 non-passing files). Every entry in `known-fails.txt` was resolved by fixing a real defect, never by rebaselining; the file is now empty and `verify-no-regression.mjs` is a green gate rather than a way to absorb breakage.
+- `verify-no-regression.mjs` now also gates **collection failures**. A file that fails to collect (`Cannot find package 'lowdb'`, "No test suite found") has an empty `assertionResults`, so assertion-only counting reported a clean run while six files were broken — including a Kimchi assertion that had been failing since `6d96e24b`.
+- Three suites written against `node:test` are now actually executed: vitest collected them by glob, ran none of their assertions, and failed each file with "No test suite found", so they were gated by nothing. They are excluded in `vitest.config.js` and run by a new `node:test suites` step in `deploy.yml`.
+- Deleted `tests/auth/saml.test.js`, a node:test duplicate that could not load (`@/` alias) and was a strict subset of the 12-test `tests/unit/saml.test.js`.
+- `unit/db-benchmark.test.js` no longer imports `lowdb`, which left the stack in the SQLite migration; the file failed collection on every run. It now benchmarks the SQLite layer only.
+- Kimchi's registry assertion no longer pins `category === "oauth"` (UI grouping, moved to `freeTier` in `6d96e24b`); it asserts `authModes: ["oauth","apikey"]`, which is what actually matters.
 - Root causes, not per-test patches: the kiro `systemPrompt` field was removed by design (kiro returns `400 REQUEST_BODY_INVALID`), so 28 assertions were checking a field that no longer exists; `security-audit` resolved paths against the vitest cwd, so 13 reads hit `tests/src/...`; the CodeWhisperer/scan endpoints, Codex CLI version and refresh-lead constants were each pinned as copied literals and went stale on bump.
 - Fixed tests now assert against the source of truth (registry entries, `parseSSELine`'s format argument, the ollama boundary that actually flattens content) instead of duplicated values, so the next bump cannot desync them again.
 - CLAUDE.md now states the real numbers and how to keep them true.
