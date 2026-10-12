@@ -25,11 +25,13 @@ applies combo fallback. A combo name like `search-combo-1` is not in
   calling `/v1/search` with a provider that cannot search.
 - A pinned target that is a combo name is not run through provider-id selection
   (combos are not in `AI_PROVIDERS`); the endpoint handles it.
-- **Search results are injected BEFORE `message_stop`, not after.** Claude Code
-  closes the turn at `message_stop` and treats anything after it as
-  unparseable, so well-formed blocks appended past it still failed the whole
-  turn with "The model's tool call could not be parsed". The upstream
-  `message_stop` is now held back and re-emitted after the search pair.
+- **Search results are injected before the turn's terminal frames.** Deferring
+  `message_stop` alone was not enough: the upstream's final `message_delta`
+  carries `stop_reason`, and a Claude client treats that as end-of-turn too, so
+  results injected between the two still failed with "The model's tool call could
+  not be parsed". Both frames are now held back and replayed, in Anthropic's
+  order, after the search pair: blocks → results → stop_reason → message_stop.
+  Non-terminal `message_delta` frames (safeguard verdicts) stay in place.
 - **Injected stream blocks are now numbered after the highest index already on
   the wire.** `buildBlocksSse` hardcoded `index: 0` for every block it emitted,
   so the server-tool pair collided with the blocks upstream had already sent.

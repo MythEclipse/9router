@@ -400,6 +400,12 @@ function suppressSearchToolUseFrames(text, state) {
       state.sawMessageStop = true;
       continue;
     }
+    if (parsed?.type === "message_delta" && parsed.delta?.stop_reason) {
+      // Also terminal — stop_reason ends the turn for a Claude client, so the
+      // search blocks have to be injected ahead of it too.
+      state.heldMessageDelta = frame;
+      continue;
+    }
     out.push(frame);
   }
   return out.join("");
@@ -489,8 +495,11 @@ export function injectWebSearchIntoStream({ stream, webSearchPlan, log, runSearc
         if (injection) {
           try { controller.enqueue(new TextEncoder().encode(injection)); } catch { /* client gone */ }
         }
-        // Close the turn now that the results are inside it. Held back from the
-        // upstream stream, so the client never sees an early message_stop.
+        // Replay the terminal frames the client must see, now that the search
+        // results are inside the turn: stop_reason first, then message_stop.
+        if (state.heldMessageDelta) {
+          try { controller.enqueue(new TextEncoder().encode(state.heldMessageDelta)); } catch { /* gone */ }
+        }
         if (state.sawMessageStop) {
           const end = `event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n\n`;
           try { controller.enqueue(new TextEncoder().encode(end)); } catch { /* client gone */ }

@@ -40,7 +40,7 @@ npx vitest run unit/capabilities.test.js   # single file (path relative to tests
 ```
 > The committed `tests/package.json` `test` script hardcodes Unix paths (`NODE_PATH=/tmp/node_modules …`) — a shared-install workaround from upstream. On Windows (or anywhere), ignore it and use the `npx vitest` form above; `vitest.config.js` resolves the `open-sse`/`@/` aliases from the repo root regardless of where vitest lives.
 >
-> **The suite IS all-green on a plain checkout** — 3952 passing, 0 failing assertions, 0 non-passing files. Gate it after every change:
+> **The suite IS all-green on a plain checkout** — 3955 passing, 0 failing assertions, 0 non-passing files. Gate it after every change:
 > ```bash
 > cd tests && npx vitest run --reporter=json --outputFile=/tmp/r.json && node __baseline__/verify-no-regression.mjs /tmp/r.json
 > ```
@@ -96,9 +96,11 @@ Claude Code declares Anthropic's `web_search_20250910` server tool. 9router pick
 - Bridge search bodies reuse the existing `/v1/search` contract (`query`, `max_results`, `search_type`, `allowed_domains` → `domain_filter`) — do not invent a new shape.
 - The bridge tool declaration is emitted in **the body's own format** (`{type,name,input_schema}` vs `{type:"function",function}`): `installBridgeTool` runs on `translatedBody`, which is already provider-format.
 - Tool-use ids must be normalised with `normalizeToolUseId` to Anthropic's `srvtoolu_*` shape on **both** the streaming and non-streaming paths; a raw model id is rejected upstream.
-- **Anything appended to a stream must land before `message_stop`.** A Claude
-  client closes the turn at that frame and treats the remainder as unparseable.
-  Hold the upstream `message_stop` back and re-emit it once the append is done.
+- **Anything appended to a stream must land before BOTH terminal frames** —
+  `message_stop` *and* the `message_delta` carrying `stop_reason`. A Claude
+  client ends the turn at either one and treats the remainder as unparseable.
+  Hold both back and replay them, in order, once the append is done. A
+  `message_delta` with no `stop_reason` (a safeguard verdict) is not terminal.
 - **Streamed content blocks must carry strictly increasing `index` values**,
   continuing past the highest index already sent. Claude Code parses the whole
   turn and fails with "The model's tool call could not be parsed" on a

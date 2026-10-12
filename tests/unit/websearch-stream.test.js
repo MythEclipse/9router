@@ -743,6 +743,78 @@ data: ${JSON.stringify({ type: "message_stop" })}
     expect(buf).toContain("message_stop");
   });
 
+  it("injects before the stop_reason message_delta too", async () => {
+    // message_stop was not the only terminal frame: the upstream's final
+    // message_delta carries stop_reason, and a Claude client treats that as the
+    // end of the turn. Injecting between the two still failed to parse.
+    const buf = await collect([
+      f({ type: "message_start", message: { id: "m", role: "assistant", content: [] } }),
+      f({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } }),
+      f({ type: "content_block_stop", index: 0 }),
+      f({ type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "toolu_a", name: "WebSearch", input: { query: "q" } } }),
+      f({ type: "content_block_stop", index: 1 }),
+      f({ type: "message_delta", delta: { stop_reason: "tool_use" } }),
+      f({ type: "message_stop" }),
+    ]);
+
+    const order = buf.split("\n")
+      .filter((l) => l.startsWith("data: "))
+      .map((l) => {
+        try {
+          const e = JSON.parse(l.slice(6));
+          if (e.type === "content_block_start") return e.content_block.type;
+          if (e.type === "message_delta" && e.delta?.stop_reason) return "STOP_REASON";
+          if (e.type === "message_stop") return "MESSAGE_STOP";
+          return null;
+        } catch { return null; }
+      })
+      .filter(Boolean);
+
+    const resultAt = order.indexOf("web_search_tool_result");
+    const stopReasonAt = order.indexOf("STOP_REASON");
+    const stopAt = order.indexOf("MESSAGE_STOP");
+
+    expect(resultAt).toBeGreaterThan(-1);
+    expect(stopReasonAt).toBeGreaterThan(resultAt);
+    expect(stopAt).toBeGreaterThan(stopReasonAt);
+  });
+
+  it("replays the terminal frames in Anthropic's order", async () => {
+    const buf = await collect([
+      f({ type: "message_start", message: { id: "m", role: "assistant", content: [] } }),
+      f({ type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "toolu_a", name: "WebSearch", input: { query: "q" } } }),
+      f({ type: "content_block_stop", index: 1 }),
+      f({ type: "message_delta", delta: { stop_reason: "tool_use" } }),
+      f({ type: "message_stop" }),
+    ]);
+
+    expect(buf.endsWith("}\n\n")).toBe(true);
+    const tail = buf.slice(-400);
+    expect(tail).toContain("stop_reason");
+    expect(tail.lastIndexOf("message_stop")).toBeGreaterThan(tail.lastIndexOf("stop_reason"));
+  });
+
+  it("keeps a non-terminal message_delta in place", async () => {
+    // Safeguard verdicts ride on a message_delta with no stop_reason; those must
+    // stay exactly where they were.
+    const buf = await collect([
+      f({ type: "message_start", message: { id: "m", role: "assistant", content: [] } }),
+      f({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } }),
+      f({ type: "content_block_stop", index: 0 }),
+      f({ type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "toolu_a", name: "WebSearch", input: { query: "q" } } }),
+      f({ type: "content_block_stop", index: 1 }),
+      f({ type: "message_delta", delta: { safeguard_results: [{ type: "dangerous_tool_use" }] } }),
+      f({ type: "message_delta", delta: { stop_reason: "tool_use" } }),
+      f({ type: "message_stop" }),
+    ]);
+
+    const guardAt = buf.indexOf("safeguard_results");
+    const resultAt = buf.indexOf("web_search_tool_result");
+    // The verdict belongs to the turn, before the injected results.
+    expect(guardAt).toBeGreaterThan(-1);
+    expect(guardAt).toBeLessThan(resultAt);
+  });
+
   it("never drops anything on the passthrough lane", async () => {
     const frames = [
       f({ type: "message_start", message: { id: "m", role: "assistant", content: [] } }),
