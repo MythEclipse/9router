@@ -844,6 +844,56 @@ data: ${JSON.stringify({ type: "message_stop" })}
     expect(guardAt).toBeLessThan(resultAt);
   });
 
+  it("rewrites stop_reason to end_turn when the only tool call was answered", async () => {
+    // The upstream ends with stop_reason=tool_use because IT had just emitted a
+    // tool call. The bridge answers that call with the native server-tool pair,
+    // so no client tool is pending. Keeping "tool_use" describes a tool_use that
+    // never arrives and Claude Code rejects the turn as unparseable. Anthropic's
+    // own completed search ends with end_turn.
+    const buf = await collect([
+      f({ type: "message_start", message: { id: "m", role: "assistant", content: [] } }),
+      f({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } }),
+      f({ type: "content_block_stop", index: 0 }),
+      f({ type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "toolu_a", name: "WebSearch", input: { query: "q" } } }),
+      f({ type: "content_block_stop", index: 1 }),
+      f({ type: "message_delta", delta: { stop_reason: "tool_use", usage: { output_tokens: 6 } } }),
+      f({ type: "message_stop" }),
+    ]);
+
+    const terminal = buf.split("\n")
+      .filter((l) => l.startsWith("data: "))
+      .map((l) => { try { return JSON.parse(l.slice(6)); } catch { return null; } })
+      .find((e) => e && e.type === "message_delta" && e.delta?.stop_reason);
+
+    expect(terminal).toBeTruthy();
+    expect(terminal.delta.stop_reason).toBe("end_turn");
+    // Usage must survive the rewrite.
+    expect(terminal.delta.usage).toEqual({ output_tokens: 6 });
+  });
+
+  it("keeps stop_reason=tool_use when another client tool really is pending", async () => {
+    // A turn that called WebSearch AND Read is genuinely waiting on Read's
+    // result, so end_turn would be a lie.
+    const buf = await collect([
+      f({ type: "message_start", message: { id: "m", role: "assistant", content: [] } }),
+      f({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } }),
+      f({ type: "content_block_stop", index: 0 }),
+      f({ type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "toolu_r", name: "Read", input: { file_path: "/x" } } }),
+      f({ type: "content_block_stop", index: 1 }),
+      f({ type: "content_block_start", index: 2, content_block: { type: "tool_use", id: "toolu_a", name: "WebSearch", input: { query: "q" } } }),
+      f({ type: "content_block_stop", index: 2 }),
+      f({ type: "message_delta", delta: { stop_reason: "tool_use" } }),
+      f({ type: "message_stop" }),
+    ]);
+
+    expect(buf).toContain('"name":"Read"');
+    const terminal = buf.split("\n")
+      .filter((l) => l.startsWith("data: "))
+      .map((l) => { try { return JSON.parse(l.slice(6)); } catch { return null; } })
+      .find((e) => e && e.type === "message_delta" && e.delta?.stop_reason);
+    expect(terminal.delta.stop_reason).toBe("tool_use");
+  });
+
   it("never drops anything on the passthrough lane", async () => {
     const frames = [
       f({ type: "message_start", message: { id: "m", role: "assistant", content: [] } }),

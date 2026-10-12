@@ -108,6 +108,17 @@ export async function attachWebSearchToClaudeBody({ responseBody, webSearchPlan,
   // Splice back in place so citations stay next to the text that referenced them.
   content.splice(index, 0, blocks.serverToolUse, blocks.toolResult);
 
+  // The upstream ended its turn with stop_reason "tool_use" because it had just
+  // emitted that call. The bridge answered it with the native server-tool pair,
+  // so no client tool is left pending, and Anthropic's own completed search ends
+  // with "end_turn". Left as "tool_use" the turn advertises a tool result that
+  // never arrives and the client rejects it. Any OTHER tool_use still in the
+  // turn is genuinely pending, so stop_reason is only corrected when none are.
+  if (responseBody.stop_reason === "tool_use"
+    && !content.some((b) => b?.type === "tool_use")) {
+    responseBody.stop_reason = "end_turn";
+  }
+
   // A turn whose only content was the search call now has no text; give the
   // client an empty string rather than a missing `content` field.
   if (!responseBody.content || responseBody.content.length === 0) {

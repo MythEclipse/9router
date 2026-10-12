@@ -52,6 +52,8 @@ export function createWebSearchStreamState() {
     nextBlockIndex: 0,
     /** Original content_block index → the contiguous index the client receives. */
     indexMap: new Map(),
+    /** Ids of client tool_use blocks the client will actually receive. */
+    survivingToolUseIds: new Set(),
     /**
      * True once the upstream has sent message_stop. Injection must land BEFORE
      * that frame: Claude Code closes the turn at message_stop and treats
@@ -405,6 +407,9 @@ function suppressSearchToolUseFrames(text, state) {
     // call could not be parsed".
     if (parsed.type === "content_block_start" && typeof parsed.index === "number") {
       if (state.suppressedIndexes.has(parsed.index)) continue;
+      if (parsed.content_block?.type === "tool_use" && parsed.content_block.id) {
+        state.survivingToolUseIds.add(parsed.content_block.id);
+      }
       const mapped = state.indexMap.get(parsed.index) ?? state.nextBlockIndex;
       state.indexMap.set(parsed.index, mapped);
       state.nextBlockIndex = Math.max(state.nextBlockIndex, mapped + 1);
@@ -425,6 +430,33 @@ function suppressSearchToolUseFrames(text, state) {
     out.push(frame);
   }
   return out.join("");
+}
+
+/**
+ * Re-emit the held terminal message_delta with a stop_reason that matches what
+ * the client is actually receiving.
+ *
+ * The upstream ends with `stop_reason: "tool_use"`, which was true of its own
+ * stream — it had just emitted a tool call. The bridge answers that call with
+ * Anthropic's native server-tool pair, so no client tool is left pending. Keeping
+ * "tool_use" describes a turn whose tool_use never arrives, and Claude Code
+ * rejects it with "The model's tool call could not be parsed". Anthropic's own
+ * completed search ends the turn with `end_turn` (see the web-search response
+ * docs), which is what the client sees here too.
+ *
+ * `stop_reason: "tool_use"` is kept when another client tool_use did survive,
+ * because in that case the turn really is waiting on a tool result.
+ */
+function rewriteStopReason(state) {
+  const frame = state.heldMessageDelta || "";
+  const parsed = parseSseFrame(frame);
+  if (!parsed || parsed.type !== "message_delta") return frame;
+  if (state.survivingToolUseIds.size > 0) return frame;
+
+  if (parsed.delta?.stop_reason === "tool_use") {
+    parsed.delta = { ...parsed.delta, stop_reason: "end_turn" };
+  }
+  return renderFrame(frame, parsed);
 }
 
 /** Re-serialise an SSE frame, preserving its `event:` line. */
@@ -521,10 +553,10 @@ export function injectWebSearchIntoStream({ stream, webSearchPlan, log, runSearc
         if (injection) {
           try { controller.enqueue(new TextEncoder().encode(injection)); } catch { /* client gone */ }
         }
-        // Replay the terminal frames the client must see, now that the search
-        // results are inside the turn: stop_reason first, then message_stop.
+        // Replay the terminal frames now that the results are inside the turn.
         if (state.heldMessageDelta) {
-          try { controller.enqueue(new TextEncoder().encode(state.heldMessageDelta)); } catch { /* gone */ }
+          const terminal = rewriteStopReason(state);
+          try { controller.enqueue(new TextEncoder().encode(terminal)); } catch { /* gone */ }
         }
         if (state.sawMessageStop) {
           const end = `event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n\n`;

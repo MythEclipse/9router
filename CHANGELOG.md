@@ -25,6 +25,14 @@ applies combo fallback. A combo name like `search-combo-1` is not in
   calling `/v1/search` with a provider that cannot search.
 - A pinned target that is a combo name is not run through provider-id selection
   (combos are not in `AI_PROVIDERS`); the endpoint handles it.
+- **`stop_reason` is corrected to `end_turn` once the bridge has answered the
+  turn's only tool call.** The upstream ends with `tool_use` because *it* had just
+  emitted a call; the bridge answers that call with the native server-tool pair,
+  so nothing is pending. Anthropic's own completed search ends with `end_turn`
+  (web-search response docs), and leaving `tool_use` in place advertises a tool
+  result that never arrives — which is what Claude Code was rejecting as "The
+  model's tool call could not be parsed". Corrected on both the streaming and
+  non-streaming paths, and only when no other client `tool_use` survives.
 - **Suppressed blocks are renumbered so indices stay contiguous.** Dropping a
   block left a hole in the `index` sequence, and a Claude client rejects a stream
   whose content-block indices skip. Forwarded blocks are now remapped to a dense

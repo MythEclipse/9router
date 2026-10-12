@@ -295,3 +295,63 @@ describe("forced-SSE to JSON path (Claude Code stream:false)", () => {
     expect(typeof mod.handleForcedSSEToJson).toBe("function");
   });
 });
+
+
+describe("stop_reason correction on the non-streaming bridge", () => {
+  // Same defect as the streaming path: the upstream ends with stop_reason
+  // "tool_use" because IT had just emitted the call. Once the bridge answers it
+  // with the native server-tool pair, nothing is pending and Anthropic ends a
+  // completed search with "end_turn".
+  const plan = { active: true, lane: "bridge", maxUses: 5 };
+  const runSearch = async () => [{ title: "T", url: "https://e.test/1" }];
+
+  const bodyWith = (content, stopReason) => ({
+    role: "assistant",
+    content,
+    stop_reason: stopReason,
+  });
+
+  const searchCall = {
+    type: "tool_use",
+    id: "toolu_a",
+    name: "WebSearch",
+    input: { query: "q" },
+  };
+
+  it("changes tool_use to end_turn when the bridge answered the only call", async () => {
+    const body = bodyWith([{ type: "text", text: "Looking." }, searchCall], "tool_use");
+    const out = await attachWebSearchToClaudeBody({ responseBody: body, webSearchPlan: plan, runSearch });
+
+    expect(out.stop_reason).toBe("end_turn");
+    expect(out.content.some((b) => b.type === "server_tool_use")).toBe(true);
+    expect(out.content.some((b) => b.type === "tool_use")).toBe(false);
+  });
+
+  it("keeps tool_use when another client tool is still pending", async () => {
+    const body = bodyWith([
+      { type: "text", text: "Looking." },
+      searchCall,
+      { type: "tool_use", id: "toolu_r", name: "Read", input: { file_path: "/x" } },
+    ], "tool_use");
+    const out = await attachWebSearchToClaudeBody({ responseBody: body, webSearchPlan: plan, runSearch });
+
+    expect(out.stop_reason).toBe("tool_use");
+    expect(out.content.some((b) => b.type === "tool_use" && b.name === "Read")).toBe(true);
+  });
+
+  it("leaves an unrelated stop_reason alone", async () => {
+    const body = bodyWith([{ type: "text", text: "Done." }], "max_tokens");
+    const out = await attachWebSearchToClaudeBody({ responseBody: body, webSearchPlan: plan, runSearch });
+    expect(out.stop_reason).toBe("max_tokens");
+  });
+
+  it("corrects stop_reason even when the search fails", async () => {
+    const failing = async () => { throw new Error("engine down"); };
+    const body = bodyWith([searchCall], "tool_use");
+    const out = await attachWebSearchToClaudeBody({ responseBody: body, webSearchPlan: plan, runSearch: failing });
+
+    expect(out.stop_reason).toBe("end_turn");
+    const result = out.content.find((b) => b.type === "web_search_tool_result");
+    expect(result.error_code).toBe("unavailable");
+  });
+});
