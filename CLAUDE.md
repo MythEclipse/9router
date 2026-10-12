@@ -40,7 +40,7 @@ npx vitest run unit/capabilities.test.js   # single file (path relative to tests
 ```
 > The committed `tests/package.json` `test` script hardcodes Unix paths (`NODE_PATH=/tmp/node_modules …`) — a shared-install workaround from upstream. On Windows (or anywhere), ignore it and use the `npx vitest` form above; `vitest.config.js` resolves the `open-sse`/`@/` aliases from the repo root regardless of where vitest lives.
 >
-> **The suite IS all-green on a plain checkout** — 3660 passing, 0 failing assertions, 0 non-passing files. Gate it after every change:
+> **The suite IS all-green on a plain checkout** — 3890 passing, 0 failing assertions, 0 non-passing files. Gate it after every change:
 > ```bash
 > cd tests && npx vitest run --reporter=json --outputFile=/tmp/r.json && node __baseline__/verify-no-regression.mjs /tmp/r.json
 > ```
@@ -48,7 +48,7 @@ npx vitest run unit/capabilities.test.js   # single file (path relative to tests
 > ```bash
 > for f in unit/kimchi.test.js unit/kimchi-strip-reasoning.test.js unit/cline-auth.test.js; do node --test --test-reporter=tap "$f"; done
 > ```
-> If a fix lands, **delete the entry** from `known-fails.txt` in the same commit; a stale entry is how a suite rots, by asserting values a later deliberate change moved.
+> `known-fails.txt` is currently **empty** and the gate expects that (`now fails=0, baseline known=0`). Do not re-add entries for failures you did not fix, and if a fix lands **delete the entry** in the same commit; a stale entry is how a suite rots, by asserting values a later deliberate change moved.
 >
 > **Three files are `node:test`, not vitest** (`kimchi`, `kimchi-strip-reasoning`, `cline-auth`). Vitest collects them by glob, runs none of their assertions, and fails each file with "No test suite found" — so they are excluded in `vitest.config.js` and executed by the "Run node:test suites" step in `deploy.yml`. Do not "fix" one by converting it back into the vitest include glob; that silently removes it from CI. A new `node:test` file needs the same two edits.
 >
@@ -88,6 +88,16 @@ State is **no longer `db.json`**. It's a SQLite layer under `src/lib/db/` with a
 - `src/lib/localDb.js` is a **backward-compat shim** re-exporting `src/lib/db/index.js`. New code should import from `@/lib/db/index.js`; per-entity logic lives in `src/lib/db/repos/*`. Schema/migrations in `src/lib/db/migrations/`.
 - DB file location resolves via `src/lib/db/paths.js` (`DATA_DIR`, else `~/.9router/`).
 - Usage/logs (`src/lib/usageDb.js`, `usage.json` + `log.txt`) still live under `~/.9router` and do **not** follow `DATA_DIR`.
+
+### Web search for the Anthropic protocol (`open-sse/handlers/webSearch*.js`)
+Claude Code declares Anthropic's `web_search_20250910` server tool. 9router picks a lane per request: **passthrough** when the upstream runs the search itself (Anthropic-family providers — `tools` untouched), **bridge** otherwise, where 9router runs the search through its own `/v1/search` path and splices a `server_tool_use` + `web_search_tool_result` block pair into the response.
+- Bridge search bodies reuse the existing `/v1/search` contract (`query`, `max_results`, `search_type`, `allowed_domains` → `domain_filter`) — do not invent a new shape.
+- The bridge tool declaration is emitted in **the body's own format** (`{type,name,input_schema}` vs `{type:"function",function}`): `installBridgeTool` runs on `translatedBody`, which is already provider-format.
+- Tool-use ids must be normalised with `normalizeToolUseId` to Anthropic's `srvtoolu_*` shape on **both** the streaming and non-streaming paths; a raw model id is rejected upstream.
+- `frameCanCarrySearch` must accept `input_json_delta` frames — Anthropic streams tool arguments out-of-band from the block start, and gating those frames away loses the query.
+- Credentials come from an **injected** resolver (`searchCredentialResolver` in `src/sse/handlers/chat.js`); `open-sse/` must not import the app layer. The lock key travels in the resolver's `options`, not positionally — `getProviderCredentials`'s 3rd positional arg is `model`.
+- Streaming injection runs **after** the safeguards wrap, so a searched turn still gets its safeguard verdict.
+- Settings: `webSearchEnabled` (unset = auto-activate when the tool is declared, `false` = force off) and `webSearchProvider` (pin the engine).
 
 ### RTK token saver (`open-sse/rtk/`)
 Pre-translate hooks that compress `tool_result` content in-place to cut tokens. **Fail-open**: any error returns null and leaves the body untouched — never throw out of them. Skips `is_error`/`status:"error"` results to preserve traces.
