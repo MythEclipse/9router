@@ -5,6 +5,8 @@ import { adjustMaxTokens } from "../formats/maxTokens.js";
 import { safeParseJSON } from "../concerns/json.js";
 import { parseDataUri } from "../concerns/image.js";
 import { extractTextContent } from "../formats/gemini.js";
+import { extractReasoningText } from "../concerns/reasoning.js";
+import { DEFAULT_THINKING_CLAUDE_SIGNATURE } from "../../config/defaultThinkingSignature.js";
 import { ROLE, OPENAI_BLOCK, CLAUDE_BLOCK } from "../schema/index.js";
 import { getCapabilitiesForModel } from "../../providers/capabilities.js";
 
@@ -253,6 +255,21 @@ function getContentBlocksFromMessage(msg, toolNameMap = new Map()) {
       }
     }
   } else if (msg.role === ROLE.ASSISTANT) {
+    // OpenAI-compatible upstreams return prior-turn reasoning as a sibling
+    // field (reasoning_content / reasoning / reasoning_details[]) rather than a
+    // content block. Claude expects a leading thinking block, so lift it or the
+    // reasoning is silently dropped from the conversation. Claude requires a
+    // signature on thinking blocks; reuse the project's default constant
+    // (same convention as formats/claude.js) since this reasoning never came
+    // from Anthropic and therefore has no real signature.
+    const liftedReasoning = extractReasoningText(msg);
+    if (liftedReasoning) {
+      blocks.push({
+        type: CLAUDE_BLOCK.THINKING,
+        thinking: liftedReasoning,
+        signature: DEFAULT_THINKING_CLAUDE_SIGNATURE,
+      });
+    }
     if (Array.isArray(msg.content)) {
       for (const part of msg.content) {
         if (part.type === OPENAI_BLOCK.TEXT && part.text) {
