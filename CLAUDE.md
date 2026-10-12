@@ -40,7 +40,7 @@ npx vitest run unit/capabilities.test.js   # single file (path relative to tests
 ```
 > The committed `tests/package.json` `test` script hardcodes Unix paths (`NODE_PATH=/tmp/node_modules …`) — a shared-install workaround from upstream. On Windows (or anywhere), ignore it and use the `npx vitest` form above; `vitest.config.js` resolves the `open-sse`/`@/` aliases from the repo root regardless of where vitest lives.
 >
-> **The suite IS all-green on a plain checkout** — 3920 passing, 0 failing assertions, 0 non-passing files. Gate it after every change:
+> **The suite IS all-green on a plain checkout** — 3925 passing, 0 failing assertions, 0 non-passing files. Gate it after every change:
 > ```bash
 > cd tests && npx vitest run --reporter=json --outputFile=/tmp/r.json && node __baseline__/verify-no-regression.mjs /tmp/r.json
 > ```
@@ -91,6 +91,8 @@ State is **no longer `db.json`**. It's a SQLite layer under `src/lib/db/` with a
 
 ### Web search for the Anthropic protocol (`open-sse/handlers/webSearch*.js`)
 Claude Code declares Anthropic's `web_search_20250910` server tool. 9router picks a lane per request: **passthrough** when the upstream runs the search itself (Anthropic-family providers — `tools` untouched), **bridge** otherwise, where 9router runs the search through its own `/v1/search` path and splices a `server_tool_use` + `web_search_tool_result` block pair into the response.
+- **Bridged searches must go through the app's `/v1/search` handler** (`searchEndpointRunner` in `src/sse/handlers/chat.js`), not straight to `handleSearchCore`. Combo expansion, per-key access and combo fallback live only there, and a combo name is not in `AI_PROVIDERS` so provider-id resolution can never select one.
+- Prefer a connected candidate over the request's own provider when picking a search engine: `searchViaChat` models often lack search access and the chat account may not be connected.
 - Bridge search bodies reuse the existing `/v1/search` contract (`query`, `max_results`, `search_type`, `allowed_domains` → `domain_filter`) — do not invent a new shape.
 - The bridge tool declaration is emitted in **the body's own format** (`{type,name,input_schema}` vs `{type:"function",function}`): `installBridgeTool` runs on `translatedBody`, which is already provider-format.
 - Tool-use ids must be normalised with `normalizeToolUseId` to Anthropic's `srvtoolu_*` shape on **both** the streaming and non-streaming paths; a raw model id is rejected upstream.

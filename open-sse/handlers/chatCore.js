@@ -64,7 +64,7 @@ export function stripContinuityFields(body) {
   return body;
 }
 
-export async function handleChatCore({ body, modelInfo, credentials, log, onCredentialsRefreshed, onRequestSuccess, onDisconnect, clientRawRequest, connectionId, userAgent, apiKey, ccFilterNaming, rtkEnabled, headroomEnabled, headroomUrl, headroomCompressUserMessages, headroomTimeoutMs, cavemanEnabled, cavemanLevel, ponytailEnabled, ponytailLevel, pxpipeEnabled, pxpipeMinChars, pxpipeTimeoutMs, pxpipeTransform, onPxpipeEvent, sourceFormatOverride, providerThinking, providerOverrides, safeguardsClassifierModel, webSearchEnabled, webSearchProvider, searchCredentialResolver, searchProviderResolver, clientFormat = null }) {
+export async function handleChatCore({ body, modelInfo, credentials, log, onCredentialsRefreshed, onRequestSuccess, onDisconnect, clientRawRequest, connectionId, userAgent, apiKey, ccFilterNaming, rtkEnabled, headroomEnabled, headroomUrl, headroomCompressUserMessages, headroomTimeoutMs, cavemanEnabled, cavemanLevel, ponytailEnabled, ponytailLevel, pxpipeEnabled, pxpipeMinChars, pxpipeTimeoutMs, pxpipeTransform, onPxpipeEvent, sourceFormatOverride, providerThinking, providerOverrides, safeguardsClassifierModel, webSearchEnabled, webSearchProvider, searchCredentialResolver, searchProviderResolver, searchEndpointRunner = null, clientFormat = null }) {
   const { provider, model } = modelInfo;
   const requestStartTime = Date.now();
   // Stable per-session color so all lines of one CLI conversation share a tag
@@ -265,6 +265,13 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     provider,
     settings: { webSearchEnabled, searchProviderId: webSearchProvider },
   });
+  // Route bridged searches through the app's own /v1/search handler so the
+  // bridge sees exactly what a user's curl sees: combo expansion, per-key
+  // access and combo fallback all live there and nowhere else.
+  const runSearchViaEndpoint = searchEndpointRunner
+    ? (payload) => searchEndpointRunner(payload)
+    : null;
+
   let runSearch = null;
   if (webSearchPlan.active) {
     // targetFormat is the format translatedBody is already in, so the bridge
@@ -276,6 +283,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
         requestProvider: provider,
         getProviderCredentials: searchCredentialResolver,
         listCandidateProviders: searchProviderResolver,
+        runSearchViaEndpoint,
         log,
       });
     }

@@ -80,6 +80,85 @@ describe("createSearchRunner", () => {
     await expect(run({ query: "q" })).rejects.toThrow(/no search provider/i);
   });
 
+  it("routes through the endpoint path when one is injected", async () => {
+    // The endpoint path is the only layer that understands combos, per-key
+    // access and combo fallback; the bridge must not duplicate (or bypass) it.
+    const runSearchViaEndpoint = vi.fn().mockResolvedValue({ results: [result()] });
+    const run = createSearchRunner({
+      webSearchPlan: plan({ searchTargetModel: "search-combo-1" }),
+      requestProvider: "openai",
+      getProviderCredentials: credsResolver(),
+      runSearchViaEndpoint,
+    });
+
+    const out = await run({ query: "latest AI news" });
+
+    expect(runSearchViaEndpoint).toHaveBeenCalledOnce();
+    expect(runSearchViaEndpoint.mock.calls[0][0]).toMatchObject({
+      model: "search-combo-1", query: "latest AI news",
+    });
+    expect(out).toHaveLength(1);
+    // handleSearchCore must not run when the endpoint path handles it.
+    expect(searchCoreMock).not.toHaveBeenCalled();
+  });
+
+  it("throws when the endpoint reports an error", async () => {
+    const runSearchViaEndpoint = vi.fn().mockRejectedValue(new Error("No credentials for provider: tinyfish"));
+    const run = createSearchRunner({
+      webSearchPlan: plan({ searchTargetModel: "search-combo-1" }),
+      requestProvider: "openai",
+      getProviderCredentials: credsResolver(),
+      runSearchViaEndpoint,
+    });
+
+    await expect(run({ query: "q" })).rejects.toThrow(/no credentials/i);
+  });
+
+  it("still applies domain filters on the endpoint path", async () => {
+    const runSearchViaEndpoint = vi.fn().mockResolvedValue({
+      results: [
+        { title: "A", url: "https://docs.example.com/a" },
+        { title: "B", url: "https://other.test/b" },
+      ],
+    });
+    const run = createSearchRunner({
+      webSearchPlan: plan({ searchTargetModel: "search-combo-1", allowedDomains: ["docs.example.com"] }),
+      requestProvider: "openai",
+      getProviderCredentials: credsResolver(),
+      runSearchViaEndpoint,
+    });
+
+    const out = await run({ query: "q" });
+    expect(out.map((r) => r.url)).toEqual(["https://docs.example.com/a"]);
+  });
+
+  it("uses a connected candidate rather than the chat provider", async () => {
+    // Production shape: chat came in on `openai`, which advertises
+    // searchViaChat but has no connected account and no search-enabled model.
+    const run = createSearchRunner({
+      webSearchPlan: plan(),
+      requestProvider: "openai",
+      getProviderCredentials: credsResolver(),
+      listCandidateProviders: async () => ["tinyfish"],
+    });
+
+    await run({ query: "q" });
+    expect(searchCoreMock.mock.calls[0][0].provider.id).toBe("tinyfish");
+  });
+
+  it("surfaces a clear error when nothing is connected to search", async () => {
+    // Better an explicit error block the client can report than a silent empty
+    // result set, which is what made this look like a flaky backend.
+    const run = createSearchRunner({
+      webSearchPlan: plan(),
+      requestProvider: "openai",
+      getProviderCredentials: vi.fn().mockResolvedValue(null),
+      listCandidateProviders: async () => [],
+    });
+
+    await expect(run({ query: "q" })).rejects.toThrow(/no credentials/i);
+  });
+
   it("throws when the provider has no usable credentials", async () => {
     const run = createSearchRunner({
       webSearchPlan: plan(),

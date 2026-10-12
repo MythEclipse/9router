@@ -254,20 +254,27 @@ describe("Claude Code web search, end to end", () => {
     expect(translated.tools).toHaveLength(1);
   });
 
-  it("reuses the request's own provider when it can already search", () => {
-    // openai searches via chat, so there is nothing to gain by switching.
+  it("prefers a connected search provider over the chat lane's provider", () => {
+    // `openai` advertises searchViaChat, but that model has no search access
+    // and the account may not even be connected. A provider in `candidates`
+    // has live credentials by construction, so it wins.
     const sel = resolveSearchProvider({
       providerId: null, requestProvider: "openai", candidates: ["serper"],
     });
-    expect(sel.providerId).toBe("openai");
-    expect(sel.source).toBe("request-provider");
+    expect(sel.providerId).toBe("serper");
+    expect(sel.source).toBe("auto");
   });
 
-  it("falls back to a dedicated search provider when the chat provider cannot search", () => {
+  it("falls back to the chat provider when nothing else is connected", () => {
     const sel = resolveSearchProvider({
-      providerId: null, requestProvider: "kiro", candidates: ["serper"],
+      providerId: null, requestProvider: "kiro", candidates: [],
     });
-    expect(sel.providerId).toBe("serper");
+    expect(sel.providerId).toBeNull();
+    const fallback = resolveSearchProvider({
+      providerId: null, requestProvider: "openai", candidates: [],
+    });
+    expect(fallback.providerId).toBe("openai");
+    expect(fallback.source).toBe("request-provider");
   });
 
   it("finds the call in a Claude content array", () => {

@@ -37,19 +37,20 @@ export function supportsSearch(providerId) {
  * @returns {{providerId: string|null, provider: object|null, source: string}}
  */
 export function resolveSearchProvider({ providerId, requestProvider, candidates = [] }) {
-  // 1. Explicit setting.
+  // 1. Explicit setting wins outright.
   if (providerId && supportsSearch(providerId)) {
     return { providerId, provider: AI_PROVIDERS[providerId], source: "settings" };
   }
 
-  // 2. The request's own provider, when it can search itself.
-  if (requestProvider && supportsSearch(requestProvider)) {
-    return { providerId: requestProvider, provider: AI_PROVIDERS[requestProvider], source: "request-provider" };
-  }
-
-  // 3. Any candidate that can search, preferring the well-known ones first so
-  //    the choice is stable across requests instead of dictionary order.
-  const usable = candidates.filter((id) => supportsSearch(id));
+  // 2. A connected dedicated search engine, preferring the well-known ones so
+  //    the choice is stable across requests instead of candidate order.
+  //
+  //    This outranks the request's own provider on purpose. `searchViaChat`
+  //    (openai -> gpt-4o-mini, etc.) only "works" when that chat account
+  //    happens to be connected AND the model has search access — neither is
+  //    guaranteed, and an unconnected provider makes the whole search fail.
+  //    A provider in `candidates` has live credentials by construction.
+  const usable = (Array.isArray(candidates) ? candidates : []).filter((id) => supportsSearch(id));
   if (usable.length) {
     for (const preferred of PREFERRED_SEARCH_PROVIDERS) {
       if (usable.includes(preferred)) {
@@ -57,6 +58,17 @@ export function resolveSearchProvider({ providerId, requestProvider, candidates 
       }
     }
     return { providerId: usable[0], provider: AI_PROVIDERS[usable[0]], source: "auto" };
+  }
+
+  // 3. Fall back to the request's own provider. `hasCredentials` lets the
+  //    caller keep an unconnected provider from silently swallowing the search.
+  if (requestProvider && supportsSearch(requestProvider)) {
+    return {
+      providerId: requestProvider,
+      provider: AI_PROVIDERS[requestProvider],
+      source: "request-provider",
+      needsCredentials: true,
+    };
   }
 
   return { providerId: null, provider: null, source: "none" };

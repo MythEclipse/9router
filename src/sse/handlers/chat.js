@@ -13,6 +13,7 @@ import { getProviderConnections } from "@/lib/db/repos/connectionsRepo";
 import { getModelInfo, getComboModels } from "../services/model.js";
 import { handleChatCore } from "open-sse/handlers/chatCore.js";
 import { supportsSearch } from "open-sse/handlers/webSearchCredentials.js";
+import { handleSearch } from "@/sse/handlers/search.js";
 import { DEFAULT_HEADROOM_URL } from "@/lib/headroom/detect";
 import { getTransform as getPxpipeTransform } from "@/lib/pxpipe/loader.js";
 import { appendPxpipeEvent } from "@/lib/pxpipe/events.js";
@@ -57,6 +58,45 @@ function pathnameOf(request) {
  * registry's own preference list (via supportsSearch/resolveSearchProvider), so
  * connection priority does not override which engine is preferred.
  */
+/**
+ * Dispatch one search through the /v1/search handler in-process.
+ *
+ * The handler is built around a web `Request`, so a synthetic one is constructed
+ * with the same headers the HTTP route would carry (the caller's API key) and
+ * the response body parsed out. This keeps the bridge on the single supported
+ * search path instead of duplicating combo/auth/fallback logic here.
+ */
+async function runSearchViaSearchEndpoint({ model, query, max_results, search_type, domain_filter }) {
+  const headers = { "content-type": "application/json" };
+  if (apiKey) headers.authorization = `Bearer ${apiKey}`;
+
+  const req = new Request("http://local/v1/search", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      model,
+      query,
+      max_results,
+      ...(search_type ? { search_type } : {}),
+      ...(Array.isArray(domain_filter) && domain_filter.length ? { domain_filter } : {}),
+    }),
+  });
+
+  const res = await handleSearch(req);
+  const text = await res.text();
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error(`search endpoint returned non-JSON (HTTP ${res.status})`);
+  }
+  if (!res.ok || parsed?.error) {
+    const msg = parsed?.error?.message || parsed?.error || `HTTP ${res.status}`;
+    throw new Error(typeof msg === "string" ? msg : "search failed");
+  }
+  return parsed;
+}
+
 async function listProvidersWithCredentials() {
   try {
     const conns = await getProviderConnections({ isActive: true });
@@ -391,6 +431,11 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       // Providers holding live credentials, so auto-selection has candidates to
       // choose from when no search provider is pinned in settings.
       searchProviderResolver: listProvidersWithCredentials,
+      // Run a bridged search through the app's own /v1/search handler, so a
+      // Claude Code WebSearch sees exactly what a user's curl sees — including
+      // combo expansion (e.g. "search-combo-1") and combo fallback, which live
+      // only in that handler.
+      searchEndpointRunner: runSearchViaSearchEndpoint,
       // Detect source format by endpoint + body
       sourceFormatOverride: request?.url ? detectFormatByEndpoint(new URL(request.url).pathname, body) : null,
       // Error envelope the client's endpoint expects (Anthropic vs OpenAI)

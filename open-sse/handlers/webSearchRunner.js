@@ -28,6 +28,7 @@ export function createSearchRunner({
   webSearchPlan,
   requestProvider,
   getProviderCredentials = defaultCredentialResolver,
+  runSearchViaEndpoint = null,
   listCandidateProviders,
   log,
 }) {
@@ -74,10 +75,22 @@ export function createSearchRunner({
   }
 
   return async function runSearch({ query, searchType }) {
+    const body = buildSearchBody({ query, webSearchPlan, searchType });
+
+    // Preferred path: dispatch through the app's /v1/search handler. It is the
+    // only layer that understands combos (e.g. "search-combo-1"), per-key access
+    // and combo fallback, so routing around it silently drops all three — a
+    // combo name is not in AI_PROVIDERS and can never be selected here.
+    if (typeof runSearchViaEndpoint === "function") {
+      const payload = await runSearchViaEndpoint({
+        model: webSearchPlan?.searchTargetModel || requestProvider,
+        ...body,
+      });
+      return applyDomainFilters(readResults(payload), webSearchPlan);
+    }
+
     const sel = await ensureProvider();
     if (sel.error) throw new Error(sel.error);
-
-    const body = buildSearchBody({ query, webSearchPlan, searchType });
 
     const result = await handleSearchCore({
       body,

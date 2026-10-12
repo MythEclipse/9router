@@ -1,5 +1,25 @@
 # Unreleased
 
+### Fix: bridged Claude Code search now goes through /v1/search
+
+Web Search still returned empty after the client-tool fix. The bridge was
+dispatching directly to `handleSearchCore`, bypassing the app's `/v1/search`
+handler — the only layer that expands combos, enforces per-key access and
+applies combo fallback. A combo name like `search-combo-1` is not in
+`AI_PROVIDERS`, so it could never be selected by provider-id resolution.
+
+- The runner takes an injected `runSearchViaEndpoint`, and `chat.js` provides one
+  that dispatches through `handleSearch` with a synthetic `Request`, so a
+  bridged search sees exactly what a user's curl sees.
+- `resolveSearchProvider` now prefers a connected candidate over the request's
+  own provider. `searchViaChat` (openai -> gpt-4o-mini) only works if that model
+  has search access and the account is connected; on this deployment neither
+  held, so every search failed. The request-provider fallback is now marked
+  `needsCredentials` so callers can tell it apart from a known-good pick.
+- The plan carries `searchTargetModel` (the configured provider or combo) so the
+  bridge targets the same thing the operator configured.
+
+
 ### Fix: Claude Code's WebSearch tool returned empty results
 
 Claude Code calling Web Search through 9router got `Did 0 searches` and a stub

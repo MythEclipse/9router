@@ -119,6 +119,11 @@ export function resolveWebSearchPlan({ body, provider, settings = {} }) {
   const tool = serverTool || clientTool;
   const options = readToolOptions(clientTool || serverTool);
 
+  // A combo name ("search-combo-1") is not in AI_PROVIDERS, so it can never be
+  // selected by provider-id resolution. Carry it explicitly: the bridge must
+  // target the same thing the operator configured for /v1/search.
+  const searchTargetModel = settings.searchProviderId || null;
+
   // Claude Code's client tool is always executed by us: there is no upstream
   // server tool to forward, so passthrough would silently return nothing.
   const lane = (!clientTool && upstreamRunsWebSearch(provider))
@@ -135,6 +140,7 @@ export function resolveWebSearchPlan({ body, provider, settings = {} }) {
         : "9router bridges web search",
     tool,
     isClaudeCodeClientTool: !!clientTool,
+    searchTargetModel,
     ...options,
   };
 }
