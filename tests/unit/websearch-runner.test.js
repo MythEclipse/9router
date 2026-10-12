@@ -88,6 +88,7 @@ describe("createSearchRunner", () => {
       webSearchPlan: plan({ searchTargetModel: "search-combo-1" }),
       requestProvider: "openai",
       getProviderCredentials: credsResolver(),
+      listCandidateProviders: async () => ["tinyfish"],
       runSearchViaEndpoint,
     });
 
@@ -108,6 +109,7 @@ describe("createSearchRunner", () => {
       webSearchPlan: plan({ searchTargetModel: "search-combo-1" }),
       requestProvider: "openai",
       getProviderCredentials: credsResolver(),
+      listCandidateProviders: async () => ["tinyfish"],
       runSearchViaEndpoint,
     });
 
@@ -125,11 +127,59 @@ describe("createSearchRunner", () => {
       webSearchPlan: plan({ searchTargetModel: "search-combo-1", allowedDomains: ["docs.example.com"] }),
       requestProvider: "openai",
       getProviderCredentials: credsResolver(),
+      listCandidateProviders: async () => ["tinyfish"],
       runSearchViaEndpoint,
     });
 
     const out = await run({ query: "q" });
     expect(out.map((r) => r.url)).toEqual(["https://docs.example.com/a"]);
+  });
+
+  it("never targets the chat provider on the endpoint path", async () => {
+    // Production regression: with no webSearchProvider configured the endpoint
+    // call used the chat provider (antigravity for claude-opus-5-5), which has
+    // no search access — so every Claude Code search came back empty.
+    const runSearchViaEndpoint = vi.fn().mockResolvedValue({ results: [result()] });
+    const run = createSearchRunner({
+      webSearchPlan: plan(),                       // no searchTargetModel
+      requestProvider: "antigravity",
+      getProviderCredentials: credsResolver(),
+      listCandidateProviders: async () => ["tinyfish"],
+      runSearchViaEndpoint,
+    });
+
+    await run({ query: "q" });
+
+    expect(runSearchViaEndpoint.mock.calls[0][0].model).toBe("tinyfish");
+  });
+
+  it("refuses to call the endpoint when nothing connected can search", async () => {
+    const runSearchViaEndpoint = vi.fn();
+    const run = createSearchRunner({
+      webSearchPlan: plan(),
+      requestProvider: "antigravity",
+      getProviderCredentials: vi.fn().mockResolvedValue(null),
+      listCandidateProviders: async () => [],
+      runSearchViaEndpoint,
+    });
+
+    await expect(run({ query: "q" })).rejects.toThrow(/no credentials|no search provider/i);
+    expect(runSearchViaEndpoint).not.toHaveBeenCalled();
+  });
+
+  it("still calls the endpoint for a pinned combo with no resolvable provider id", async () => {
+    // "search-combo-1" is not in AI_PROVIDERS; that must not block the combo.
+    const runSearchViaEndpoint = vi.fn().mockResolvedValue({ results: [result()] });
+    const run = createSearchRunner({
+      webSearchPlan: plan({ searchTargetModel: "search-combo-1" }),
+      requestProvider: "antigravity",
+      getProviderCredentials: vi.fn().mockResolvedValue(null),
+      listCandidateProviders: async () => [],
+      runSearchViaEndpoint,
+    });
+
+    await run({ query: "q" });
+    expect(runSearchViaEndpoint.mock.calls[0][0].model).toBe("search-combo-1");
   });
 
   it("uses a connected candidate rather than the chat provider", async () => {

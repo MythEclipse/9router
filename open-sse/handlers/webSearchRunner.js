@@ -11,7 +11,7 @@
  */
 
 import { handleSearchCore } from "./search/index.js";
-import { resolveSearchProvider, resolveSearchCredentials } from "./webSearchCredentials.js";
+import { resolveSearchProvider, resolveSearchCredentials, supportsSearch } from "./webSearchCredentials.js";
 
 /**
  * Build a `runSearch({query, plan}) => SearchResult[]` closure.
@@ -35,6 +35,11 @@ export function createSearchRunner({
   // Resolved once per request: provider choice must not change mid-turn, or two
   // searches in one turn could hit different engines.
   let resolved = null;
+  // Target for the /v1/search endpoint path: the operator's configured provider
+  // or combo, else the connected search engine we auto-selected. Never the chat
+  // provider — that lane (antigravity, openai, …) usually has no search access
+  // at all, and asking it produced a silent empty result set.
+  let resolvedTargetModel = null;
 
   async function ensureProvider() {
     if (resolved) return resolved;
@@ -43,11 +48,17 @@ export function createSearchRunner({
       ? await listCandidateProviders()
       : [];
 
+    // An operator-pinned target (often a combo name like "search-combo-1") is
+    // not in AI_PROVIDERS, so it must not be run through provider-id selection.
+    // The endpoint path handles it; here we only auto-select a fallback engine.
+    const pinnedTarget = webSearchPlan?.searchTargetModel || null;
     const selection = resolveSearchProvider({
-      providerId: webSearchPlan?.searchProviderId,
+      providerId: pinnedTarget && supportsSearch(pinnedTarget) ? pinnedTarget : null,
       requestProvider,
       candidates,
     });
+
+    resolvedTargetModel = pinnedTarget || selection.providerId;
 
     if (!selection.providerId) {
       resolved = { error: "no search provider configured" };
@@ -77,19 +88,30 @@ export function createSearchRunner({
   return async function runSearch({ query, searchType }) {
     const body = buildSearchBody({ query, webSearchPlan, searchType });
 
+    // Resolve the target BEFORE dispatching. ensureProvider is memoised and
+    // side-effect free apart from caching, so calling it here costs nothing and
+    // guarantees `resolvedTargetModel` is populated — previously the endpoint
+    // path ran first and fell back to the chat provider, which on this
+    // deployment is `antigravity`: no search access, silently zero results.
+    const sel = await ensureProvider();
+
     // Preferred path: dispatch through the app's /v1/search handler. It is the
     // only layer that understands combos (e.g. "search-combo-1"), per-key access
     // and combo fallback, so routing around it silently drops all three — a
     // combo name is not in AI_PROVIDERS and can never be selected here.
     if (typeof runSearchViaEndpoint === "function") {
+      if (sel.error && !webSearchPlan?.searchTargetModel) {
+        // Nothing connected can search — surface it rather than calling the
+        // endpoint with a provider that cannot search.
+        throw new Error(sel.error);
+      }
       const payload = await runSearchViaEndpoint({
-        model: webSearchPlan?.searchTargetModel || requestProvider,
+        model: webSearchPlan?.searchTargetModel || resolvedTargetModel || requestProvider,
         ...body,
       });
       return applyDomainFilters(readResults(payload), webSearchPlan);
     }
 
-    const sel = await ensureProvider();
     if (sel.error) throw new Error(sel.error);
 
     const result = await handleSearchCore({

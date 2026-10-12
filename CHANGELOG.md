@@ -18,6 +18,13 @@ applies combo fallback. A combo name like `search-combo-1` is not in
   `needsCredentials` so callers can tell it apart from a known-good pick.
 - The plan carries `searchTargetModel` (the configured provider or combo) so the
   bridge targets the same thing the operator configured.
+- **The endpoint target is resolved before dispatch, never defaulted to the chat
+  provider.** `claude-opus-5-5` resolves to the `antigravity` provider, which
+  has no search access, so the previous fallback made every Claude Code search
+  return zero results. With nothing connected the runner now raises instead of
+  calling `/v1/search` with a provider that cannot search.
+- A pinned target that is a combo name is not run through provider-id selection
+  (combos are not in `AI_PROVIDERS`); the endpoint handles it.
 
 
 ### Fix: Claude Code's WebSearch tool returned empty results
