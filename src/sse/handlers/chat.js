@@ -66,8 +66,13 @@ function pathnameOf(request) {
  * the response body parsed out. This keeps the bridge on the single supported
  * search path instead of duplicating combo/auth/fallback logic here.
  */
-async function runSearchViaSearchEndpoint({ model, query, max_results, search_type, domain_filter }) {
+async function runSearchViaSearchEndpoint({ model, query, max_results, search_type, domain_filter }, { apiKey = null } = {}) {
   const headers = { "content-type": "application/json" };
+  // The caller's key must ride on the synthetic request: /v1/search authenticates
+  // it, and combo expansion resolves permissions from it. `apiKey` is a local of
+  // handleSingleModelChat, so this module-level runner cannot close over it — it
+  // is bound at the injection site below. Omitting it produced "apiKey is not
+  // defined" at runtime and every bridged search came back `unavailable`.
   if (apiKey) headers.authorization = `Bearer ${apiKey}`;
 
   const req = new Request("http://local/v1/search", {

@@ -135,6 +135,40 @@ describe("createSearchRunner", () => {
     expect(out.map((r) => r.url)).toEqual(["https://docs.example.com/a"]);
   });
 
+  it("forwards the caller's key to the endpoint runner", async () => {
+    // Regression: runSearchViaSearchEndpoint is module-level and referenced a
+    // free `apiKey` variable, so every bridged search threw "apiKey is not
+    // defined" and returned error_code=unavailable with zero results.
+    const runSearchViaEndpoint = vi.fn().mockResolvedValue({ results: [result()] });
+    const run = createSearchRunner({
+      webSearchPlan: plan(),
+      requestProvider: "antigravity",
+      getProviderCredentials: credsResolver(),
+      listCandidateProviders: async () => ["tinyfish"],
+      runSearchViaEndpoint,
+      requestApiKey: "sk-test-key",
+    });
+
+    await run({ query: "q" });
+
+    expect(runSearchViaEndpoint.mock.calls[0][1]).toEqual({ apiKey: "sk-test-key" });
+  });
+
+  it("passes an explicit null key rather than a free variable", async () => {
+    // No key in scope must mean "no Authorization header", never a ReferenceError.
+    const runSearchViaEndpoint = vi.fn().mockResolvedValue({ results: [result()] });
+    const run = createSearchRunner({
+      webSearchPlan: plan(),
+      requestProvider: "antigravity",
+      getProviderCredentials: credsResolver(),
+      listCandidateProviders: async () => ["tinyfish"],
+      runSearchViaEndpoint,
+    });
+
+    await run({ query: "q" });
+    expect(runSearchViaEndpoint.mock.calls[0][1]).toEqual({ apiKey: null });
+  });
+
   it("never targets the chat provider on the endpoint path", async () => {
     // Production regression: with no webSearchProvider configured the endpoint
     // call used the chat provider (antigravity for claude-opus-5-5), which has

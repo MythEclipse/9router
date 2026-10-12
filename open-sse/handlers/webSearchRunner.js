@@ -31,6 +31,9 @@ export function createSearchRunner({
   runSearchViaEndpoint = null,
   listCandidateProviders,
   log,
+  // The caller's gateway key. The /v1/search handler authenticates it and
+  // resolves combo permissions from it, so the endpoint path must forward it.
+  requestApiKey = null,
 }) {
   // Resolved once per request: provider choice must not change mid-turn, or two
   // searches in one turn could hit different engines.
@@ -105,10 +108,13 @@ export function createSearchRunner({
         // endpoint with a provider that cannot search.
         throw new Error(sel.error);
       }
-      const payload = await runSearchViaEndpoint({
-        model: webSearchPlan?.searchTargetModel || resolvedTargetModel || requestProvider,
-        ...body,
-      });
+      const payload = await runSearchViaEndpoint(
+        {
+          model: webSearchPlan?.searchTargetModel || resolvedTargetModel || requestProvider,
+          ...body,
+        },
+        { apiKey: requestApiKey },
+      );
       return applyDomainFilters(readResults(payload), webSearchPlan);
     }
 

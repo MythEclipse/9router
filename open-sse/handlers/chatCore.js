@@ -284,6 +284,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
         getProviderCredentials: searchCredentialResolver,
         listCandidateProviders: searchProviderResolver,
         runSearchViaEndpoint,
+        requestApiKey: apiKey,
         log,
       });
     }
