@@ -21,7 +21,14 @@ vi.mock("@/sse/handlers/chat.js", () => ({
 }));
 vi.mock("@/lib/localDb", () => ({ getSettings: (...a) => getSettings(...a) }));
 vi.mock("open-sse/handlers/webSearchCredentials.js", () => ({
-  supportsSearch: (id) => ["tinyfish", "exa"].includes(id),
+  // Mirrors the real resolveSearchProvider preference order: a connected
+  // dedicated engine wins over the chat provider, which is what keeps
+  // antigravity (Vertex redirect URLs) out of the results.
+  resolveSearchProvider: ({ providerId, candidates = [] }) => {
+    if (providerId) return { providerId, source: "settings" };
+    const usable = candidates.filter((id) => ["tinyfish", "exa"].includes(id));
+    return { providerId: usable[0] || null, source: usable.length ? "auto" : "none" };
+  },
 }));
 
 const { POST } = await import(
@@ -162,6 +169,16 @@ describe("Claude Code CCR worker web-search route", () => {
     const res = await POST(request({ query: "  " }), { params });
     expect(res.status).toBe(400);
     expect(handleSearch).not.toHaveBeenCalled();
+  });
+
+  it("does not fall back to the chat provider when it cannot search", async () => {
+    // antigravity is connected and `supportsSearch` is true for it, but it
+    // returns Vertex grounding redirect URLs that resolve nowhere useful. A
+    // connected dedicated engine must still win.
+    listProvidersWithCredentials.mockResolvedValue(["antigravity", "tinyfish", "exa"]);
+    await POST(request({ query: "q" }), { params });
+    const sent = JSON.parse(await handleSearch.mock.calls[0][0].text());
+    expect(sent.model).toBe("tinyfish");
   });
 
   it("404s an unknown worker route", async () => {

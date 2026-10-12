@@ -24,7 +24,7 @@
 import { handleSearch } from "@/sse/handlers/search.js";
 import { listProvidersWithCredentials } from "@/sse/handlers/chat.js";
 import { getSettings } from "@/lib/localDb";
-import { supportsSearch } from "open-sse/handlers/webSearchCredentials.js";
+import { resolveSearchProvider } from "open-sse/handlers/webSearchCredentials.js";
 
 export const dynamic = "force-dynamic";
 
@@ -42,23 +42,27 @@ function jsonResponse(data, status = 200) {
 }
 
 /**
- * Pick the search target the same way the bridge does: an operator-pinned
- * provider/combo if set, otherwise the first connected engine that can search.
- * Falling back to the chat provider is what previously produced empty results —
- * claude-opus-5-5 resolves to `antigravity`, which has no search access.
+ * Pick the search target the same way the bridge does.
+ *
+ * resolveSearchProvider already encodes the two rules that matter here:
+ * an operator-pinned provider wins, and otherwise a connected DEDICATED engine
+ * is preferred over the request's chat provider. Choosing by candidate order
+ * instead picked `antigravity` (Vertex grounding redirects — result URLs that
+ * resolve nowhere useful) for a claude-opus-5-5 request.
+ *
+ * A combo name (e.g. "search-combo-1") is not in AI_PROVIDERS, so
+ * resolveSearchProvider cannot validate it; that case is passed straight through
+ * to handleSearch, which owns combo expansion.
  */
 async function resolveSearchTarget() {
   const settings = await getSettings();
   const pinned = settings.webSearchProvider;
-  if (pinned && typeof pinned === "string" && pinned.trim()) return pinned.trim();
+  const trimmedPinned = typeof pinned === "string" ? pinned.trim() : "";
+  if (trimmedPinned) return trimmedPinned;
 
   const candidates = await listProvidersWithCredentials();
-  const connected = candidates.find((id) => supportsSearch(id));
-  if (connected) return connected;
-
-  // No engine reported usable credentials: let handleSearch resolve it and
-  // surface its own (clearer) error rather than guessing a provider here.
-  return null;
+  const resolved = resolveSearchProvider({ candidates });
+  return resolved.providerId || null;
 }
 
 /**

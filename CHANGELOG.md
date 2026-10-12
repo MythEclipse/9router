@@ -130,8 +130,10 @@ New `POST /api/v1/code/sessions/[id]/worker/[worker]` route serves it:
 - reuses the one supported `/v1/search` path, so combo expansion, per-key access
   and combo fallback behave exactly as for a direct call;
 - forwards the caller's key so per-key access still applies;
-- picks a connected engine that can actually search, never the chat provider
-  (`claude-opus-5-5` resolves to `antigravity`, which has no search access);
+- picks the engine through the existing `resolveSearchProvider`, so an
+  operator-pinned provider wins and otherwise a connected *dedicated* engine is
+  chosen over the chat provider — candidate order would pick `antigravity` for a
+  `claude-opus-5-5` request and return Vertex grounding redirect URLs;
 - honours `allowed_domains` / `blocked_domains` using `/v1/search`'s own fields;
 - preserves `snippet`, which the client needs — with
   `CLAUDE_CODE_WEBSEARCH_CITATIONS` set it builds the model's tool_result text
