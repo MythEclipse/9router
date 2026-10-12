@@ -22,7 +22,10 @@ beforeAll(async () => {
   vi.resetModules();
   db = await import("@/lib/db/index.js");
   await db.initDb();
-  await db.updateSettings({ enableObservability2: true, observabilityBatchSize: 1 });
+  // The repo reads settings.enableObservability (not enableObservability2), and
+    // ENABLE_REQUEST_LOGS overrides it when present in the env.
+    delete process.env.ENABLE_REQUEST_LOGS;
+    await db.updateSettings({ enableObservability: true, observabilityBatchSize: 1 });
 
   const { getAdapter } = await import("@/lib/db/driver.js");
   adapter = await getAdapter();
