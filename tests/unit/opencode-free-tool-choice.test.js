@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { PROVIDERS } from "../../open-sse/config/providers.js";
 import { OpenCodeExecutor } from "../../open-sse/executors/opencode.js";
 import { proxyAwareFetch } from "../../open-sse/utils/proxyFetch.js";
+import { OPENCODE_FINGERPRINT_TOOLS } from "../../open-sse/utils/opencodeFingerprint.js";
 
 vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
   proxyAwareFetch: vi.fn(async () => ({ ok: true, status: 200, headers: { get: () => "" } })),
@@ -20,6 +21,26 @@ function responsesBody(model, tool_choice) {
   return body;
 }
 
+/**
+ * The caller's own tools, as a subset of what goes on the wire.
+ *
+ * opencode requires its fingerprint quartet (bash/glob/grep/write/edit) to be
+ * declared; tools the client did not send are appended as inert stubs whose
+ * description forbids calling them (opencodeFingerprint.js). So the wire list
+ * is the caller's tools PLUS stubs — asserting equality with TOOLS alone would
+ * pin the pre-fingerprint behaviour.
+ */
+const namesOf = (tools) => (tools || []).map((t) => t.name ?? t.function?.name);
+const expectCallerToolsIntact = (tools) => {
+  const names = namesOf(tools);
+  for (const t of TOOLS) expect(names).toContain(t.name);
+  // every added entry must be a declared fingerprint stub, never an unknown one
+  for (const name of names) {
+    if (TOOLS.some((t) => t.name === name)) continue;
+    expect(OPENCODE_FINGERPRINT_TOOLS).toContain(name);
+  }
+};
+
 describe("opencode Free 1.3 tool_choice auto-only", () => {
   it("khai quirk đúng model 1.3-Free trong registry", () => {
     expect(PROVIDERS.opencode.quirks?.forceAutoToolChoiceModels).toEqual([FREE_13]);
@@ -36,7 +57,7 @@ describe("opencode Free 1.3 tool_choice auto-only", () => {
       const body = responsesBody(model, structuredClone(choice));
       const out = new OpenCodeExecutor().transformRequest(model, body, true, CREDS);
       expect(out.tool_choice).toBe("auto");
-      expect(out.tools).toEqual(TOOLS);
+      expectCallerToolsIntact(out.tools);
       expect(out.input).toEqual(INPUT);
     }
   });
@@ -46,14 +67,17 @@ describe("opencode Free 1.3 tool_choice auto-only", () => {
       FREE_13, responsesBody(FREE_13, "auto"), true, CREDS,
     );
     expect(autoOut.tool_choice).toBe("auto");
-    expect(autoOut.tools).toEqual(TOOLS);
+    expectCallerToolsIntact(autoOut.tools);
     expect(autoOut.input).toEqual(INPUT);
 
     const absentOut = new OpenCodeExecutor().transformRequest(
       FREE_13, responsesBody(FREE_13, undefined), true, CREDS,
     );
-    expect("tool_choice" in absentOut).toBe(false);
-    expect(absentOut.tools).toEqual(TOOLS);
+    // applyFingerprintTools() defaults Responses tool_choice to "auto" when it had
+    // to inject the quartet — an absent choice must not leave the request with a
+    // decoy-only tool list it could refuse to pick from.
+    expect(absentOut.tool_choice).toBe("auto");
+    expectCallerToolsIntact(absentOut.tools);
     expect(absentOut.input).toEqual(INPUT);
   });
 
@@ -84,7 +108,7 @@ describe("opencode Free 1.3 tool_choice auto-only", () => {
     const sent = JSON.parse(actualInit.body);
     expect(sent.tool_choice).toBe("auto");
     expect(sent.model).toBe(FREE_13);
-    expect(sent.tools).toEqual(TOOLS);
+    expectCallerToolsIntact(sent.tools);
     expect(sent.input).toEqual(INPUT);
   });
 });

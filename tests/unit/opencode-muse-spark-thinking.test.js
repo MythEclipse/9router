@@ -4,6 +4,7 @@ import { PROVIDER_MODELS, getModelTargetFormat } from "../../open-sse/config/pro
 import { getThinkingLevels } from "../../open-sse/providers/thinkingLevels.js";
 import { FORMATS } from "../../open-sse/translator/formats.js";
 import { OpenCodeExecutor } from "../../open-sse/executors/opencode.js";
+import { OPENCODE_FINGERPRINT_TOOLS } from "../../open-sse/utils/opencodeFingerprint.js";
 import "../translator/registerAll.js";
 import { translateRequest } from "../../open-sse/translator/index.js";
 
@@ -214,14 +215,16 @@ describe("OpenCode Free Muse Spark thinking", () => {
     // User message, function_call, function_call_output, and next user message survive
     const types = out.input.map((item) => item.type);
     expect(types).toEqual(["message", "function_call", "function_call_output", "message"]);
-    // Tools flattened and empty properties added
-    expect(out.tools).toEqual([
-      {
-        type: "function",
-        name: "shell",
-        description: "Run shell command",
-        parameters: { type: "object", properties: {} },
-      },
-    ]);
+    // The caller's own tool, flattened (parameters.properties added). opencode also
+    // requires its fingerprint quartet to be declared, so the wire list carries
+    // inert stubs for the missing members on top of this one.
+    expect(out.tools[0]).toEqual({
+      type: "function",
+      name: "shell",
+      description: "Run shell command",
+      parameters: { type: "object", properties: {} },
+    });
+    const names = out.tools.map((t) => t.name);
+    for (const name of names.slice(1)) expect(OPENCODE_FINGERPRINT_TOOLS).toContain(name);
   });
 });
