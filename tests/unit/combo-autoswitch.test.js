@@ -35,11 +35,17 @@ describe("detectRequiredCapabilities", () => {
     expect(r.has("vision")).toBe(true);
   });
 
-  it("web_search tool -> search", () => {
+  it("web_search tool does NOT add search (detection is deliberately off)", () => {
+    // combo.js: "search: temporarily disabled in auto-switch (feature not wired
+    // yet)". Tools are not scanned at all today, so a web_search tool must not
+    // narrow the model pool. If that capability is ever wired up, this test
+    // should be flipped to expect true in the same commit.
     const r = detectRequiredCapabilities({ messages: [{ role: "user", content: "q" }], tools: [
       { type: "web_search" },
     ] });
-    expect(r.has("search")).toBe(true);
+    expect(r.has("search")).toBe(false);
+    // Modality detection from the same body still works.
+    expect(r.size).toBe(0);
   });
 
   it("responses input_image -> vision", () => {
@@ -66,9 +72,18 @@ describe("reorderByCapabilities", () => {
   });
 
   it("keeps order when no model matches", () => {
+    // "keeps order" is about the sequence, not array identity: the sort path
+    // returns a new array, so comparing by reference is testing the wrong thing.
     const models = ["deepseek/deepseek-chat", "deepseek/deepseek-reasoner"];
     const out = reorderByCapabilities(models, new Set(["vision"]));
-    expect(out).toBe(models);
+    expect(out).toEqual(models);
+  });
+
+  it("returns the same array when there is nothing to reorder", () => {
+    // The documented early-return path does short-circuit on identity.
+    const models = ["deepseek/deepseek-chat", "deepseek/deepseek-reasoner"];
+    expect(reorderByCapabilities(models, new Set())).toBe(models);
+    expect(reorderByCapabilities(models, null)).toBe(models);
   });
 
   it("single model -> unchanged", () => {
