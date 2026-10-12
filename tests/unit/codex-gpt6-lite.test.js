@@ -15,14 +15,19 @@ describe("Codex GPT-6 Sol/Luna transport", () => {
     const entry = getModelsByProviderId("codex").find((item) => item.id === model);
     expect(entry?.responsesLite).toBe(true);
     expect(entry?.thinkingLevels).toEqual(["low", "medium", "high", "xhigh", "max"]);
+    // gpt-6* publishes the real 1.05M window via the `*gpt-6*` rule (89ffac5a),
+    // but the explicit per-model entries win for the 6.0-series ids that still
+    // list 272000. Everything else in the capability shape is unchanged.
     expect(getCapabilitiesForModel("codex", model)).toMatchObject({
       vision: true,
       reasoning: true,
       search: true,
       thinkingFormat: "openai",
-      contextWindow: 272000,
       maxOutput: 128000,
     });
+    expect(getCapabilitiesForModel("codex", model).contextWindow).toBe(
+      model === "gpt-6.1-sol" ? 1050000 : 272000,
+    );
     expect(getThinkingLevels("codex", model)).toEqual(["low", "medium", "high", "xhigh", "max"]);
     expect(getThinkingLevels("codex", `${model}(high)`)).toEqual(entry.thinkingLevels);
   });

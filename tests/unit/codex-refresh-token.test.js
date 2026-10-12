@@ -147,13 +147,21 @@ describe("Codex Refresh Token", () => {
     it("should return provider-specific lead time for OAuth providers", async () => {
       const { getRefreshLeadMs } = await import("../../open-sse/services/tokenRefresh.js");
 
-      // Synced with CLIProxyAPI refresh_registry
-      expect(getRefreshLeadMs("codex")).toBe(5 * 24 * 60 * 60 * 1000);   // 5 days
-      expect(getRefreshLeadMs("claude")).toBe(4 * 60 * 60 * 1000);       // 4 hours
-      expect(getRefreshLeadMs("iflow")).toBe(24 * 60 * 60 * 1000);       // 24 hours
-      expect(getRefreshLeadMs("kimi")).toBe(5 * 60 * 1000);              // 5 minutes
-      expect(getRefreshLeadMs("kimi-coding")).toBe(5 * 60 * 1000);       // legacy alias
-      expect(getRefreshLeadMs("antigravity")).toBe(5 * 60 * 1000);       // 5 minutes
+      // refreshLeadMs is registry-driven (PROVIDER_OAUTH -> REFRESH_LEAD_MS), so
+      // assert against the registry instead of a copied literal: codex moved
+      // 5d -> 10min in 0bc7f86e because OpenAI rotates the refresh token on
+      // every use, and a 5-day lead logged accounts out.
+      const { PROVIDER_OAUTH } = await import("../../open-sse/providers/index.js");
+      for (const provider of ["codex", "claude", "iflow", "kimi", "antigravity"]) {
+        expect(getRefreshLeadMs(provider), provider).toBe(
+          PROVIDER_OAUTH[provider].refreshLeadMs,
+        );
+      }
+
+      // Codex access tokens live ~1h, so the lead must stay well under that.
+      expect(getRefreshLeadMs("codex")).toBeLessThan(60 * 60 * 1000);
+      // kimi-coding is a legacy alias for kimi after the merge.
+      expect(getRefreshLeadMs("kimi-coding")).toBe(getRefreshLeadMs("kimi"));
     });
 
     it("should fallback to default buffer for unknown providers", async () => {

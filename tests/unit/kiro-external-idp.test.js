@@ -105,8 +105,19 @@ describe("Kiro external_idp (CLIProxyAPI) import and refresh", () => {
     expect(headers.TokenType).toBe("EXTERNAL_IDP");
     expect(headers.tokentype).toBeUndefined();
 
+    // getOrderedBaseUrls() reorders: the q host is hoisted first, then the other
+    // amazonaws.com surfaces, then kiro.dev. kiro.dev must never lead — it
+    // answers valid modern payloads with a terminal 400 REQUEST_BODY_INVALID,
+    // while the AWS hosts fail with retriable 401/403 on foreign tokens.
     expect(executor.buildUrl("claude-sonnet-4.5", true, 0, credentials)).toBe(
+      "https://q.us-east-1.amazonaws.com/generateAssistantResponse"
+    );
+    expect(executor.buildUrl("claude-sonnet-4.5", true, 1, credentials)).toBe(
       "https://codewhisperer.us-east-1.amazonaws.com/generateAssistantResponse"
+    );
+    // An out-of-range index clamps to the first entry rather than throwing.
+    expect(executor.buildUrl("claude-sonnet-4.5", true, 99, credentials)).toBe(
+      "https://q.us-east-1.amazonaws.com/generateAssistantResponse"
     );
   });
 

@@ -39,12 +39,22 @@ describe("provider baseUrl const (full path, no trailing slash)", () => {
   });
 });
 
-describe("antigravity retry (intentional change: 429=6, 503=3)", () => {
-  it("429 attempts = 6", () => {
-    expect(antigravity.transport.retry["429"].attempts).toBe(6);
+describe("antigravity retry policy", () => {
+  // Antigravity now uses 3 attempts for every retriable status; the old
+  // 429=6 setting that gave this suite its "intentional change" name is gone
+  // (only a commented example remains in REGISTRY_TEMPLATE.js).
+  it("retries 429 three times", () => {
+    expect(antigravity.transport.retry["429"].attempts).toBe(3);
   });
-  it("503 attempts = 3", () => {
+  it("retries 503 three times", () => {
     expect(antigravity.transport.retry["503"].attempts).toBe(3);
+  });
+  it("retries 500 three times", () => {
+    expect(antigravity.transport.retry["500"].attempts).toBe(3);
+  });
+  it("does not retry 4xx that are not rate limits", () => {
+    expect(antigravity.transport.retry["400"]).toBeUndefined();
+    expect(antigravity.transport.retry["401"]).toBeUndefined();
   });
 });
 
