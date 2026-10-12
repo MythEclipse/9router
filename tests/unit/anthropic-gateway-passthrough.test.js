@@ -78,3 +78,35 @@ describe("upstream response header forwarding", () => {
     expect(res.headers.get("anthropic-ratelimit-unified-reset")).toBe("1790000000");
   });
 });
+
+describe("DefaultExecutor.buildHeaders() pairs the safeguards field with its beta", () => {
+  let DefaultExecutor;
+
+  beforeEach(async () => {
+    vi.resetModules();
+    ({ DefaultExecutor } = await import("open-sse/executors/default.js"));
+  });
+
+  it("adds dangerous-tool-use when the body carries safeguards, even without the header", () => {
+    // Claude Code sets both; a proxy that strips unknown anthropic-beta values
+    // can leave the body field alone. Forwarding one half alone is a hard 400.
+    const executor = new DefaultExecutor("claude");
+    const body = { safeguards: [{ type: "dangerous_tool_use", classifier_context: { v: 1 } }] };
+    const flags = betaFlags(executor.buildHeaders({ apiKey: "sk-test" }, true, undefined, "claude-opus-5-5", body));
+    expect(flags).toContain("dangerous-tool-use-2026-09-03");
+  });
+
+  it("does not add it when no safeguards field is present", () => {
+    const executor = new DefaultExecutor("claude");
+    const headers = executor.buildHeaders({ apiKey: "sk-test" }, true, undefined, "claude-opus-5-5");
+    expect(betaFlags(headers)).not.toContain("dangerous-tool-use-2026-09-03");
+  });
+
+  it("does not duplicate a beta the client already sent", () => {
+    const executor = new DefaultExecutor("claude");
+    const rawHeaders = { "anthropic-beta": "dangerous-tool-use-2026-09-03" };
+    const body = { safeguards: [{ type: "dangerous_tool_use", classifier_context: { v: 1 } }] };
+    const flags = betaFlags(executor.buildHeaders({ apiKey: "sk-test", rawHeaders }, true, undefined, "claude-opus-5-5", body));
+    expect(flags.filter((f) => f === "dangerous-tool-use-2026-09-03")).toHaveLength(1);
+  });
+});

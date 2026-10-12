@@ -11,6 +11,10 @@ import { buildRequestDetail, extractRequestConfig, extractUsageFromResponse, sav
 import { appendRequestLog, saveRequestDetail } from "@/lib/usageDb.js";
 import { decloakToolNames } from "../../utils/claudeCloaking.js";
 import { restoreToolNames } from "../../utils/opencodeFingerprint.js";
+import { attachSafeguardResults, collectToolUseIds, buildUnavailableResults } from "../safeguardsProtocol.js";
+import { reviewAndBuildSafeguardResults } from "../safeguardsBridge.js";
+import { resolveDecisionCredentials } from "../safeguardsCredentials.js";
+import { SAFEGUARD_STATUS_UNAVAILABLE } from "../../config/safeguardsConstants.js";
 import { ROLE, RESPONSES_ITEM } from "../../translator/schema/index.js";
 
 /**
@@ -231,9 +235,71 @@ export function translateNonStreamingResponse(responseBody, targetFormat, source
 }
 
 /**
+ * Attach safeguard verdicts to a Claude-format response body, running the
+ * decision engine when the upstream did not review the action itself.
+ *
+ * Returns the body unchanged when there is nothing to do, so it is safe to call
+ * on every response.
+ *
+ * @param {object} params
+ * @param {object} params.responseBody - parsed Claude response (mutated)
+ * @param {object} params.safeguardsPlan - result of resolveSafeguardsReviewPlan
+ * @param {object} [params.log]
+ * @param {Function} [params.credentialResolver] - injected for tests
+ * @returns {Promise<object>} the same body
+ */
+export async function attachReviewToClaudeBody({ responseBody, safeguardsPlan, log, credentialResolver }) {
+  if (!safeguardsPlan?.active || !responseBody || typeof responseBody !== "object") return responseBody;
+
+  const toolUseIds = collectToolUseIds(responseBody);
+
+  // Nothing to judge: a message with no tool call has no action to review, so
+  // the decision engine is never invoked (it would cost a call per turn for
+  // nothing, and an empty verdict map would tell the client review is available
+  // while deciding nothing).
+  if (toolUseIds.length === 0) return responseBody;
+
+  // Upstream ran the review itself: its verdict is authoritative — relay as-is.
+  if (safeguardsPlan.lane === "passthrough" && Array.isArray(responseBody.safeguard_results)) {
+    return responseBody;
+  }
+
+  // Upstream does not review: say so, so the client falls back to its own
+  // (billed) classifier rather than assuming no check happened.
+  if (safeguardsPlan.lane === "passthrough") {
+    return attachSafeguardResults(responseBody, buildUnavailableResults());
+  }
+
+  // Bridge: 9router is the reviewer. A decision-engine outage must NOT read as
+  // approval, so resolveDecisionCredentials returning null yields "unavailable"
+  // and the client re-classifies with its own (billed) classifier.
+  const reviewer = safeguardsPlan.reviewer;
+  const credentials = await resolveDecisionCredentials({
+    provider: reviewer?.provider,
+    model: reviewer?.model,
+    credentialResolver,
+  });
+  if (!credentials) {
+    log?.warn?.("SAFEGUARD", `no credentials for reviewer ${reviewer?.provider} — reporting unavailable`);
+    return attachSafeguardResults(responseBody, buildUnavailableResults(SAFEGUARD_STATUS_UNAVAILABLE, "reviewer unavailable"));
+  }
+
+  const results = await reviewAndBuildSafeguardResults({
+    classifierContext: safeguardsPlan.classifierContext,
+    toolUseIds,
+    provider: reviewer.provider,
+    model: reviewer.model,
+    credentials,
+    threshold: safeguardsPlan.threshold,
+    log,
+  });
+  return attachSafeguardResults(responseBody, results);
+}
+
+/**
  * Handle non-streaming response from provider.
  */
-export async function handleNonStreamingResponse({ providerResponse, provider, model, sourceFormat, targetFormat, body, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, clientRawRequest, onRequestSuccess, reqLogger, toolNameMap, customToolNames, trackDone, appendLog, pxpipe, reqTag, log, clientFormat = null }) {
+export async function handleNonStreamingResponse({ providerResponse, provider, model, sourceFormat, targetFormat, body, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, clientRawRequest, onRequestSuccess, reqLogger, toolNameMap, customToolNames, trackDone, appendLog, pxpipe, reqTag, log, clientFormat = null, safeguardsPlan = null }) {
   trackDone();
   const contentType = providerResponse.headers.get("content-type") || "";
   let responseBody;
@@ -272,6 +338,13 @@ export async function handleNonStreamingResponse({ providerResponse, provider, m
 
   // Decloak tool_use names once on raw Claude body, before any translation (INPUT side)
   responseBody = decloakToolNames(responseBody, toolNameMap);
+
+  // Claude Code auto-mode review: run AFTER decloaking so verdicts key on the
+  // tool_use.id the CLIENT sees (the cloaked name is renamed, the id is not).
+  const isClaudeClient = clientFormat === FORMATS.CLAUDE;
+  if (isClaudeClient) {
+    await attachReviewToClaudeBody({ responseBody, safeguardsPlan, log });
+  }
 
   const usage = extractUsageFromResponse(responseBody);
   appendLog({ tokens: usage, status: "200 OK" });

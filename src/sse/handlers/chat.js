@@ -344,6 +344,8 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       providerThinking,
       // Per-provider user overrides (custom headers / connect timeout) from settings
       providerOverrides: (chatSettings.providerOverrides || {})[provider] || null,
+      // Decision model used to answer Claude Code auto-mode safeguard reviews
+      safeguardsClassifierModel: chatSettings.safeguardsClassifierModel || null,
       // Detect source format by endpoint + body
       sourceFormatOverride: request?.url ? detectFormatByEndpoint(new URL(request.url).pathname, body) : null,
       // Error envelope the client's endpoint expects (Anthropic vs OpenAI)

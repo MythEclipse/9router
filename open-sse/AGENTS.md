@@ -31,6 +31,16 @@ Provider-agnostic SSE engine: one OpenAI-style request → any provider (LLM cha
 - **Executor** (only for non-standard upstream): subclass `BaseExecutor` (override `getBaseUrls`/`buildHeaders`/`buildUrl`/`execute`), register in `executors/index.js` map. `getExecutor` falls back to `DefaultExecutor` when absent.
 - **Translator**: add `request|response/<from>-to-<to>.js` calling `register(...)`, then import it in `translator/index.js`. Reuse `schema/` + `concerns/` — don't re-implement parsing.
 
+## Credentials — never in code
+Every credential is resolved at call time from the provider store via `getProviderCredentials(provider, excludeIds, model, opts)` (`@/sse/services/auth.js`). Never inline a key, token, or credentialed base URL — not in tests, not as a `credentialResolver` default, not in a probe script. When a lane needs a *different* provider's credential than the chat request it serves (a decision engine reviewing another provider's turn), resolve it explicitly rather than reusing the chat lane's credentials — see `handlers/safeguardsCredentials.js`.
+
+## Claude Code auto-mode (safeguards)
+Claude Code treats an `ANTHROPIC_BASE_URL` gateway as the Anthropic API, so 9router owns the auto-mode classifier contract. Wire shapes are in `handlers/safeguardsProtocol.js`, the System One `noul` → verdict mapping in `handlers/safeguardsBridge.js`. Invariants:
+- The `safeguards` body field and its `dangerous-tool-use-*` beta must travel together — splitting the pair is a hard 400.
+- Verdicts are keyed by `tool_use.id`; nothing in the pipeline may rewrite that id.
+- NO verdict ever reads as approval. An engine outage or an unusable answer yields `unavailable`/`unsupported` so the client re-classifies with its own (billed) classifier. Never default a failure to `not_flagged`.
+- A decision model's id is itself slash-prefixed (`typesafe/jev-1.13`), so the System One body model must stay provider-qualified (`openrouter/typesafe/jev-1.13`) or the model parser reads `typesafe` as a provider and credential lookup fails.
+
 ## Pitfalls
 
 - OpenAI bridge is lossy (thinking, non-base64 images, tool ids, is_error) — prefer a direct route for fragile pairs.

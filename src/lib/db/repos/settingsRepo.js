@@ -64,6 +64,9 @@ const DEFAULT_SETTINGS = {
   pxpipeTimeoutMs: 15000,
   // Per-provider user header overrides applied at dispatch: { [providerId]: { headers: {..} } }
   providerOverrides: {},
+  // Decision model (provider/model) that answers Claude Code auto-mode safeguard
+  // reviews. Empty = pick the cheapest configured System One lane.
+  safeguardsClassifierModel: "",
 };
 
 async function readRaw() {

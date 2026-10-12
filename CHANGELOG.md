@@ -1,3 +1,13 @@
+# Unreleased
+
+## Features
+- **Claude Code auto mode**: implement the `dangerous_tool_use` safeguard protocol so 9router answers Claude Code's server-side classifier reviews. Forwards the `safeguards` request field with its paired `dangerous-tool-use-2026-09-03` beta, and returns `safeguard_results` on both non-streaming bodies and the final `message_delta` of a stream. When the routed upstream cannot run the review itself, 9router bridges it with the System One decision engine (`safeguardsClassifierModel` setting overrides the reviewer). Verdicts are keyed by `tool_use.id`; an engine outage reports `unavailable`/`unsupported` so Claude Code re-classifies with its own classifier rather than treating the failure as approval.
+
+## Fixes
+- **Streaming**: close the SSE controller on the normal end-of-stream path in the safeguard stream wrapper (an unclosed controller left Claude Code clients hanging forever) and pump in `pull` so upstream backpressure is preserved
+- **Streaming**: observe Claude tool ids from the accumulated frame rather than the raw chunk — a chunk boundary falling mid-JSON silently dropped the tool_use frame and its verdict
+- **System One**: keep the decision model provider-qualified (`openrouter/typesafe/jev-1.13`) in the auto-mode review request, so the model parser no longer reads `typesafe` as a provider and fails credential lookup
+
 # v0.5.99 (2026-10-08)
 
 ## Features

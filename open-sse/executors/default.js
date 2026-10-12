@@ -2,6 +2,7 @@ import { BaseExecutor } from "./base.js";
 import { randomUUID } from "node:crypto";
 import { PROVIDERS, PROVIDER_OAUTH } from "../config/providers.js";
 import { ANTHROPIC_API_VERSION, OPENAI_COMPAT_BASE, ANTHROPIC_COMPAT_BASE, selectAnthropicBeta, mergeAnthropicBeta } from "../providers/shared.js";
+import { DANGEROUS_TOOL_USE_BETA } from "../config/safeguardsConstants.js";
 import { resolveOpenAICompatibleApiType } from "../services/provider.js";
 import { OAUTH_ENDPOINTS, buildKimiHeaders } from "../config/appConstants.js";
 import { buildClineHeaders } from "../shared/clineAuth.js";
@@ -183,6 +184,17 @@ export class DefaultExecutor extends BaseExecutor {
       headers["Anthropic-Beta"] = mergeAnthropicBeta(selectAnthropicBeta(model, body), clientBeta);
     } else if (this.provider === "anthropic" && clientBeta) {
       headers["Anthropic-Beta"] = mergeAnthropicBeta(headers["Anthropic-Beta"], clientBeta);
+    }
+
+    // Claude Code auto-mode: the `dangerous-tool-use-*` beta pairs with the
+    // top-level `safeguards` field and the two MUST travel together — Anthropic
+    // hard-400s when one arrives without the other. Claude Code normally sets
+    // the header itself, so it is already covered by the clientBeta union above;
+    // re-add it here when the body carries the field but the header did not
+    // survive (a proxy that strips unknown anthropic-beta values), otherwise the
+    // forwarded field would be rejected as an unknown input.
+    if (Array.isArray(body?.safeguards)) {
+      headers["Anthropic-Beta"] = mergeAnthropicBeta(headers["Anthropic-Beta"], DANGEROUS_TOOL_USE_BETA);
     }
 
     // Claude OAuth: align x-claude-code-session-id with metadata.user_id.session_id if missing
