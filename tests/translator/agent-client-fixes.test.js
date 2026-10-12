@@ -183,6 +183,9 @@ describe("tool-result images reach Anthropic-compatible and Command Code upstrea
     expect(json).not.toContain("[image omitted]");
     expect(json).toContain(`"type":"image"`);
     expect(json).toContain(`data:image/png;base64,${PNG}`);
-    expect(json).toContain(`"mediaType":"image/png"`);
+    // The block carries its mime on `mimeType`, the field the rest of the
+    // translator reads. `mediaType` was emitted as a duplicate of it and read
+    // by nothing, so it was dropped from the wire shape.
+    expect(json).toContain(`"mimeType":"image/png"`);
   });
 });

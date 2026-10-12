@@ -1,5 +1,11 @@
 # Unreleased
 
+## Tests
+- **Suite cleanup: 97 → 16 failures**, all real defects fixed rather than rebaselined. The `known-fails.txt` baseline was exactly in sync with reality, so none of these were regressions — they were assertions left behind by earlier deliberate changes.
+- Root causes, not per-test patches: the kiro `systemPrompt` field was removed by design (kiro returns `400 REQUEST_BODY_INVALID`), so 28 assertions were checking a field that no longer exists; `security-audit` resolved paths against the vitest cwd, so 13 reads hit `tests/src/...`; the CodeWhisperer/scan endpoints, Codex CLI version and refresh-lead constants were each pinned as copied literals and went stale on bump.
+- Fixed tests now assert against the source of truth (registry entries, `parseSSELine`'s format argument, the ollama boundary that actually flattens content) instead of duplicated values, so the next bump cannot desync them again.
+- CLAUDE.md's "26 catalogued" figure is now accurate again.
+
 ## Features
 - **Claude Code auto mode**: implement the `dangerous_tool_use` safeguard protocol so 9router answers Claude Code's server-side classifier reviews. Forwards the `safeguards` request field with its paired `dangerous-tool-use-2026-09-03` beta, and returns `safeguard_results` on both non-streaming bodies and the final `message_delta` of a stream. When the routed upstream cannot run the review itself, 9router bridges it with the System One decision engine (`safeguardsClassifierModel` setting overrides the reviewer). Verdicts are keyed by `tool_use.id`; an engine outage reports `unavailable`/`unsupported` so Claude Code re-classifies with its own classifier rather than treating the failure as approval.
 
