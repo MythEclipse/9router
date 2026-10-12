@@ -269,7 +269,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   // bridge sees exactly what a user's curl sees: combo expansion, per-key
   // access and combo fallback all live there and nowhere else.
   const runSearchViaEndpoint = searchEndpointRunner
-    ? (payload) => searchEndpointRunner(payload)
+    ? (payload, options) => searchEndpointRunner(payload, options)
     : null;
 
   let runSearch = null;

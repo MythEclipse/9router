@@ -443,3 +443,38 @@ describe("domain filters", () => {
     expect(out.map((r) => r.url)).toEqual(["https://ok.test/x"]);
   });
 });
+
+describe("endpoint runner adapter (chatCore)", () => {
+  // The adapter was `(payload) => searchEndpointRunner(payload)`, which silently
+  // dropped the second argument — the caller's key — so every bridged search
+  // reached /v1/search with no Authorization header ("Missing API key").
+  it("forwards both the payload and the options argument", async () => {
+    const inner = vi.fn().mockResolvedValue({ results: [result()] });
+    const adapter = (payload, options) => inner(payload, options);
+
+    await adapter({ model: "search-combo-1", query: "q" }, { apiKey: "sk-abc" });
+
+    expect(inner).toHaveBeenCalledWith(
+      { model: "search-combo-1", query: "q" },
+      { apiKey: "sk-abc" },
+    );
+  });
+
+  it("does not lose the key when a real runner is composed over it", async () => {
+    const inner = vi.fn().mockResolvedValue({ results: [result()] });
+    const adapter = (payload, options) => inner(payload, options);
+
+    const run = createSearchRunner({
+      webSearchPlan: plan(),
+      requestProvider: "antigravity",
+      getProviderCredentials: credsResolver(),
+      listCandidateProviders: async () => ["tinyfish"],
+      runSearchViaEndpoint: adapter,
+      requestApiKey: "sk-compose",
+    });
+
+    await run({ query: "q" });
+
+    expect(inner.mock.calls[0][1]).toEqual({ apiKey: "sk-compose" });
+  });
+});
