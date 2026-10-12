@@ -93,6 +93,7 @@ jobs:
         # of their assertions, and fails the file with "No test suite found", so
         # they are excluded in vitest.config.js and executed here instead.
         # Without this step they are not gated by anything.
+        working-directory: tests
         run: |
           for f in unit/kimchi.test.js unit/kimchi-strip-reasoning.test.js \
                    unit/cline-auth.test.js; do
