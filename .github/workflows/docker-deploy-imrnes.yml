@@ -190,7 +190,22 @@ jobs:
           # the key with an unhelpful "invalid format" error.
           sed -i 's/\r$//' ~/.ssh/id_ed25519
           ssh-keygen -y -f ~/.ssh/id_ed25519 >/dev/null
-          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          # ssh-keyscan intermittently gets "Connection closed by remote host"
+          # (the host rate-limits concurrent handshakes) and returns non-zero,
+          # which `set -euo pipefail` turns into a hard deploy failure before a
+          # single byte is pushed. Retry, and only insist on a non-empty
+          # known_hosts — the key type is irrelevant, ssh checks the host key.
+          for attempt in 1 2 3 4 5; do
+            if ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && \
+               [ -s ~/.ssh/known_hosts ]; then
+              break
+            fi
+            if [ "$attempt" = "5" ]; then
+              echo "::error::could not read host key for $VPS_HOST after 5 attempts"
+              exit 1
+            fi
+            sleep $((attempt * 3))
+          done
 
       # Guard against deploying to the wrong machine. This repo has two hosts:
       # orange (9router via Nix on :4014) and imrnes (this workflow, :2028). A
