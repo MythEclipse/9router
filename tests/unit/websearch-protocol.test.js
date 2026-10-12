@@ -22,6 +22,7 @@ import {
   SERVER_TOOL_USE_ID_RE,
   clampMaxUses,
   isWebSearchTool,
+  isWebSearchToolType,
 } from "../../open-sse/config/webSearchConstants.js";
 import { toResultItem } from "../../open-sse/handlers/webSearchBridge.js";
 
@@ -312,5 +313,40 @@ describe("result block fidelity", () => {
   it("uses the anthropic result item type", () => {
     const item = toResultItem({ title: "T", url: "https://a.test" });
     expect(item.type).toBe("web_search_result");
+  });
+});
+
+
+describe("server tool type matching is version-agnostic", () => {
+  it("recognises every Anthropic web_search version, current and future", () => {
+    // Matching is by prefix, not string equality: Claude Code sends
+    // web_search_20250910 while the constant names 20250305, and Anthropic
+    // keeps adding versions. An equality check would silently stop matching
+    // and the bridge would never activate.
+    for (const type of [
+      "web_search_20250305",
+      "web_search_20250910",
+      "web_search_20260209",
+      "web_search_20260318",
+      "web_search_20991231",
+    ]) {
+      expect(isWebSearchToolType(type)).toBe(true);
+    }
+  });
+
+  it("does not match a bare name with no version, or another server tool", () => {
+    expect(isWebSearchToolType("web_search")).toBe(false);
+    expect(isWebSearchToolType("code_execution_20250522")).toBe(false);
+    expect(isWebSearchToolType("bash_20250124")).toBe(false);
+  });
+
+  it("recognises the tool Claude Code actually sends", () => {
+    expect(isWebSearchTool({ type: "web_search_20250910", name: WEB_SEARCH_TOOL_NAME })).toBe(true);
+  });
+
+  it("requires the name to match too, not just the type", () => {
+    // A client-defined tool may reuse the server type; without the name check
+    // 9router would hijack it.
+    expect(isWebSearchTool({ type: "web_search_20250910", name: "my_search" })).toBe(false);
   });
 });
