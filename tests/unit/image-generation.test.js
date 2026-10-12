@@ -11,6 +11,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { handleImageGenerationCore } from "../../open-sse/handlers/imageGenerationCore.js";
+import { CODEX_CLI_VERSION } from "../../open-sse/providers/registry/codex.js";
 
 const originalFetch = global.fetch;
 
@@ -356,7 +357,9 @@ describe("handleImageGenerationCore", () => {
         headers: expect.objectContaining({
           authorization: "Bearer codex-token",
           "chatgpt-account-id": "account-123",
-          version: "0.154.0",
+          // Assert the CURRENT version, read from the same source the executor
+          // uses, rather than a hardcoded copy that goes stale on every bump.
+          version: CODEX_CLI_VERSION,
         }),
       })
     );
