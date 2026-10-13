@@ -91,11 +91,14 @@ const translatedSessionCleanup = setInterval(() => {
 }, MEMORY_CONFIG.sessionCleanupIntervalMs);
 if (translatedSessionCleanup.unref) translatedSessionCleanup.unref();
 
-export function translateSessionId(sessionId, clientTool = "") {
+// `identity` scopes the mapping to the calling user. Without it two users that
+// both send the same literal session id (clients commonly send "default") land
+// on one shared upstream session. It is part of the cache key, never the wire.
+export function translateSessionId(sessionId, clientTool = "", identity = "") {
   if (typeof sessionId === "string" && OPENCODE_SESSION_RE.test(sessionId.trim())) {
     return sessionId.trim();
   }
-  const key = `opencode:ses:${clientTool || "generic"}:${sessionId || ""}`;
+  const key = `opencode:ses:${identity || "-"}:${clientTool || "generic"}:${sessionId || ""}`;
   const existing = translatedOpencodeSessions.get(key);
   if (existing) {
     existing.lastUsed = Date.now();
@@ -147,15 +150,32 @@ const stableSessionCleanup = setInterval(() => {
 }, MEMORY_CONFIG.sessionCleanupIntervalMs);
 if (stableSessionCleanup.unref) stableSessionCleanup.unref();
 
-function identityKey(credentials) {
-  const connectionId = credentials?.connectionId || credentials?.id;
-  if (connectionId) return `opencode:conn:${String(connectionId).slice(0, 128)}`;
+// A no-auth provider hands every caller the same literal connectionId
+// ("noauth", src/sse/services/auth.js), so connectionId carries no per-user
+// signal here — scoping on it would collapse unrelated users onto one session.
+// The caller's own credential to 9router is the only stable per-user identity
+// available, and chatCore already exposes it on credentials.rawHeaders.
+function callerIdentity(credentials) {
   const raw = credentials?.rawHeaders || {};
   const auth = raw.authorization || raw.Authorization || raw["x-api-key"] || raw["X-Api-Key"] || "";
-  if (auth) {
-    const digest = crypto.createHash("sha256").update(String(auth)).digest("hex").slice(0, 32);
-    return `opencode:auth:${digest}`;
+  if (!auth) return "";
+  return crypto.createHash("sha256").update(String(auth)).digest("hex").slice(0, 32);
+}
+
+// The literal "noauth" is a sentinel, not an identity: two unrelated callers
+// share it verbatim, so it must not be used to scope or separate sessions.
+function isDistinctConnection(credentials) {
+  const connectionId = credentials?.connectionId || credentials?.id;
+  if (!connectionId) return false;
+  return String(connectionId) !== "noauth";
+}
+
+function identityKey(credentials) {
+  if (isDistinctConnection(credentials)) {
+    return `opencode:conn:${String(credentials.connectionId || credentials.id).slice(0, 128)}`;
   }
+  const identity = callerIdentity(credentials);
+  if (identity) return `opencode:auth:${identity}`;
   return "opencode:default";
 }
 
@@ -282,6 +302,10 @@ function resolveOpencodeSession(body, credentials, providerSessionId, clientTool
   const native = nativeSession(headers);
   if (native) return native;
 
+  // Scope every translation to the calling user so two users never share a
+  // session just because their clients sent the same session id.
+  const identity = callerIdentity(credentials);
+
   let incoming = null;
   for (const [key, value] of Object.entries(headers)) {
     if (key.toLowerCase() === SESSION_HEADER) {
@@ -291,9 +315,19 @@ function resolveOpencodeSession(body, credentials, providerSessionId, clientTool
   }
 
   const hinted = incoming || normalizeSession(providerSessionId);
-  if (hinted) return translateSessionId(hinted, clientTool);
+  if (hinted) return translateSessionId(hinted, clientTool, identity);
 
-  if (credentials?.connectionId || bodyHasSessionHints(body)) {
+  // With no client session id, the conversation still has to keep ONE upstream
+  // session for its whole life. resolveSessionId() keys on the connection and,
+  // once the assistant history passes its length threshold, on the assistant
+  // text — so a long conversation silently changes session mid-thread and
+  // re-mints a quota bucket per turn. When the caller has an identity of its
+  // own, prefer that: it is stable for every turn of that user's conversation.
+  if (identity) return stableSessionId(credentials);
+
+  // No client session id and no caller identity. Fall back to connection scope
+  // when it is a real one; the shared "noauth" sentinel carries no information.
+  if (isDistinctConnection(credentials) || bodyHasSessionHints(body)) {
     let viaManager = null;
     try {
       viaManager = resolveSessionId({
@@ -305,7 +339,7 @@ function resolveOpencodeSession(body, credentials, providerSessionId, clientTool
     } catch {
       viaManager = null;
     }
-    if (viaManager) return translateSessionId(viaManager, clientTool);
+    if (viaManager) return translateSessionId(viaManager, clientTool, identity);
   }
 
   return stableSessionId(credentials);

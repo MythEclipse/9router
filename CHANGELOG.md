@@ -242,6 +242,36 @@ as not an authentic OpenCode client.
 
 Upstream: PR #4782. Fixes #4780, #4778, #4777, #4101, #4127, #4781.
 
+### Fix: OpenCode Free sessions were shared between users and reset mid-conversation
+
+On the free tier every caller is handed the same literal `connectionId`
+(`"noauth"`, `src/sse/services/auth.js`), so two unrelated users of one 9router
+instance resolved to the **same** upstream `ses_` — two different API keys
+produced one shared session, and two clients that both sent the literal
+`session_id: "default"` collided on it as well. Separately, a conversation
+silently changed session part-way through: with no client session id, resolution
+fell through to `resolveSessionId`, whose assistant-text key activates only past
+its 50-character threshold (`ASSISTANT_MIN_LEN`/`ASSISTANT_CAP_LEN`), so the
+session flipped the moment the accumulated assistant text crossed 50 chars —
+re-minting a quota bucket mid-thread and reproducing the 429 the session-reuse
+work was meant to prevent.
+
+- Session resolution is now scoped to the calling user. `callerIdentity()` hashes
+  the caller's own credential to 9router (already on `credentials.rawHeaders`,
+  set in `chatCore.js:183`) and that identity is part of the translation cache
+  key, so a shared literal session id no longer merges two users. The identity is
+  a cache key only and never goes on the wire.
+- `"noauth"` is treated as a sentinel rather than an identity: it no longer
+  selects or separates sessions, which had made `identityKey()`'s per-user hash
+  unreachable for every no-auth provider.
+- When the caller has an identity, that identity now pins the session for the
+  whole conversation instead of the assistant-text heuristic, so a long thread
+  keeps one `ses_` from the first turn to the last.
+- Applied to `open-sse/executors/opencode.js` and `open-sse/executors/opencode-zen.js`.
+  `sessionManager.js` is untouched, so no other provider changes behaviour.
+- Verified live on `space-bunny-free`: two callers get distinct sessions and each
+  keeps its own across turns, including when both send `session_id: "default"`.
+
 
 ## Fixes
 - **GLM-5.2 lost `reasoning_effort`**: `resolveCapabilities` returns from an exact `MODEL_CAPABILITIES` entry before it reaches `PATTERN_CAPABILITIES`, so the exact `glm-5.2` entry silently shadowed the `*glm-5.2*` pattern that sets `thinkingEffortSupported`. GLM-5.2 requests went out without the effort level z.ai expects. The flag is now declared on the exact entry, with a regression test pinning that the gate stays version-exact (pre-5.2 GLM still ignores the field).

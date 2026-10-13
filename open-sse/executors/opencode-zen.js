@@ -74,11 +74,14 @@ const translatedZenSessionCleanup = setInterval(() => {
 }, MEMORY_CONFIG?.sessionCleanupIntervalMs || 300000);
 if (translatedZenSessionCleanup.unref) translatedZenSessionCleanup.unref();
 
-export function translateSessionId(sessionId, clientTool = "") {
+// `identity` scopes the mapping to the calling user so two users that send the
+// same literal session id do not land on one shared upstream session. It is
+// part of the cache key only, never sent on the wire.
+export function translateSessionId(sessionId, clientTool = "", identity = "") {
   if (typeof sessionId === "string" && OPENCODE_SESSION_RE.test(sessionId.trim())) {
     return sessionId.trim();
   }
-  const key = `opencode-zen:ses:${clientTool || "generic"}:${sessionId || ""}`;
+  const key = `opencode-zen:ses:${identity || "-"}:${clientTool || "generic"}:${sessionId || ""}`;
   const existing = translatedZenSessions.get(key);
   if (existing) {
     existing.lastUsed = Date.now();
@@ -167,8 +170,17 @@ function nativeSession(headers) {
   return null;
 }
 
-function translatedSession(sessionId, clientTool) {
-  return translateSessionId(sessionId, clientTool);
+// A no-auth provider hands every caller the same literal connectionId, so it
+// carries no per-user signal; the caller's own credential is what separates them.
+function callerIdentity(credentials) {
+  const raw = credentials?.rawHeaders || {};
+  const auth = raw.authorization || raw.Authorization || raw["x-api-key"] || raw["X-Api-Key"] || "";
+  if (!auth) return "";
+  return crypto.createHash("sha256").update(String(auth)).digest("hex").slice(0, 32);
+}
+
+function translatedSession(sessionId, clientTool, identity) {
+  return translateSessionId(sessionId, clientTool, identity);
 }
 
 // Strip the thinking suffix "model(level)" so checks hit the base id.
@@ -266,7 +278,7 @@ export class OpenCodeZenExecutor extends DefaultExecutor {
 
     return {
       ...sourceCredentials,
-      [SESSION_FIELD]: native || translatedSession(resolved, clientTool),
+      [SESSION_FIELD]: native || translatedSession(resolved, clientTool, callerIdentity(sourceCredentials)),
     };
   }
 
