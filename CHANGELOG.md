@@ -211,6 +211,37 @@ Details:
 - New settings: `webSearchEnabled` (unset = auto-activate on tool declaration,
   `false` = force off) and `webSearchProvider` (pin the search engine).
 
+### Fix: OpenCode Free 403 FreeTierError for non-OpenCode clients
+
+Every free-tier request arriving from a client that is not OpenCode itself —
+Claude Code, curl, omp, pi — was refused:
+
+```json
+{"type":"error","error":{"type":"FreeTierError","message":"OpenCode's free tier can only be used from within OpenCode. Download it at https://opencode.ai and keep building."}}
+```
+
+`translateSessionId()` turns a generic downstream session id into an OpenCode
+`ses_` id by SHA-256-hashing it and taking the first 6 digest bytes as the
+12-hex prefix. Upstream Zen validates that prefix: it has to decode to a recent
+inverted timestamp `~(BigInt(Date.now()) * 4096n + counter)` — the same shape the
+CLI's `generateSessionId()` emits. A SHA-256 digest carries random bits there, so
+the decoded timestamp was essentially never recent, and Zen classified the caller
+as not an authentic OpenCode client.
+
+- The prefix is now produced by `generateSessionId()` instead of a digest, in
+  both `open-sse/executors/opencode.js` and `open-sse/executors/opencode-zen.js`.
+  A session id that is already a valid `ses_` still passes through untouched, so
+  a real OpenCode client keeps its own identity.
+- The translation is memoised in a TTL/LRU cache (max 1000 entries, driven by
+  `MEMORY_CONFIG.sessionTtlMs`) so one downstream conversation still maps to one
+  stable upstream session across turns — generating a fresh id per request would
+  churn the upstream session affinity instead of preserving it.
+- Verified live on `space-bunny-free`: digest-derived ids returned 403 4/4,
+  generated ids returned 200 4/4, with the difference visible in the prefix
+  itself (`c67251c513c6` vs `ecc5937c7ffe`).
+
+Upstream: PR #4782. Fixes #4780, #4778, #4777, #4101, #4127, #4781.
+
 
 ## Fixes
 - **GLM-5.2 lost `reasoning_effort`**: `resolveCapabilities` returns from an exact `MODEL_CAPABILITIES` entry before it reaches `PATTERN_CAPABILITIES`, so the exact `glm-5.2` entry silently shadowed the `*glm-5.2*` pattern that sets `thinkingEffortSupported`. GLM-5.2 requests went out without the effort level z.ai expects. The flag is now declared on the exact entry, with a regression test pinning that the gate stays version-exact (pre-5.2 GLM still ignores the field).
