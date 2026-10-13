@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { DefaultExecutor } from "./default.js";
-import { resolveSessionId } from "../utils/sessionManager.js";
+import { resolveOpencodeSession } from "./opencode.js";
 import { isMuseSparkModel } from "../providers/models/helpers.js";
 import {
   normalizeResponsesInput,
@@ -74,14 +74,13 @@ const translatedZenSessionCleanup = setInterval(() => {
 }, MEMORY_CONFIG?.sessionCleanupIntervalMs || 300000);
 if (translatedZenSessionCleanup.unref) translatedZenSessionCleanup.unref();
 
-// `identity` scopes the mapping to the calling user so two users that send the
-// same literal session id do not land on one shared upstream session. It is
-// part of the cache key only, never sent on the wire.
-export function translateSessionId(sessionId, clientTool = "", identity = "") {
+// Maps a caller-supplied session id onto a canonical OpenCode `ses_` id, memoised
+// so one conversation keeps one upstream session for its whole life.
+export function translateSessionId(sessionId, clientTool = "") {
   if (typeof sessionId === "string" && OPENCODE_SESSION_RE.test(sessionId.trim())) {
     return sessionId.trim();
   }
-  const key = `opencode-zen:ses:${identity || "-"}:${clientTool || "generic"}:${sessionId || ""}`;
+  const key = `opencode-zen:ses:${clientTool || "generic"}:${sessionId || ""}`;
   const existing = translatedZenSessions.get(key);
   if (existing) {
     existing.lastUsed = Date.now();
@@ -170,17 +169,11 @@ function nativeSession(headers) {
   return null;
 }
 
-// A no-auth provider hands every caller the same literal connectionId, so it
-// carries no per-user signal; the caller's own credential is what separates them.
-function callerIdentity(credentials) {
-  const raw = credentials?.rawHeaders || {};
-  const auth = raw.authorization || raw.Authorization || raw["x-api-key"] || raw["X-Api-Key"] || "";
-  if (!auth) return "";
-  return crypto.createHash("sha256").update(String(auth)).digest("hex").slice(0, 32);
-}
-
-function translatedSession(sessionId, clientTool, identity) {
-  return translateSessionId(sessionId, clientTool, identity);
+// The free tier shares one credential across every caller, so session identity
+// comes from the request payload (the caller's session id, else the opening turn)
+// rather than from any key. See opencode.js for the full rationale.
+function translatedSession(sessionId, clientTool) {
+  return translateSessionId(sessionId, clientTool);
 }
 
 // Strip the thinking suffix "model(level)" so checks hit the base id.
@@ -268,17 +261,12 @@ export class OpenCodeZenExecutor extends DefaultExecutor {
 
   prepareRequestCredentials({ body, credentials, providerSessionId, clientTool } = {}) {
     const sourceCredentials = credentials || {};
-    const native = nativeSession(sourceCredentials.rawHeaders);
-    const resolved = normalizeSession(providerSessionId) || resolveSessionId({
-      headers: sourceCredentials.rawHeaders,
-      body,
-      connectionId: sourceCredentials.connectionId,
-      scope: "opencode-zen",
-    });
-
+    // Same payload-driven resolution as the OpenCode Free executor: the shared
+    // credential cannot identify a caller, so the request itself must.
+    const resolved = resolveOpencodeSession(body, sourceCredentials, providerSessionId, clientTool);
     return {
       ...sourceCredentials,
-      [SESSION_FIELD]: native || translatedSession(resolved, clientTool, callerIdentity(sourceCredentials)),
+      [SESSION_FIELD]: nativeSession(sourceCredentials.rawHeaders) || translatedSession(resolved, clientTool),
     };
   }
 

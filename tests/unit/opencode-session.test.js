@@ -100,28 +100,28 @@ describe("OpenCode Free Session ID Format", () => {
     expect(repeated).toBe(translated);
   });
 
-  it("scopes the translation to the calling identity", () => {
-    // Clients commonly send the same literal session id ("default"). Without
-    // the identity in the cache key, two unrelated users land on one shared
-    // upstream session.
-    const shared = "default";
-    const alice = translateSessionId(shared, "claude", "alice-digest");
-    const bob = translateSessionId(shared, "claude", "bob-digest");
-    expect(alice).not.toBe(bob);
-    expect(alice).toMatch(OPENCODE_SESSION_RE);
-    expect(bob).toMatch(OPENCODE_SESSION_RE);
-    expect(translateSessionId(shared, "claude", "alice-digest")).toBe(alice);
+  it("keys the translation on the full composite id, not a bare client hint", () => {
+    // The cache key is whatever the resolver hands in. Session resolution
+    // combines the client hint with the conversation anchor before calling this,
+    // so a shared literal like "default" reaches here already disambiguated.
+    const one = translateSessionId("default:aaa", "claude");
+    const two = translateSessionId("default:bbb", "claude");
+    expect(one).not.toBe(two);
+    expect(one).toMatch(OPENCODE_SESSION_RE);
+    expect(two).toMatch(OPENCODE_SESSION_RE);
+    expect(translateSessionId("default:aaa", "claude")).toBe(one);
   });
 });
 
-describe("OpenCode Free per-caller session scoping (connectionId 'noauth')", () => {
-  // A no-auth provider hands every caller the literal connectionId "noauth",
-  // so scoping sessions on it collapses unrelated users onto one session.
+describe("OpenCode Free payload-driven session scoping (one shared credential)", () => {
+  // The free tier authenticates everyone with the same literal credential
+  // ("Bearer public") and hands every caller connectionId "noauth", so neither a
+  // key nor a connection can separate conversations — only the payload can.
   const NOAUTH = { id: "noauth", connectionId: "noauth", accessToken: "public" };
-  const ALICE = { authorization: "Bearer sk-alice-1234" };
-  const BOB = { authorization: "Bearer sk-bob-5678" };
+  // One key handed to a whole team: it must not affect session identity at all.
+  const SHARED = { authorization: "Bearer sk-shared-by-everyone" };
 
-  function upstreamSession(body, downstreamHeaders = {}) {
+  function upstreamSession(body, downstreamHeaders = SHARED) {
     const executor = getExecutor("opencode");
     const credentials = { ...NOAUTH, rawHeaders: { ...downstreamHeaders } };
     const prepared = executor.prepareRequestCredentials({
@@ -134,52 +134,107 @@ describe("OpenCode Free per-caller session scoping (connectionId 'noauth')", () 
   }
 
   const prompt = (text) => ({ model: "big-pickle", messages: [{ role: "user", content: text }] });
-
-  it("keeps two callers on separate sessions", () => {
-    expect(upstreamSession(prompt("hai"), ALICE)).not.toBe(upstreamSession(prompt("hai"), BOB));
+  const thread = (...texts) => ({
+    model: "big-pickle",
+    messages: texts.flatMap((t, i) => (i === 0 ? [{ role: "user", content: t }] : [
+      { role: "assistant", content: `Balasan panjang untuk giliran ${i} agar history terus bertambah.` },
+      { role: "user", content: t },
+    ])),
   });
 
-  it("keeps them separate even when both send the same literal session id", () => {
-    const shared = { "x-opencode-session": "default" };
-    expect(upstreamSession(prompt("hai"), { ...ALICE, ...shared }))
-      .not.toBe(upstreamSession(prompt("hai"), { ...BOB, ...shared }));
+  it("keeps two conversations apart with no session id at all", () => {
+    expect(upstreamSession(prompt("tolong jelaskan docker")))
+      .not.toBe(upstreamSession(prompt("tolong jelaskan kubernetes")));
   });
 
-  it("holds one session for the whole conversation as assistant text grows", () => {
-    // resolveSessionId() switches to an assistant-text key past its length
-    // threshold, which used to re-mint the session mid-thread.
-    const first = upstreamSession(prompt("hai"), ALICE);
-    const second = upstreamSession({
-      model: "big-pickle",
-      messages: [
-        { role: "user", content: "hai" },
-        { role: "assistant", content: "Halo! Ada yang bisa saya bantu?" },
-        { role: "user", content: "lanjut" },
-      ],
-    }, ALICE);
-    const third = upstreamSession({
-      model: "big-pickle",
-      messages: [
-        { role: "user", content: "hai" },
-        { role: "assistant", content: "Halo! Ada yang bisa saya bantu?" },
-        { role: "user", content: "lanjut" },
-        { role: "assistant", content: "Tentu, silakanIntensity pertanyaan lagi." },
-        { role: "user", content: "lagi" },
-      ],
-    }, ALICE);
+  it("keeps them apart even when both send the same literal session id", () => {
+    const shared = { ...SHARED, "x-opencode-session": "default" };
+    expect(upstreamSession(prompt("pertanyaan soal database"), shared))
+      .not.toBe(upstreamSession(prompt("pertanyaan soal frontend"), shared));
+  });
 
+  it("ignores the caller's credential when separating conversations", () => {
+    // Different keys, same conversation -> still one session.
+    expect(upstreamSession(prompt("pertanyaan yang sama"), { authorization: "Bearer sk-a" }))
+      .toBe(upstreamSession(prompt("pertanyaan yang sama"), { authorization: "Bearer sk-b" }));
+  });
+
+  it("holds one session for the whole conversation as history grows", () => {
+    const first = upstreamSession(thread("hai"));
+    const second = upstreamSession(thread("hai", "lanjut"));
+    const third = upstreamSession(thread("hai", "lanjut", "lagi"));
+    expect(second).toBe(first);
+    expect(third).toBe(first);
+  });
+
+  it("holds one session when the client also sends a stable session id", () => {
+    const withId = { ...SHARED, "x-opencode-session": "conv-9" };
+    const first = upstreamSession(thread("prompt pertama"), withId);
+    const second = upstreamSession(thread("prompt pertama", "prompt kedua"), withId);
+    const third = upstreamSession(thread("prompt pertama", "prompt kedua", "prompt ketiga"), withId);
     expect(second).toBe(first);
     expect(third).toBe(first);
   });
 
   it("still separates distinct conversations of the same caller", () => {
-    expect(upstreamSession(prompt("a"), { ...ALICE, "x-opencode-session": "conv-1" }))
-      .not.toBe(upstreamSession(prompt("a"), { ...ALICE, "x-opencode-session": "conv-2" }));
+    expect(upstreamSession(prompt("a"), { ...SHARED, "x-opencode-session": "conv-1" }))
+      .not.toBe(upstreamSession(prompt("a"), { ...SHARED, "x-opencode-session": "conv-2" }));
   });
 
   it("still passes a native OpenCode session through untouched", () => {
     const native = "ses_ecc5937c7ffeZq7Xk2Lm9PwRtX";
-    expect(upstreamSession(prompt("a"), { ...ALICE, "x-opencode-session": native })).toBe(native);
+    expect(upstreamSession(prompt("a"), { ...SHARED, "x-opencode-session": native })).toBe(native);
+  });
+});
+
+describe("OpenCode Zen resolves sessions from the payload too", () => {
+  // opencode-zen used to resolve through sessionManager's assistant-text
+  // heuristic, which re-minted the session mid-thread and could not separate
+  // conversations sharing one credential. It now shares the Free executor's
+  // payload-driven resolution.
+  const NOAUTH = { id: "noauth", connectionId: "noauth", accessToken: "public" };
+  const SHARED = { authorization: "Bearer sk-shared-by-everyone" };
+
+  function zenSession(body, rawHeaders = SHARED) {
+    const executor = getExecutor("opencode-zen");
+    return executor.prepareRequestCredentials({
+      body,
+      credentials: { ...NOAUTH, rawHeaders: { ...rawHeaders } },
+      providerSessionId: undefined,
+      clientTool: "claude",
+    })._opencodeZenSession;
+  }
+
+  const u = (t) => ({ role: "user", content: t });
+  const a = (t) => ({ role: "assistant", content: t });
+  const prompt = (t) => ({ model: "grok-code", messages: [u(t)] });
+  const thread = (...turns) => ({
+    model: "grok-code",
+    messages: turns.flatMap((t, i) => (i === 0
+      ? [u(t)]
+      : [a(`Balasan panjang untuk giliran ${i} agar history terus bertambah.`), u(t)])),
+  });
+
+  it("keeps one session for the whole conversation as history grows", () => {
+    const first = zenSession(thread("hai"));
+    const second = zenSession(thread("hai", "lanjut"));
+    const third = zenSession(thread("hai", "lanjut", "lagi"));
+    expect(second).toBe(first);
+    expect(third).toBe(first);
+  });
+
+  it("separates conversations that share one credential", () => {
+    expect(zenSession(prompt("jelaskan docker")))
+      .not.toBe(zenSession(prompt("jelaskan kubernetes")));
+    const literal = { ...SHARED, "x-opencode-session": "default" };
+    expect(zenSession(prompt("jelaskan docker"), literal))
+      .not.toBe(zenSession(prompt("jelaskan kubernetes"), literal));
+  });
+
+  it("emits a valid session and passes a native one through", () => {
+    expect(zenSession(prompt("a"))).toMatch(OPENCODE_SESSION_RE);
+    const native = "ses_ecc5937c7ffeZq7Xk2Lm9PwRtX";
+    expect(zenSession(prompt("a"), { ...SHARED, "x-opencode-session": native })).toBe(native);
   });
 });
 
@@ -327,18 +382,22 @@ describe("OpenCode Stable Session Reuse (429 follow-up)", () => {
     expect(second._opencodeSession).toBe(first._opencodeSession);
   });
 
-  it("isolates stable sessions by downstream identity", () => {
+  it("does not key sessions on the caller's credential", () => {
+    // The free tier hands the same literal credential to everyone, so a key is
+    // not an identity. Two callers with different keys on the same conversation
+    // belong on the same session; two conversations must not share one.
     const executor = getExecutor("opencode");
-    const body = { messages: [{ role: "user", content: "hello" }] };
-    const forKey = (auth) => executor.prepareRequestCredentials({
+    const conversation = (text) => ({ messages: [{ role: "user", content: text }] });
+    const forBody = (body, auth) => executor.prepareRequestCredentials({
       body,
       credentials: anonymousCredentials(auth),
       providerSessionId: null,
       clientTool: "claude",
     })._opencodeSession;
 
-    expect(forKey("user-A")).not.toBe(forKey("user-B"));
-    expect(forKey("user-A")).toMatch(OPENCODE_SESSION_RE);
+    expect(forBody(conversation("hello"), "user-A")).toBe(forBody(conversation("hello"), "user-B"));
+    expect(forBody(conversation("hello"), "user-A")).not.toBe(forBody(conversation("goodbye"), "user-A"));
+    expect(forBody(conversation("hello"), "user-A")).toMatch(OPENCODE_SESSION_RE);
   });
 
   it("exposes the stable session helper directly", () => {
