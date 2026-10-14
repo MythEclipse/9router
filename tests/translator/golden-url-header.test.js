@@ -3,6 +3,7 @@
 // Mock proxyFetch + uuid-heavy executors KHÔNG cần ở đây vì chỉ gọi buildUrl/buildHeaders (pure).
 import { describe, it, expect } from "vitest";
 import os from "os";
+import pkg from "../../package.json" with { type: "json" };
 import { PROVIDERS } from "../../open-sse/config/providers.js";
 import { DefaultExecutor } from "../../open-sse/executors/default.js";
 
@@ -29,6 +30,15 @@ const SPECIALIZED = new Set([
 ]);
 
 // Sanitize header: khử token + field thời gian động (kimi X-Msh-Device-Id) để snapshot ổn định.
+//
+// APP_VERSION is package.json's `version`, which open-sse/shared/clineAuth.js
+// and open-sse/config/appConstants.js stamp into User-Agent / X-CLIENT-VERSION
+// / X-CORE-VERSION / X-Msh-Version. It changes on every release bump, so a
+// snapshot that records it turns CI red on every version bump for reasons that
+// have nothing to do with the headers under test. Pin it like <NODE>/<HOST>.
+// The value is still asserted — a generic \d+\.\d+ regex would clobber the
+// hardcoded X-Stainless-Runtime-Version that should stay locked.
+const APP_VERSION = pkg.version || "0.0.0";
 function sanitize(headers) {
   const out = {};
   for (const [k, v] of Object.entries(headers)) {
@@ -50,6 +60,7 @@ function sanitize(headers) {
           // regex would also clobber X-Stainless-Runtime-Version, which is a
           // hardcoded constant that should stay locked.
           .split(process.version).join("<NODE>")
+          .split(APP_VERSION).join("<APP_VERSION>")
       : v;
   }
   return out;
