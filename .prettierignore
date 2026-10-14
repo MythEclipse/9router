@@ -1,0 +1,15 @@
+bun.lock
+package-lock.json
+node_modules
+.next
+out
+build
+CHANGELOG.md
+
+# open-sse/ is synced from upstream (github.com/decolua/9router), and the
+# provider suites under tests/unit/ + tests/translator/real/ are carried in from
+# the same source. Reformatting them locally would guarantee a conflict on every
+# upstream sync, so prettier only guards eslint there. New code in those trees
+# should still match the local style.
+open-sse/
+tests/
