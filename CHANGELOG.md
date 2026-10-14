@@ -1,5 +1,34 @@
 # Unreleased
 
+### Fix: OpenCode Free 403 FreeTierError on the live free tier
+
+Live probes (2026-10-15) show the free tier moved from `/zen/v1/*` to
+`/inference/v1/*`: the same fingerprint returns 403 on `/zen/v1/chat/completions`
+and `/zen/v1/responses` but 200 on the `/inference/v1` equivalents. Upstream also
+validates authentic OpenCode tool schemas — dummy descriptions 403 while the
+canonical defs return 200 — and rejects `stream:false` with 403.
+
+- `open-sse/executors/opencode.js`: `buildUrl` routes per model to
+  `/inference/v1/responses` (Muse Spark), `/inference/v1/messages`
+  (`union-alpha`), else `/inference/v1/chat/completions`. Collapsing everything
+  to chat broke Muse Spark with 400 `ModelProtocolUnsupported`.
+- `open-sse/utils/opencodeFingerprint.js`: keep the authentic tool defs
+  (required live) but restore the legacy `tool_choice` defaults. Chat with
+  `none`/absent and Responses with absent all return 200; only Responses with
+  explicit `none`/named on `muse-spark-1.3-free` 400s, already demoted to `auto`
+  by the executor quirk. Forcing `auto` globally would let the model pick decoy
+  fingerprint tools on the chat lane.
+- `open-sse/executors/opencode-zen.js`: drop the local dummy fingerprint stubs
+  and use the shared `applyFingerprintTools()` so both executors send authentic
+  schemas; add `x-opencode-session-id` / `x-opencode-request` /
+  `x-opencode-project` headers for parity with the free lane.
+- Registry/test-endpoint updates (`/inference/v1/models`, systemone baseUrl,
+  UA `opencode/1.19.0`, `x-opencode-client: cli`) kept — verified 200 live.
+
+Verified live: `big-pickle` chat and `muse-spark-1.3-contributor-free`
+responses both HTTP 200 via the executor wire shape. Suites green:
+`unit/` 3456 passed, `translator/` 440 passed.
+
 ### Fix: bridged Claude Code search now goes through /v1/search
 
 Web Search still returned empty after the client-tool fix. The bridge was

@@ -10,9 +10,11 @@
  * downstream clients still recognise their own tool calls.
  */
 
+import { OPENCODE_FINGERPRINT_TOOL_DEFS } from "./opencodeToolDefs.js";
+
 /** Canonical names required by the upstream free-tier gate. */
 export const OPENCODE_FINGERPRINT_TOOLS = [
-  "bash", "edit", "glob", "grep", "read", "skill", "task", "todowrite", "webfetch", "write",
+  "bash", "edit", "glob", "grep", "read", "skill", "task", "todowrite", "webfetch", "websearch", "write",
 ];
 
 // Request body -> names renamed for that request. transformRequest() mutates the
@@ -69,15 +71,25 @@ export function concealFingerprintToolNames(tools) {
     if (seen.has(key)) continue;
     seen.add(key);
 
-    if (current !== key) {
-      map.set(key, current);
-      const fn = tool.function && typeof tool.function === "object" && !Array.isArray(tool.function)
-        ? tool.function
-        : null;
-      out.push(fn ? { ...tool, function: { ...fn, name: key } } : { ...tool, name: key });
-    } else {
-      out.push(tool);
-    }
+    map.set(key, current);
+    const def = OPENCODE_FINGERPRINT_TOOL_DEFS[key];
+    const fn = tool.function && typeof tool.function === "object" && !Array.isArray(tool.function)
+      ? tool.function
+      : null;
+    out.push(fn ? {
+      ...tool,
+      function: {
+        ...fn,
+        name: key,
+        description: def ? def.description : fn.description,
+        parameters: def ? def.parameters : fn.parameters,
+      },
+    } : {
+      ...tool,
+      name: key,
+      description: def ? def.description : tool.description,
+      parameters: def ? def.parameters : tool.parameters,
+    });
   }
   return { tools: out, map };
 }
@@ -87,17 +99,18 @@ export function appendMissingFingerprintTools(tools, flat) {
   const list = Array.isArray(tools) ? tools : [];
   for (const name of OPENCODE_FINGERPRINT_TOOLS) {
     if (list.some((tool) => fingerprintToolKey(toolNameOf(tool)) === name)) continue;
+    const def = OPENCODE_FINGERPRINT_TOOL_DEFS[name];
     list.push(flat ? {
       type: "function",
       name,
-      description: "This tool is currently unavailable and must not be used.",
-      parameters: { type: "object", properties: {} },
+      description: def?.description || "",
+      parameters: def?.parameters || { type: "object", properties: {} },
     } : {
       type: "function",
       function: {
         name,
-        description: "This tool is currently unavailable and must not be used.",
-        parameters: { type: "object", properties: {} },
+        description: def?.description || "",
+        parameters: def?.parameters || { type: "object", properties: {} },
       },
     });
   }
@@ -129,6 +142,13 @@ export function retargetToolChoice(body, map) {
  * Full request-side pass: canonicalise fingerprint case variants, remove
  * duplicate fingerprint declarations, append missing members and preserve the
  * legacy tool_choice defaults used by the OpenCode executor.
+ *
+ * Live probes (2026-10-15, /inference/v1): chat with tool_choice "none" or
+ * absent returns 200, Responses with absent returns 200 — only Responses with
+ * explicit "none"/named on muse-spark-1.3-free 400s, and that case is demoted
+ * to "auto" by the executor quirk (forceAutoToolChoiceModels). Forcing "auto"
+ * globally would let the model pick decoy fingerprint tools on the chat lane,
+ * so the legacy defaults stand.
  *
  * @param {object} body
  * @param {boolean} flat - true for Responses tools ({name}), false for chat tools

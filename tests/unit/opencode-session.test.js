@@ -345,25 +345,25 @@ describe("OpenCode Free Executor Session Resolution", () => {
 });
 
 describe("OpenCode Free User-Agent Validation", () => {
-  it("defaults User-Agent to opencode/1.18.31 for non-opencode downstream clients", () => {
+  it("defaults User-Agent to opencode/1.19.0 for non-opencode downstream clients", () => {
     const executor = getExecutor("opencode");
     const headersNoUa = executor.buildHeaders({});
-    expect(headersNoUa["User-Agent"]).toBe("opencode/1.18.31");
+    expect(headersNoUa["User-Agent"]).toBe("opencode/1.19.0 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14");
 
     const headersClaude = executor.buildHeaders({ rawHeaders: { "user-agent": "Claude-Code/1.0" } });
-    expect(headersClaude["User-Agent"]).toBe("opencode/1.18.31");
+    expect(headersClaude["User-Agent"]).toBe("opencode/1.19.0 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14");
   });
 
-  it("replaces bare opencode with versioned opencode/1.18.31 to prevent 403 FreeTierError", () => {
+  it("replaces bare opencode with versioned opencode/1.19.0 to prevent 403 FreeTierError", () => {
     const executor = getExecutor("opencode");
     const headers = executor.buildHeaders({ rawHeaders: { "user-agent": "opencode" } });
-    expect(headers["User-Agent"]).toBe("opencode/1.18.31");
+    expect(headers["User-Agent"]).toBe("opencode/1.19.0 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14");
   });
 
   it("upgrades outdated opencode versions (< 1.17) to prevent 426 Upgrade Required", () => {
     const executor = getExecutor("opencode");
     const headers = executor.buildHeaders({ rawHeaders: { "user-agent": "opencode/1.15.0" } });
-    expect(headers["User-Agent"]).toBe("opencode/1.18.31");
+    expect(headers["User-Agent"]).toBe("opencode/1.19.0 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14");
   });
 
   it("preserves valid opencode versions (>= 1.17)", () => {
@@ -374,7 +374,7 @@ describe("OpenCode Free User-Agent Validation", () => {
     expect(headers118["User-Agent"]).toBe("opencode/1.18.31 ai-sdk/provider-utils/4.0.40 runtime/bun/1.3.14");
 
     const headersFuture = executor.buildHeaders({ rawHeaders: { "user-agent": "opencode/1.19.0" } });
-    expect(headersFuture["User-Agent"]).toBe("opencode/1.19.0");
+    expect(headersFuture["User-Agent"]).toBe("opencode/1.19.0 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14");
   });
 });
 
@@ -495,7 +495,11 @@ describe("OpenCode Stable Session Reuse (429 follow-up)", () => {
     "bash", "read",
     ...OPENCODE_FINGERPRINT_TOOLS.filter((name) => name !== "bash" && name !== "read"),
   ]);
-  expect(chatPartial.tools[0].function.description).toBe("existing");
+  // Upstream validates authentic OpenCode tool schemas: client-supplied
+  // fingerprint descriptions are replaced with the canonical defs (live:
+  // dummy/custom schemas 403, authentic defs 200).
+  expect(chatPartial.tools[0].function.description).not.toBe("existing");
+  expect(chatPartial.tools[0].function.description).toContain("persistent shell session");
 });
 
   it("cloaks Muse Responses requests even when the client already supplies tools", () => {

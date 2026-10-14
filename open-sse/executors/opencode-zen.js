@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { DefaultExecutor } from "./default.js";
 import { resolveOpencodeSession } from "./opencode.js";
+import { applyFingerprintTools } from "../utils/opencodeFingerprint.js";
 import { isMuseSparkModel } from "../providers/models/helpers.js";
 import {
   normalizeResponsesInput,
@@ -16,15 +17,13 @@ const MAX_SESSION_LENGTH = 256;
 
 const RESPONSES_BASE_URL = "https://opencode.ai/zen/v1/responses";
 const MAX_TOOL_NAME_LEN = 128;
-const OPENCODE_UA = "opencode/1.18.31";
+const OPENCODE_UA = "opencode/1.19.0 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14";
 export const OPENCODE_SESSION_RE = /^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/;
+export const OPENCODE_REQUEST_RE = /^msg_[0-9a-f]{12}[0-9A-Za-z]{14}$/;
 const BASE62_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-// Free-tier fingerprint (mirrors opencode executor, PR #4132 + issue #4836):
-// upstream 403s requests missing the full 10-tool agentic fingerprint or
-// stream:true. Keep in sync with open-sse/utils/opencodeFingerprint.js.
-const OPENCODE_FINGERPRINT_TOOLS = [
-  "bash", "edit", "glob", "grep", "read", "skill", "task", "todowrite", "webfetch", "write",
-];
+// Free-tier fingerprint lives in open-sse/utils/opencodeFingerprint.js (authentic
+// OpenCode tool schemas — live probes show dummy descriptions 403). This lane
+// uses the shared applyFingerprintTools() so both executors stay in sync.
 
 function hasValidOpencodeVersion(ua) {
   const m = String(ua || "").match(/opencode\/(\d+)\.(\d+)(?:\.(\d+))?/i);
@@ -97,61 +96,6 @@ export function translateSessionId(sessionId, clientTool = "") {
   }
   translatedZenSessions.set(key, { sessionId: id, lastUsed: Date.now() });
   return id;
-}
-
-function toolNameOf(tool) {
-  if (!tool || typeof tool !== "object" || Array.isArray(tool)) return "";
-  const fn = tool.function && typeof tool.function === "object" && !Array.isArray(tool.function) ? tool.function : null;
-  const raw = typeof tool.name === "string" ? tool.name : (typeof fn?.name === "string" ? fn.name : "");
-  return raw.trim();
-}
-
-function ensureChatFingerprintTools(body) {
-  if (!body || typeof body !== "object") return;
-  const present = new Set();
-  if (Array.isArray(body.tools)) {
-    for (const tool of body.tools) {
-      const name = toolNameOf(tool);
-      if (name) present.add(name);
-    }
-  } else {
-    body.tools = [];
-  }
-  for (const name of OPENCODE_FINGERPRINT_TOOLS) {
-    if (present.has(name)) continue;
-    body.tools.push({
-      type: "function",
-      function: {
-        name,
-        description: `OpenCode built-in ${name} tool`,
-        parameters: { type: "object", properties: {} },
-      },
-    });
-    present.add(name);
-  }
-}
-
-function ensureResponsesFingerprintTools(body) {
-  if (!body || typeof body !== "object") return;
-  const present = new Set();
-  if (Array.isArray(body.tools)) {
-    for (const tool of body.tools) {
-      const name = toolNameOf(tool);
-      if (name) present.add(name);
-    }
-  } else {
-    body.tools = [];
-  }
-  for (const name of OPENCODE_FINGERPRINT_TOOLS) {
-    if (present.has(name)) continue;
-    body.tools.push({
-      type: "function",
-      name,
-      description: `OpenCode built-in ${name} tool`,
-      parameters: { type: "object", properties: {} },
-    });
-    present.add(name);
-  }
 }
 
 function normalizeSession(value) {
@@ -288,13 +232,15 @@ export class OpenCodeZenExecutor extends DefaultExecutor {
     headers["User-Agent"] = hasValidOpencodeVersion(downstreamUa) ? downstreamUa : OPENCODE_UA;
     headers["x-opencode-client"] = lower["x-opencode-client"] || "desktop";
     const prepared = credentials?.[SESSION_FIELD];
-    if (prepared) {
-      headers[SESSION_HEADER] = prepared;
-      return headers;
-    }
-
-    const fallback = this.prepareRequestCredentials({ credentials });
-    headers[SESSION_HEADER] = fallback[SESSION_FIELD];
+    const session = prepared || this.prepareRequestCredentials({ credentials })[SESSION_FIELD];
+    headers[SESSION_HEADER] = session;
+    headers["x-opencode-session-id"] = session;
+    const downstreamReq = typeof lower["x-opencode-request"] === "string"
+      && OPENCODE_REQUEST_RE.test(lower["x-opencode-request"].trim())
+      ? lower["x-opencode-request"].trim()
+      : null;
+    headers["x-opencode-request"] = downstreamReq || generateRequestId();
+    headers["x-opencode-project"] = lower["x-opencode-project"] || "35f9e9e6efffa4ca5cbcb640684befd1263b8b9a";
     return headers;
   }
 
@@ -303,7 +249,7 @@ export class OpenCodeZenExecutor extends DefaultExecutor {
     // Free-tier gate: upstream 403s stream:false even when everything else is valid.
     if (out && typeof out === "object") out.stream = true;
     if (!isResponsesModel(model || body?.model)) {
-      ensureChatFingerprintTools(out);
+      applyFingerprintTools(out, false);
       return out;
     }
     const normalized = normalizeResponsesInput(out.input);
@@ -327,8 +273,8 @@ export class OpenCodeZenExecutor extends DefaultExecutor {
     delete out.reasoning_effort;
     out.stream = true;
     out.store = false;
-    ensureResponsesFingerprintTools(out);
     normalizeResponsesTools(out);
+    applyFingerprintTools(out, true);
     sanitizeResponsesItems(out);
     return out;
   }
