@@ -1,0 +1,1191 @@
+name: CI
+
+# Single consolidated pipeline. One file, branching jobs (needs:):
+#
+#   push master ──┬── test ──┬── deploy-orange ──► orange VPS (/opt/9router, :4014)
+#                 │          │
+#                 │          ├── image ── smoke ──┤
+#                 │                               └── deploy-imrnes ──► imrnes VPS (docker, :2028)
+#                 │
+#   tag v* ───────┴── release-prepare ── release-build (amd64+arm64) ── release-publish ──► GHCR (+Docker Hub)
+#
+#   dispatch ── tray (only when tray_publish=true) ──► tray-binaries release
+#   dispatch ── release-* (only when release_tag set) — republish an existing tag
+#   dispatch ── test + deploys (plain dispatch from master, no inputs set)
+#
+# No workflow-level concurrency: the two deploys target different hosts and
+# serialize per-host via job-level groups below (cancel-in-progress: false —
+# never abandon a half-synced tree or half-pulled image mid-restart).
+# test/image/release/tray stay parallel.
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing vX.Y.Z tag to republish (release lane only)"
+        required: false
+        default: ""
+        type: string
+      promote_latest:
+        description: "Promote this republish to latest"
+        required: false
+        default: false
+        type: boolean
+      tray_publish:
+        description: "Upload tray binary to the tray-binaries release (tray lane only)"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  # Shared regression gate for both deploy lanes: the suite is NOT expected
+  # to be all-green — verify-no-regression.mjs against
+  # tests/__baseline__/known-fails.txt is the real pass/fail signal.
+  test:
+    name: Test
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      # node_modules must include devDependencies: the Next build resolves
+      # @tailwindcss/postcss, which lives in devDependencies. setup-bun does
+      # not inherit NODE_ENV=production, so this installs them by default.
+      - name: Install deps
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        run: bun run build
+
+      # vitest is a devDependency of tests/package.json (NOT the root), so it
+      # must be installed and invoked from tests/. Running `npx vitest` at the
+      # repo root finds no binary and fails.
+      - name: Install test deps
+        working-directory: tests
+        run: bun install --frozen-lockfile || bun install
+
+      - name: Run test suite
+        working-directory: tests
+        # `|| true`: the suite exits non-zero on known failures; the regression
+        # gate below is the real pass/fail signal.
+        # Write the report to the runner temp dir, not the repo — otherwise the
+        # JSON lands in tests/ and gets committed by the next push.
+        run: npx vitest run --reporter=json --outputFile="$RUNNER_TEMP/results.json" || true
+
+      - name: Check for regressions
+        run: |
+          node tests/__baseline__/verify-no-regression.mjs "$RUNNER_TEMP/results.json"
+
+      - name: Run node:test suites
+        # These use node:test, not vitest: vitest collects them by glob, runs none
+        # of their assertions, and fails the file with "No test suite found", so
+        # they are excluded in vitest.config.js and executed here instead.
+        # Without this step they are not gated by anything.
+        working-directory: tests
+        run: |
+          for f in unit/kimchi.test.js unit/kimchi-strip-reasoning.test.js \
+                   unit/cline-auth.test.js; do
+            node --test --test-reporter=tap "$f"
+          done
+
+      - name: Verify provider/alias/oauth baselines
+        run: |
+          node tests/__baseline__/verify-providers.mjs
+          node tests/__baseline__/verify-oauth-urls.mjs
+          node tests/__baseline__/verify-alias.mjs
+
+  # Deploy 9router to the orange VPS as a plain Next.js app (native systemd
+  # unit at /opt/9router, port 4014).
+  #
+  # The file list below mirrors flake.nix's installPhase exactly:
+  #   .next/standalone/* + .next + open-sse + src + public + custom-server.js
+  #   + package.json
+  # node_modules stays on the host and is only reinstalled when the lockfile
+  # changes, so a deploy ships ~40 MB instead of a full reinstall.
+  #
+  # Data is out of scope by design: the unit runs as user 9router with
+  # WorkingDirectory=/var/lib/9router, which this job never writes to. Secrets
+  # come from Bitwarden via the bws-exec wrapper in the unit's ExecStart.
+  deploy-orange:
+    name: Deploy to orange VPS
+    if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || (inputs.release_tag == '' && inputs.tray_publish != true))
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: 9router-deploy
+      cancel-in-progress: false
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      # App tree on the VPS. /var/lib/9router (unit WorkingDirectory, holds the
+      # SQLite data) is deliberately NOT this path.
+      APP_DIR: /opt/9router/current
+      ROLLBACK_TAR: /opt/9router/rollback-prev.tgz
+      # Port 9router listens on (systemd unit bws-exec -> node custom-server.js).
+      PORT: 4014
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install deps
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        run: bun run build
+
+      # Assemble exactly what flake.nix used to copy into $out/lib/9router:
+      # the standalone server, the full .next build, the runtime source trees
+      # and custom-server.js. node_modules is left out on purpose — the host
+      # keeps its own and only refreshes it when bun.lock changes.
+      - name: Assemble release
+        run: |
+          set -euo pipefail
+          R=/tmp/9router-release
+          rm -rf "$R"
+          mkdir -p "$R"
+          cp custom-server.js package.json bun.lock "$R"/
+          cp -r src open-sse public "$R"/
+          cp .next/standalone/server.js "$R/server.js"
+          # Anchor both excludes at the transfer root: .next/standalone is a
+          # partial copy and .next/cache is build cache — neither belongs on
+          # the host (its current tree has neither).
+          rsync -a --exclude='/standalone' --exclude='/cache' .next/ "$R/.next/"
+          tar -czf /tmp/9router-release.tgz -C "$R" .
+          echo "release: $(du -h /tmp/9router-release.tgz | cut -f1), $(find "$R" -type f | wc -l) files"
+
+      - name: Setup SSH key
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          sed -i 's/\r$//' ~/.ssh/id_ed25519
+          ssh-keygen -y -f ~/.ssh/id_ed25519 >/dev/null 2>&1 || { echo "SSH key invalid"; exit 1; }
+          # ssh-keyscan intermittently gets "Connection closed by remote host"
+          # (the host rate-limits concurrent handshakes) and returns non-zero,
+          # which `set -euo pipefail` turns into a hard deploy failure before a
+          # single byte is pushed. Retry, and only insist on a non-empty
+          # known_hosts — the key type is irrelevant, ssh checks the host key.
+          for attempt in 1 2 3 4 5; do
+            if ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && \
+               [ -s ~/.ssh/known_hosts ]; then
+              break
+            fi
+            if [ "$attempt" = "5" ]; then
+              echo "::error::could not read host key for $VPS_HOST after 5 attempts"
+              exit 1
+            fi
+            sleep $((attempt * 3))
+          done
+
+      - name: Deploy to VPS
+        run: |
+          set -euo pipefail
+          SHORT_SHA="${GITHUB_SHA::7}"
+
+          # Decide BEFORE syncing: once the new tree lands, the host's copies
+          # are ours, so comparing afterwards could never detect a change.
+          # A missing bun.lock on the host falls back to package.json.
+          echo "=== Compare dependency manifests ==="
+          ssh "$VPS_USER@$VPS_HOST" "cat $APP_DIR/package.json 2>/dev/null || true" > /tmp/host-package.json
+          ssh "$VPS_USER@$VPS_HOST" "cat $APP_DIR/bun.lock 2>/dev/null || true" > /tmp/host-bun.lock
+          NEED_INSTALL=0
+          if [ -s /tmp/host-package.json ] && ! cmp -s package.json /tmp/host-package.json; then
+            NEED_INSTALL=1
+          fi
+          if [ -s /tmp/host-bun.lock ] && ! cmp -s bun.lock /tmp/host-bun.lock; then
+            NEED_INSTALL=1
+          fi
+          echo "dependency manifests changed: $NEED_INSTALL (0 = reuse the host's node_modules)"
+
+          echo "=== Backup current install (node_modules excluded) ==="
+          ssh "$VPS_USER@$VPS_HOST" \
+            "sudo tar czf $ROLLBACK_TAR --exclude=node_modules -C $APP_DIR . && sudo ls -lh $ROLLBACK_TAR"
+
+          echo "=== Ship release $SHORT_SHA ==="
+          cat /tmp/9router-release.tgz | ssh "$VPS_USER@$VPS_HOST" \
+            "sudo rm -rf /tmp/9router-stage && sudo mkdir -p /tmp/9router-stage && sudo tar xzf - -C /tmp/9router-stage && echo staged"
+
+          echo "=== Sync into $APP_DIR ==="
+          # --delete drops build artefacts that no longer exist; the
+          # node_modules exclude keeps the host's install in place.
+          ssh "$VPS_USER@$VPS_HOST" \
+            "sudo rsync -a --delete --exclude=node_modules /tmp/9router-stage/ $APP_DIR/ && sudo rm -rf /tmp/9router-stage"
+
+          # node_modules is root-owned, so the install runs as root with bun's
+          # absolute path (sudo's secure_path must not be trusted to find it).
+          if [ "$NEED_INSTALL" = "1" ]; then
+            echo "=== bun install on the VPS ==="
+            ssh "$VPS_USER@$VPS_HOST" "cd $APP_DIR && sudo HOME=/root /usr/local/bin/bun install --frozen-lockfile"
+          else
+            echo "=== manifests unchanged -> reusing host node_modules ==="
+          fi
+
+          echo "=== Restarting service ==="
+          ssh "$VPS_USER@$VPS_HOST" "sudo systemctl restart 9router"
+          ssh "$VPS_USER@$VPS_HOST" "systemctl show -p ActiveState --value 9router"
+
+          echo "Deployed: $SHORT_SHA -> $APP_DIR"
+
+      # Health check. /v1/models requires auth (401 without a key), so probe it
+      # from INSIDE the VPS over loopback where a key is unnecessary — and
+      # accept any HTTP response as "the server is up".
+      - name: Verify service
+        run: |
+          for i in $(seq 1 10); do
+            code=$(ssh "$VPS_USER@$VPS_HOST" \
+              "curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:${{ env.PORT }}/v1/models || echo 000")
+            echo "attempt $i: /v1/models -> $code"
+            case "$code" in
+              200|401) echo "::notice::9router is serving on 127.0.0.1:${{ env.PORT }} (HTTP $code)"; exit 0 ;;
+            esac
+            sleep 3
+          done
+          echo "::error::9router did not answer /v1/models on the VPS in time"
+          exit 1
+
+      # Anything failing above (ship, sync, restart, health) restores the
+      # previous tree and restarts, so a bad build leaves prod as it was.
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "::warning::Deploy failed — restoring previous install"
+          ssh "$VPS_USER@$VPS_HOST" \
+            "if [ -f $ROLLBACK_TAR ]; then \
+               sudo rm -rf /tmp/9router-rollback && sudo mkdir -p /tmp/9router-rollback && \
+               sudo tar xzf $ROLLBACK_TAR -C /tmp/9router-rollback && \
+               sudo rsync -a --delete --exclude=node_modules /tmp/9router-rollback/ $APP_DIR/ && \
+               sudo rm -rf /tmp/9router-rollback && \
+               sudo systemctl restart 9router && echo rolled-back; \
+             else echo no-backup-present; fi"
+
+  # Container image for the imrnes lane (linux/amd64 only: imrnes is x86_64).
+  # Runs in parallel with test; deploy-imrnes gates on both.
+  image:
+    name: Build image
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      IMAGE: ghcr.io/asepharyana/9router
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve tag
+        id: meta
+        run: |
+          set -euo pipefail
+          tag="$(node -p "require('./package.json').version")"
+          echo "Building ${tag} from $(git rev-parse --short HEAD)"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.meta.outputs.tag }}
+            ${{ env.IMAGE }}:latest
+          build-args: |
+            APP_VERSION=${{ steps.meta.outputs.tag }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  smoke:
+    name: Smoke-test image
+    if: github.ref == 'refs/heads/master'
+    needs: image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      IMAGE: ghcr.io/asepharyana/9router
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run image and wait for health
+        env:
+          IMAGE: ${{ env.IMAGE }}
+          TAG: ${{ needs.image.outputs.tag }}
+        run: |
+          set -Eeuo pipefail
+          container="9router-smoke-${GITHUB_RUN_ID}"
+          trap 'docker logs "$container" || true; docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+
+          docker run --detach --name "$container" \
+            --publish 2028:2028 \
+            -e PORT=2028 -e HOSTNAME=0.0.0.0 -e DATA_DIR=/app/data \
+            "${IMAGE}:${TAG}"
+
+          for attempt in {1..45}; do
+            if body="$(curl --fail --silent --show-error http://127.0.0.1:2028/api/health)"; then
+              echo "health OK: ${body}"
+              exit 0
+            fi
+            (( attempt % 5 == 0 )) && echo "waiting for health (${attempt}/45)" >&2
+            sleep 2
+          done
+
+          echo "health check never returned 200" >&2
+          exit 1
+
+  # Ship the container to the imrnes VPS behind https://omniroute.imrnes.team/.
+  # 9router serves dashboard AND /v1 on a single port, so it binds 2028;
+  # 20128/20129 stay bound by OmniRoute (Hermes fallback) during migration.
+  deploy-imrnes:
+    name: Deploy to imrnes VPS
+    if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || (inputs.release_tag == '' && inputs.tray_publish != true))
+    # Gated on test as well as image+smoke: a regression in this push must
+    # not reach the production hostname.
+    needs: [test, image, smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: 9router-docker-imrnes
+      cancel-in-progress: false
+    env:
+      IMAGE: ghcr.io/asepharyana/9router
+      # Dedicated secrets, NOT the shared VPS_HOST/VPS_USER (those point at
+      # orange). A shared secret pointing at the wrong host previously sent
+      # this deploy to orange, where it failed only by luck.
+      VPS_HOST: ${{ secrets.IMRNES_HOST }}
+      VPS_USER: ${{ secrets.IMRNES_USER }}
+      PORT: 2028
+      DEPLOY_DIR: /root/9router-docker
+      PUBLIC_HOST: omniroute.imrnes.team
+    steps:
+      - name: Setup SSH key
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # CI secrets are stored with CRLF endings; a stray \r makes ssh reject
+          # the key with an unhelpful "invalid format" error.
+          sed -i 's/\r$//' ~/.ssh/id_ed25519
+          ssh-keygen -y -f ~/.ssh/id_ed25519 >/dev/null
+          # ssh-keyscan intermittently gets "Connection closed by remote host"
+          # (the host rate-limits concurrent handshakes) and returns non-zero.
+          # Retry, and only insist on a non-empty known_hosts.
+          for attempt in 1 2 3 4 5; do
+            if ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && \
+               [ -s ~/.ssh/known_hosts ]; then
+              break
+            fi
+            if [ "$attempt" = "5" ]; then
+              echo "::error::could not read host key for $VPS_HOST after 5 attempts"
+              exit 1
+            fi
+            sleep $((attempt * 3))
+          done
+
+      # Guard against deploying to the wrong machine (orange vs imrnes).
+      # Assert the host identity before writing anything to it.
+      - name: Verify target host
+        run: |
+          set -euo pipefail
+          expected="VM-8-131-ubuntu"
+          actual="$(ssh -T "$VPS_USER@$VPS_HOST" 'hostname')"
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::Refusing to deploy: expected host '$expected' but $VPS_HOST is '$actual'."
+            echo "Check the IMRNES_HOST / IMRNES_USER secrets."
+            exit 1
+          fi
+          echo "Target confirmed: $actual ($VPS_HOST)"
+
+      # The GHCR package is private: a GITHUB_TOKEN can push but cannot change
+      # package visibility, so the VPS gets its own read-only registry
+      # credential, written to a root-only docker config. Never printed.
+      - name: Authorize VPS to pull from GHCR
+        env:
+          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GHCR_READ_TOKEN" ]; then
+            echo "::error::Secret GHCR_READ_TOKEN is not set."
+            echo "Create a classic PAT for asepharyana with scope 'read:packages' and add it as GHCR_READ_TOKEN."
+            exit 1
+          fi
+          auth="$(printf '%s' "asepharyana:$GHCR_READ_TOKEN" | base64 -w0)"
+
+          # $auth expands HERE, inside the double-quoted ssh argument, so the
+          # base64 credential travels over the encrypted channel instead of
+          # through the runner log. The JSON body below is a quoted heredoc, so
+          # nothing on the wire is re-expanded by the remote shell.
+          ssh -T "$VPS_USER@$VPS_HOST" "umask 077 && mkdir -p /root/.docker && cat > /root/.docker/config.json" <<JSON
+          {"auths":{"ghcr.io":{"auth":"$auth"}}}
+          JSON
+
+          ssh -T "$VPS_USER@$VPS_HOST" "chmod 600 /root/.docker/config.json && echo 'docker credential installed'"
+
+      # Runs BEFORE the compose file is written: docker compose reads .env from
+      # the project directory to interpolate ${JWT_SECRET} etc., and fails on
+      # a missing .env. Idempotent — secrets are generated exactly once;
+      # rotating them on redeploy would invalidate stored credentials.
+      # 'REMOTE' is quoted so $(openssl ...) runs on the VPS, not here.
+      - name: Bootstrap secrets
+        run: |
+          set -euo pipefail
+          ssh -T "$VPS_USER@$VPS_HOST" bash -s <<'REMOTE'
+          set -euo pipefail
+          mkdir -p /root/9router-docker
+          cd /root/9router-docker
+
+          if [ -f .env ]; then
+            echo "Reusing existing .env (secrets preserved)"
+          else
+            umask 077
+            {
+              echo "JWT_SECRET=$(openssl rand -hex 32)"
+              echo "API_KEY_SECRET=$(openssl rand -hex 32)"
+              echo "MACHINE_ID_SALT=$(openssl rand -hex 16)"
+              # Human-readable so the operator can actually log in; the other
+              # three are never read by a human. Change it from the dashboard
+              # Profile page after the first login.
+              #
+              # tr -dc strips the base64 newline, and head -c 16 then takes a
+              # fixed-length alphanumeric password. Reading base64 with
+              # `head -c 20` would embed a literal \n in the .env value.
+              echo "INITIAL_PASSWORD=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 16)"
+            } > .env
+            chmod 600 .env
+            echo "Generated .env with fresh secrets"
+            echo "  dashboard login password: $(grep '^INITIAL_PASSWORD=' .env | cut -d= -f2)"
+          fi
+          REMOTE
+
+      # Unquoted heredoc on purpose: ${IMAGE_TAG} must expand HERE (runner) so
+      # the file lands with a concrete tag. The secret names are escaped so they
+      # survive to the VPS and are expanded by docker compose from .env instead.
+      - name: Write compose file
+        env:
+          IMAGE_TAG: ${{ needs.image.outputs.tag }}
+        run: |
+          set -euo pipefail
+          ssh -T "$VPS_USER@$VPS_HOST" "cat > '$DEPLOY_DIR/docker-compose.yml'" <<COMPOSE
+          services:
+            9router:
+              image: ${{ env.IMAGE }}:${IMAGE_TAG}
+              container_name: 9router
+              restart: unless-stopped
+              stop_grace_period: 30s
+              ports:
+                - "$PORT:$PORT"
+              volumes:
+                - ./data:/app/data
+              environment:
+                PORT: "$PORT"
+                HOSTNAME: "0.0.0.0"
+                DATA_DIR: /app/data
+                NODE_ENV: production
+                NEXT_TELEMETRY_DISABLED: "1"
+                # Interpolated by docker compose from .env on the VPS.
+                JWT_SECRET: \${JWT_SECRET}
+                API_KEY_SECRET: \${API_KEY_SECRET}
+                MACHINE_ID_SALT: \${MACHINE_ID_SALT}
+                INITIAL_PASSWORD: \${INITIAL_PASSWORD}
+                # The dashboard is served over HTTPS at the public hostname, so
+                # the session cookie must be marked Secure.
+                AUTH_COOKIE_SECURE: "true"
+                # NOTE: /v1 is NOT open. 9router gates /v1 on an API key created
+                # in the dashboard, regardless of REQUIRE_API_KEY — that env var
+                # is listed in .env.example but is never read by the v1 code
+                # path, so setting it is misleading. Create one at
+                # https://omniroute.imrnes.team/dashboard/keys after first deploy.
+                BASE_URL: https://$PUBLIC_HOST
+                NEXT_PUBLIC_BASE_URL: https://$PUBLIC_HOST
+          COMPOSE
+
+      # Single service: 9router serves both /v1 and the dashboard on 2028.
+      # The Let's Encrypt cert for this host already exists in acme.json.
+      - name: Write Traefik router
+        run: |
+          set -euo pipefail
+          ssh -T "$VPS_USER@$VPS_HOST" "cat > /data/coolify/proxy/dynamic/9router.yaml" <<'TRAEFIK'
+          http:
+            routers:
+              9router-router:
+                rule: "Host(`omniroute.imrnes.team`)"
+                service: 9router-service
+                entryPoints:
+                  - https
+                tls:
+                  certResolver: letsencrypt
+            services:
+              9router-service:
+                loadBalancer:
+                  servers:
+                    - url: "http://host.docker.internal:2028"
+          TRAEFIK
+
+          # Roll back instantly if Traefik rejects the file — a malformed router
+          # takes the whole dynamic config down, not just this one host.
+          ssh -T "$VPS_USER@$VPS_HOST" \
+            "docker logs --since 30s coolify-proxy 2>&1 | tail -5"
+
+      - name: Pull and start
+        run: |
+          set -euo pipefail
+          ssh -T "$VPS_USER@$VPS_HOST" bash -s <<'REMOTE'
+          set -euo pipefail
+          cd /root/9router-docker
+          docker compose config --quiet      # fail fast on bad interpolation
+          docker compose pull
+          docker compose up -d
+          docker compose ps
+          REMOTE
+
+      - name: Verify container serves
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 20); do
+            code="$(ssh -T "$VPS_USER@$VPS_HOST" "curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:$PORT/api/health || echo 000")"
+            echo "attempt ${attempt}: /api/health -> ${code}"
+            if [ "$code" = "200" ]; then
+              echo "9router is serving on imrnes:$PORT"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "::error::9router did not answer /api/health on imrnes in time"
+          ssh -T "$VPS_USER@$VPS_HOST" "cd $DEPLOY_DIR && docker compose logs --tail 50" || true
+          exit 1
+
+      # Proves the public hostname, the TLS cert, and the Traefik cutover all
+      # work from outside the VPS — the thing users actually depend on.
+      - name: Verify public URL
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 10); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "https://$PUBLIC_HOST/api/health" || echo 000)"
+            echo "attempt ${attempt}: https://$PUBLIC_HOST/api/health -> ${code}"
+            if [ "$code" = "200" ]; then
+              echo "Public URL is serving 9router"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::https://$PUBLIC_HOST/api/health did not return 200"
+          exit 1
+
+      - name: Summary
+        run: |
+          {
+            echo "### 9router deployed to imrnes"
+            echo "- Image: \`$IMAGE:${{ needs.image.outputs.tag }}\`"
+            echo "- Port: $PORT (OmniRoute still on 20128/20129)"
+            echo "- Public: https://$PUBLIC_HOST"
+            echo "- Manage: \`cd $DEPLOY_DIR && docker compose {ps,logs,restart}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Release lane: runs on v* tags (or dispatch with release_tag). Validates the
+  # tag against package.json versions, then builds per-arch images by digest.
+  release-prepare:
+    name: Validate release
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      commit: ${{ steps.release.outputs.commit }}
+      publish_dockerhub: ${{ steps.release.outputs.publish_dockerhub }}
+      promote_latest: ${{ steps.release.outputs.promote_latest }}
+      ghcr_image: ${{ steps.release.outputs.ghcr_image }}
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag || github.ref_name }}
+          fetch-depth: 1
+
+      - name: Validate tag and package versions
+        id: release
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          PROMOTE_LATEST_INPUT: ${{ inputs.promote_latest && 'true' || 'false' }}
+        run: |
+          node <<'NODE'
+          const fs = require("fs");
+          const { execFileSync } = require("child_process");
+
+          const tag = process.env.RELEASE_TAG || "";
+          const match = /^v((?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)$/.exec(tag);
+
+          if (tag.includes("+")) {
+            console.error(`Build metadata is not supported in Docker release tags: ${tag}`);
+            process.exit(1);
+          }
+
+          if (!match) {
+            console.error(`Expected a Docker-safe semver tag like v0.5.81 or v0.5.81-rc.1, received: ${tag || "<empty>"}`);
+            process.exit(1);
+          }
+
+          const version = match[1];
+          if (version.length > 128 || !/^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/.test(version)) {
+            console.error(`Version is not a valid Docker tag: ${version}`);
+            process.exit(1);
+          }
+
+          const prerelease = version.includes("-")
+            ? version.slice(version.indexOf("-") + 1).split(".")
+            : [];
+          for (const identifier of prerelease) {
+            if (/^\d+$/.test(identifier) && identifier.length > 1 && identifier.startsWith("0")) {
+              console.error(`Numeric prerelease identifiers cannot contain leading zeroes: ${identifier}`);
+              process.exit(1);
+            }
+          }
+
+          const rootVersion = require("./package.json").version;
+          const cliVersion = require("./cli/package.json").version;
+
+          if (rootVersion !== version) {
+            console.error(`package.json version ${rootVersion} does not match tag ${tag}`);
+            process.exit(1);
+          }
+
+          if (cliVersion !== version) {
+            console.error(`cli/package.json version ${cliVersion} does not match tag ${tag}`);
+            process.exit(1);
+          }
+
+          const commit = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+          const publishDockerHub = process.env.REPOSITORY === "decolua/9router";
+          const ghcrImage = `ghcr.io/${process.env.REPOSITORY.toLowerCase()}`;
+          const isPrerelease = version.includes("-");
+          const promoteLatest = (process.env.EVENT_NAME === "push" && !isPrerelease)
+            || process.env.PROMOTE_LATEST_INPUT === "true";
+          const output = process.env.GITHUB_OUTPUT;
+
+          fs.appendFileSync(output, `tag=${tag}\n`);
+          fs.appendFileSync(output, `version=${version}\n`);
+          fs.appendFileSync(output, `commit=${commit}\n`);
+          fs.appendFileSync(output, `publish_dockerhub=${publishDockerHub}\n`);
+          fs.appendFileSync(output, `promote_latest=${promoteLatest}\n`);
+          fs.appendFileSync(output, `ghcr_image=${ghcrImage}\n`);
+
+          console.log(`Validated ${tag} at ${commit}`);
+          console.log(`latest promotion: ${promoteLatest ? "enabled" : "disabled"}`);
+          NODE
+
+  release-build:
+    name: Build ${{ matrix.platform }}
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+    needs: release-prepare
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    env:
+      GHCR_IMAGE: ${{ needs.release-prepare.outputs.ghcr_image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            suffix: amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            suffix: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Check out release source at validated commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-prepare.outputs.commit }}
+          path: source
+          fetch-depth: 1
+
+      - name: Check out publishing Dockerfile
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: workflow
+          sparse-checkout: |
+            Dockerfile
+          fetch-depth: 1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push platform image by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: source
+          file: workflow/Dockerfile
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=${{ env.GHCR_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          build-args: |
+            APP_VERSION=${{ needs.release-prepare.outputs.version }}
+            ALPINE_MIRROR=${{ vars.ALPINE_MIRROR || 'dl-cdn.alpinelinux.org' }}
+            NPM_REGISTRY=${{ vars.NPM_REGISTRY || 'https://registry.npmjs.org/' }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ needs.release-prepare.outputs.commit }}
+            org.opencontainers.image.version=${{ needs.release-prepare.outputs.version }}
+          cache-from: type=gha,scope=9router-${{ matrix.suffix }}
+          cache-to: type=gha,mode=max,scope=9router-${{ matrix.suffix }}
+          provenance: false
+          sbom: false
+
+      - name: Smoke-test platform image before publishing digest artifact
+        env:
+          GHCR_IMAGE: ${{ env.GHCR_IMAGE }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+
+          container="9router-platform-smoke-${GITHUB_RUN_ID}-${{ matrix.suffix }}"
+          trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+
+          docker run --detach \
+            --name "$container" \
+            --platform "$PLATFORM" \
+            --publish 20128:20128 \
+            "${GHCR_IMAGE}@${IMAGE_DIGEST}"
+
+          for attempt in {1..45}; do
+            if curl --fail --silent --show-error http://127.0.0.1:20128/api/health; then
+              echo "${PLATFORM} health check passed"
+              exit 0
+            fi
+            if (( attempt % 5 == 0 )); then
+              echo "Waiting for ${PLATFORM} health check (${attempt}/45)" >&2
+            fi
+            sleep 2
+          done
+
+          echo "${PLATFORM} health check failed; container logs follow:" >&2
+          docker logs "$container" || true
+          exit 1
+
+      - name: Save image digest
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          test -n "$IMAGE_DIGEST"
+          mkdir -p "$RUNNER_TEMP/digests"
+          printf '%s\n' "$IMAGE_DIGEST" > "$RUNNER_TEMP/digests/${{ matrix.suffix }}.txt"
+
+      - name: Upload image digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.suffix }}
+          path: ${{ runner.temp }}/digests/${{ matrix.suffix }}.txt
+          if-no-files-found: error
+
+  release-publish:
+    name: Publish and verify manifest
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+    needs:
+      - release-prepare
+      - release-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      # Keep every release in one FIFO queue. A per-tag group would still allow
+      # an older release to finish after a newer one and move latest backwards.
+      group: docker-publish-${{ github.repository }}
+      cancel-in-progress: false
+    env:
+      GHCR_IMAGE: ${{ needs.release-prepare.outputs.ghcr_image }}
+    steps:
+      - name: Download platform digests
+        uses: actions/download-artifact@v4
+        with:
+          pattern: digests-*
+          path: ${{ runner.temp }}/digests
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and verify version manifest
+        env:
+          GHCR_IMAGE: ${{ env.GHCR_IMAGE }}
+          VERSION: ${{ needs.release-prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          digest_files=("$RUNNER_TEMP"/digests/*.txt)
+
+          if [[ "${#digest_files[@]}" -ne 2 ]]; then
+            echo "Expected two platform digests, found ${#digest_files[@]}" >&2
+            exit 1
+          fi
+
+          sources=()
+          for digest_file in "${digest_files[@]}"; do
+            digest="$(tr -d '\n' < "$digest_file")"
+            if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "Invalid image digest in $digest_file: $digest" >&2
+              exit 1
+            fi
+            sources+=("${GHCR_IMAGE}@${digest}")
+          done
+
+          docker buildx imagetools create \
+            --tag "${GHCR_IMAGE}:${VERSION}" \
+            "${sources[@]}"
+
+          docker buildx imagetools inspect "${GHCR_IMAGE}:${VERSION}" | tee "$RUNNER_TEMP/version-manifest.txt"
+          docker buildx imagetools inspect --raw "${GHCR_IMAGE}:${VERSION}" > "$RUNNER_TEMP/version-manifest.json"
+
+          expected=$'linux/amd64\nlinux/arm64'
+          actual="$(jq -r '[.manifests[] | select(.platform != null and .platform.os != null and .platform.architecture != null) | "\(.platform.os)/\(.platform.architecture)"] | sort | .[]' "$RUNNER_TEMP/version-manifest.json")"
+          if [[ "$actual" != "$expected" ]]; then
+            echo "Version manifest platforms do not match exactly:" >&2
+            printf '%s\n' "$actual" >&2
+            exit 1
+          fi
+
+      - name: Smoke-test resolved version manifest
+        env:
+          GHCR_IMAGE: ${{ env.GHCR_IMAGE }}
+          VERSION: ${{ needs.release-prepare.outputs.version }}
+        run: |
+          set -Eeuo pipefail
+          container="9router-manifest-smoke-${GITHUB_RUN_ID}"
+          trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+
+          docker run --detach \
+            --name "$container" \
+            --platform linux/amd64 \
+            --publish 20128:20128 \
+            "${GHCR_IMAGE}:${VERSION}"
+
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error http://127.0.0.1:20128/api/health; then
+              echo "Resolved version manifest health check passed"
+              exit 0
+            fi
+            if (( attempt % 5 == 0 )); then
+              echo "Waiting for resolved manifest health check (${attempt}/30)" >&2
+            fi
+            sleep 2
+          done
+
+          echo "Resolved version manifest health check failed; container logs follow:" >&2
+          docker logs "$container" || true
+          exit 1
+
+      - name: Log in to Docker Hub
+        if: needs.release-prepare.outputs.publish_dockerhub == 'true'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Publish version image to Docker Hub
+        if: needs.release-prepare.outputs.publish_dockerhub == 'true'
+        env:
+          DOCKERHUB_IMAGE: decolua/9router
+          GHCR_IMAGE: ${{ env.GHCR_IMAGE }}
+          VERSION: ${{ needs.release-prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create \
+            --tag "${DOCKERHUB_IMAGE}:${VERSION}" \
+            "${GHCR_IMAGE}:${VERSION}"
+
+          docker buildx imagetools inspect "${DOCKERHUB_IMAGE}:${VERSION}" | tee "$RUNNER_TEMP/dockerhub-version-manifest.txt"
+          docker buildx imagetools inspect --raw "${DOCKERHUB_IMAGE}:${VERSION}" > "$RUNNER_TEMP/dockerhub-version-manifest.json"
+
+          expected=$'linux/amd64\nlinux/arm64'
+          actual="$(jq -r '[.manifests[] | select(.platform != null and .platform.os != null and .platform.architecture != null) | "\(.platform.os)/\(.platform.architecture)"] | sort | .[]' "$RUNNER_TEMP/dockerhub-version-manifest.json")"
+          if [[ "$actual" != "$expected" ]]; then
+            echo "Docker Hub version manifest platforms do not match exactly:" >&2
+            printf '%s\n' "$actual" >&2
+            exit 1
+          fi
+
+      - name: Record latest promotion policy
+        env:
+          PROMOTE_LATEST: ${{ needs.release-prepare.outputs.promote_latest }}
+          VERSION: ${{ needs.release-prepare.outputs.version }}
+        run: |
+          if [[ "$PROMOTE_LATEST" == "true" ]]; then
+            echo "### Latest promotion" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Policy: promote \`latest\` after the verified ${VERSION} manifest." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Latest promotion" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Policy: leave \`latest\` unchanged; this is a numbered-tag-only manual republish." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Promote verified version to latest
+        if: needs.release-prepare.outputs.promote_latest == 'true'
+        env:
+          DOCKERHUB_IMAGE: decolua/9router
+          GHCR_IMAGE: ${{ env.GHCR_IMAGE }}
+          PUBLISH_DOCKERHUB: ${{ needs.release-prepare.outputs.publish_dockerhub }}
+          VERSION: ${{ needs.release-prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          docker buildx imagetools create \
+            --tag "${GHCR_IMAGE}:latest" \
+            "${GHCR_IMAGE}:${VERSION}"
+
+          if [[ "$PUBLISH_DOCKERHUB" == "true" ]]; then
+            docker buildx imagetools create \
+              --tag "${DOCKERHUB_IMAGE}:latest" \
+              "${GHCR_IMAGE}:${VERSION}"
+          fi
+
+          docker buildx imagetools inspect "${GHCR_IMAGE}:latest" | tee "$RUNNER_TEMP/ghcr-latest-manifest.txt"
+          docker buildx imagetools inspect --raw "${GHCR_IMAGE}:latest" > "$RUNNER_TEMP/ghcr-latest-manifest.json"
+
+          expected=$'linux/amd64\nlinux/arm64'
+          actual="$(jq -r '[.manifests[] | select(.platform != null and .platform.os != null and .platform.architecture != null) | "\(.platform.os)/\(.platform.architecture)"] | sort | .[]' "$RUNNER_TEMP/ghcr-latest-manifest.json")"
+          if [[ "$actual" != "$expected" ]]; then
+            echo "GHCR latest manifest platforms do not match exactly:" >&2
+            printf '%s\n' "$actual" >&2
+            exit 1
+          fi
+
+          if [[ "$PUBLISH_DOCKERHUB" == "true" ]]; then
+            docker buildx imagetools inspect "${DOCKERHUB_IMAGE}:latest" | tee "$RUNNER_TEMP/dockerhub-latest-manifest.txt"
+            docker buildx imagetools inspect --raw "${DOCKERHUB_IMAGE}:latest" > "$RUNNER_TEMP/dockerhub-latest-manifest.json"
+            actual="$(jq -r '[.manifests[] | select(.platform != null and .platform.os != null and .platform.architecture != null) | "\(.platform.os)/\(.platform.architecture)"] | sort | .[]' "$RUNNER_TEMP/dockerhub-latest-manifest.json")"
+            if [[ "$actual" != "$expected" ]] ; then
+              echo "Docker Hub latest manifest platforms do not match exactly:" >&2
+              printf '%s\n' "$actual" >&2
+              exit 1
+            fi
+          fi
+
+          {
+            echo "### Published Docker images"
+            echo "- GHCR: \`${GHCR_IMAGE}:${VERSION}\`"
+            echo "- GHCR latest: \`${GHCR_IMAGE}:latest\`"
+            if [[ "$PUBLISH_DOCKERHUB" == "true" ]]; then
+              echo "- Docker Hub: \`${DOCKERHUB_IMAGE}:${VERSION}\`"
+              echo "- Docker Hub latest: \`${DOCKERHUB_IMAGE}:latest\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Native macOS tray binary (arm64) for Apple Silicon users. Manual-only via
+  # the tray_publish dispatch input: the artifact's sha256 is pinned in
+  # cli/hooks/trayRuntime.js and verified on every download, so a new build is
+  # only publishable together with a matching pin.
+  tray:
+    name: Build darwin/arm64 tray
+    if: github.event_name == 'workflow_dispatch' && inputs.tray_publish == true
+    runs-on: macos-15
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      # Pinned because -trimpath only makes the build reproducible for a given Go
+      # version and macOS SDK. Bumping this changes the sha256.
+      GO_VERSION: "1.27.1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          # The Go module lives in a temp clone of the upstream repo, so there is
+          # no go.sum at the workspace root for setup-go's cache to key on.
+          cache: false
+
+      - name: Record SDK provenance
+        run: |
+          {
+            echo "runner macOS: $(sw_vers -productVersion)"
+            echo "Xcode:        $(xcodebuild -version | head -1)"
+            echo "clang:        $(clang --version | head -1)"
+            echo "Go:           $(go version)"
+          } | tee sdk-provenance.txt
+
+      - name: Build
+        run: node cli/scripts/buildTrayArm64.js
+
+      - name: Compare against pinned checksum
+        id: sha
+        run: |
+          BUILT=$(shasum -a 256 cli/.tray-build/tray_darwin_arm64 | cut -d' ' -f1)
+          # Whitespace-tolerant, and a missing constant must fail loudly: a null
+          # match would otherwise surface as an opaque TypeError from [1].
+          PINNED=$(node -e '
+            const m = require("fs").readFileSync("cli/hooks/trayRuntime.js", "utf8")
+              .match(/ARM64_TRAY_SHA256\s*=\s*"([0-9a-f]{64})"/);
+            if (!m) { console.error("::error::ARM64_TRAY_SHA256 not found in cli/hooks/trayRuntime.js"); process.exit(1); }
+            process.stdout.write(m[1]);
+          ')
+          {
+            echo "built=$BUILT"
+            echo "pinned=$PINNED"
+            if [ "$BUILT" = "$PINNED" ]; then echo "match=true"; else echo "match=false"; fi
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Write job summary
+        run: |
+          {
+            echo "### tray_darwin_arm64"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| built sha256  | \`${{ steps.sha.outputs.built }}\` |"
+            echo "| pinned sha256 | \`${{ steps.sha.outputs.pinned }}\` |"
+            echo "| match         | ${{ steps.sha.outputs.match }} |"
+            echo ""
+            echo '```'
+            cat sdk-provenance.txt
+            echo '```'
+            echo ""
+            if [ "${{ steps.sha.outputs.match }}" = "true" ]; then
+              echo "Pin already matches — safe to re-run with \`tray_publish=true\`."
+            else
+              echo "⚠️ Pin does **not** match. To publish this build, set \`ARM64_TRAY_SHA256\`"
+              echo "in \`cli/hooks/trayRuntime.js\` to the built sha256 above and land that"
+              echo "change first. Publishing without it makes every Apple Silicon client fail"
+              echo "checksum verification and fall back to the Rosetta binary."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Uploaded before the mismatch gate below, so a publish run that fails on a
+      # checksum mismatch still leaves the bytes downloadable — that is exactly
+      # the run where a maintainer needs them to verify the new sha256.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tray_darwin_arm64
+          path: |
+            cli/.tray-build/tray_darwin_arm64
+            sdk-provenance.txt
+
+      - name: Refuse to publish on checksum mismatch
+        if: ${{ steps.sha.outputs.match != 'true' }}
+        run: |
+          echo "::error::publish requested but built sha256 != ARM64_TRAY_SHA256"
+          echo "  built:  ${{ steps.sha.outputs.built }}"
+          echo "  pinned: ${{ steps.sha.outputs.pinned }}"
+          echo "Update cli/hooks/trayRuntime.js and land it before publishing."
+          exit 1
+
+      - name: Publish to tray-binaries release
+        if: ${{ steps.sha.outputs.match == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Clients fetch from the hardcoded ARM64_TRAY_URL, so publishing from a
+          # different repo would gate an asset stream nobody downloads and silently
+          # decouple the sha pin from the bytes Apple Silicon users execute.
+          URL_REPO=$(node -e '
+            const m = require("fs").readFileSync("cli/hooks/trayRuntime.js", "utf8")
+              .match(/"https:\/\/github\.com\/([^\/"]+\/[^\/"]+)\/releases\/download\/tray-binaries\/tray_darwin_arm64"/);
+            if (!m) { console.error("::error::ARM64_TRAY_URL not found in cli/hooks/trayRuntime.js"); process.exit(1); }
+            process.stdout.write(m[1]);
+          ')
+          if [ "${{ github.repository }}" != "$URL_REPO" ]; then
+            echo "::error::publishing to ${{ github.repository }}, but ARM64_TRAY_URL points clients at $URL_REPO"
+            echo "Repoint ARM64_TRAY_URL in cli/hooks/trayRuntime.js at this repo, or run the publish from $URL_REPO."
+            exit 1
+          fi
+
+          # gh release upload does not create the release, so bootstrap it on the
+          # first publish run rather than failing with "release not found".
+          if ! gh release view tray-binaries >/dev/null 2>&1; then
+            echo "Release 'tray-binaries' does not exist yet — creating it"
+            gh release create tray-binaries --latest=false \
+              --title "Native macOS tray binaries" \
+              --notes "Built by .github/workflows/ci.yml. Provenance and the pinned sha256 live in that workflow and in cli/hooks/trayRuntime.js (ARM64_TRAY_SHA256)."
+          fi
+
+          gh release upload tray-binaries cli/.tray-build/tray_darwin_arm64 --clobber
+
+          echo "Uploaded. Verifying public download URL..."
+          URL="https://github.com/${{ github.repository }}/releases/download/tray-binaries/tray_darwin_arm64"
+          GOT=""
+          for attempt in 1 2 3; do
+            if curl -fsSL --max-time 60 -o /tmp/verify "$URL"; then
+              GOT=$(shasum -a 256 /tmp/verify | cut -d' ' -f1)
+              if [ "$GOT" = "${{ steps.sha.outputs.built }}" ]; then break; fi
+            fi
+            # A just-uploaded asset can 404 or serve stale bytes until the CDN catches up.
+            echo "attempt $attempt: got '${GOT:-<download failed>}' — retrying in 15s"
+            sleep 15
+          done
+          if [ "$GOT" != "${{ steps.sha.outputs.built }}" ]; then
+            echo "::error::downloaded asset sha256 '${GOT:-<none>}' != built ${{ steps.sha.outputs.built }} after 3 attempts"
+            exit 1
+          fi
+          echo "✅ $URL serves the expected bytes"

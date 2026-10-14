@@ -16,7 +16,7 @@ export default defineConfig({
     // via the **/*.test.js glob, runs none of their assertions, and then fails
     // the file with "No test suite found" — which reported 0 failed assertions
     // and therefore slipped past the regression gate. The three that still exist
-    // run explicitly in the "node:test suites" step of deploy.yml instead.
+    // run explicitly in the "node:test suites" step of ci.yml instead.
     // (tests/auth/saml.test.js was a subset of tests/unit/saml.test.js and has
     // been deleted; the vitest twin covers every function it did.)
     exclude: [

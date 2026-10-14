@@ -1,5 +1,18 @@
 # Unreleased
 
+### Chore: consolidate CI into one branching workflow
+
+Four workflows (`deploy.yml`, `docker-deploy-imrnes.yml`, `docker-publish.yml`,
+`tray-binaries.yml`) are merged into `.github/workflows/ci.yml`, branching by
+`needs` and `if` instead of by file:
+
+- `test` (single shared regression gate) fans out to `deploy-orange`, and to
+  `image` → `smoke` → `deploy-imrnes`; the release lane
+  (`release-prepare` → `release-build` → `release-publish`) runs on `v*` tags
+  or dispatch with `release_tag`; `tray` runs on dispatch with `tray_publish`.
+- Per-host deploy concurrency groups are kept at job level, and all steps are
+  verbatim copies — only triggers, conditions and env scoping changed.
+
 ### Fix: OpenCode Free 403 FreeTierError on the live free tier
 
 Live probes (2026-10-15) show the free tier moved from `/zen/v1/*` to

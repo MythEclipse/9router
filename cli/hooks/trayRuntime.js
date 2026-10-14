@@ -17,7 +17,12 @@ const crypto = require("crypto");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { getRuntimeDir, getRuntimeNodeModules, runNpmInstall, summarizeNpmError } = require("./sqliteRuntime");
+const {
+  getRuntimeDir,
+  getRuntimeNodeModules,
+  runNpmInstall,
+  summarizeNpmError,
+} = require("./sqliteRuntime");
 
 const SYSTRAY_PKG = "systray2";
 const SYSTRAY_VERSION = "2.1.4";
@@ -28,11 +33,12 @@ const LEGACY_SYSTRAY_PKG = "systray";
 // step re-derives this repo from the literal below and refuses to upload
 // anywhere else, so the integrity gate can't drift from what clients fetch.
 //
-// The asset is built by .github/workflows/tray-binaries.yml on a macos-15 runner.
+// The asset is built by .github/workflows/ci.yml (tray lane) on a macos-15 runner.
 // cgo compiles AppKit against the runner's SDK, so this value tracks that image:
 // when GitHub updates it the sha changes, the workflow refuses to publish, and
 // this constant must be bumped in the same change as the re-upload.
-const ARM64_TRAY_URL = "https://github.com/decolua/9router/releases/download/tray-binaries/tray_darwin_arm64";
+const ARM64_TRAY_URL =
+  "https://github.com/decolua/9router/releases/download/tray-binaries/tray_darwin_arm64";
 const ARM64_TRAY_SHA256 = "487e3c365aaa1eb6ad295bf3989711e975b52cee07505bf641c8559954881c81";
 const ARM64_RETRY_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
@@ -49,7 +55,7 @@ function cleanupLegacySystray({ silent = false } = {}) {
   //    __dirname here = <pkg root>/hooks → up 1 = pkg root
   const targets = [
     path.join(getRuntimeNodeModules(), LEGACY_SYSTRAY_PKG),
-    path.join(__dirname, "..", "node_modules", LEGACY_SYSTRAY_PKG)
+    path.join(__dirname, "..", "node_modules", LEGACY_SYSTRAY_PKG),
   ];
   for (const dir of targets) {
     if (fs.existsSync(dir)) {
@@ -83,11 +89,18 @@ function ensureRuntimeDir() {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   const pkgPath = path.join(dir, "package.json");
   if (!fs.existsSync(pkgPath)) {
-    fs.writeFileSync(pkgPath, JSON.stringify({
-      name: "9router-runtime",
-      version: "1.0.0",
-      private: true
-    }, null, 2));
+    fs.writeFileSync(
+      pkgPath,
+      JSON.stringify(
+        {
+          name: "9router-runtime",
+          version: "1.0.0",
+          private: true,
+        },
+        null,
+        2,
+      ),
+    );
   }
   return dir;
 }
@@ -107,7 +120,10 @@ function isArm64MachO(file) {
   } catch {
     return false;
   } finally {
-    if (fd !== null) try { fs.closeSync(fd); } catch {}
+    if (fd !== null)
+      try {
+        fs.closeSync(fd);
+      } catch {}
   }
 }
 
@@ -118,7 +134,10 @@ function isArm64MachO(file) {
 // with any other node-systray consumer.
 function bustSystrayCopyCache() {
   try {
-    fs.rmSync(path.join(os.homedir(), ".cache", "node-systray", SYSTRAY_VERSION), { recursive: true, force: true });
+    fs.rmSync(path.join(os.homedir(), ".cache", "node-systray", SYSTRAY_VERSION), {
+      recursive: true,
+      force: true,
+    });
   } catch {}
 }
 
@@ -138,7 +157,9 @@ function recentlyAttemptedArm64() {
 }
 
 function markArm64Attempt() {
-  try { fs.writeFileSync(arm64AttemptMarker(), String(Date.now())); } catch {}
+  try {
+    fs.writeFileSync(arm64AttemptMarker(), String(Date.now()));
+  } catch {}
 }
 
 // Cleared on success so the cooldown only ever throttles *failures*. Without
@@ -146,7 +167,9 @@ function markArm64Attempt() {
 // globally installed 9router older than this change, which shares the same
 // ~/.9router/runtime — would leave the user waiting out the cooldown.
 function clearArm64Attempt() {
-  try { fs.rmSync(arm64AttemptMarker(), { force: true }); } catch {}
+  try {
+    fs.rmSync(arm64AttemptMarker(), { force: true });
+  } catch {}
 }
 
 // Throws on any failure so the caller has a single error path.
@@ -155,10 +178,13 @@ function downloadFile(url, dest, timeoutSec) {
   // keeps the caller synchronous.
   const res = spawnSync("curl", ["-fsSL", "--max-time", String(timeoutSec), "-o", dest, url], {
     encoding: "utf8",
-    timeout: (timeoutSec + 5) * 1000
+    timeout: (timeoutSec + 5) * 1000,
   });
   if (res.status === 0 && fs.existsSync(dest)) return;
-  const detail = (res.stderr || res.error?.message || `curl exit ${res.status}`).trim().split("\n").pop();
+  const detail = (res.stderr || res.error?.message || `curl exit ${res.status}`)
+    .trim()
+    .split("\n")
+    .pop();
   throw new Error(detail || "download failed");
 }
 
@@ -202,10 +228,14 @@ function ensureArm64TrayBin() {
     console.log("✅ Native Apple Silicon tray installed");
     return { native: true, installed: true };
   } catch (e) {
-    try { fs.rmSync(tmp, { force: true }); } catch {}
+    try {
+      fs.rmSync(tmp, { force: true });
+    } catch {}
     console.warn("⚠️  Native tray download failed — falling back to the Intel binary");
     console.warn(`   Reason: ${e.message}`);
-    console.warn("   The Intel tray needs Rosetta 2: softwareupdate --install-rosetta --agree-to-license");
+    console.warn(
+      "   The Intel tray needs Rosetta 2: softwareupdate --install-rosetta --agree-to-license",
+    );
     return { native: false, error: e.message };
   }
 }

@@ -184,4 +184,4 @@ GHCR publishing uses the workflow's `GITHUB_TOKEN` with package write permission
 
 The optional repository variables `ALPINE_MIRROR` and `NPM_REGISTRY` can override the default package mirrors used by the CI Docker build.
 
-Workflow: `.github/workflows/docker-publish.yml`
+Workflow: `.github/workflows/ci.yml` (release lane)
