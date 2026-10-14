@@ -15,7 +15,7 @@ export default {
   transport: {
     baseUrl: "https://opencode.ai",
     headers: {
-      "x-opencode-client": "cli",
+      "x-opencode-client": "desktop",
     },
     forceStream: true,
     noAuth: true,
