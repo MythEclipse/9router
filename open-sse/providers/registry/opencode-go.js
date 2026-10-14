@@ -13,7 +13,7 @@ export default {
     textIcon: "OC",
     website: "https://opencode.ai/auth",
     notice: {
-      text: "OpenCode Go subscription: $5/mo (then 10/mo). Access to Kimi, GLM, Qwen, MiMo, MiniMax models.",
+      text: "OpenCode Go subscription: Go $10/mo or Go Plus $40/mo. Documented for third-party coding agents. LongCat 2.5 Preview Free, Step 5 Preview Free and Cat Jam Free are unlimited on Go.",
       apiKeyUrl: "https://opencode.ai/auth",
     },
   },
@@ -59,7 +59,14 @@ export default {
     { id: "minimax-m3", name: "MiniMax M3", supportedFormats: ["openai", "claude"] },
     { id: "minimax-m2.7", name: "MiniMax M2.7", supportedFormats: ["openai", "claude"] },
     { id: "minimax-m2.5", name: "MiniMax M2.5", supportedFormats: ["openai", "claude"] },
-    { id: "space-bunny-free", name: "Space Bunny Free", supportedFormats: ["openai", "claude"] },
+    { id: "space-bunny", name: "Space Bunny", supportedFormats: ["openai", "claude"] },
+    // Go's unlimited free models (https://opencode.ai/docs/go/). These three are
+    // the only free ids OpenCode documents as reachable on a Go subscription —
+    // every other `*-free` id belongs to the Console free tier, which 403s with
+    // FreeTierError off-OpenCode and must not be listed here.
+    { id: "longcat-2.5-preview-free", name: "LongCat 2.5 Preview Free", supportedFormats: ["openai"] },
+    { id: "step-5-preview-free", name: "Step 5 Preview Free", supportedFormats: ["openai"] },
+    { id: "cat-jam-free", name: "Cat Jam Free", supportedFormats: ["openai"] },
     { id: "qwen3.8-max", name: "Qwen 3.8 Max", supportedFormats: ["openai", "claude"] },
     { id: "qwen3.8-flash", name: "Qwen 3.8 Flash", supportedFormats: ["openai", "claude"] },
     { id: "qwen3.7-max", name: "Qwen 3.7 Max", supportedFormats: ["openai", "claude"] },

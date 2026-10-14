@@ -85,20 +85,40 @@ describe("OpenCode Free Session ID Format", () => {
     expect(translateSessionId(`  ${valid}  `)).toBe(valid);
   });
 
-  it("translates arbitrary sessions with valid inverted timestamp prefix (fixes #4780)", () => {
+  // Upstream Zen verifies the 12-hex prefix decodes to ~(Date.now() * 4096n + counter).
+// Only the low 48 bits survive the 6-byte encode, so the millisecond timestamp is
+// truncated and cannot be asserted — but the low 12 bits are the per-timestamp counter,
+// and THAT is the invariant worth pinning. The old assertion checked for a trailing 'fe',
+// which is ~0x01 and so only true when counter === 1: it passed for the first id minted in
+// a millisecond and turned red whenever another call in the same file bumped the counter.
+const decodeCounter = (id) => {
+  const decoded = (id.slice(4, 16).match(/../g) || [])
+    .reduce((acc, byte) => acc * 256n + BigInt(parseInt(byte, 16)), 0n);
+  return (2n ** 48n - 1n - decoded) % 0x1000n;
+};
+
+it("translates arbitrary sessions with valid inverted timestamp prefix (fixes #4780)", () => {
     const raw = "claude:non-opencode-uuid-12345";
     const translated = translateSessionId(raw, "claude");
     expect(translated).toMatch(OPENCODE_SESSION_RE);
     expect(translated).toHaveLength(30);
 
-    // Upstream Zen verifies the 12-hex prefix decodes to ~(BigInt(Date.now()) * 4096n + counter)
-    // The lowest byte of ~(...) always produces 'fe' in hex (ending with 'ffe' in the 12-hex prefix).
-    const timeHex = translated.slice(4, 16);
-    expect(timeHex.endsWith("fe")).toBe(true);
+    const counter = decodeCounter(translated);
+    expect(counter).toBeGreaterThanOrEqual(1n);
+    expect(counter).toBeLessThan(0x1000n);
 
     // Stability across repeated translations of the same input
     const repeated = translateSessionId(raw, "claude");
     expect(repeated).toBe(translated);
+  });
+
+  it("mints distinct session ids for the same millisecond via the counter", () => {
+    // The counter is what stops two sessions colliding inside one millisecond —
+    // assert that directly instead of through a fixed byte of the encoded prefix.
+    const first = generateSessionId(1700000000000);
+    const second = generateSessionId(1700000000000);
+    expect(first).not.toBe(second);
+    expect(decodeCounter(second) - decodeCounter(first)).toBe(1n);
   });
 
   it("keys the translation on the full composite id, not a bare client hint", () => {
