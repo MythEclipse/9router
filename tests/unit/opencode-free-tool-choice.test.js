@@ -24,8 +24,9 @@ function responsesBody(model, tool_choice) {
 /**
  * The caller's own tools, as a subset of what goes on the wire.
  *
- * opencode requires its fingerprint quartet (bash/glob/grep/write/edit) to be
- * declared; tools the client did not send are appended as inert stubs whose
+ * opencode requires its full 10-tool fingerprint set (see
+ * OPENCODE_FINGERPRINT_TOOLS) to be declared; tools the client did not send are
+ * appended as inert stubs whose
  * description forbids calling them (opencodeFingerprint.js). So the wire list
  * is the caller's tools PLUS stubs — asserting equality with TOOLS alone would
  * pin the pre-fingerprint behaviour.
@@ -74,8 +75,8 @@ describe("opencode Free 1.3 tool_choice auto-only", () => {
       FREE_13, responsesBody(FREE_13, undefined), true, CREDS,
     );
     // applyFingerprintTools() defaults Responses tool_choice to "auto" when it had
-    // to inject the quartet — an absent choice must not leave the request with a
-    // decoy-only tool list it could refuse to pick from.
+    // to inject the fingerprint tools — an absent choice must not leave the
+    // request with a decoy-only tool list it could refuse to pick from.
     expect(absentOut.tool_choice).toBe("auto");
     expectCallerToolsIntact(absentOut.tools);
     expect(absentOut.input).toEqual(INPUT);

@@ -9,9 +9,10 @@
 // or the official API and stay in the opencode-go / deepseek real suites.
 //
 // The free tier only accepts requests carrying the client fingerprint
-// (opencode UA + session header + stream:true + bash/glob/grep/read quartet);
-// the opencode-zen executor injects all of it, which is part of what this
-// smoke verifies.
+// (opencode UA + session header + stream:true + the 10-tool agentic
+// fingerprint from issue #4836: bash/edit/glob/grep/read/skill/task/
+// todowrite/webfetch/write); the opencode-zen executor injects all of it,
+// which is part of what this smoke verifies.
 //
 //   OPENCODE_ZEN_KEY=oc_sk... RUN_REAL=1 npx vitest run --config tests/vitest.config.js tests/translator/real/opencode-zen-free-responses.real.test.js
 //
@@ -126,7 +127,7 @@ describe.skipIf(!RUN_REAL)(`REAL zen free responses 直通 (${MODEL})`, () => {
   );
 
   it(
-    "accepts custom tools alongside the fingerprint quartet",
+    "accepts custom tools alongside the fingerprint tool set",
     async () => {
       const creds = await prepare();
       if (!creds) return;

@@ -1,22 +1,26 @@
 /**
  * Helpers for the OpenCode Zen free-tier client fingerprint.
  *
- * Live upstream probes show that free-tier requests must include the lowercase
- * file-search quartet (bash/glob/grep/read). Agent clients such as Claude Code
- * may declare the same tools with different casing, so those case variants must
- * be renamed instead of duplicated. The response side restores the caller's
- * original spelling so downstream clients still recognise their own tool calls.
+ * Live upstream probes (issue #4836, 0.5.75) show that free-tier requests must
+ * carry the full 10-tool agentic fingerprint (bash/edit/glob/grep/read/skill/
+ * task/todowrite/webfetch/write) — the earlier file-search quartet alone now
+ * 403s. Agent clients such as Claude Code may declare the same tools with
+ * different casing, so those case variants must be renamed instead of
+ * duplicated. The response side restores the caller's original spelling so
+ * downstream clients still recognise their own tool calls.
  */
 
 /** Canonical names required by the upstream free-tier gate. */
-export const OPENCODE_FINGERPRINT_TOOLS = ["bash", "glob", "grep", "read"];
+export const OPENCODE_FINGERPRINT_TOOLS = [
+  "bash", "edit", "glob", "grep", "read", "skill", "task", "todowrite", "webfetch", "write",
+];
 
 // Request body -> names renamed for that request. transformRequest() mutates the
 // same body object that chatCore passed into the executor, so a WeakMap keeps the
 // mapping request-local without putting transport metadata on the wire.
 const renamedToolNames = new WeakMap();
 
-/** Canonical lowercase name when `name` is a quartet member; "" otherwise. */
+/** Canonical lowercase name when `name` is a fingerprint member; "" otherwise. */
 export function fingerprintToolKey(name) {
   const lower = String(name ?? "").trim().toLowerCase();
   return OPENCODE_FINGERPRINT_TOOLS.includes(lower) ? lower : "";
@@ -34,7 +38,7 @@ function toolNameOf(tool) {
 }
 
 /**
- * Canonicalise only the fingerprint quartet and remove duplicate quartet
+ * Canonicalise only the fingerprint tools and remove duplicate fingerprint
  * variants. Non-fingerprint tools are preserved verbatim, including tools whose
  * names differ only by case; they are outside OpenCode's fingerprint contract.
  *
@@ -45,7 +49,7 @@ export function concealFingerprintToolNames(tools) {
   const map = new Map();
   if (!Array.isArray(tools) || tools.length === 0) return { tools, map };
 
-  const seenQuartet = new Set();
+  const seen = new Set();
   const out = [];
   for (const tool of tools) {
     if (!tool || typeof tool !== "object" || Array.isArray(tool)) {
@@ -61,9 +65,9 @@ export function concealFingerprintToolNames(tools) {
     }
 
     // `Bash` + `bash` is rejected upstream as a duplicate. Keep exactly one
-    // declaration for each quartet member.
-    if (seenQuartet.has(key)) continue;
-    seenQuartet.add(key);
+    // declaration for each fingerprint member.
+    if (seen.has(key)) continue;
+    seen.add(key);
 
     if (current !== key) {
       map.set(key, current);
@@ -78,7 +82,7 @@ export function concealFingerprintToolNames(tools) {
   return { tools: out, map };
 }
 
-/** Append only genuinely missing quartet declarations. */
+/** Append only genuinely missing fingerprint declarations. */
 export function appendMissingFingerprintTools(tools, flat) {
   const list = Array.isArray(tools) ? tools : [];
   for (const name of OPENCODE_FINGERPRINT_TOOLS) {
@@ -100,7 +104,7 @@ export function appendMissingFingerprintTools(tools, flat) {
   return list;
 }
 
-/** Point an explicit tool_choice at a quartet member after canonicalisation. */
+/** Point an explicit tool_choice at a fingerprint member after canonicalisation. */
 export function retargetToolChoice(body, map) {
   if (!body || typeof body !== "object" || !map?.size) return;
   const choice = body.tool_choice;
@@ -122,9 +126,9 @@ export function retargetToolChoice(body, map) {
 }
 
 /**
- * Full request-side pass: canonicalise quartet case variants, remove duplicate
- * quartet declarations, append missing members and preserve the legacy
- * tool_choice defaults used by the OpenCode executor.
+ * Full request-side pass: canonicalise fingerprint case variants, remove
+ * duplicate fingerprint declarations, append missing members and preserve the
+ * legacy tool_choice defaults used by the OpenCode executor.
  *
  * @param {object} body
  * @param {boolean} flat - true for Responses tools ({name}), false for chat tools

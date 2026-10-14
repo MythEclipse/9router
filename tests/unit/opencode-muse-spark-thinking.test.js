@@ -216,8 +216,8 @@ describe("OpenCode Free Muse Spark thinking", () => {
     const types = out.input.map((item) => item.type);
     expect(types).toEqual(["message", "function_call", "function_call_output", "message"]);
     // The caller's own tool, flattened (parameters.properties added). opencode also
-    // requires its fingerprint quartet to be declared, so the wire list carries
-    // inert stubs for the missing members on top of this one.
+    // requires its full 10-tool fingerprint set to be declared, so the wire list
+    // carries inert stubs for the missing members on top of this one.
     expect(out.tools[0]).toEqual({
       type: "function",
       name: "shell",
