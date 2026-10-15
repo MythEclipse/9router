@@ -4,7 +4,6 @@ import { PROVIDER_MODELS, getModelTargetFormat } from "../../open-sse/config/pro
 import { getThinkingLevels } from "../../open-sse/providers/thinkingLevels.js";
 import { FORMATS } from "../../open-sse/translator/formats.js";
 import { OpenCodeExecutor } from "../../open-sse/executors/opencode.js";
-import { OPENCODE_FINGERPRINT_TOOLS } from "../../open-sse/utils/opencodeFingerprint.js";
 import "../translator/registerAll.js";
 import { translateRequest } from "../../open-sse/translator/index.js";
 
@@ -215,16 +214,18 @@ describe("OpenCode Free Muse Spark thinking", () => {
     // User message, function_call, function_call_output, and next user message survive
     const types = out.input.map((item) => item.type);
     expect(types).toEqual(["message", "function_call", "function_call_output", "message"]);
-    // The caller's own tool, flattened (parameters.properties added). opencode also
-    // requires its full 10-tool fingerprint set to be declared, so the wire list
-    // carries inert stubs for the missing members on top of this one.
-    expect(out.tools[0]).toEqual({
-      type: "function",
-      name: "shell",
-      description: "Run shell command",
-      parameters: { type: "object", properties: {} },
-    });
-    const names = out.tools.map((t) => t.name);
-    for (const name of names.slice(1)) expect(OPENCODE_FINGERPRINT_TOOLS).toContain(name);
+    // Tools flattened and empty properties added. The caller's own `shell` clashes
+    // with OpenCode's fingerprint tool, so it (and its prior call) travel under an
+    // alias while the exact read/shell definitions are appended.
+    expect(out.tools.slice(0, 1)).toEqual([
+      {
+        type: "function",
+        name: "shell_client",
+        description: "Run shell command",
+        parameters: { type: "object", properties: {} },
+      },
+    ]);
+    expect(out.tools.map((t) => t.name)).toEqual(["shell_client", "read", "shell"]);
+    expect(out.input.find((item) => item.type === "function_call").name).toBe("shell_client");
   });
 });

@@ -4,6 +4,7 @@ import { PROVIDERS } from "../config/providers.js";
 import { MEMORY_CONFIG } from "../config/runtimeConfig.js";
 import { getThinkingLevels } from "../providers/thinkingLevels.js";
 import { injectReasoningContent } from "../utils/reasoningContentInjector.js";
+import { resolveSessionId } from "../utils/sessionManager.js";
 import { isMuseSparkModel } from "../providers/models/helpers.js";
 import { applyFingerprintTools } from "../utils/opencodeFingerprint.js";
 import { ANTHROPIC_API_VERSION } from "../providers/shared.js";
@@ -14,31 +15,22 @@ import {
   coerceResponsesOutput,
 } from "../translator/formats/responsesApi.js";
 
-const OPENCODE_UA = "opencode/1.19.0 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14";
+// OpenCode v2 UA shape: opencode/<channel>/<version>/<client>. Upstream rejects
+// the v1 "opencode/1.18.x" form with 403 FreeTierError since 2026-10-14.
+const OPENCODE_UA = "opencode/latest/2.0.26/cli";
+const OPENCODE_CLIENT = "cli";
 const MAX_SESSION_LENGTH = 256;
 const MAX_TOOL_NAME_LEN = 128;
 const SESSION_HEADER = "x-opencode-session";
 const SESSION_FIELD = "_opencodeSession";
-const REQ_FIELD = "_opencodeRequest";
 export const OPENCODE_SESSION_RE = /^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/;
-export const OPENCODE_REQUEST_RE = /^msg_[0-9a-f]{12}[0-9A-Za-z]{14}$/;
 const BASE62_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
 function hasValidOpencodeVersion(ua) {
-  const m = String(ua || "").match(/opencode\/(\d+)\.(\d+)(?:\.(\d+))?/i);
-  if (!m) return false;
-  const major = parseInt(m[1], 10);
-  const minor = parseInt(m[2], 10);
-  return major > 1 || (major === 1 && minor >= 17);
+  const m = String(ua || "").match(/^opencode\/[a-z0-9-]+\/(\d+)\.\d+\.\d+\/[a-z0-9-]+$/i);
+  return !!m && parseInt(m[1], 10) >= 2;
 }
-
-function resolveUserAgent(downstreamUa) {
-  if (!downstreamUa) return OPENCODE_UA;
-  if (!hasValidOpencodeVersion(downstreamUa)) return OPENCODE_UA;
-  if (/ai-sdk/i.test(downstreamUa)) return downstreamUa;
-  return `${downstreamUa} ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14`;
-}
-// Models served by /zen/v1/responses; every other model stays on /chat/completions.
+// Models served by /inference/v1/responses; every other model stays on /chat/completions.
 const RESPONSES_MODELS = new Set([
   "muse-spark-1.2-contributor-free",
   "muse-spark-1.3-contributor-free",
@@ -57,67 +49,43 @@ function unstableRandom() {
   return randomPart;
 }
 
+// Session prefix = 12 hex of ~(timeMs * 0x1000 + counter), low 48 bits, like the CLI.
+// Upstream decodes it and rejects a non-small counter with 403 FreeTierError
+// (live probes: counter 0–16 pass, >=100 fail), so the counter must stay real.
+const SESSION_PREFIX_MASK = (1n << 48n) - 1n;
+const SESSION_TIME_MASK = (1n << 36n) - 1n;
+
+function descendingTimeHex(time, counterValue) {
+  return (~(BigInt(time) * 0x1000n + BigInt(counterValue)) & SESSION_PREFIX_MASK)
+    .toString(16)
+    .padStart(12, "0");
+}
+
 export function generateSessionId(timestamp = Date.now()) {
   if (timestamp !== lastTimestamp) {
     lastTimestamp = timestamp;
     counter = 0;
   }
   counter++;
-
-  const current = BigInt(timestamp) * 0x1000n + BigInt(counter);
-  const value = ~current;
-  const time = Array.from({ length: 6 }, (_, index) =>
-    Number((value >> BigInt(40 - 8 * index)) & 0xffn)
-      .toString(16)
-      .padStart(2, "0")
-  ).join("");
-  return `ses_${time}${unstableRandom()}`;
+  return `ses_${descendingTimeHex(timestamp, counter)}${unstableRandom()}`;
 }
 
-export function generateRequestId(timestamp = Date.now()) {
-  const current = BigInt(timestamp) * 0x1000n + 1n;
-  const value = current;
-  const time = Array.from({ length: 6 }, (_, index) =>
-    Number((value >> BigInt(40 - 8 * index)) & 0xffn)
-      .toString(16)
-      .padStart(2, "0")
-  ).join("");
-  return `msg_${time}${unstableRandom()}`;
-}
-
-const translatedOpencodeSessions = new Map();
-const MAX_TRANSLATED_SESSIONS = 1000;
-const translatedSessionCleanup = setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of translatedOpencodeSessions) {
-    if (now - entry.lastUsed > MEMORY_CONFIG.sessionTtlMs) {
-      translatedOpencodeSessions.delete(key);
-    }
-  }
-}, MEMORY_CONFIG.sessionCleanupIntervalMs);
-if (translatedSessionCleanup.unref) translatedSessionCleanup.unref();
-
-// Maps a caller-supplied session id onto a canonical OpenCode `ses_` id. The
-// mapping is memoised so one conversation keeps one upstream session for its
-// whole life instead of re-minting (and re-paying) a session per turn.
 export function translateSessionId(sessionId, clientTool = "") {
   if (typeof sessionId === "string" && OPENCODE_SESSION_RE.test(sessionId.trim())) {
     return sessionId.trim();
   }
-  const key = `opencode:ses:${clientTool || "generic"}:${sessionId || ""}`;
-  const existing = translatedOpencodeSessions.get(key);
-  if (existing) {
-    existing.lastUsed = Date.now();
-    translatedOpencodeSessions.delete(key);
-    translatedOpencodeSessions.set(key, existing);
-    return existing.sessionId;
+  const digest = crypto
+    .createHash("sha256")
+    .update(`opencode\0${clientTool || "generic"}\0${sessionId || ""}`)
+    .digest();
+  // Deterministic time field from the digest, counter pinned to 1 (what the CLI sends).
+  const time = BigInt(`0x${digest.subarray(0, 5).toString("hex")}`) & SESSION_TIME_MASK;
+  const timeHex = descendingTimeHex(time, 1);
+  let randomPart = "";
+  for (let i = 6; i < 20; i++) {
+    randomPart += BASE62_CHARS[digest[i] % 62];
   }
-  const id = generateSessionId();
-  if (translatedOpencodeSessions.size >= MAX_TRANSLATED_SESSIONS) {
-    translatedOpencodeSessions.delete(translatedOpencodeSessions.keys().next().value);
-  }
-  translatedOpencodeSessions.set(key, { sessionId: id, lastUsed: Date.now() });
-  return id;
+  return `ses_${timeHex}${randomPart}`;
 }
 
 function normalizeSession(value) {
@@ -156,89 +124,14 @@ const stableSessionCleanup = setInterval(() => {
 }, MEMORY_CONFIG.sessionCleanupIntervalMs);
 if (stableSessionCleanup.unref) stableSessionCleanup.unref();
 
-// The free tier authenticates every caller with the same literal credential
-// (`Bearer public`), so a key identifies nothing: a team or shared deployment
-// hands the same key to many people, and keying sessions on it would put them
-// all back on one session. What separates conversations is the request itself,
-// so resolution below is payload-driven throughout.
-function firstUserText(body) {
-  try {
-    if (!body || typeof body !== "object") return "";
-    const arr = Array.isArray(body.messages)
-      ? body.messages
-      : Array.isArray(body.input)
-        ? body.input
-        : null;
-    if (!arr) return typeof body.input === "string" ? body.input.trim().slice(0, 600) : "";
-    for (const msg of arr) {
-      if (!msg || msg.role !== "user") continue;
-      const content = msg.content;
-      if (typeof content === "string" && content.trim()) return content.trim().slice(0, 600);
-      if (Array.isArray(content)) {
-        const text = content
-          .map((part) => (typeof part === "string" ? part : part?.text || part?.input_text || ""))
-          .join(" ")
-          .trim();
-        if (text) return text.slice(0, 600);
-      }
-    }
-  } catch {
-    return "";
-  }
-  return "";
-}
-
-// A conversation is identified by its FIRST user turn. Unlike the accumulated
-// assistant text used by resolveSessionId(), the opening turn does not change as
-// history grows, so the session survives every turn of that conversation instead
-// of flipping once a length threshold is crossed.
-function conversationAnchor(body) {
-  const text = firstUserText(body);
-  if (!text) return "";
-  return crypto.createHash("sha256").update(text).digest("hex").slice(0, 24);
-}
-
-// The caller's own session id, when it sends one.
-function clientPayloadSession(body, providerSessionId) {
-  const explicit = normalizeSession(providerSessionId);
-  if (explicit) return explicit;
-  if (!body || typeof body !== "object") return null;
-  for (const field of ["session_id", "conversation_id", "prompt_cache_key"]) {
-    const value = normalizeSession(body[field]);
-    if (value) return value;
-  }
-  const requestId = body.request?.sessionId;
-  if (requestId != null && String(requestId) !== "") {
-    const value = normalizeSession(String(requestId));
-    if (value) return value;
-  }
-  return null;
-}
-
-// Both signals are combined rather than one winning over the other. A client
-// session id alone is not enough: clients routinely send a shared literal like
-// "default", which would merge unrelated conversations. Pairing it with the
-// opening turn keeps a genuine continuation together (both parts are constant
-// across its turns) while keeping two conversations apart.
-function payloadSessionKey(body, providerSessionId, incoming) {
-  const clientId = incoming || clientPayloadSession(body, providerSessionId);
-  const anchor = conversationAnchor(body);
-  if (clientId && anchor) return `${clientId}:${anchor}`;
-  if (clientId) return clientId;
-  if (anchor) return `conv:${anchor}`;
-  return null;
-}
-
-function isDistinctConnection(credentials) {
-  const connectionId = credentials?.connectionId || credentials?.id;
-  if (!connectionId) return false;
-  return String(connectionId) !== "noauth";
-}
-
 function identityKey(credentials) {
-  // "noauth" is a sentinel shared by every no-auth caller, not an identity.
-  if (isDistinctConnection(credentials)) {
-    return `opencode:conn:${String(credentials.connectionId || credentials.id).slice(0, 128)}`;
+  const connectionId = credentials?.connectionId || credentials?.id;
+  if (connectionId) return `opencode:conn:${String(connectionId).slice(0, 128)}`;
+  const raw = credentials?.rawHeaders || {};
+  const auth = raw.authorization || raw.Authorization || raw["x-api-key"] || raw["X-Api-Key"] || "";
+  if (auth) {
+    const digest = crypto.createHash("sha256").update(String(auth)).digest("hex").slice(0, 32);
+    return `opencode:auth:${digest}`;
   }
   return "opencode:default";
 }
@@ -260,59 +153,36 @@ export function stableSessionId(credentials) {
   return sessionId;
 }
 
-function lastUserText(body) {
+function bodyHasSessionHints(body) {
   try {
-    if (!body || typeof body !== "object") return "";
+    if (!body || typeof body !== "object") return false;
+    if (typeof body.session_id === "string" && body.session_id.trim()) return true;
+    if (typeof body.conversation_id === "string" && body.conversation_id.trim()) return true;
+    if (typeof body.prompt_cache_key === "string" && body.prompt_cache_key.trim()) return true;
+    if (body.metadata && typeof body.metadata.user_id === "string" && body.metadata.user_id.trim()) return true;
+    if (body.request && body.request.sessionId != null && String(body.request.sessionId) !== "") return true;
     const arr = Array.isArray(body.messages)
       ? body.messages
       : Array.isArray(body.input)
         ? body.input
         : null;
-    if (!arr) return typeof body.input === "string" ? body.input.slice(-600) : "";
-    for (let i = arr.length - 1; i >= 0; i--) {
-      const msg = arr[i];
-      if (!msg) continue;
-      if (msg.role && msg.role !== "user") continue;
-      const content = msg.content;
-      if (typeof content === "string" && content.trim()) return content.trim().slice(-600);
-      if (Array.isArray(content)) {
-        const text = content
-          .map((part) => (typeof part === "string" ? part : part?.text || part?.input_text || ""))
-          .join(" ")
-          .trim();
-        if (text) return text.slice(-600);
+    if (arr) {
+      let assistantText = "";
+      for (const msg of arr) {
+        if (msg?.role === "assistant") {
+          const content = msg.content;
+          if (typeof content === "string") assistantText += content;
+          else if (Array.isArray(content)) {
+            for (const part of content) assistantText += part?.text || part?.output || "";
+          }
+          if (assistantText.length >= 50) return true;
+        }
       }
     }
+    return false;
   } catch {
-    return "";
+    return false;
   }
-  return "";
-}
-
-// The real CLI sends the current user message id (stable per turn, same on
-// retries) as x-opencode-request. Derive it deterministically from the
-// session plus the last user message so retries share the id.
-export function deriveRequestId(sessionId, body) {
-  const text = lastUserText(body);
-  if (!text) return generateRequestId();
-  const digest = crypto
-    .createHash("sha256")
-    .update(`opencode-req\0${sessionId || ""}\0${text}`)
-    .digest();
-  const timeHex = digest.subarray(0, 6).toString("hex");
-  let randomPart = "";
-  for (let i = 6; i < 20; i++) {
-    randomPart += BASE62_CHARS[digest[i] % 62];
-  }
-  const id = `msg_${timeHex}${randomPart}`;
-  return OPENCODE_REQUEST_RE.test(id) ? id : generateRequestId();
-}
-
-function normalizeRequestId(value) {
-  if (typeof value !== "string") return null;
-  const normalized = value.trim();
-  if (!normalized || normalized.length > MAX_SESSION_LENGTH) return null;
-  return OPENCODE_REQUEST_RE.test(normalized) ? normalized : null;
 }
 
 // Strip the thinking suffix "model(level)" so registry lookups hit the base id.
@@ -329,7 +199,7 @@ function isMessagesModel(model) {
   return MESSAGES_MODELS.has(baseModelId(model));
 }
 
-export function resolveOpencodeSession(body, credentials, providerSessionId, clientTool) {
+function resolveOpencodeSession(body, credentials, providerSessionId, clientTool) {
   const headers = credentials?.rawHeaders || {};
   const native = nativeSession(headers);
   if (native) return native;
@@ -342,29 +212,25 @@ export function resolveOpencodeSession(body, credentials, providerSessionId, cli
     }
   }
 
-  // The caller's session id and the conversation's opening turn together
-  // identify the thread. Both are constant across that thread's turns, so one
-  // session spans its whole life; two threads that happen to share a literal
-  // session id still land apart because their opening turns differ.
-  const key = payloadSessionKey(body, providerSessionId, incoming);
-  if (key) return translateSessionId(key, clientTool);
+  const hinted = incoming || normalizeSession(providerSessionId);
+  if (hinted) return translateSessionId(hinted, clientTool);
 
-  // Nothing usable in the payload (a single bare prompt with no text). Fall back
-  // to connection scope; the shared "noauth" sentinel separates nobody, so that
-  // case collapses to one session by design.
-  return stableSessionId(credentials);
-}
-
-function resolveOpencodeRequestId(body, credentials, sessionId) {
-  const raw = credentials?.rawHeaders || {};
-  for (const [key, value] of Object.entries(raw)) {
-    if (key.toLowerCase() === "x-opencode-request") {
-      const normalized = normalizeRequestId(value);
-      if (normalized) return normalized;
-      break;
+  if (credentials?.connectionId || bodyHasSessionHints(body)) {
+    let viaManager = null;
+    try {
+      viaManager = resolveSessionId({
+        headers,
+        body,
+        connectionId: credentials?.connectionId,
+        scope: "opencode",
+      });
+    } catch {
+      viaManager = null;
     }
+    if (viaManager) return translateSessionId(viaManager, clientTool);
   }
-  return deriveRequestId(sessionId, body);
+
+  return stableSessionId(credentials);
 }
 
 function normalizeResponsesTools(body) {
@@ -465,7 +331,6 @@ export class OpenCodeExecutor extends BaseExecutor {
     return {
       ...sourceCredentials,
       [SESSION_FIELD]: session,
-      [REQ_FIELD]: resolveOpencodeRequestId(body, sourceCredentials, session),
     };
   }
 
@@ -512,8 +377,10 @@ export class OpenCodeExecutor extends BaseExecutor {
     return super.execute({ ...args, credentials: this.prepareRequestCredentials(args) });
   }
 
+  // Free tier moved from /zen/v1 to /inference/v1 (OpenCode v2); /zen/v1 now
+  // answers every free request with 403 FreeTierError.
   buildUrl(model) {
-    const base = this.config.baseUrl || "https://opencode.ai";
+    const base = this.config.baseUrl;
     if (isResponsesModel(model)) return `${base}/inference/v1/responses`;
     if (isMessagesModel(model)) return `${base}/inference/v1/messages`;
     return `${base}/inference/v1/chat/completions`;
@@ -525,20 +392,22 @@ export class OpenCodeExecutor extends BaseExecutor {
     for (const [k, v] of Object.entries(raw)) lower[k.toLowerCase()] = v;
 
     const downstreamUa = lower["user-agent"] || "";
+    const isOpencodeDownstream = hasValidOpencodeVersion(downstreamUa);
 
     const session = credentials?.[SESSION_FIELD] || this.prepareRequestCredentials({ credentials })[SESSION_FIELD];
-    const downstreamReq = normalizeRequestId(lower["x-opencode-request"]);
-    const requestId = credentials?.[REQ_FIELD] || downstreamReq || generateRequestId();
 
+    // Mirrors the v2 CLI. Upstream needs x-opencode-session-id next to
+    // x-opencode-session, and rejects any x-opencode-request (v1 only) with 403.
     const headers = {
       "Content-Type": "application/json",
       "Authorization": "Bearer public",
-      "User-Agent": resolveUserAgent(downstreamUa),
-      "x-opencode-client": lower["x-opencode-client"] || "cli",
+      "User-Agent": isOpencodeDownstream ? downstreamUa : OPENCODE_UA,
+      "x-opencode-client": lower["x-opencode-client"] || OPENCODE_CLIENT,
       "x-opencode-session": session,
       "x-opencode-session-id": session,
-      "x-opencode-request": requestId,
-      "x-opencode-project": lower["x-opencode-project"] || "35f9e9e6efffa4ca5cbcb640684befd1263b8b9a",
+      "x-session-affinity": session,
+      "x-session-id": session,
+      "x-opencode-project": lower["x-opencode-project"] || "global",
       "Accept": stream ? "text/event-stream" : "*/*",
     };
     if (url.endsWith("/messages")) headers["anthropic-version"] = ANTHROPIC_API_VERSION;
