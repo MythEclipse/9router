@@ -68,6 +68,10 @@ package-lock.json
 .github/instructions/codacy.instructions.md
 README1.md
 deploy*.sh
+# `deploy*.sh` is unanchored, so it matches deploy/<host>/*.sh too and silently
+# drops the deploy scripts CI ships to the VPS. Keep the root-level Coolify
+# deploy.sh ignored, but never let it eat a per-host script.
+!deploy/**/*.sh
 ecosystem.config.*
 
 scripts/agSniffer/*
