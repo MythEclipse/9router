@@ -70,15 +70,19 @@ resolve_bun() {
     command -v bun
     return 0
   fi
-  local candidate="/usr/local/bin/bun"
-  if [ -x "$candidate" ]; then
-    printf '%s\n' "$candidate"
-    return 0
-  fi
+  # The official installer drops the binary in $HOME/.bun/bin and does NOT
+  # symlink it into /usr/local/bin when run with a custom HOME. Check there too.
+  for candidate in /usr/local/bin/bun /root/.bun/bin/bun "$HOME/.bun/bin/bun"; do
+    [ -x "$candidate" ] && { printf '%s\n' "$candidate"; return 0; }
+  done
   log "installing bun ${BUN_VERSION} (needed for bun.lock)"
+  # Give the installer the HOME whose bin directory we then probe, so a fresh
+  # install lands where resolve_bun looks for it.
   curl -fsSL "https://bun.sh/install" | as_root bash -s "bun-v${BUN_VERSION}" >/dev/null
-  [ -x "$candidate" ] || die "bun install did not produce $candidate"
-  printf '%s\n' "$candidate"
+  for candidate in /usr/local/bin/bun /root/.bun/bin/bun; do
+    [ -x "$candidate" ] && { printf '%s\n' "$candidate"; return 0; }
+  done
+  die "bun install did not produce an executable at /usr/local/bin/bun or /root/.bun/bin/bun"
 }
 BUN="$(resolve_bun)"
 
@@ -111,10 +115,15 @@ rollback() {
 on_error() {
   local rc="$1" line="$2"
   log "step failed at line $line (exit $rc)"
-  [ "$ACTIVATED" = "1" ] && rollback
+  if [ "$ACTIVATED" = "1" ]; then
+    rollback
+  fi
   exit "$rc"
 }
-trap 'on_error $LINENO' ERR
+# Capture $? inside the trap string: passing only $LINENO would hand the line
+# number to $1 and leave $2 unbound, aborting the handler under `set -u` —
+# after which the script keeps running past the failure.
+trap 'rc=$?; on_error "$rc" "$LINENO"' ERR
 
 health_check() {
   log "health-check $HEALTH_URL"
@@ -147,18 +156,26 @@ as_root tar xzf "$PAYLOAD" -C "$RELEASE_DIR" --exclude=.deploy-sha
 [ -d "${RELEASE_DIR}/.next" ] || die "payload has no .next build"
 
 # ── 2. shared dependency install ───────────────────────────────────────────
-# Only reinstall when a manifest actually changed. Compared BEFORE the swap so
-# a mangled previous state can never mark the current release as up-to-date.
+# Only reuse the shared install when it was produced BY THIS SCRIPT from this
+# exact lockfile. Comparing manifests alone is not enough: node_modules can be
+# inherited from an earlier layout (e.g. moved aside from a Docker-era tree),
+# and a .next built against one Next.js version dies at runtime under another
+# with an obscure ENOENT on a build artefact. The stamp is written only after a
+# successful install, so a host that has never run this script always reinstalls.
 NEED_INSTALL=0
+STAMP="${DEPS_DIR}/.install-stamp"
+LOCK_HASH=""
+if [ -f "${RELEASE_DIR}/bun.lock" ] && command -v sha256sum >/dev/null 2>&1; then
+  LOCK_HASH="$(sha256sum "${RELEASE_DIR}/bun.lock" | cut -d' ' -f1)"
+fi
+
 if [ ! -d "${DEPS_DIR}/node_modules" ]; then
   NEED_INSTALL=1
-else
-  for manifest in package.json bun.lock; do
-    [ -f "${RELEASE_DIR}/${manifest}" ] || continue
-    if ! as_root cmp -s "${RELEASE_DIR}/${manifest}" "${DEPS_DIR}/${manifest}"; then
-      NEED_INSTALL=1
-    fi
-  done
+elif [ ! -f "$STAMP" ]; then
+  log "no install stamp in $DEPS_DIR — assuming an inherited tree"
+  NEED_INSTALL=1
+elif [ -n "$LOCK_HASH" ] && [ "$(cat "$STAMP")" != "$LOCK_HASH" ]; then
+  NEED_INSTALL=1
 fi
 
 if [ "$NEED_INSTALL" = "1" ]; then
@@ -167,10 +184,26 @@ if [ "$NEED_INSTALL" = "1" ]; then
   as_root cp "${RELEASE_DIR}/package.json" "${RELEASE_DIR}/bun.lock" "$DEPS_DIR/"
   # Runs as root with an explicit HOME: sudo's secure_path must not be trusted
   # to find bun, and bun refuses to write its cache to an unwritable HOME.
-  as_root env HOME=/root "$BUN" --cwd "$DEPS_DIR" install --frozen-lockfile
+  # A subshell with `cd` rather than a --cwd flag: `bun --cwd <dir> install`
+  # is parsed as a SCRIPT named "install", which fails with "Script not found".
+  as_root rm -rf "${DEPS_DIR}/node_modules"
+  (
+    cd "$DEPS_DIR"
+    as_root env HOME=/root "$BUN" install --frozen-lockfile
+  )
   [ -d "${DEPS_DIR}/node_modules" ] || die "bun install produced no node_modules"
+
+  # Record what was actually installed, so the next run can tell a matching
+  # reuse from a drifted one without trusting a bare directory test.
+  next_version="$(node -p "require('${DEPS_DIR}/node_modules/next/package.json').version" 2>/dev/null || echo unknown)"
+  log "installed next@${next_version} into $DEPS_DIR"
+  if [ -n "$LOCK_HASH" ]; then
+    printf '%s' "$LOCK_HASH" | as_root tee "$STAMP" >/dev/null
+  else
+    printf 'no-lockfile' | as_root tee "$STAMP" >/dev/null
+  fi
 else
-  log "manifests unchanged -> reusing $DEPS_DIR/node_modules"
+  log "lockfile unchanged since last install -> reusing $DEPS_DIR/node_modules"
 fi
 
 # node_modules is root-owned and must resolve relative to the release dir
