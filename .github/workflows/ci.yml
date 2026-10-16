@@ -6,6 +6,8 @@ name: CI
 #                 │          │
 #                 │          └── deploy-imrnes ──► imrnes VPS  (systemd, /opt/9router, :2028)
 #                 │
+#                 └── image ── smoke ──► ghcr.io/asepharyana/9router  (container publish, not a deploy)
+#                 │
 #   tag v* ───────┴── release-prepare ── release-build (amd64+arm64) ── release-publish ──► GHCR (+Docker Hub)
 #
 #   dispatch ── tray (only when tray_publish=true) ──► tray-binaries release
@@ -15,11 +17,11 @@ name: CI
 # No workflow-level concurrency: the two deploys target different hosts and
 # serialize per-host via job-level groups below (cancel-in-progress: false —
 # never abandon a half-synced tree or half-pulled image mid-restart).
-# test/release/tray stay parallel.
+# test/image/release/tray stay parallel.
 #
-# The imrnes lane no longer builds a container: imrnes runs 9router natively
-# under systemd, exactly like orange, so both lanes ship the same tarball and
-# the image/smoke jobs (60 min of amd64-only image build) are gone.
+# Both deploy lanes now install 9router natively under systemd and ship the
+# same tarball; image/smoke remain as the GHCR publish lane only, so nothing on
+# our own fleet depends on the container any more.
 
 on:
   push:
@@ -287,8 +289,115 @@ jobs:
                sudo systemctl restart 9router && echo rolled-back; \
              else echo no-backup-present; fi"
 
-# Deploy 9router to the imrnes VPS as a native systemd unit at
-# /opt/9router/current, port 2028, behind https://omniroute.imrnes.team/
+  # Rolling container image, published to GHCR so external consumers can pull
+  # 9router without building it. This is a PUBLISH lane, not a deploy lane:
+  # imrnes now runs 9router natively under systemd (see deploy-imrnes below), so
+  # nothing on our own fleet consumes this image any more — but the published
+  # artifact is still maintained, and the tagged release lane below builds
+  # multi-arch manifests from the same Dockerfile.
+  #
+  # Runs in parallel with test and gates nothing but itself — a failed image
+  # build must not block a native deploy, and a failed deploy must not need a
+  # rebuilt image to recover.
+  #
+  # linux/amd64 only: that is the single platform imrnes ran.
+  image:
+    name: Build image
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      IMAGE: ghcr.io/asepharyana/9router
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve tag
+        id: meta
+        run: |
+          set -euo pipefail
+          tag="$(node -p "require('./package.json').version")"
+          echo "Building ${tag} from $(git rev-parse --short HEAD)"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.meta.outputs.tag }}
+            ${{ env.IMAGE }}:latest
+          build-args: |
+            APP_VERSION=${{ steps.meta.outputs.tag }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  smoke:
+    name: Smoke-test image
+    if: github.ref == 'refs/heads/master'
+    needs: image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      IMAGE: ghcr.io/asepharyana/9router
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run image and wait for health
+        env:
+          IMAGE: ${{ env.IMAGE }}
+          TAG: ${{ needs.image.outputs.tag }}
+        run: |
+          set -Eeuo pipefail
+          container="9router-smoke-${GITHUB_RUN_ID}"
+          trap 'docker logs "$container" || true; docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+
+          docker run --detach --name "$container" \
+            --publish 2028:2028 \
+            -e PORT=2028 -e HOSTNAME=0.0.0.0 -e DATA_DIR=/app/data \
+            "${IMAGE}:${TAG}"
+
+          for attempt in {1..45}; do
+            if body="$(curl --fail --silent --show-error http://127.0.0.1:2028/api/health)"; then
+              echo "health OK: ${body}"
+              exit 0
+            fi
+            (( attempt % 5 == 0 )) && echo "waiting for health (${attempt}/45)" >&2
+            sleep 2
+          done
+
+          echo "health check never returned 200" >&2
+          exit 1
+
+  # Deploy 9router to the imrnes VPS as a native systemd unit at
+  # /opt/9router/current, port 2028, behind https://omniroute.imrnes.team/
   # (Caddy proxies 127.0.0.1:2028; the Traefik router and the docker-compose
   # stack under /root/9router-docker are gone).
   #
@@ -301,8 +410,9 @@ jobs:
   deploy-imrnes:
     name: Deploy to imrnes VPS
     if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || (inputs.release_tag == '' && inputs.tray_publish != true))
-    # Gated on test as well: a regression in this push must not reach the
-    # production hostname.
+    # Gated on test: a regression in this push must not reach the production
+    # hostname. Deliberately NOT gated on image/smoke — that is the container
+    # publish lane, and a native deploy must not wait on (or be blocked by) it.
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 30
