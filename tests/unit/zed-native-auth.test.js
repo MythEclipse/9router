@@ -275,4 +275,49 @@ describe("criterion L — decrypt failure errors the session but keeps the serve
     expect(again.port).toBe(started.port);
     clearZedSession(state);
   });
+
+  // A single attempt cannot distinguish a correct decrypt from corruption:
+  // PKCS#1 v1.5 unpadding has no integrity check, so ~1 wrong-key decrypt in
+  // 100 succeeds with random bytes. Those bytes are often valid UTF-8, so a
+  // string-level check (replacement chars) misses them — measured at 25
+  // accepted garbage plaintexts per 8000 attempts, one of them the empty
+  // string. Run the whole batch: one draw cannot fail a probabilistic bug.
+  it("rejects EVERY wrong-key decrypt across many draws, not just this one", () => {
+    const live = createZedNativeAuthData({}, {});
+    const other = createZedNativeAuthData({}, {});
+    const attempts = 400;
+    const accepted = [];
+    for (let i = 0; i < attempts; i += 1) {
+      const bad = encryptForCallback(other.publicKey, "not-for-this-key");
+      try {
+        accepted.push(decryptZedAccessToken(bad, live.privateKeyVerifier));
+      } catch {
+        /* expected: wrong key must throw */
+      }
+    }
+    expect(accepted).toEqual([]);
+  });
+
+  // The wrong-key rejection must not break the PKCS#1 v1.5 path itself, which
+  // is why that fallback exists: an older Zed client can still send v1.5.
+  it("still round-trips a genuine token under BOTH paddings", () => {
+    const auth = createZedNativeAuthData({}, {});
+    const token = "zed-access-token-abc123";
+    const v15 = crypto
+      .publicEncrypt(
+        {
+          key: crypto.createPublicKey({
+            key: Buffer.from(auth.publicKey, "base64url"),
+            format: "der",
+            type: "pkcs1",
+          }),
+          padding: crypto.constants.RSA_PKCS1_PADDING,
+        },
+        Buffer.from(token, "utf8"),
+      )
+      .toString("base64url");
+
+    expect(decryptZedAccessToken(encryptForCallback(auth.publicKey, token), auth.privateKeyVerifier)).toBe(token);
+    expect(decryptZedAccessToken(v15, auth.privateKeyVerifier)).toBe(token);
+  });
 });

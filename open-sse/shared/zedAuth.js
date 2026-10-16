@@ -153,23 +153,36 @@ export function decryptZedAccessToken(encryptedAccessToken, privateKeyVerifier) 
       )
       .toString("utf8");
   } catch (oaepError) {
-    try {
-      const text = crypto
-        .privateDecrypt(
-          { key: privateKey, padding: crypto.constants.RSA_PKCS1_PADDING },
-          encrypted,
-        )
-        .toString("utf8");
-      // PKCS#1 v1.5 unpadding is not integrity-checked: a wrong-key decrypt
-      // can "succeed" with garbage bytes instead of throwing. Replacement
-      // characters prove the output is not the real UTF-8 token — fail loudly
-      // rather than storing garbage as a credential.
-      if (text.includes("�")) fail(oaepError);
-      return text;
-    } catch (err) {
-      if (err.message.startsWith("Failed to decrypt Zed access token")) throw err;
+    // PKCS#1 v1.5 has no integrity check: given a WRONG key, roughly 1 in 100
+    // decrypts "succeed" with random bytes, and node's unpadding accepts them
+    // unconditionally. Validating the decoded string is not sufficient — random
+    // bytes often form valid UTF-8 (measured: 25 accepted garbage plaintexts in
+    // 8000 attempts, including 1- and 2-byte strings that contain no
+    // replacement character at all). Such a value would be stored as the user's
+    // access token and silently break every later request.
+    //
+    // Decrypt raw and validate the padding ourselves instead. The check is
+    // then structural rather than heuristic: 0x00 0x02, at least 8 non-zero
+    // padding bytes, a 0x00 separator, then the message.
+    const raw = crypto.privateDecrypt(
+      { key: privateKey, padding: crypto.constants.RSA_NO_PADDING },
+      encrypted,
+    );
+    const separator = raw.indexOf(0x00, 2);
+    // Bytes at indices 2..separator-1 must all be non-zero, and PKCS#1 v1.5
+    // mandates at least 8 of them. indexOf skips leading zero padding bytes, so
+    // a zero anywhere in the padding is reported as an earlier separator.
+    if (raw[0] !== 0x00 || raw[1] !== 0x02 || separator === -1 || separator < 10) {
       fail(oaepError);
     }
+    const message = raw.subarray(separator + 1);
+    const text = message.toString("utf8");
+    // A valid token cannot survive an empty plaintext or one whose bytes do not
+    // round-trip through UTF-8; both indicate corruption rather than a token.
+    if (message.length === 0 || !Buffer.from(text, "utf8").equals(message)) {
+      fail(oaepError);
+    }
+    return text;
   }
 }
 
