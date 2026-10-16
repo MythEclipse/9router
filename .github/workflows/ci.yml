@@ -2,10 +2,9 @@ name: CI
 
 # Single consolidated pipeline. One file, branching jobs (needs:):
 #
-#   push master ──┬── test ──┬── deploy-orange ──► orange VPS (/opt/9router, :4014)
+#   push master ──┬── test ──┬── deploy-orange ──► orange VPS  (systemd, /opt/9router, :4014)
 #                 │          │
-#                 │          ├── image ── smoke ──┤
-#                 │                               └── deploy-imrnes ──► imrnes VPS (docker, :2028)
+#                 │          └── deploy-imrnes ──► imrnes VPS  (systemd, /opt/9router, :2028)
 #                 │
 #   tag v* ───────┴── release-prepare ── release-build (amd64+arm64) ── release-publish ──► GHCR (+Docker Hub)
 #
@@ -16,7 +15,11 @@ name: CI
 # No workflow-level concurrency: the two deploys target different hosts and
 # serialize per-host via job-level groups below (cancel-in-progress: false —
 # never abandon a half-synced tree or half-pulled image mid-restart).
-# test/image/release/tray stay parallel.
+# test/release/tray stay parallel.
+#
+# The imrnes lane no longer builds a container: imrnes runs 9router natively
+# under systemd, exactly like orange, so both lanes ship the same tarball and
+# the image/smoke jobs (60 min of amd64-only image build) are gone.
 
 on:
   push:
@@ -284,128 +287,72 @@ jobs:
                sudo systemctl restart 9router && echo rolled-back; \
              else echo no-backup-present; fi"
 
-  # Container image for the imrnes lane (linux/amd64 only: imrnes is x86_64).
-  # Runs in parallel with test; deploy-imrnes gates on both.
-  image:
-    name: Build image
-    if: github.ref == 'refs/heads/master'
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    env:
-      IMAGE: ghcr.io/asepharyana/9router
-    outputs:
-      tag: ${{ steps.meta.outputs.tag }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Resolve tag
-        id: meta
-        run: |
-          set -euo pipefail
-          tag="$(node -p "require('./package.json').version")"
-          echo "Building ${tag} from $(git rev-parse --short HEAD)"
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: |
-            ${{ env.IMAGE }}:${{ steps.meta.outputs.tag }}
-            ${{ env.IMAGE }}:latest
-          build-args: |
-            APP_VERSION=${{ steps.meta.outputs.tag }}
-          labels: |
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ steps.meta.outputs.tag }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  smoke:
-    name: Smoke-test image
-    if: github.ref == 'refs/heads/master'
-    needs: image
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      IMAGE: ghcr.io/asepharyana/9router
-    steps:
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Run image and wait for health
-        env:
-          IMAGE: ${{ env.IMAGE }}
-          TAG: ${{ needs.image.outputs.tag }}
-        run: |
-          set -Eeuo pipefail
-          container="9router-smoke-${GITHUB_RUN_ID}"
-          trap 'docker logs "$container" || true; docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
-
-          docker run --detach --name "$container" \
-            --publish 2028:2028 \
-            -e PORT=2028 -e HOSTNAME=0.0.0.0 -e DATA_DIR=/app/data \
-            "${IMAGE}:${TAG}"
-
-          for attempt in {1..45}; do
-            if body="$(curl --fail --silent --show-error http://127.0.0.1:2028/api/health)"; then
-              echo "health OK: ${body}"
-              exit 0
-            fi
-            (( attempt % 5 == 0 )) && echo "waiting for health (${attempt}/45)" >&2
-            sleep 2
-          done
-
-          echo "health check never returned 200" >&2
-          exit 1
-
-  # Ship the container to the imrnes VPS behind https://omniroute.imrnes.team/.
-  # 9router serves dashboard AND /v1 on a single port, so it binds 2028;
-  # 20128/20129 stay bound by OmniRoute (Hermes fallback) during migration.
+# Deploy 9router to the imrnes VPS as a native systemd unit at
+# /opt/9router/current, port 2028, behind https://omniroute.imrnes.team/
+  # (Caddy proxies 127.0.0.1:2028; the Traefik router and the docker-compose
+  # stack under /root/9router-docker are gone).
+  #
+  # Same payload as deploy-orange, so both lanes ship the identical file set:
+  #   .next/standalone/server.js + .next + open-sse + src + public
+  #   + custom-server.js + package.json + bun.lock + deploy/imrnes/*
+  # node_modules is NOT in the payload: deploy-native.sh installs it once into
+  # /opt/9router/deps (bun.lock is a bun lockfile, so only bun can resolve it)
+  # and symlinks it into every release.
   deploy-imrnes:
     name: Deploy to imrnes VPS
     if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || (inputs.release_tag == '' && inputs.tray_publish != true))
-    # Gated on test as well as image+smoke: a regression in this push must
-    # not reach the production hostname.
-    needs: [test, image, smoke]
+    # Gated on test as well: a regression in this push must not reach the
+    # production hostname.
+    needs: test
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     concurrency:
-      group: 9router-docker-imrnes
+      group: 9router-deploy-imrnes
       cancel-in-progress: false
     env:
-      IMAGE: ghcr.io/asepharyana/9router
       # Dedicated secrets, NOT the shared VPS_HOST/VPS_USER (those point at
       # orange). A shared secret pointing at the wrong host previously sent
       # this deploy to orange, where it failed only by luck.
       VPS_HOST: ${{ secrets.IMRNES_HOST }}
       VPS_USER: ${{ secrets.IMRNES_USER }}
       PORT: 2028
-      DEPLOY_DIR: /root/9router-docker
       PUBLIC_HOST: omniroute.imrnes.team
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install deps
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        run: bun run build
+
+      - name: Assemble release
+        run: |
+          set -euo pipefail
+          R=/tmp/9router-release-imrnes
+          rm -rf "$R"
+          mkdir -p "$R"
+          cp custom-server.js package.json bun.lock "$R"/
+          cp -r src open-sse public deploy "$R"/
+          cp .next/standalone/server.js "$R/server.js"
+          # Anchor both excludes at the transfer root: .next/standalone is a
+          # partial copy and .next/cache is build cache — neither belongs on
+          # the host.
+          rsync -a --exclude='/standalone' --exclude='/cache' .next/ "$R/.next/"
+          # The deploy script derives the release directory name from this
+          # marker, so a re-uploaded payload always lands in a fresh directory.
+          printf '%s' "${GITHUB_SHA:0:7}" > "$R/.deploy-sha"
+          tar -czf /tmp/9router-imrnes.tgz -C "$R" .
+          echo "release: $(du -h /tmp/9router-imrnes.tgz | cut -f1), $(find "$R" -type f | wc -l) files"
+
       - name: Setup SSH key
         env:
           SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -447,49 +394,32 @@ jobs:
           fi
           echo "Target confirmed: $actual ($VPS_HOST)"
 
-      # The GHCR package is private: a GITHUB_TOKEN can push but cannot change
-      # package visibility, so the VPS gets its own read-only registry
-      # credential, written to a root-only docker config. Never printed.
-      - name: Authorize VPS to pull from GHCR
-        env:
-          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
-        run: |
-          set -euo pipefail
-          if [ -z "$GHCR_READ_TOKEN" ]; then
-            echo "::error::Secret GHCR_READ_TOKEN is not set."
-            echo "Create a classic PAT for asepharyana with scope 'read:packages' and add it as GHCR_READ_TOKEN."
-            exit 1
-          fi
-          auth="$(printf '%s' "asepharyana:$GHCR_READ_TOKEN" | base64 -w0)"
-
-          # $auth expands HERE, inside the double-quoted ssh argument, so the
-          # base64 credential travels over the encrypted channel instead of
-          # through the runner log. The JSON body below is a quoted heredoc, so
-          # nothing on the wire is re-expanded by the remote shell.
-          ssh -T "$VPS_USER@$VPS_HOST" "umask 077 && mkdir -p /root/.docker && cat > /root/.docker/config.json" <<JSON
-          {"auths":{"ghcr.io":{"auth":"$auth"}}}
-          JSON
-
-          ssh -T "$VPS_USER@$VPS_HOST" "chmod 600 /root/.docker/config.json && echo 'docker credential installed'"
-
-      # Runs BEFORE the compose file is written: docker compose reads .env from
-      # the project directory to interpolate ${JWT_SECRET} etc., and fails on
-      # a missing .env. Idempotent — secrets are generated exactly once;
-      # rotating them on redeploy would invalidate stored credentials.
-      # 'REMOTE' is quoted so $(openssl ...) runs on the VPS, not here.
-      - name: Bootstrap secrets
+      # Runs before anything is unpacked: the unit's EnvironmentFile must exist
+      # or every restart crash-loops. Idempotent — secrets are generated exactly
+      # once; regenerating them on redeploy would invalidate stored sessions.
+      - name: Bootstrap secrets and runtime dir
         run: |
           set -euo pipefail
           ssh -T "$VPS_USER@$VPS_HOST" bash -s <<'REMOTE'
           set -euo pipefail
-          mkdir -p /root/9router-docker
-          cd /root/9router-docker
+          mkdir -p /opt/9router /var/lib/9router
+          chown ubuntu:netdev /opt/9router /var/lib/9router
 
-          if [ -f .env ]; then
-            echo "Reusing existing .env (secrets preserved)"
+          if [ -f /opt/9router/.env ]; then
+            echo "Reusing existing /opt/9router/.env (secrets preserved)"
           else
             umask 077
             {
+              echo "PORT=2028"
+              echo "HOSTNAME=0.0.0.0"
+              echo "DATA_DIR=/var/lib/9router"
+              echo "NODE_ENV=production"
+              echo "NEXT_TELEMETRY_DISABLED=1"
+              # The dashboard is served over HTTPS at the public hostname, so
+              # the session cookie must be marked Secure.
+              echo "AUTH_COOKIE_SECURE=true"
+              echo "BASE_URL=https://omniroute.imrnes.team"
+              echo "NEXT_PUBLIC_BASE_URL=https://omniroute.imrnes.team"
               echo "JWT_SECRET=$(openssl rand -hex 32)"
               echo "API_KEY_SECRET=$(openssl rand -hex 32)"
               echo "MACHINE_ID_SALT=$(openssl rand -hex 16)"
@@ -499,113 +429,36 @@ jobs:
               #
               # tr -dc strips the base64 newline, and head -c 16 then takes a
               # fixed-length alphanumeric password. Reading base64 with
-              # `head -c 20` would embed a literal \n in the .env value.
+              # `head -c 20` would embed a literal \n in the value.
               echo "INITIAL_PASSWORD=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 16)"
-            } > .env
-            chmod 600 .env
-            echo "Generated .env with fresh secrets"
-            echo "  dashboard login password: $(grep '^INITIAL_PASSWORD=' .env | cut -d= -f2)"
+            } > /opt/9router/.env
+            chown ubuntu:netdev /opt/9router/.env
+            chmod 600 /opt/9router/.env
+            echo "Generated /opt/9router/.env with fresh secrets"
+            echo "  dashboard login password: $(grep '^INITIAL_PASSWORD=' /opt/9router/.env | cut -d= -f2)"
           fi
           REMOTE
 
-      # Unquoted heredoc on purpose: ${IMAGE_TAG} must expand HERE (runner) so
-      # the file lands with a concrete tag. The secret names are escaped so they
-      # survive to the VPS and are expanded by docker compose from .env instead.
-      - name: Write compose file
-        env:
-          IMAGE_TAG: ${{ needs.image.outputs.tag }}
+      # The deploy script is shipped from the checkout of the commit being
+      # deployed, so the deploy logic always matches the released code. It
+      # handles the release unpack, the deps install, the unit install, the
+      # symlink flip, the restart, the health check, the rollback and the
+      # prune.
+      - name: Ship release and deploy
         run: |
           set -euo pipefail
-          ssh -T "$VPS_USER@$VPS_HOST" "cat > '$DEPLOY_DIR/docker-compose.yml'" <<COMPOSE
-          services:
-            9router:
-              image: ${{ env.IMAGE }}:${IMAGE_TAG}
-              container_name: 9router
-              restart: unless-stopped
-              stop_grace_period: 30s
-              ports:
-                - "$PORT:$PORT"
-              volumes:
-                - ./data:/app/data
-              environment:
-                PORT: "$PORT"
-                HOSTNAME: "0.0.0.0"
-                DATA_DIR: /app/data
-                NODE_ENV: production
-                NEXT_TELEMETRY_DISABLED: "1"
-                # Interpolated by docker compose from .env on the VPS.
-                JWT_SECRET: \${JWT_SECRET}
-                API_KEY_SECRET: \${API_KEY_SECRET}
-                MACHINE_ID_SALT: \${MACHINE_ID_SALT}
-                INITIAL_PASSWORD: \${INITIAL_PASSWORD}
-                # The dashboard is served over HTTPS at the public hostname, so
-                # the session cookie must be marked Secure.
-                AUTH_COOKIE_SECURE: "true"
-                # NOTE: /v1 is NOT open. 9router gates /v1 on an API key created
-                # in the dashboard, regardless of REQUIRE_API_KEY — that env var
-                # is listed in .env.example but is never read by the v1 code
-                # path, so setting it is misleading. Create one at
-                # https://omniroute.imrnes.team/dashboard/keys after first deploy.
-                BASE_URL: https://$PUBLIC_HOST
-                NEXT_PUBLIC_BASE_URL: https://$PUBLIC_HOST
-          COMPOSE
+          scp deploy/imrnes/deploy-native.sh "$VPS_USER@$VPS_HOST:/tmp/9router-deploy.sh"
+          scp /tmp/9router-imrnes.tgz "$VPS_USER@$VPS_HOST:/tmp/9router-imrnes.tgz"
+          ssh -T "$VPS_USER@$VPS_HOST" 'bash /tmp/9router-deploy.sh /tmp/9router-imrnes.tgz'
 
-      # Single service: 9router serves both /v1 and the dashboard on 2028.
-      # The Let's Encrypt cert for this host already exists in acme.json.
-      - name: Write Traefik router
+      - name: Verify unit state
         run: |
           set -euo pipefail
-          ssh -T "$VPS_USER@$VPS_HOST" "cat > /data/coolify/proxy/dynamic/9router.yaml" <<'TRAEFIK'
-          http:
-            routers:
-              9router-router:
-                rule: "Host(`omniroute.imrnes.team`)"
-                service: 9router-service
-                entryPoints:
-                  - https
-                tls:
-                  certResolver: letsencrypt
-            services:
-              9router-service:
-                loadBalancer:
-                  servers:
-                    - url: "http://host.docker.internal:2028"
-          TRAEFIK
+          ssh -T "$VPS_USER@$VPS_HOST" "systemctl show -p ActiveState --value 9router"
+          ssh -T "$VPS_USER@$VPS_HOST" "systemctl is-enabled 9router; systemctl is-active 9router"
+          ssh -T "$VPS_USER@$VPS_HOST" "readlink -f /opt/9router/current"
 
-          # Roll back instantly if Traefik rejects the file — a malformed router
-          # takes the whole dynamic config down, not just this one host.
-          ssh -T "$VPS_USER@$VPS_HOST" \
-            "docker logs --since 30s coolify-proxy 2>&1 | tail -5"
-
-      - name: Pull and start
-        run: |
-          set -euo pipefail
-          ssh -T "$VPS_USER@$VPS_HOST" bash -s <<'REMOTE'
-          set -euo pipefail
-          cd /root/9router-docker
-          docker compose config --quiet      # fail fast on bad interpolation
-          docker compose pull
-          docker compose up -d
-          docker compose ps
-          REMOTE
-
-      - name: Verify container serves
-        run: |
-          set -euo pipefail
-          for attempt in $(seq 1 20); do
-            code="$(ssh -T "$VPS_USER@$VPS_HOST" "curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:$PORT/api/health || echo 000")"
-            echo "attempt ${attempt}: /api/health -> ${code}"
-            if [ "$code" = "200" ]; then
-              echo "9router is serving on imrnes:$PORT"
-              exit 0
-            fi
-            sleep 3
-          done
-          echo "::error::9router did not answer /api/health on imrnes in time"
-          ssh -T "$VPS_USER@$VPS_HOST" "cd $DEPLOY_DIR && docker compose logs --tail 50" || true
-          exit 1
-
-      # Proves the public hostname, the TLS cert, and the Traefik cutover all
+      # Proves the public hostname, the TLS cert, and the Caddy cutover all
       # work from outside the VPS — the thing users actually depend on.
       - name: Verify public URL
         run: |
@@ -625,11 +478,12 @@ jobs:
       - name: Summary
         run: |
           {
-            echo "### 9router deployed to imrnes"
-            echo "- Image: \`$IMAGE:${{ needs.image.outputs.tag }}\`"
-            echo "- Port: $PORT (OmniRoute still on 20128/20129)"
+            echo "### 9router deployed to imrnes (native systemd)"
+            echo "- Release: \`\$(ssh -T $VPS_USER@$VPS_HOST readlink -f /opt/9router/current)\`"
+            echo "- Unit: \`9router\` on port $PORT (OmniRoute still on 20128/20129)"
             echo "- Public: https://$PUBLIC_HOST"
-            echo "- Manage: \`cd $DEPLOY_DIR && docker compose {ps,logs,restart}\`"
+            echo "- Data: \`DATA_DIR=/var/lib/9router\` (outside the release tree)"
+            echo "- Manage: \`systemctl {status,restart,logs} 9router\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
   # Release lane: runs on v* tags (or dispatch with release_tag). Validates the
