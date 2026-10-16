@@ -164,10 +164,20 @@ export function decryptZedAccessToken(encryptedAccessToken, privateKeyVerifier) 
     // Decrypt raw and validate the padding ourselves instead. The check is
     // then structural rather than heuristic: 0x00 0x02, at least 8 non-zero
     // padding bytes, a 0x00 separator, then the message.
-    const raw = crypto.privateDecrypt(
-      { key: privateKey, padding: crypto.constants.RSA_NO_PADDING },
-      encrypted,
-    );
+    //
+    // RSA_NO_PADDING can still throw (ciphertext shorter than the modulus, or
+    // an OpenSSL "data too large for modulus"), so wrap it: an unwrapped throw
+    // escapes with a raw OpenSSL message that matches no caller expectation.
+    let raw;
+    try {
+      raw = crypto.privateDecrypt(
+        { key: privateKey, padding: crypto.constants.RSA_NO_PADDING },
+        encrypted,
+      );
+    } catch (err) {
+      fail(oaepError);
+      return ""; // unreachable; keeps the control flow explicit
+    }
     const separator = raw.indexOf(0x00, 2);
     // Bytes at indices 2..separator-1 must all be non-zero, and PKCS#1 v1.5
     // mandates at least 8 of them. indexOf skips leading zero padding bytes, so
