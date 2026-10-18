@@ -11,6 +11,7 @@ describe("Gemini 4 Argon capabilities", () => {
     const model = provider === "antigravity" ? "gemini-4-argon-high" : "gemini-4-argon";
     const caps = getCapabilitiesForModel(provider, model);
     expect(caps.reasoning).toBe(true);
+    expect(caps.pdf).toBe(true);
     expect(caps.thinkingFormat).toBe("gemini-level");
     expect(caps.thinkingCanDisable).toBe(false);
     expect(caps.contextWindow).toBe(1048576);

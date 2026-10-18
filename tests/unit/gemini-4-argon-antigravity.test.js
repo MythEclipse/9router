@@ -23,6 +23,7 @@ describe("Gemini 4 Argon Support & Config", () => {
   it("resolves capabilities correctly for gemini-4-argon models with official limits", () => {
     const caps = getCapabilitiesForModel("antigravity", "gemini-4-argon-high");
     expect(caps.vision).toBe(true);
+    expect(caps.pdf).toBe(true);
     expect(caps.reasoning).toBe(true);
     expect(caps.thinkingFormat).toBe("gemini-level");
     expect(caps.thinkingCanDisable).toBe(false);
@@ -30,10 +31,17 @@ describe("Gemini 4 Argon Support & Config", () => {
     expect(caps.maxOutput).toBe(65536);
   });
 
-  it("defines pricing matching gemini-3.8-flash baseline", () => {
-    expect(MODEL_PRICING["gemini-4-argon"]).toBeDefined();
-    expect(MODEL_PRICING["gemini-4-argon-high"]).toBeDefined();
-    expect(MODEL_PRICING["gemini-4-argon-medium"]).toBeDefined();
-    expect(MODEL_PRICING["gemini-4-argon-low"]).toBeDefined();
+  it("defines official intro pricing for gemini-4-argon models ($2/$10)", () => {
+    const expectedPricing = {
+      input: 2.00,
+      output: 10.00,
+      cached: 0.10,
+      reasoning: 10.00,
+      cache_creation: 2.00,
+    };
+    expect(MODEL_PRICING["gemini-4-argon"]).toEqual(expectedPricing);
+    expect(MODEL_PRICING["gemini-4-argon-high"]).toEqual(expectedPricing);
+    expect(MODEL_PRICING["gemini-4-argon-medium"]).toEqual(expectedPricing);
+    expect(MODEL_PRICING["gemini-4-argon-low"]).toEqual(expectedPricing);
   });
 });
