@@ -422,9 +422,13 @@ PORT=20128 HOSTNAME=0.0.0.0 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run 
         <img src="./public/providers/siliconflow.png" width="50" alt="SiliconFlow"/><br/>
         <sub>SiliconFlow</sub>
       </td>
+      <td align="center" width="100">
+        <img src="./public/providers/dothoosh.png" width="50" alt="DotHoosh"/><br/>
+        <sub>دات‌هوش (DotHoosh)</sub>
+      </td>
     </tr>
   </table>
-  <p><i>...و بیش از ۲۰ ارائه‌دهنده دیگر از جمله Nebius، Chutes، Hyperbolic و نقاط پایانی سفارشی سازگار با OpenAI/Anthropic</i></p>
+  <p><i>...و بیش از ۲۰ ارائه‌دهنده دیگر از جمله دات‌هوش (DotHoosh، با پرداخت تومانی)، Nebius، Chutes، Hyperbolic و نقاط پایانی سفارشی سازگار با OpenAI/Anthropic</i></p>
 </div>
 
 ---
