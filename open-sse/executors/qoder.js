@@ -32,6 +32,7 @@ import { FETCH_CONNECT_TIMEOUT_MS, HTTP_STATUS } from "../config/runtimeConfig.j
 import {
   QODER_CHAT_SIG_PATH,
   QODER_CONTEXT_TIER_ENV,
+  getQoderStaticModelConfig,
   qoderInferenceBase,
 } from "../shared/qoder/constants.js";
 import { getQoderModelConfig, resolveQoderModels, isQoderPat, resolveQoderCredentials } from "../services/qoderModels.js";
@@ -249,12 +250,21 @@ async function buildQoderRequestBody({ model, body, credentials, log, proxyOptio
     // not be populated yet on first ever call for this credential.
     const refreshed = await resolveQoderModels(credentials, { forceRefresh: true, log, proxyOptions, signal, region });
     const retried = refreshed?.rawConfigs.get(qoderKey);
-    if (!retried) {
-      throw new Error(
-        `qoder: model_config for "${qoderKey}" not yet known (run a model list fetch or check upstream connectivity)`,
-      );
+    if (retried) {
+      modelConfig = { ...retried, key: qoderKey };
+    } else {
+      // Last resort: a static block for models the per-account catalog omits.
+      // Sonus (smodel) / Cantus (cmodel) are the known cases — the chat
+      // endpoint accepts them even when /model/list never mentions them, so
+      // refusing here would make an available model look broken.
+      modelConfig = getQoderStaticModelConfig(qoderKey);
+      if (!modelConfig) {
+        throw new Error(
+          `qoder: model_config for "${qoderKey}" not yet known (run a model list fetch or check upstream connectivity)`,
+        );
+      }
+      log?.info?.("QODER", `using static model_config for "${qoderKey}" (absent from the account catalog)`);
     }
-    modelConfig = { ...retried, key: qoderKey };
   }
 
   const incoming = Array.isArray(body.messages)
