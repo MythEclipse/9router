@@ -911,21 +911,45 @@ export class QoderExecutor extends BaseExecutor {
         const reconstructed = new Response(
           new ReadableStream({
             start(controller) {
+              // The consumer may close or cancel before we finish pumping (it
+              // stops at the terminal frame), so every controller call has to
+              // be guarded — close() twice throws ERR_INVALID_STATE.
+              let closed = false;
+              const finish = () => {
+                if (closed) return;
+                closed = true;
+                try { controller.close(); } catch { /* already closed */ }
+              };
+              const push = (chunk) => {
+                if (closed) return false;
+                try {
+                  controller.enqueue(chunk);
+                  return true;
+                } catch {
+                  closed = true;
+                  return false;
+                }
+              };
+
               const enc = new TextEncoder();
-              if (peek.consumed) controller.enqueue(enc.encode(peek.consumed));
-              if (!peek.upstreamDone) {
-                // Forward the remainder untouched.
-                const pump = () => {
-                  reader.read().then(({ done, value }) => {
-                    if (done) { controller.close(); return; }
-                    controller.enqueue(value);
-                    pump();
-                  }).catch(() => controller.close());
-                };
-                pump();
-              } else {
-                controller.close();
+              if (peek.consumed && !push(enc.encode(peek.consumed))) return;
+              if (peek.upstreamDone) {
+                finish();
+                return;
               }
+              // Forward the remainder untouched.
+              const pump = () => {
+                if (closed) return;
+                reader.read().then(({ done, value }) => {
+                  if (done) { finish(); return; }
+                  if (!push(value)) return;
+                  pump();
+                }).catch(() => finish());
+              };
+              pump();
+            },
+            cancel() {
+              return reader.cancel().catch(() => {});
             },
           }),
           { status: sent.response.status, statusText: sent.response.statusText, headers: sent.response.headers },
