@@ -346,20 +346,18 @@ export async function saveRequestUsage(entry, options = {}) {
       // DISTINCT requests that land on the same millisecond with equal token
       // counts (a burst of identical prompts on one key) matched it and one was
       // silently dropped. Callers in the chat path always supply an id now.
+      //
+      // The id is looked up from `requestIdIdx` (an indexed column), NOT from
+      // `meta LIKE '%…%'`: that LIKE is a full table scan with no index it can
+      // use, and measured 669us/write at 8k rows versus 6us for an indexed
+      // lookup — on the per-request hot path.
       if (!allowDuplicate) {
         const existing = entry.requestId
           ? db.get(
             `SELECT id, endpoint FROM usageHistory
-               WHERE COALESCE(provider, '') = COALESCE(?, '')
-                 AND COALESCE(model, '') = COALESCE(?, '')
-                 AND COALESCE(connectionId, '') = COALESCE(?, '')
-                 AND meta LIKE ?
+               WHERE requestId = ?
                ORDER BY id DESC LIMIT 1`,
-            [
-              entry.provider || null, entry.model || null,
-              entry.connectionId || null,
-              `%"requestId":${JSON.stringify(String(entry.requestId))}%`,
-            ]
+            [String(entry.requestId)]
           )
           : db.get(
             `SELECT id, endpoint FROM usageHistory
@@ -387,13 +385,14 @@ export async function saveRequestUsage(entry, options = {}) {
       }
 
       db.run(
-        `INSERT INTO usageHistory(timestamp, provider, model, connectionId, apiKey, endpoint, promptTokens, completionTokens, cost, status, tokens, meta) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO usageHistory(timestamp, provider, model, connectionId, apiKey, endpoint, promptTokens, completionTokens, cost, status, tokens, meta, requestId) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           entry.timestamp, entry.provider || null, entry.model || null,
           entry.connectionId || null, entry.apiKey || null, entry.endpoint || null,
           promptTokens, completionTokens, entry.cost || 0, entry.status || "ok",
           stringifyJson(tokens),
           stringifyJson(entry.requestId ? { requestId: String(entry.requestId) } : {}),
+          entry.requestId ? String(entry.requestId) : null,
         ]
       );
 

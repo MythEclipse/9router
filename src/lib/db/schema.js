@@ -125,12 +125,16 @@ export const TABLES = {
       status: "TEXT",
       tokens: "TEXT",
       meta: "TEXT",
+      requestId: "TEXT",
     },
     indexes: [
       "CREATE INDEX IF NOT EXISTS idx_uh_ts ON usageHistory(timestamp DESC)",
       "CREATE INDEX IF NOT EXISTS idx_uh_provider ON usageHistory(provider)",
       "CREATE INDEX IF NOT EXISTS idx_uh_model ON usageHistory(model)",
       "CREATE INDEX IF NOT EXISTS idx_uh_conn ON usageHistory(connectionId)",
+      // Dedupe looks a request up by this on every write; without the index that
+      // is a full table scan (669us vs 6us at 8k rows, measured).
+      "CREATE INDEX IF NOT EXISTS idx_uh_request_id ON usageHistory(requestId)",
     ],
   },
   usageDaily: {
