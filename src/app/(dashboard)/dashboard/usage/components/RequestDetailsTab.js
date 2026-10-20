@@ -242,11 +242,16 @@ export default function RequestDetailsTab() {
     }
   }, [pagination.page, pagination.pageSize, filters]);
 
+  // Data fetching on mount/pager change is the intended effect here: these callbacks
+  // are async, so setState lands in a promise continuation, not synchronously in the
+  // effect body — the rule cannot tell those apart.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchProviders();
   }, [fetchProviders]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchDetails();
   }, [fetchDetails]);
 
