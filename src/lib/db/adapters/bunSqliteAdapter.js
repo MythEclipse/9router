@@ -31,9 +31,18 @@ export async function createBunSqliteAdapter(filePath) {
     try { db.close(); } catch {}
   }
   const onShutdown = () => gracefulClose();
+  const onSigint = () => { onShutdown(); process.exit(0); };
+  const onSigterm = () => { onShutdown(); process.exit(0); };
   process.once("beforeExit", onShutdown);
-  process.once("SIGINT", () => { onShutdown(); process.exit(0); });
-  process.once("SIGTERM", () => { onShutdown(); process.exit(0); });
+  process.once("SIGINT", onSigint);
+  process.once("SIGTERM", onSigterm);
+
+  // See nodeSqliteAdapter: a rebuilt adapter must not leave its handlers behind.
+  function detachShutdownHandlers() {
+    process.off("beforeExit", onShutdown);
+    process.off("SIGINT", onSigint);
+    process.off("SIGTERM", onSigterm);
+  }
 
   return {
     driver: "bun:sqlite",
@@ -56,6 +65,7 @@ export async function createBunSqliteAdapter(filePath) {
     checkpoint() { try { db.exec("PRAGMA wal_checkpoint(TRUNCATE)"); } catch {} },
     close() {
       clearInterval(checkpointTimer);
+      detachShutdownHandlers();
       gracefulClose();
     },
     raw: db,

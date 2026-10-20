@@ -135,6 +135,11 @@ describe("usageDaily aggregate — secret hygiene", () => {
   it("never stores the raw API key in the daily aggregate", async () => {
     await seed();
 
+    // The day rollup is coalesced in memory and written on a flush tick, so a
+    // reader of the raw row must flush first (getUsageStats does this internally;
+    // this test inspects the persisted blob directly).
+    await db.flushDayRollup();
+
     const { getAdapter } = await import("@/lib/db/driver.js");
     const adapter = await getAdapter();
     const raw = adapter.get(`SELECT data FROM usageDaily`)?.data || "";

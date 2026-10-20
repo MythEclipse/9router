@@ -9,8 +9,17 @@ const LOG_LEVELS = {
 
 const LEVEL = LOG_LEVELS[process.env.LOG_LEVEL?.toUpperCase?.()] ?? LOG_LEVELS.INFO;
 
+/**
+ * Timestamp for log lines ("HH:MM:SS", local time).
+ *
+ * Plain arithmetic rather than toLocaleTimeString: the options-object form costs
+ * ~56-77us per call and the request path formats one clock per line it prints.
+ * Output is identical, so log readers see no difference. See timeFormat.js.
+ */
 function formatTime() {
-  return new Date().toLocaleTimeString("en-US", { hour12: false });
+  const d = new Date();
+  const pad = (n) => (n < 10 ? `0${n}` : `${n}`);
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
 // Colored-dot tags to correlate request lines by session (same session → same color)

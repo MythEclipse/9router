@@ -103,6 +103,9 @@ export async function createSqlJsAdapter(filePath) {
     if (saveTimer) clearTimeout(saveTimer);
     if (dirty) persist();
     db.close();
+    process.off("beforeExit", flush);
+    process.off("SIGINT", flush);
+    process.off("SIGTERM", flush);
   }
 
   // Flush on shutdown

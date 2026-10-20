@@ -6,13 +6,40 @@ const pricingKv = makeKv("pricing");
 const CACHE_TTL_MS = 5000;
 
 let cache = { value: null, expiresAt: 0 };
+/**
+ * User pricing overrides, memoised for the same window as the merged map.
+ *
+ * `getPricingForModel` runs on EVERY usage write (calculateCost) and used to
+ * re-read the whole `pricing` scope each time — 18us of SQLite + JSON per
+ * completed request, purely to price a row. Invalidated together with the merged
+ * map, so an edit is visible on the next call.
+ */
+let userCache = { value: null, expiresAt: 0 };
 
 function invalidate() {
   cache = { value: null, expiresAt: 0 };
+  userCache = { value: null, expiresAt: 0 };
+}
+
+/**
+ * Drop the merged pricing map. Exported so a caller that rewrote the `pricing`
+ * scope OUTSIDE this module (importDb) can clear it, instead of waiting out the
+ * TTL and serving pre-import prices.
+ */
+export function invalidatePricingCache() {
+  invalidate();
 }
 
 async function getUserPricing() {
   return await pricingKv.getAll();
+}
+
+async function getUserPricingCached() {
+  const now = Date.now();
+  if (userCache.value && userCache.expiresAt > now) return userCache.value;
+  const value = await getUserPricing();
+  userCache = { value, expiresAt: now + CACHE_TTL_MS };
+  return value;
 }
 
 export async function getPricing() {
@@ -50,7 +77,7 @@ export async function getPricing() {
 
 export async function getPricingForModel(provider, model) {
   if (!model) return null;
-  const userPricing = await getUserPricing();
+  const userPricing = await getUserPricingCached();
   if (provider && userPricing[provider]?.[model]) return userPricing[provider][model];
   const { getPricingForModel: resolveConst } = await import("open-sse/providers/pricing.js");
   return resolveConst(provider, model);

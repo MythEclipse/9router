@@ -34,9 +34,19 @@ export function createBetterSqliteAdapter(filePath) {
 
   // Ensure WAL is flushed and -wal/-shm files removed on shutdown
   const onShutdown = () => gracefulClose();
+  const onSigint = () => { onShutdown(); process.exit(0); };
+  const onSigterm = () => { onShutdown(); process.exit(0); };
   process.once("beforeExit", onShutdown);
-  process.once("SIGINT", () => { onShutdown(); process.exit(0); });
-  process.once("SIGTERM", () => { onShutdown(); process.exit(0); });
+  process.once("SIGINT", onSigint);
+  process.once("SIGTERM", onSigterm);
+
+  // See nodeSqliteAdapter: a rebuilt adapter must not leave its handlers (and a
+  // closed database) attached for the life of the process.
+  function detachShutdownHandlers() {
+    process.off("beforeExit", onShutdown);
+    process.off("SIGINT", onSigint);
+    process.off("SIGTERM", onSigterm);
+  }
 
   return {
     driver: "better-sqlite3",
@@ -48,6 +58,7 @@ export function createBetterSqliteAdapter(filePath) {
     checkpoint() { try { db.pragma("wal_checkpoint(TRUNCATE)"); } catch {} },
     close() {
       clearInterval(checkpointTimer);
+      detachShutdownHandlers();
       gracefulClose();
     },
     raw: db,

@@ -3,7 +3,7 @@
 // pre-change safety backup in migrate.js: when the stored version is lower,
 // one lightweight DB backup is taken before applying schema changes. Forgetting
 // to bump only skips that backup — it does NOT break the additive auto-sync.
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export const PRAGMA_SQL = `
 PRAGMA journal_mode = WAL;
@@ -142,6 +142,18 @@ export const TABLES = {
       dateKey: "TEXT PRIMARY KEY",
       data: "TEXT NOT NULL",
     },
+  },
+  // Per-request deltas waiting to be folded into usageDaily. See the coalesced
+  // writer in repos/usageRepo.js: the day blob is O(size) to rewrite, so it is
+  // no longer rewritten per request. Each request appends one small row here
+  // (durable immediately) and a periodic flush folds the batch into the blob.
+  usagePending: {
+    columns: {
+      id: "INTEGER PRIMARY KEY AUTOINCREMENT",
+      dateKey: "TEXT NOT NULL",
+      entry: "TEXT NOT NULL",
+    },
+    indexes: ["CREATE INDEX IF NOT EXISTS idx_up_date ON usagePending(dateKey)"],
   },
   requestDetails: {
     columns: {

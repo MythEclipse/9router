@@ -97,6 +97,39 @@ async function readRaw() {
   return row ? parseJson(row.data, {}) : {};
 }
 
+/**
+ * Raw settings row, memoised.
+ *
+ * `getSettings()` is called ~6 times per chat request (handler auth gate, combo
+ * expansion, per-account dispatch, sibling handlers) and each call re-reads and
+ * re-parses the row from SQLite — 17-26us apiece, on the request path, in a
+ * process where every DB call blocks the event loop. Nothing about the row
+ * changes between those calls.
+ *
+ * The cache holds the RAW row (not the merged object): `mergeWithDefaults`
+ * mutates the nested `capacityAdapter` entries it walks, so handing every caller
+ * one shared merged object would let one caller's write through to the next
+ * request. Merging is ~5us and stays per-call; this only removes the query.
+ *
+ * Invalidation: `updateSettings` and `importDb` clear it (single-process gateway,
+ * and this is the only writer), and the TTL bounds anything that writes the row
+ * behind our back.
+ */
+const RAW_CACHE_TTL_MS = 2000;
+let rawCache = { value: null, expiresAt: 0 };
+
+function invalidateRawCache() {
+  rawCache = { value: null, expiresAt: 0 };
+}
+
+async function readRawCached() {
+  const now = Date.now();
+  if (rawCache.value && rawCache.expiresAt > now) return rawCache.value;
+  const value = await readRaw();
+  rawCache = { value, expiresAt: now + RAW_CACHE_TTL_MS };
+  return value;
+}
+
 // Merge raw settings with defaults; backward-compat for missing keys
 export function mergeWithDefaults(raw) {
   const merged = { ...DEFAULT_SETTINGS, ...(raw || {}) };
@@ -127,7 +160,7 @@ export function mergeWithDefaults(raw) {
 }
 
 export async function getSettings() {
-  const raw = await readRaw();
+  const raw = await readRawCached();
   return mergeWithDefaults(raw);
 }
 
@@ -144,7 +177,19 @@ export async function updateSettings(updates) {
       [stringifyJson(next)],
     );
   });
+  // The memoised raw row is now stale — clear it before returning so the very
+  // next getSettings() (including one inside this same request) sees the write.
+  invalidateRawCache();
   return mergeWithDefaults(next);
+}
+
+/**
+ * Drop the memoised settings row. Called by every writer of the settings table
+ * (`updateSettings`, `importDb`) so a settings change is visible immediately
+ * rather than after the TTL.
+ */
+export function invalidateSettingsCache() {
+  invalidateRawCache();
 }
 
 export async function isCloudEnabled() {

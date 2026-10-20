@@ -1,6 +1,10 @@
 // Public API barrel — all DB functions
 import { getAdapter } from "./driver.js";
 import { stringifyJson, parseJson } from "./helpers/jsonCol.js";
+import { invalidateSettingsCache } from "./repos/settingsRepo.js";
+import { invalidatePricingCache } from "./repos/pricingRepo.js";
+import { invalidateApiKeyCache } from "./repos/apiKeysRepo.js";
+import { invalidateNodeCache } from "./repos/nodesRepo.js";
 import { keyAccessFromColumns, keyAccessToColumns, validateKeyAccessInput } from "@/shared/utils/keyAccess.js";
 import { KEY_ACCESS_UNRESTRICTED } from "@/shared/constants/keyAccess.js";
 
@@ -61,7 +65,7 @@ export {
 export {
   statsEmitter, trackPendingRequest, getActiveRequests,
   saveRequestUsage, getUsageHistory, getUsageStats, getChartData,
-  appendRequestLog, getRecentLogs,
+  appendRequestLog, getRecentLogs, flushDayRollup,
 } from "./repos/usageRepo.js";
 
 // Request details
@@ -172,6 +176,16 @@ export async function importDb(payload) {
       db.run(`INSERT OR REPLACE INTO kv(scope, key, value) VALUES('pricing', ?, ?)`, [provider, stringifyJson(models || {})]);
     }
   });
+
+  // Settings, pricing and api-key caches are process-wide memos over rows this
+  // call just rewrote. Without clearing them, a restore returns the freshly
+  // imported data in its OWN response while the next request keeps serving
+  // pre-import values — for api keys that means a key the import just deleted
+  // still authenticating.
+  invalidateSettingsCache();
+  invalidatePricingCache();
+  invalidateApiKeyCache();
+  invalidateNodeCache();
 
   return await exportDb();
 }
