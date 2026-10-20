@@ -67,6 +67,11 @@ export function stripContinuityFields(body) {
 export async function handleChatCore({ body, modelInfo, credentials, log, onCredentialsRefreshed, onRequestSuccess, onDisconnect, clientRawRequest, connectionId, userAgent, apiKey, ccFilterNaming, rtkEnabled, headroomEnabled, headroomUrl, headroomCompressUserMessages, headroomTimeoutMs, cavemanEnabled, cavemanLevel, ponytailEnabled, ponytailLevel, pxpipeEnabled, pxpipeMinChars, pxpipeTimeoutMs, pxpipeTransform, onPxpipeEvent, sourceFormatOverride, providerThinking, providerOverrides, safeguardsClassifierModel, webSearchEnabled, webSearchProvider, searchCredentialResolver, searchProviderResolver, searchEndpointRunner = null, clientFormat = null }) {
   const { provider, model } = modelInfo;
   const requestStartTime = Date.now();
+  // Per-request identity for the usage row. Every caller stamps its own
+  // timestamp, so it can never identify a request — this can, and it is what
+  // lets saveRequestUsage dedupe a genuine double-report without collapsing two
+  // distinct requests that happen to share a millisecond.
+  const requestId = `${requestStartTime}-${Math.random().toString(36).slice(2, 11)}`;
   // Stable per-session color so all lines of one CLI conversation share a tag
   const sessionSeed = (() => {
     try {
@@ -575,7 +580,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     return createErrorResult(statusCode, errMsg, resetsAtMs, upstreamResponseHeaders(providerResponse.headers), clientFormat);
   }
 
-  const sharedCtx = { provider, model, body, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, clientRawRequest, onRequestSuccess, pxpipe: pxpipeSummary, reqTag, log, clientFormat };
+  const sharedCtx = { provider, model, body, stream, translatedBody, finalBody, requestStartTime, requestId, connectionId, apiKey, clientRawRequest, onRequestSuccess, pxpipe: pxpipeSummary, reqTag, log, clientFormat };
   const appendLog = (extra) => appendRequestLog({ model, provider, connectionId, ...extra }).catch(() => { });
   const trackDone = () => trackPendingRequest(model, provider, connectionId, false);
 

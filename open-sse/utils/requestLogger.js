@@ -69,25 +69,34 @@ function writeJsonFile(sessionPath, filename, data) {
   }
 }
 
-// Mask sensitive data in headers (DISABLED - keep full token for testing)
+// Mask credentials before any request/response header reaches disk.
+//
+// This is opt-in debug logging (ENABLE_REQUEST_LOGS=true), but "debug" is not a
+// licence to persist live credentials: `logTargetRequest` receives the headers
+// the gateway sends UPSTREAM, which carry the provider's Authorization/x-api-key
+// and any Cookie the lane needs. A logs/ directory left on a shared host then
+// holds working keys for every provider the operator has connected.
+//
+// Keep enough of each value to correlate a failure with a credential (first 6 /
+// last 4) and mask the rest.
+const SENSITIVE_HEADER_PARTS = ["authorization", "x-api-key", "api-key", "apikey", "cookie", "token", "secret"];
+
+function maskHeaderValue(value) {
+  const text = String(value ?? "");
+  if (text.length <= 12) return "***";
+  return `${text.slice(0, 6)}...${text.slice(-4)}`;
+}
+
 function maskSensitiveHeaders(headers) {
   if (!headers) return {};
-  return { ...headers };
-  
-  // Old masking code (disabled):
-  // const masked = { ...headers };
-  // const sensitiveKeys = ["authorization", "x-api-key", "cookie", "token"];
-  // 
-  // for (const key of Object.keys(masked)) {
-  //   const lowerKey = key.toLowerCase();
-  //   if (sensitiveKeys.some(sk => lowerKey.includes(sk))) {
-  //     const value = masked[key];
-  //     if (value && value.length > 20) {
-  //       masked[key] = value.slice(0, 10) + "..." + value.slice(-5);
-  //     }
-  //   }
-  // }
-  // return masked;
+  const masked = {};
+  for (const [key, value] of Object.entries(headers)) {
+    const lower = String(key).toLowerCase();
+    masked[key] = SENSITIVE_HEADER_PARTS.some((part) => lower.includes(part))
+      ? maskHeaderValue(value)
+      : value;
+  }
+  return masked;
 }
 
 // No-op logger when logging is disabled
@@ -166,11 +175,12 @@ export async function createRequestLogger(sourceFormat, targetFormat, model) {
     // 5. Log provider response (for non-streaming or error)
     logProviderResponse(status, statusText, headers, body) {
       const filename = "5_res_provider.json";
+      const plain = headers ? (typeof headers.entries === "function" ? Object.fromEntries(headers.entries()) : headers) : {};
       writeJsonFile(sessionPath, filename, {
         timestamp: new Date().toISOString(),
         status,
         statusText,
-        headers: headers ? (typeof headers.entries === "function" ? Object.fromEntries(headers.entries()) : headers) : {},
+        headers: maskSensitiveHeaders(plain),
         body
       });
     },

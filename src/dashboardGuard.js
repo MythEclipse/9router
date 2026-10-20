@@ -61,26 +61,15 @@ const ALWAYS_PROTECTED = [
   "/api/oauth/zed/auto-import",
 ];
 
-// Require auth, but allow through if requireLogin is disabled
-const PROTECTED_API_PATHS = [
-  "/api/settings",
-  "/api/keys",
-  "/api/providers",
-  "/api/provider-nodes",
-  "/api/proxy-pools",
-  "/api/combos",
-  "/api/models",
-  "/api/usage",
-  "/api/oauth",
-  "/api/cloud",
-  "/api/media-providers",
-  "/api/pricing",
-  "/api/tags",
-  "/api/cli-tools",
-  "/api/mcp",
-  "/api/translator",
-  "/api/tunnel",
-];
+// Require auth, but allow through if requireLogin is disabled.
+//
+// NOTE: there is deliberately no PROTECTED_API_PATHS list here. Authorization for
+// /api/* is deny-by-default below (every path needs auth unless it is on
+// PUBLIC_API_PATHS/PUBLIC_PREFIXES), so an allow-list of "protected" prefixes
+// would be dead weight — and the previous one was exactly that: 18 prefixes that
+// no code read, which reads like a security policy to anyone auditing this file
+// while protecting nothing. Add to PUBLIC_API_PATHS to open a route, and to
+// ALWAYS_PROTECTED / LOCAL_ONLY_PATHS to tighten one.
 
 // Routes that spawn child processes or read host secrets — restrict to localhost.
 const LOCAL_ONLY_PATHS = [

@@ -271,6 +271,41 @@ export async function getActiveRequests() {
   return { activeRequests, recentRequests, errorProvider };
 }
 
+/**
+ * usageHistory has no natural size bound: one row per request, forever, and
+ * nothing ever deletes them (requestDetails has maxRecords, this table had
+ * nothing). On a gateway that runs for months that is an unbounded file.
+ *
+ * Nothing reads a raw row older than 60 days: getUsageStats/getChartData answer
+ * 24h/7d/30d/60d from usageHistory and everything longer from the usageDaily
+ * rollup, while lifetime totals live in _meta. So rows past the retention window
+ * are dead weight.
+ *
+ * Runs opportunistically from the write path (at most once an hour) rather than a
+ * timer, so it costs nothing on a gateway that is not taking traffic.
+ */
+const HISTORY_RETENTION_MS = 90 * 86400000;
+const HISTORY_PRUNE_INTERVAL_MS = 3600000;
+let lastHistoryPruneAt = 0;
+
+function pruneHistory(db) {
+  const now = Date.now();
+  if (now - lastHistoryPruneAt < HISTORY_PRUNE_INTERVAL_MS) return;
+  lastHistoryPruneAt = now;
+  try {
+    db.run(`DELETE FROM usageHistory WHERE timestamp < ?`, [
+      new Date(now - HISTORY_RETENTION_MS).toISOString(),
+    ]);
+  } catch { /* pruning must never fail a usage write */ }
+}
+
+// Test seam: the hourly throttle would otherwise make the prune untestable
+// within one process (only the first call in a run ever prunes).
+export const __test__ = {
+  resetHistoryPruneThrottle() { lastHistoryPruneAt = 0; },
+  HISTORY_RETENTION_MS,
+};
+
 export async function saveRequestUsage(entry, options = {}) {
   // Lifecycle rows (pending/error) exist for the Request Logs view only. They
   // are NOT usage: a request that was billed nothing must not move token, cost
@@ -298,23 +333,50 @@ export async function saveRequestUsage(entry, options = {}) {
         clearPendingRow(db, entry);
       }
 
+      // Dedupe protects against ONE request being reported twice.
+      //
+      // With an explicit requestId we key on that — the only thing that can
+      // actually identify a request, since every caller stamps its own
+      // `new Date().toISOString()` and two reports of the same call are always
+      // milliseconds apart. Without one we keep the historical byte-identical
+      // key (timestamp+model+counts) so untagged callers behave exactly as
+      // before.
+      //
+      // The id path exists because that legacy key is also a collision: two
+      // DISTINCT requests that land on the same millisecond with equal token
+      // counts (a burst of identical prompts on one key) matched it and one was
+      // silently dropped. Callers in the chat path always supply an id now.
       if (!allowDuplicate) {
-        const existing = db.get(
-          `SELECT id, endpoint FROM usageHistory
-           WHERE timestamp = ?
-             AND COALESCE(provider, '') = COALESCE(?, '')
-             AND COALESCE(model, '') = COALESCE(?, '')
-             AND COALESCE(connectionId, '') = COALESCE(?, '')
-             AND COALESCE(apiKey, '') = COALESCE(?, '')
-             AND promptTokens = ?
-             AND completionTokens = ?
-           ORDER BY id DESC LIMIT 1`,
-          [
-            entry.timestamp, entry.provider || null, entry.model || null,
-            entry.connectionId || null, entry.apiKey || null,
-            promptTokens, completionTokens,
-          ]
-        );
+        const existing = entry.requestId
+          ? db.get(
+            `SELECT id, endpoint FROM usageHistory
+               WHERE COALESCE(provider, '') = COALESCE(?, '')
+                 AND COALESCE(model, '') = COALESCE(?, '')
+                 AND COALESCE(connectionId, '') = COALESCE(?, '')
+                 AND meta LIKE ?
+               ORDER BY id DESC LIMIT 1`,
+            [
+              entry.provider || null, entry.model || null,
+              entry.connectionId || null,
+              `%"requestId":${JSON.stringify(String(entry.requestId))}%`,
+            ]
+          )
+          : db.get(
+            `SELECT id, endpoint FROM usageHistory
+               WHERE timestamp = ?
+                 AND COALESCE(provider, '') = COALESCE(?, '')
+                 AND COALESCE(model, '') = COALESCE(?, '')
+                 AND COALESCE(connectionId, '') = COALESCE(?, '')
+                 AND COALESCE(apiKey, '') = COALESCE(?, '')
+                 AND promptTokens = ?
+                 AND completionTokens = ?
+               ORDER BY id DESC LIMIT 1`,
+            [
+              entry.timestamp, entry.provider || null, entry.model || null,
+              entry.connectionId || null, entry.apiKey || null,
+              promptTokens, completionTokens,
+            ]
+          );
 
         if (existing) {
           if (!existing.endpoint && entry.endpoint) {
@@ -330,7 +392,8 @@ export async function saveRequestUsage(entry, options = {}) {
           entry.timestamp, entry.provider || null, entry.model || null,
           entry.connectionId || null, entry.apiKey || null, entry.endpoint || null,
           promptTokens, completionTokens, entry.cost || 0, entry.status || "ok",
-          stringifyJson(tokens), stringifyJson({}),
+          stringifyJson(tokens),
+          stringifyJson(entry.requestId ? { requestId: String(entry.requestId) } : {}),
         ]
       );
 
@@ -354,6 +417,10 @@ export async function saveRequestUsage(entry, options = {}) {
       db.run(`INSERT INTO _meta(key, value) VALUES('totalRequestsLifetime', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, [String(next)]);
       inserted = true;
     });
+
+    // Outside the transaction: a prune is housekeeping, and doing a large DELETE
+    // inside the same transaction as the insert would hold the write lock for it.
+    if (!logOnly) pruneHistory(db);
 
     if (inserted) {
       if (!logOnly) pushToRing(entry);
