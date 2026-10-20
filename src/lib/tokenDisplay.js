@@ -13,11 +13,21 @@
 // look like a broken recorder. Every helper here accepts both shapes.
 
 export function getCachedTokens(tokens) {
-  return tokens?.cached_tokens ?? tokens?.prompt_tokens_details?.cached_tokens ?? tokens?.cache_read_input_tokens ?? 0;
+  return (
+    tokens?.cached_tokens ??
+    tokens?.prompt_tokens_details?.cached_tokens ??
+    tokens?.cache_read_input_tokens ??
+    0
+  );
 }
 
 export function getCacheCreationTokens(tokens) {
-  return tokens?.cache_creation_tokens ?? tokens?.prompt_tokens_details?.cache_creation_tokens ?? tokens?.cache_creation_input_tokens ?? 0;
+  return (
+    tokens?.cache_creation_tokens ??
+    tokens?.prompt_tokens_details?.cache_creation_tokens ??
+    tokens?.cache_creation_input_tokens ??
+    0
+  );
 }
 
 export function getOutputTokens(tokens) {

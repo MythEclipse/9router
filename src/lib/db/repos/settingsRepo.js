@@ -118,7 +118,7 @@ export function mergeWithDefaults(raw) {
       const entry = merged.capacityAdapter[capKey];
       if (Array.isArray(entry?.models)) {
         entry.models = entry.models.map((m) =>
-          m === "oc/mimo-v2.5-free" ? "oc/mimo-v2.6-flash-free" : m
+          m === "oc/mimo-v2.5-free" ? "oc/mimo-v2.6-flash-free" : m,
         );
       }
     }
@@ -154,12 +154,7 @@ export async function isCloudEnabled() {
 
 export async function getCloudUrl() {
   const settings = await getSettings();
-  return (
-    settings.cloudUrl ||
-    process.env.CLOUD_URL ||
-    process.env.NEXT_PUBLIC_CLOUD_URL ||
-    ""
-  );
+  return settings.cloudUrl || process.env.CLOUD_URL || process.env.NEXT_PUBLIC_CLOUD_URL || "";
 }
 
 export async function exportSettings() {

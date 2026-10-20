@@ -7,7 +7,12 @@ import Drawer from "@/shared/components/Drawer";
 import Pagination from "@/shared/components/Pagination";
 import { cn } from "@/shared/utils/cn";
 import { AI_PROVIDERS, getProviderByAlias } from "@/shared/constants/providers";
-import { getCachedTokens, getCacheCreationTokens, getInputTokens, getOutputTokens } from "@/lib/tokenDisplay";
+import {
+  getCachedTokens,
+  getCacheCreationTokens,
+  getInputTokens,
+  getOutputTokens,
+} from "@/lib/tokenDisplay";
 
 let providerNameCache = null;
 let providerNodesCache = null;
@@ -53,7 +58,9 @@ function LargePayload({ value }) {
       </div>
       <pre className="max-h-[300px] max-w-full overflow-auto rounded-lg border border-black/5 bg-black/5 p-3 font-mono text-xs text-text-main dark:border-white/5 dark:bg-white/5 sm:p-4">
         {shown}
-        {!expanded && value.length > shown.length ? "\n… truncated in view (expand to see the rest)" : ""}
+        {!expanded && value.length > shown.length
+          ? "\n… truncated in view (expand to see the rest)"
+          : ""}
       </pre>
     </div>
   );
@@ -70,7 +77,9 @@ function WithheldNotice({ value }) {
         {value?.field ? <code className="font-mono">{value.field}</code> : "This field"} was not
         returned by the API{value?.bytes ? ` (${value.bytes} bytes stored)` : ""}.
       </p>
-      <p className="mt-1 opacity-90">{value?.hint || "Enable payloads in Settings → Observability to view it."}</p>
+      <p className="mt-1 opacity-90">
+        {value?.hint || "Enable payloads in Settings → Observability to view it."}
+      </p>
     </div>
   );
 }
@@ -124,7 +133,7 @@ async function fetchProviderNames() {
 
   providerNameCache = {
     ...AI_PROVIDERS,
-    ...providerNodesCache
+    ...providerNodesCache,
   };
 
   return { providerNameCache, providerNodesCache };
@@ -136,7 +145,7 @@ function getProviderName(providerId, cache) {
 
   const cached = cache[providerId];
 
-  if (typeof cached === 'string') {
+  if (typeof cached === "string") {
     return cached;
   }
 
@@ -150,35 +159,34 @@ function getProviderName(providerId, cache) {
 
 function CollapsibleSection({ title, children, defaultOpen = false, icon = null }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
-  
+
   return (
     <div className="border border-black/5 dark:border-white/5 rounded-lg overflow-hidden">
-      <button 
+      <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex items-center justify-between p-3 bg-black/[0.02] dark:bg-white/[0.02] hover:bg-black/[0.04] dark:hover:bg-white/[0.04] transition-colors"
       >
         <div className="flex items-center gap-2">
-          {icon && <span className="material-symbols-outlined text-[18px] text-text-muted">{icon}</span>}
+          {icon && (
+            <span className="material-symbols-outlined text-[18px] text-text-muted">{icon}</span>
+          )}
           <span className="font-semibold text-sm text-text-main">{title}</span>
         </div>
-        <span className={cn(
-          "material-symbols-outlined text-[20px] text-text-muted transition-transform duration-200",
-          isOpen ? "rotate-90" : ""
-        )}>
+        <span
+          className={cn(
+            "material-symbols-outlined text-[20px] text-text-muted transition-transform duration-200",
+            isOpen ? "rotate-90" : "",
+          )}
+        >
           chevron_right
         </span>
       </button>
-      
-      {isOpen && (
-        <div className="p-4 border-t border-black/5 dark:border-white/5">
-          {children}
-        </div>
-      )}
+
+      {isOpen && <div className="p-4 border-t border-black/5 dark:border-white/5">{children}</div>}
     </div>
   );
 }
-
 
 export default function RequestDetailsTab() {
   const [details, setDetails] = useState([]);
@@ -186,7 +194,7 @@ export default function RequestDetailsTab() {
     page: 1,
     pageSize: 20,
     totalItems: 0,
-    totalPages: 0
+    totalPages: 0,
   });
   const [loading, setLoading] = useState(false);
   const [selectedDetail, setSelectedDetail] = useState(null);
@@ -196,7 +204,7 @@ export default function RequestDetailsTab() {
   const [filters, setFilters] = useState({
     provider: "",
     startDate: "",
-    endDate: ""
+    endDate: "",
   });
 
   const fetchProviders = useCallback(async () => {
@@ -222,7 +230,7 @@ export default function RequestDetailsTab() {
     try {
       const params = new URLSearchParams({
         page: pagination.page.toString(),
-        pageSize: pagination.pageSize.toString()
+        pageSize: pagination.pageSize.toString(),
       });
       if (filters.provider) params.append("provider", filters.provider);
       if (filters.startDate) params.append("startDate", filters.startDate);
@@ -230,10 +238,10 @@ export default function RequestDetailsTab() {
 
       const res = await fetch(`/api/usage/request-details?${params}`);
       const data = await res.json();
-      if (seq !== requestSeq.current) return;  // a newer request already answered
+      if (seq !== requestSeq.current) return; // a newer request already answered
 
       setDetails(data.details || []);
-      setPagination(prev => ({ ...prev, ...data.pagination }));
+      setPagination((prev) => ({ ...prev, ...data.pagination }));
     } catch (error) {
       if (seq !== requestSeq.current) return;
       console.error("Failed to fetch request details:", error);
@@ -261,11 +269,11 @@ export default function RequestDetailsTab() {
   };
 
   const handlePageChange = (newPage) => {
-    setPagination(prev => ({ ...prev, page: newPage }));
+    setPagination((prev) => ({ ...prev, page: newPage }));
   };
 
   const handlePageSizeChange = (newPageSize) => {
-    setPagination(prev => ({ ...prev, pageSize: newPageSize, page: 1 }));
+    setPagination((prev) => ({ ...prev, pageSize: newPageSize, page: 1 }));
   };
 
   // A filter change on page 3 asks for page 3 of a narrower result set, which is
@@ -286,7 +294,9 @@ export default function RequestDetailsTab() {
       <Card padding="md">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="flex min-w-0 flex-col gap-2">
-            <label htmlFor="provider-filter" className="text-sm font-medium text-text-main">Provider</label>
+            <label htmlFor="provider-filter" className="text-sm font-medium text-text-main">
+              Provider
+            </label>
             <select
               id="provider-filter"
               value={filters.provider}
@@ -294,9 +304,9 @@ export default function RequestDetailsTab() {
               className={cn(
                 "h-9 px-3 rounded-lg border border-black/10 dark:border-white/10 bg-surface",
                 "text-sm text-text-main focus:outline-none focus:ring-2 focus:ring-primary/20",
-                "w-full min-w-0 cursor-pointer"
+                "w-full min-w-0 cursor-pointer",
               )}
-              style={{ colorScheme: 'auto' }}
+              style={{ colorScheme: "auto" }}
             >
               <option value="">All Providers</option>
               {providers.map((provider) => (
@@ -306,9 +316,11 @@ export default function RequestDetailsTab() {
               ))}
             </select>
           </div>
-          
+
           <div className="flex min-w-0 flex-col gap-2">
-            <label htmlFor="start-date-filter" className="text-sm font-medium text-text-main">Start Date</label>
+            <label htmlFor="start-date-filter" className="text-sm font-medium text-text-main">
+              Start Date
+            </label>
             <input
               id="start-date-filter"
               type="datetime-local"
@@ -316,13 +328,15 @@ export default function RequestDetailsTab() {
               onChange={(e) => updateFilters({ startDate: e.target.value })}
               className={cn(
                 "h-9 px-3 rounded-lg border border-black/10 dark:border-white/10 bg-surface",
-                "w-full min-w-0 text-sm text-text-main focus:outline-none focus:ring-2 focus:ring-primary/20"
+                "w-full min-w-0 text-sm text-text-main focus:outline-none focus:ring-2 focus:ring-primary/20",
               )}
             />
           </div>
 
           <div className="flex min-w-0 flex-col gap-2">
-            <label htmlFor="end-date-filter" className="text-sm font-medium text-text-main">End Date</label>
+            <label htmlFor="end-date-filter" className="text-sm font-medium text-text-main">
+              End Date
+            </label>
             <input
               id="end-date-filter"
               type="datetime-local"
@@ -330,15 +344,20 @@ export default function RequestDetailsTab() {
               onChange={(e) => updateFilters({ endDate: e.target.value })}
               className={cn(
                 "h-9 px-3 rounded-lg border border-black/10 dark:border-white/10 bg-surface",
-                "w-full min-w-0 text-sm text-text-main focus:outline-none focus:ring-2 focus:ring-primary/20"
+                "w-full min-w-0 text-sm text-text-main focus:outline-none focus:ring-2 focus:ring-primary/20",
               )}
             />
           </div>
-          
+
           <div className="flex min-w-0 flex-col gap-2 sm:col-span-2 lg:col-span-1">
-            <span className="hidden text-sm font-medium text-text-main opacity-0 lg:block" aria-hidden="true">Clear</span>
-            <Button 
-              variant="ghost" 
+            <span
+              className="hidden text-sm font-medium text-text-main opacity-0 lg:block"
+              aria-hidden="true"
+            >
+              Clear
+            </span>
+            <Button
+              variant="ghost"
               onClick={handleClearFilters}
               disabled={!filters.provider && !filters.startDate && !filters.endDate}
               className="w-full"
@@ -357,10 +376,16 @@ export default function RequestDetailsTab() {
                 <th className="text-left p-4 text-sm font-semibold text-text-main">Timestamp</th>
                 <th className="text-left p-4 text-sm font-semibold text-text-main">Model</th>
                 <th className="text-left p-4 text-sm font-semibold text-text-main">Provider</th>
-                <th className="text-right p-4 text-sm font-semibold text-text-main">Input Tokens</th>
+                <th className="text-right p-4 text-sm font-semibold text-text-main">
+                  Input Tokens
+                </th>
                 <th className="text-right p-4 text-sm font-semibold text-text-main">Cached</th>
-                <th className="text-right p-4 text-sm font-semibold text-text-main">Cache Creation</th>
-                <th className="text-right p-4 text-sm font-semibold text-text-main">Output Tokens</th>
+                <th className="text-right p-4 text-sm font-semibold text-text-main">
+                  Cache Creation
+                </th>
+                <th className="text-right p-4 text-sm font-semibold text-text-main">
+                  Output Tokens
+                </th>
                 <th className="text-left p-4 text-sm font-semibold text-text-main">Latency</th>
                 <th className="text-center p-4 text-sm font-semibold text-text-main">Action</th>
               </tr>
@@ -370,7 +395,9 @@ export default function RequestDetailsTab() {
                 <tr>
                   <td colSpan="9" className="p-8 text-center text-text-muted">
                     <div className="flex items-center justify-center gap-2">
-                      <span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span>
+                      <span className="material-symbols-outlined animate-spin text-[20px]">
+                        progress_activity
+                      </span>
                       Loading...
                     </div>
                   </td>
@@ -394,34 +421,38 @@ export default function RequestDetailsTab() {
                       {detail.model}
                     </td>
                     <td className="max-w-[180px] truncate p-4 text-sm text-text-main">
-                       <span className="font-medium">
-                         {getProviderName(detail.provider, providerNameCache)}
-                       </span>
-                     </td>
+                      <span className="font-medium">
+                        {getProviderName(detail.provider, providerNameCache)}
+                      </span>
+                    </td>
                     <td className="p-4 text-sm text-text-main text-right font-mono">
                       {getInputTokens(detail.tokens).toLocaleString()}
                     </td>
                     <td className="p-4 text-sm text-text-main text-right font-mono">
-                      {getCachedTokens(detail.tokens) > 0 ? getCachedTokens(detail.tokens).toLocaleString() : "—"}
+                      {getCachedTokens(detail.tokens) > 0
+                        ? getCachedTokens(detail.tokens).toLocaleString()
+                        : "—"}
                     </td>
                     <td className="p-4 text-sm text-text-main text-right font-mono">
-                      {getCacheCreationTokens(detail.tokens) > 0 ? getCacheCreationTokens(detail.tokens).toLocaleString() : "—"}
+                      {getCacheCreationTokens(detail.tokens) > 0
+                        ? getCacheCreationTokens(detail.tokens).toLocaleString()
+                        : "—"}
                     </td>
                     <td className="p-4 text-sm text-text-main text-right font-mono">
                       {getOutputTokens(detail.tokens).toLocaleString()}
                     </td>
                     <td className="p-4 text-sm text-text-muted">
                       <div className="flex flex-col gap-0.5">
-                        <div>TTFT: <span className="font-mono">{detail.latency?.ttft || 0}ms</span></div>
-                        <div>Total: <span className="font-mono">{detail.latency?.total || 0}ms</span></div>
+                        <div>
+                          TTFT: <span className="font-mono">{detail.latency?.ttft || 0}ms</span>
+                        </div>
+                        <div>
+                          Total: <span className="font-mono">{detail.latency?.total || 0}ms</span>
+                        </div>
                       </div>
                     </td>
                     <td className="p-4 text-center">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleViewDetail(detail)}
-                      >
+                      <Button variant="outline" size="sm" onClick={() => handleViewDetail(detail)}>
                         Detail
                       </Button>
                     </td>
@@ -460,29 +491,36 @@ export default function RequestDetailsTab() {
               </div>
               <div>
                 <span className="text-text-muted">Timestamp:</span>{" "}
-                <span className="text-text-main">{new Date(selectedDetail.timestamp).toLocaleString()}</span>
+                <span className="text-text-main">
+                  {new Date(selectedDetail.timestamp).toLocaleString()}
+                </span>
               </div>
               <div>
-                 <span className="text-text-muted">Provider:</span>{" "}
-                 <span className="text-text-main font-medium">{getProviderName(selectedDetail.provider, providerNameCache)}</span>
-               </div>
+                <span className="text-text-muted">Provider:</span>{" "}
+                <span className="text-text-main font-medium">
+                  {getProviderName(selectedDetail.provider, providerNameCache)}
+                </span>
+              </div>
               <div>
                 <span className="text-text-muted">Model:</span>{" "}
                 <span className="text-text-main font-mono">{selectedDetail.model}</span>
               </div>
               <div>
                 <span className="text-text-muted">Status:</span>{" "}
-                <span className={cn(
-                  "font-medium",
-                  selectedDetail.status === "success" ? "text-green-600" : "text-red-600"
-                )}>
+                <span
+                  className={cn(
+                    "font-medium",
+                    selectedDetail.status === "success" ? "text-green-600" : "text-red-600",
+                  )}
+                >
                   {selectedDetail.status}
                 </span>
               </div>
               <div>
                 <span className="text-text-muted">Latency:</span>{" "}
                 <span className="text-text-main font-mono">
-                  TTFT {selectedDetail.latency?.ttft || 0}ms / Total {selectedDetail.latency?.total || 0}ms
+                  TTFT {selectedDetail.latency?.ttft || 0}ms / Total{" "}
+                  {selectedDetail.latency?.total || 0}ms
                 </span>
               </div>
               <div>
@@ -518,14 +556,18 @@ export default function RequestDetailsTab() {
             {selectedDetail.pxpipe && (
               <div className="rounded-lg border border-black/5 dark:border-white/5 p-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="material-symbols-outlined text-[18px] text-text-muted">image</span>
+                  <span className="material-symbols-outlined text-[18px] text-text-muted">
+                    image
+                  </span>
                   <span className="font-semibold text-sm text-text-main">PXPIPE</span>
-                  <span className={cn(
-                    "text-xs px-2 py-0.5 rounded",
-                    selectedDetail.pxpipe.applied
-                      ? "bg-green-500/15 text-green-600"
-                      : "bg-amber-500/15 text-amber-600"
-                  )}>
+                  <span
+                    className={cn(
+                      "text-xs px-2 py-0.5 rounded",
+                      selectedDetail.pxpipe.applied
+                        ? "bg-green-500/15 text-green-600"
+                        : "bg-amber-500/15 text-amber-600",
+                    )}
+                  >
                     {selectedDetail.pxpipe.applied ? "Activated" : "Skipped"}
                   </span>
                 </div>
@@ -533,19 +575,28 @@ export default function RequestDetailsTab() {
                   <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
                     <div>
                       <span className="text-text-muted block text-xs">Original (est.)</span>
-                      <span className="font-mono">{(selectedDetail.pxpipe.tokensBeforeEst || 0).toLocaleString()} tokens</span>
+                      <span className="font-mono">
+                        {(selectedDetail.pxpipe.tokensBeforeEst || 0).toLocaleString()} tokens
+                      </span>
                     </div>
                     <div>
                       <span className="text-text-muted block text-xs">Compressed (est.)</span>
-                      <span className="font-mono">{(selectedDetail.pxpipe.tokensAfterEst || 0).toLocaleString()} tokens</span>
+                      <span className="font-mono">
+                        {(selectedDetail.pxpipe.tokensAfterEst || 0).toLocaleString()} tokens
+                      </span>
                     </div>
                     <div>
                       <span className="text-text-muted block text-xs">Saved</span>
-                      <span className="font-mono text-green-600">{selectedDetail.pxpipe.savedPct || 0}%</span>
+                      <span className="font-mono text-green-600">
+                        {selectedDetail.pxpipe.savedPct || 0}%
+                      </span>
                     </div>
                     <div>
                       <span className="text-text-muted block text-xs">Images</span>
-                      <span className="font-mono">{selectedDetail.pxpipe.imageCount || 0} ({selectedDetail.pxpipe.durationMs || 0}ms)</span>
+                      <span className="font-mono">
+                        {selectedDetail.pxpipe.imageCount || 0} (
+                        {selectedDetail.pxpipe.durationMs || 0}ms)
+                      </span>
                     </div>
                   </div>
                 ) : (
@@ -581,7 +632,11 @@ export default function RequestDetailsTab() {
                 />
               )}
 
-              <CollapsibleSection title="4. Client Response (Final)" defaultOpen={true} icon="output">
+              <CollapsibleSection
+                title="4. Client Response (Final)"
+                defaultOpen={true}
+                icon="output"
+              >
                 {isWithheld(selectedDetail.response) ? (
                   <WithheldNotice value={selectedDetail.response} />
                 ) : (
