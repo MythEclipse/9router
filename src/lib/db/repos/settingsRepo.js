@@ -47,10 +47,19 @@ const DEFAULT_SETTINGS = {
   observabilityBatchSize: 20,
   observabilityFlushIntervalMs: 5000,
   observabilityMaxJsonSize: 5,
-  // Payload bodies (prompts, tool calls, provider responses) are redacted from
-  // GET /api/usage/request-details by default. Turn this on to read them —
-  // see the note in that route for what it exposes.
-  observabilityIncludePayloads: false,
+  // Payload bodies (prompts, tool calls, provider responses) are returned by
+  // GET /api/usage/request-details only when this is on.
+  //
+  // Defaults to TRUE: this is a single-operator local gateway, and the logs view
+  // exists to show what a request actually contained — a redacted-by-default
+  // observability tab shows a request that used 244k tokens with no content and
+  // no way to tell why, which is the bug it is supposed to help diagnose. The
+  // exposure is contained by the dashboard auth gate (/api/usage/* requires a
+  // session) rather than by stripping the payloads.
+  //
+  // Turn it off on a shared or internet-facing instance: with requireLogin
+  // disabled, anyone who can reach the port can read every prompt and response.
+  observabilityIncludePayloads: true,
   outboundProxyEnabled: false,
   outboundProxyUrl: "",
   outboundNoProxy: "",

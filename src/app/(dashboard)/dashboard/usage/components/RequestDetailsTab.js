@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Card from "@/shared/components/Card";
 import Button from "@/shared/components/Button";
 import Drawer from "@/shared/components/Drawer";
 import Pagination from "@/shared/components/Pagination";
 import { cn } from "@/shared/utils/cn";
 import { AI_PROVIDERS, getProviderByAlias } from "@/shared/constants/providers";
+import { getCachedTokens, getCacheCreationTokens, getInputTokens, getOutputTokens } from "@/lib/tokenDisplay";
 
 let providerNameCache = null;
 let providerNodesCache = null;
@@ -15,6 +16,47 @@ let providerNodesCache = null;
 // UI shows an explanation instead of printing the marker as if it were content.
 function isWithheld(value) {
   return Boolean(value && typeof value === "object" && value.withheld === true);
+}
+
+// Pretty-printing multi-megabyte JSON on render blocks the main thread, so payload
+// bodies above this size are collapsed behind an explicit expand.
+const BIG_PAYLOAD_CHARS = 60000;
+
+function formatBytes(n) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// JSON.stringify throws on circular / BigInt values and returns undefined for
+// functions; a payload viewer must degrade to something rather than blank the tab.
+function safeStringify(value) {
+  if (value === undefined) return "";
+  try {
+    return JSON.stringify(value, null, 2) ?? String(value);
+  } catch (err) {
+    return `[unserializable payload: ${err?.message || err}]`;
+  }
+}
+
+function LargePayload({ value }) {
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? value : value.slice(0, 8000);
+  return (
+    <div>
+      <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-text-muted">
+        <span className="font-mono">{formatBytes(value.length)}</span>
+        <Button variant="outline" onClick={() => setExpanded((v) => !v)}>
+          {expanded ? "Collapse" : "Expand full payload"}
+        </Button>
+        <span>Showing first 8 KB until expanded.</span>
+      </div>
+      <pre className="max-h-[300px] max-w-full overflow-auto rounded-lg border border-black/5 bg-black/5 p-3 font-mono text-xs text-text-main dark:border-white/5 dark:bg-white/5 sm:p-4">
+        {shown}
+        {!expanded && value.length > shown.length ? "\n… truncated in view (expand to see the rest)" : ""}
+      </pre>
+    </div>
+  );
 }
 
 function WithheldNotice({ value }) {
@@ -35,13 +77,31 @@ function WithheldNotice({ value }) {
 
 function PayloadSection({ title, value, icon, defaultOpen = false }) {
   const withheld = isWithheld(value);
-  return (
-    <CollapsibleSection title={withheld ? `${title} — withheld` : title} defaultOpen={defaultOpen} icon={icon}>
-      {withheld ? (
+  if (withheld) {
+    return (
+      <CollapsibleSection title={`${title} — withheld`} defaultOpen={defaultOpen} icon={icon}>
         <WithheldNotice value={value} />
+      </CollapsibleSection>
+    );
+  }
+
+  // A translated provider request can be ~1 MB (long conversations, tool schemas).
+  // Pretty-printing that on every open freezes the tab, so past a threshold show
+  // the size and let the operator expand deliberately.
+  const raw = typeof value === "string" ? value : safeStringify(value);
+  const big = raw.length > BIG_PAYLOAD_CHARS;
+
+  return (
+    <CollapsibleSection
+      title={big ? `${title} — ${formatBytes(raw.length)}` : title}
+      defaultOpen={defaultOpen}
+      icon={icon}
+    >
+      {big ? (
+        <LargePayload value={raw} />
       ) : (
         <pre className="max-h-[300px] max-w-full overflow-auto rounded-lg border border-black/5 bg-black/5 p-3 font-mono text-xs text-text-main dark:border-white/5 dark:bg-white/5 sm:p-4">
-          {typeof value === "string" ? value : JSON.stringify(value, null, 2)}
+          {raw}
         </pre>
       )}
     </CollapsibleSection>
@@ -119,22 +179,6 @@ function CollapsibleSection({ title, children, defaultOpen = false, icon = null 
   );
 }
 
-function getCachedTokens(tokens) {
-  return tokens?.cached_tokens || tokens?.cache_read_input_tokens || 0;
-}
-
-function getCacheCreationTokens(tokens) {
-  return tokens?.cache_creation_input_tokens || 0;
-}
-
-function getInputTokens(tokens) {
-  const prompt = tokens?.prompt_tokens || tokens?.input_tokens || 0;
-  // Canonical storage keeps prompt cache-inclusive. Legacy Claude rows may have
-  // stored prompt cache-exclusive; fall back to cache when it's larger so old
-  // rows don't under-report input.
-  const cache = getCachedTokens(tokens);
-  return prompt < cache ? cache : prompt;
-}
 
 export default function RequestDetailsTab() {
   const [details, setDetails] = useState([]);
@@ -168,7 +212,12 @@ export default function RequestDetailsTab() {
     }
   }, []);
 
+  // Guards against out-of-order responses: paging quickly issues overlapping
+  // requests, and a slower earlier one would otherwise overwrite the newer page.
+  const requestSeq = useRef(0);
+
   const fetchDetails = useCallback(async () => {
+    const seq = ++requestSeq.current;
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -181,13 +230,15 @@ export default function RequestDetailsTab() {
 
       const res = await fetch(`/api/usage/request-details?${params}`);
       const data = await res.json();
+      if (seq !== requestSeq.current) return;  // a newer request already answered
 
       setDetails(data.details || []);
       setPagination(prev => ({ ...prev, ...data.pagination }));
     } catch (error) {
+      if (seq !== requestSeq.current) return;
       console.error("Failed to fetch request details:", error);
     } finally {
-      setLoading(false);
+      if (seq === requestSeq.current) setLoading(false);
     }
   }, [pagination.page, pagination.pageSize, filters]);
 
@@ -212,8 +263,17 @@ export default function RequestDetailsTab() {
     setPagination(prev => ({ ...prev, pageSize: newPageSize, page: 1 }));
   };
 
+  // A filter change on page 3 asks for page 3 of a narrower result set, which is
+  // usually empty — the operator then believes the filter matched nothing. Reset to
+  // the first page whenever the query changes.
+  const updateFilters = (patch) => {
+    setFilters({ ...filters, ...patch });
+    setPagination((prev) => (prev.page === 1 ? prev : { ...prev, page: 1 }));
+  };
+
   const handleClearFilters = () => {
     setFilters({ provider: "", startDate: "", endDate: "" });
+    setPagination((prev) => (prev.page === 1 ? prev : { ...prev, page: 1 }));
   };
 
   return (
@@ -225,7 +285,7 @@ export default function RequestDetailsTab() {
             <select
               id="provider-filter"
               value={filters.provider}
-              onChange={(e) => setFilters({ ...filters, provider: e.target.value })}
+              onChange={(e) => updateFilters({ provider: e.target.value })}
               className={cn(
                 "h-9 px-3 rounded-lg border border-black/10 dark:border-white/10 bg-surface",
                 "text-sm text-text-main focus:outline-none focus:ring-2 focus:ring-primary/20",
@@ -248,7 +308,7 @@ export default function RequestDetailsTab() {
               id="start-date-filter"
               type="datetime-local"
               value={filters.startDate}
-              onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
+              onChange={(e) => updateFilters({ startDate: e.target.value })}
               className={cn(
                 "h-9 px-3 rounded-lg border border-black/10 dark:border-white/10 bg-surface",
                 "w-full min-w-0 text-sm text-text-main focus:outline-none focus:ring-2 focus:ring-primary/20"
@@ -262,7 +322,7 @@ export default function RequestDetailsTab() {
               id="end-date-filter"
               type="datetime-local"
               value={filters.endDate}
-              onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
+              onChange={(e) => updateFilters({ endDate: e.target.value })}
               className={cn(
                 "h-9 px-3 rounded-lg border border-black/10 dark:border-white/10 bg-surface",
                 "w-full min-w-0 text-sm text-text-main focus:outline-none focus:ring-2 focus:ring-primary/20"
@@ -303,7 +363,7 @@ export default function RequestDetailsTab() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="7" className="p-8 text-center text-text-muted">
+                  <td colSpan="9" className="p-8 text-center text-text-muted">
                     <div className="flex items-center justify-center gap-2">
                       <span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span>
                       Loading...
@@ -312,7 +372,7 @@ export default function RequestDetailsTab() {
                 </tr>
               ) : details.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="p-8 text-center text-text-muted">
+                  <td colSpan="9" className="p-8 text-center text-text-muted">
                     No request details found
                   </td>
                 </tr>
@@ -343,7 +403,7 @@ export default function RequestDetailsTab() {
                       {getCacheCreationTokens(detail.tokens) > 0 ? getCacheCreationTokens(detail.tokens).toLocaleString() : "—"}
                     </td>
                     <td className="p-4 text-sm text-text-main text-right font-mono">
-                      {detail.tokens?.completion_tokens?.toLocaleString() || 0}
+                      {getOutputTokens(detail.tokens).toLocaleString()}
                     </td>
                     <td className="p-4 text-sm text-text-muted">
                       <div className="flex flex-col gap-0.5">
@@ -445,7 +505,7 @@ export default function RequestDetailsTab() {
               <div>
                 <span className="text-text-muted">Output Tokens:</span>{" "}
                 <span className="text-text-main font-mono">
-                  {selectedDetail.tokens?.completion_tokens?.toLocaleString() || 0}
+                  {getOutputTokens(selectedDetail.tokens).toLocaleString()}
                 </span>
               </div>
             </div>

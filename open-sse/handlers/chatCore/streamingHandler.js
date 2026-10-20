@@ -135,8 +135,27 @@ export async function handleStreamingResponse({ providerResponse, provider, mode
 }
 
 /**
- * Build onStreamComplete callback for streaming usage tracking.
+ * Explain an empty assistant text without pretending the recorder failed.
+ *
+ * Streaming turns genuinely come back with no text delta when the model spent the
+ * whole turn on reasoning (DeepSeek/OpenCode style), when it answered with tool
+ * calls only, or when the upstream returned an empty completion. Each case needs a
+ * different follow-up, so the stored row names the case and carries the counts.
  */
+function describeEmptyContent({ thinking, outputTokens }) {
+  const parts = [];
+  if (thinking) parts.push(`${thinking.length} chars of reasoning`);
+  if (outputTokens) parts.push(`${outputTokens} output tokens`);
+  const detail = parts.length ? ` (${parts.join(", ")})` : "";
+  if (thinking) {
+    return `[No assistant text — the turn produced reasoning only${detail}. Expand the thinking panel to read it.]`;
+  }
+  if (outputTokens) {
+    return `[No assistant text delta — upstream billed ${outputTokens} output tokens with no text content${detail}.]`;
+  }
+  return "[No assistant text — the upstream stream ended without any content or usage.]";
+}
+
 export function buildOnStreamComplete({ provider, model, connectionId, apiKey, requestStartTime, requestId, body, stream, finalBody, translatedBody, clientRawRequest, pxpipe, reqTag, log }) {
   const streamDetailId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 
@@ -145,7 +164,14 @@ export function buildOnStreamComplete({ provider, model, connectionId, apiKey, r
       ttft: ttftAt ? ttftAt - requestStartTime : Date.now() - requestStartTime,
       total: Date.now() - requestStartTime
     };
-    const safeContent = contentObj?.content || "[Empty streaming response]";
+    const thinking = contentObj?.thinking || "";
+    const content = contentObj?.content || "";
+    // An empty content string means no text delta was accumulated — not that the
+    // recorder failed. Say which, and say how much reasoning did arrive, so the row
+    // can be diagnosed without guessing (a turn that billed 77 output tokens and
+    // recorded a bare placeholder looked like a broken feature).
+    const outputTokens = usage?.completion_tokens ?? usage?.output_tokens ?? 0;
+    const safeContent = content || describeEmptyContent({ thinking, outputTokens });
     const safeThinking = contentObj?.thinking || null;
 
     saveRequestDetail(buildRequestDetail({

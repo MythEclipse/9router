@@ -5,6 +5,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { getCachedTokens, getCacheCreationTokens, getInputTokens, getOutputTokens } from "@/lib/tokenDisplay";
+
 
 const originalDataDir = process.env.DATA_DIR;
 let tempDir;
@@ -112,20 +114,6 @@ describe("request details — tab crash-risk cases", () => {
   });
 });
 
-// Mirror of RequestDetailsTab token helpers (component is "use client",
-// helpers are not exported). Keep in sync with the component.
-function getCachedTokens(tokens) {
-  return tokens?.cached_tokens || tokens?.cache_read_input_tokens || 0;
-}
-function getCacheCreationTokens(tokens) {
-  return tokens?.cache_creation_input_tokens || 0;
-}
-function getInputTokens(tokens) {
-  const prompt = tokens?.prompt_tokens || tokens?.input_tokens || 0;
-  const cache = getCachedTokens(tokens);
-  return prompt < cache ? cache : prompt;
-}
-
 describe("backupDbLite — excludes requestDetails, keeps critical data", () => {
   it("backup file omits requestDetails rows but keeps other tables", async () => {
     const { backupDbLite } = await import("@/lib/db/backup.js");
@@ -191,6 +179,26 @@ describe("token helpers — render-time crash safety", () => {
   it("prompt_tokens preferred, falls back to input_tokens", () => {
     expect(getInputTokens({ prompt_tokens: 100 })).toBe(100);
     expect(getInputTokens({ input_tokens: 50 })).toBe(50);
+  });
+
+  it("Anthropic-shaped row reports cache-exclusive input PLUS cached reads", () => {
+    // The real row that made the tab look broken: 548 fresh + 244,736 cached.
+    // Reporting max(548, 244736) hid the 548 and duplicated the Cached column.
+    expect(
+      getInputTokens({ input_tokens: 548, output_tokens: 377, cache_read_input_tokens: 244736 })
+    ).toBe(245284);
+  });
+
+  it("Anthropic-shaped row includes cache creation in the prompt total", () => {
+    expect(
+      getInputTokens({ input_tokens: 100, cache_read_input_tokens: 900, cache_creation_input_tokens: 50 })
+    ).toBe(1050);
+  });
+
+  it("OpenAI-shaped prompt_tokens stays cache-inclusive (no double count)", () => {
+    // prompt_tokens already contains the cached part; adding it again would
+    // inflate every OpenAI request.
+    expect(getInputTokens({ prompt_tokens: 1000, cached_tokens: 800 })).toBe(1000);
   });
 
   it("legacy Claude row (prompt < cache) → returns cache", () => {

@@ -38,12 +38,35 @@ export function parseSSELine(line, format = null) {
 }
 
 // Check if chunk has valuable content (not empty)
+// Providers disagree on the key that carries reasoning text: OpenAI-compatible
+// gateways use `reasoning_content`, DeepSeek and the OpenCode family use
+// `reasoning`, others `thinking`. A gate that knows only one of them silently
+// drops a reasoning-only chunk — which then never reaches the client AND never
+// lands in the observability content, so a turn that spent 77 output tokens can
+// be recorded as "[Empty streaming response]".
+export const REASONING_FIELDS = ["reasoning_content", "reasoning", "thinking"];
+
+/**
+ * Pick the reasoning text out of a delta/chunk, whichever key the upstream used.
+ * Returns "" when there is none.
+ */
+export function extractReasoningText(delta) {
+  if (!delta || typeof delta !== "object") return "";
+  for (const field of REASONING_FIELDS) {
+    const value = delta[field];
+    if (typeof value === "string" && value !== "") return value;
+  }
+  return "";
+}
+
 export function hasValuableContent(chunk, format) {
   // OpenAI format
   if (format === FORMATS.OPENAI && chunk.choices?.[0]?.delta) {
     const delta = chunk.choices[0].delta;
     return delta.content && delta.content !== "" ||
            delta.reasoning_content && delta.reasoning_content !== "" ||
+           delta.reasoning && delta.reasoning !== "" ||
+           delta.thinking && delta.thinking !== "" ||
            delta.tool_calls && delta.tool_calls.length > 0 ||
            chunk.choices[0].finish_reason ||
            delta.role;

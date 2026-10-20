@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getRequestDetails } from "@/lib/usageDb";
 import { getSettings } from "@/lib/localDb";
+import { isAuthenticated } from "@/dashboardGuard";
 
 /**
  * GET /api/usage/request-details
@@ -77,6 +78,12 @@ export async function GET(request) {
     try {
       const settings = await getSettings();
       includePayloads = settings?.observabilityIncludePayloads === true;
+      // A gateway with login disabled serves /api/usage/* to anyone who can reach
+      // the port, so payloads there would be world-readable conversation history.
+      // Withhold unless the request is authenticated even though login is off.
+      if (includePayloads && settings?.requireLogin === false) {
+        includePayloads = await isAuthenticated(request);
+      }
     } catch {
       // Fail closed: an unreadable settings row must not reveal payloads.
       includePayloads = false;
