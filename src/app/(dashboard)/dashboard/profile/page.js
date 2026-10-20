@@ -649,6 +649,25 @@ export default function ProfilePage() {
     }
   };
 
+  // Storing payloads and SHOWING them are separate switches: a detail row is
+  // recorded with its bodies either way, but GET /api/usage/request-details
+  // withholds them unless this is on. Turning it on makes the logs view able to
+  // read every prompt and response that passed through the gateway.
+  const updateObservabilityIncludePayloads = async (enabled) => {
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ observabilityIncludePayloads: enabled }),
+      });
+      if (res.ok) {
+        setSettings(prev => ({ ...prev, observabilityIncludePayloads: enabled }));
+      }
+    } catch (err) {
+      console.error("Failed to update observabilityIncludePayloads:", err);
+    }
+  };
+
   const reloadSettings = async () => {
     try {
       const res = await fetch("/api/settings");
@@ -1616,6 +1635,22 @@ export default function ProfilePage() {
             <Toggle
               checked={observabilityEnabled}
               onChange={updateObservabilityEnabled}
+              disabled={loading}
+            />
+          </div>
+          <div className="mt-4 pt-4 border-t border-black/5 dark:border-white/5 flex items-start sm:items-center justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-sm sm:text-base">Include payloads in the logs view</p>
+              <p className="text-xs sm:text-sm text-text-muted">
+                Off by default: request and response bodies stay stored but are withheld by the
+                API. Turn on to read prompts, tool calls and provider responses in the logs view —
+                this exposes the full conversation history of every request through this gateway
+                to anyone who can open the dashboard.
+              </p>
+            </div>
+            <Toggle
+              checked={settings.observabilityIncludePayloads === true}
+              onChange={updateObservabilityIncludePayloads}
               disabled={loading}
             />
           </div>

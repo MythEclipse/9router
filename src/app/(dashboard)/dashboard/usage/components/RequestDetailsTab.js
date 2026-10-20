@@ -11,6 +11,43 @@ import { AI_PROVIDERS, getProviderByAlias } from "@/shared/constants/providers";
 let providerNameCache = null;
 let providerNodesCache = null;
 
+// A payload the API withheld on purpose carries {withheld:true}. Detect it so the
+// UI shows an explanation instead of printing the marker as if it were content.
+function isWithheld(value) {
+  return Boolean(value && typeof value === "object" && value.withheld === true);
+}
+
+function WithheldNotice({ value }) {
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100 sm:p-4">
+      <div className="mb-1 flex items-center gap-2 font-semibold">
+        <span className="material-symbols-outlined text-[16px]">visibility_off</span>
+        Payload withheld
+      </div>
+      <p className="opacity-90">
+        {value?.field ? <code className="font-mono">{value.field}</code> : "This field"} was not
+        returned by the API{value?.bytes ? ` (${value.bytes} bytes stored)` : ""}.
+      </p>
+      <p className="mt-1 opacity-90">{value?.hint || "Enable payloads in Settings → Observability to view it."}</p>
+    </div>
+  );
+}
+
+function PayloadSection({ title, value, icon, defaultOpen = false }) {
+  const withheld = isWithheld(value);
+  return (
+    <CollapsibleSection title={withheld ? `${title} — withheld` : title} defaultOpen={defaultOpen} icon={icon}>
+      {withheld ? (
+        <WithheldNotice value={value} />
+      ) : (
+        <pre className="max-h-[300px] max-w-full overflow-auto rounded-lg border border-black/5 bg-black/5 p-3 font-mono text-xs text-text-main dark:border-white/5 dark:bg-white/5 sm:p-4">
+          {typeof value === "string" ? value : JSON.stringify(value, null, 2)}
+        </pre>
+      )}
+    </CollapsibleSection>
+  );
+}
+
 async function fetchProviderNames() {
   if (providerNameCache && providerNodesCache) {
     return { providerNameCache, providerNodesCache };
@@ -456,50 +493,54 @@ export default function RequestDetailsTab() {
             )}
 
             <div className="space-y-4">
-              <CollapsibleSection title="1. Client Request (Input)" defaultOpen={true} icon="input">
-                <pre className="max-h-[300px] max-w-full overflow-auto rounded-lg border border-black/5 bg-black/5 p-3 font-mono text-xs text-text-main dark:border-white/5 dark:bg-white/5 sm:p-4">
-                  {JSON.stringify(selectedDetail.request, null, 2)}
-                </pre>
-              </CollapsibleSection>
+              <PayloadSection
+                title="1. Client Request (Input)"
+                defaultOpen={true}
+                icon="input"
+                value={selectedDetail.request}
+              />
 
               {selectedDetail.providerRequest && (
-                <CollapsibleSection title="2. Provider Request (Translated)" icon="translate">
-                  <pre className="max-h-[300px] max-w-full overflow-auto rounded-lg border border-black/5 bg-black/5 p-3 font-mono text-xs text-text-main dark:border-white/5 dark:bg-white/5 sm:p-4">
-                    {JSON.stringify(selectedDetail.providerRequest, null, 2)}
-                  </pre>
-                </CollapsibleSection>
+                <PayloadSection
+                  title="2. Provider Request (Translated)"
+                  icon="translate"
+                  value={selectedDetail.providerRequest}
+                />
               )}
 
               {selectedDetail.providerResponse && (
-                <CollapsibleSection title="3. Provider Response (Raw)" icon="data_object">
-                  <pre className="max-h-[300px] max-w-full overflow-auto rounded-lg border border-black/5 bg-black/5 p-3 font-mono text-xs text-text-main dark:border-white/5 dark:bg-white/5 sm:p-4">
-                    {typeof selectedDetail.providerResponse === 'object'
-                      ? JSON.stringify(selectedDetail.providerResponse, null, 2)
-                      : selectedDetail.providerResponse
-                    }
-                  </pre>
-                </CollapsibleSection>
+                <PayloadSection
+                  title="3. Provider Response (Raw)"
+                  icon="data_object"
+                  value={selectedDetail.providerResponse}
+                />
               )}
-              
+
               <CollapsibleSection title="4. Client Response (Final)" defaultOpen={true} icon="output">
-                {selectedDetail.response?.thinking && (
-                  <div className="mb-4">
-                    <h4 className="font-semibold text-text-main mb-2 flex items-center gap-2 text-xs uppercase tracking-wide opacity-70">
-                      <span className="material-symbols-outlined text-[16px]">psychology</span>
-                      Thinking Process
+                {isWithheld(selectedDetail.response) ? (
+                  <WithheldNotice value={selectedDetail.response} />
+                ) : (
+                  <>
+                    {selectedDetail.response?.thinking && (
+                      <div className="mb-4">
+                        <h4 className="font-semibold text-text-main mb-2 flex items-center gap-2 text-xs uppercase tracking-wide opacity-70">
+                          <span className="material-symbols-outlined text-[16px]">psychology</span>
+                          Thinking Process
+                        </h4>
+                        <pre className="max-h-[200px] max-w-full overflow-auto rounded-lg border border-amber-200 bg-amber-50 p-3 font-mono text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100 sm:p-4">
+                          {selectedDetail.response.thinking}
+                        </pre>
+                      </div>
+                    )}
+
+                    <h4 className="font-semibold text-text-main mb-2 text-xs uppercase tracking-wide opacity-70">
+                      Content
                     </h4>
-                    <pre className="max-h-[200px] max-w-full overflow-auto rounded-lg border border-amber-200 bg-amber-50 p-3 font-mono text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100 sm:p-4">
-                      {selectedDetail.response.thinking}
+                    <pre className="max-h-[300px] max-w-full overflow-auto rounded-lg border border-black/5 bg-black/5 p-3 font-mono text-xs text-text-main dark:border-white/5 dark:bg-white/5 sm:p-4">
+                      {selectedDetail.response?.content || "[No content]"}
                     </pre>
-                  </div>
+                  </>
                 )}
-                
-                <h4 className="font-semibold text-text-main mb-2 text-xs uppercase tracking-wide opacity-70">
-                  Content
-                </h4>
-                <pre className="max-h-[300px] max-w-full overflow-auto rounded-lg border border-black/5 bg-black/5 p-3 font-mono text-xs text-text-main dark:border-white/5 dark:bg-white/5 sm:p-4">
-                  {selectedDetail.response?.content || "[No content]"}
-                </pre>
               </CollapsibleSection>
             </div>
           </div>

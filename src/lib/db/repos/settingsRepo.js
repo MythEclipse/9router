@@ -47,6 +47,10 @@ const DEFAULT_SETTINGS = {
   observabilityBatchSize: 20,
   observabilityFlushIntervalMs: 5000,
   observabilityMaxJsonSize: 5,
+  // Payload bodies (prompts, tool calls, provider responses) are redacted from
+  // GET /api/usage/request-details by default. Turn this on to read them —
+  // see the note in that route for what it exposes.
+  observabilityIncludePayloads: false,
   outboundProxyEnabled: false,
   outboundProxyUrl: "",
   outboundNoProxy: "",
