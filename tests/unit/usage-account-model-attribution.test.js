@@ -11,6 +11,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 let tempDir;
 let db;
+// The suite-wide setup file owns DATA_DIR for the whole worker. Capture its
+// value and restore THAT on teardown — `delete process.env.DATA_DIR` would leave
+// every later file in this worker pointing at the user's real ~/.9router.
+const originalDataDir = process.env.DATA_DIR;
 
 beforeEach(async () => {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "9router-by-account-"));
@@ -31,7 +35,8 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  delete process.env.DATA_DIR;
+  if (originalDataDir === undefined) delete process.env.DATA_DIR;
+  else process.env.DATA_DIR = originalDataDir;
   try { global._dbAdapter?.instance?.close?.(); } catch {}
   delete global._dbAdapter;
   delete global._recentRing;
