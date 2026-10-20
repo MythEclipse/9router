@@ -1,3 +1,8 @@
+# Unreleased
+
+## Fixes
+- **DB**: strip NUL bytes from bound strings so a value carrying raw binary no longer aborts the write on better-sqlite3 ("String contains null byte") or gets silently truncated at the first NUL on node:sqlite (#4917)
+
 # v0.5.104 (2026-10-15)
 
 ## Features
