@@ -22,7 +22,16 @@ import * as log from "../utils/logger.js";
 // providers can now select in parallel.
 const selectionMutexes = new Map();
 
-function acquireSelectionMutex(key) {
+/**
+ * Serialise account selection per provider.
+ *
+ * Exported so the locking property can be tested directly: the real selection
+ * path cannot demonstrate it, because the default driver (node:sqlite) is
+ * synchronous — its critical section never yields, so two providers never
+ * visibly overlap and any wall-clock comparison measures noise. That is what made
+ * an earlier end-to-end version of this test flaky rather than wrong.
+ */
+export function acquireSelectionMutex(key) {
   const current = selectionMutexes.get(key) || Promise.resolve();
   let release;
   const next = new Promise((resolve) => { release = resolve; });

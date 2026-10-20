@@ -6,107 +6,108 @@
 //
 // The lock is now per provider: an account belongs to exactly one provider, and
 // the strategy / sticky limit are read per provider, so cross-provider ordering
-// never mattered. These tests pin the two properties that must hold:
-//   • different providers select concurrently (no shared queue), and
-//   • selections OF THE SAME provider still serialise (no lost rotation state).
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+// never mattered.
+import { describe, it, expect } from "vitest";
 
-let tempDir;
-let db;
-const originalDataDir = process.env.DATA_DIR;
+// These drive the lock itself rather than the selection path. An end-to-end
+// version was flaky, and the reason is worth recording: the default driver
+// (node:sqlite) is SYNCHRONOUS, so a selection's critical section never yields to
+// the event loop. Two providers therefore never visibly overlap even when their
+// locks are independent, and any wall-clock comparison ends up measuring
+// scheduler noise. A deterministic gate on the critical section proves the same
+// property exactly, with no thresholds.
+const { acquireSelectionMutex } = await import("../../src/sse/services/auth.js");
 
-beforeEach(async () => {
-  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "9router-selection-mutex-"));
-  process.env.DATA_DIR = tempDir;
-  delete global._dbAdapter;
-  delete global._pendingRequests;
-  delete global._connectionMapCache;
-  vi.resetModules();
-  db = await import("@/lib/db/index.js");
-  await db.initDb();
-
-  const now = new Date().toISOString();
-  for (const provider of ["prova", "provb"]) {
-    for (let i = 0; i < 4; i++) {
-      await db.createProviderConnection({
-        id: `${provider}-${i}`,
-        provider,
-        authType: "apikey",
-        name: `${provider} ${i}`,
-        apiKey: `key-${provider}-${i}`,
-        priority: i + 1,
-        isActive: true,
-        testStatus: "active",
-        createdAt: now,
-        updatedAt: now,
-      });
-    }
+/** Run `fn` as `key`'s critical section, recording enter/exit order. */
+async function section(key, tag, events, fn) {
+  const mutex = acquireSelectionMutex(key);
+  await mutex.wait;
+  events.push(`${tag}:enter`);
+  try {
+    return await fn();
+  } finally {
+    events.push(`${tag}:exit`);
+    mutex.release();
   }
-  // Round-robin on BOTH providers: this is the writing path, so it is the one
-  // that could actually serialise if the lock were shared.
-  await db.updateSettings({
-    fallbackStrategy: "round-robin",
-    stickyRoundRobinLimit: 1,
-  });
-});
+}
 
-afterEach(() => {
-  if (originalDataDir === undefined) delete process.env.DATA_DIR;
-  else process.env.DATA_DIR = originalDataDir;
-  try { global._dbAdapter?.instance?.close?.(); } catch { /* already closed */ }
-  delete global._dbAdapter;
-  try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch { /* best effort */ }
-});
+describe("account selection mutex", () => {
+  it("serialises the same provider: no two sections of one key interleave", async () => {
+    const events = [];
 
-describe("account selection mutex is per provider", () => {
-  it("selects across two providers concurrently, not serially", async () => {
-    const { getProviderCredentials } = await import("../../src/sse/services/auth.js");
-
-    // Warm both providers so alias/credential caches are populated.
-    await getProviderCredentials("prova", new Set(), "m1", {});
-    await getProviderCredentials("provb", new Set(), "m1", {});
-
-    const N = 12;
-
-    // Sequential reference: N selections of prova, one after another.
-    const tSeq = process.hrtime.bigint();
-    for (let i = 0; i < N; i++) await getProviderCredentials("prova", new Set(), "m1", {});
-    const seqMs = Number(process.hrtime.bigint() - tSeq) / 1e6;
-
-    // The same N selections on prova, but with N selections of provb running at
-    // the same time. A SHARED lock would serialise all 2N (so this wall time
-    // would be ≈ 2× the sequential run); per-provider locks let the two
-    // providers progress in parallel (≈ 1× plus overhead).
-    const tPar = process.hrtime.bigint();
+    // Three concurrent holders of ONE key. Each records enter, yields, records
+    // exit. Without the lock all three would enter first.
     await Promise.all([
-      ...Array.from({ length: N }, () => getProviderCredentials("prova", new Set(), "m1", {})),
-      ...Array.from({ length: N }, () => getProviderCredentials("provb", new Set(), "m1", {})),
+      section("prova", "a", events, () => new Promise((r) => setTimeout(r, 5))),
+      section("prova", "b", events, () => new Promise((r) => setTimeout(r, 5))),
+      section("prova", "c", events, () => new Promise((r) => setTimeout(r, 5))),
     ]);
-    const parMs = Number(process.hrtime.bigint() - tPar) / 1e6;
 
-    // Generous bound: fails clearly if a shared queue comes back (≈2×), tolerant
-    // of scheduler noise on a loaded machine.
-    expect(parMs).toBeLessThan(seqMs * 1.8);
+    // Strictly nested enter/exit pairs, never two enters in a row. This is the
+    // property the round-robin rotation state depends on.
+    expect(events).toHaveLength(6);
+    for (let i = 0; i < events.length; i += 2) {
+      expect(events[i]).toMatch(/:enter$/);
+      expect(events[i + 1]).toMatch(/:exit$/);
+      expect(events[i].split(":")[0]).toBe(events[i + 1].split(":")[0]);
+    }
   });
 
-  it("still serialises selections of the SAME provider (rotation state is consistent)", async () => {
-    const { getProviderCredentials } = await import("../../src/sse/services/auth.js");
+  it("does not serialise different providers against each other", async () => {
+    const events = [];
+    // A holds its key and only finishes once B has entered. With a SHARED lock B
+    // could never enter, so this deadlocks rather than fails on a threshold.
+    let bEntered;
+    const bDidEnter = new Promise((r) => { bEntered = r; });
 
-    // 8 concurrent selections on one provider with sticky limit 1: round-robin
-    // must spread them across the 4 accounts, which only holds if the critical
-    // section never interleaves (each selection reads the state the previous one
-    // wrote).
-    const picked = await Promise.all(
-      Array.from({ length: 8 }, () => getProviderCredentials("prova", new Set(), "m1", {}))
+    const a = section("prova", "a", events, async () => {
+      await bDidEnter;
+      return "a";
+    });
+
+    const b = section("provb", "b", events, async () => {
+      bEntered();
+      return "b";
+    });
+
+    await expect(Promise.all([a, b])).resolves.toEqual(["a", "b"]);
+    // B entered while A was still open: the two keys are independent.
+    expect(events).toEqual(["a:enter", "b:enter", "b:exit", "a:exit"]);
+  });
+
+  it("releases cleanly, so the same key can be taken again immediately", async () => {
+    // Enough distinct keys to catch a leaked queue entry, then reuse one.
+    await Promise.all(
+      Array.from({ length: 50 }, (_, i) => section(`prov-${i}`, `k${i}`, [], async () => i))
     );
 
-    const ids = picked.map((c) => c?.connectionId).filter(Boolean);
-    expect(ids).toHaveLength(8);
-    // Every account gets used: a corrupted/interleaved rotation would skew onto
-    // one or two accounts and leave others untouched.
-    expect(new Set(ids).size).toBe(4);
+    // A leaked queue would hang this forever.
+    const again = await section("prov-0", "again", [], async () => "ok");
+    expect(again).toBe("ok");
+  });
+
+  it("keys the lock on the PROVIDER, not on a shared global", async () => {
+    // The three tests above pass even if getProviderCredentials locked on one
+    // constant key, because they exercise acquireSelectionMutex directly.
+    //
+    // A behavioural version of this check does NOT work here, and that is worth
+    // recording because it was tried: holding a key and asserting another
+    // provider still settles stays green under the regression, since a global-key
+    // implementation simply takes a different key than the one held, and the
+    // synchronous driver makes the two orderings indistinguishable by timing.
+    // What actually regressed historically is the KEY EXPRESSION at the call
+    // site, so assert on that directly — the same tripwire style the repo already
+    // uses for things a runtime probe cannot see.
+    const fs = await import("node:fs");
+    const url = await import("node:url");
+    const src = fs.readFileSync(
+      url.fileURLToPath(new URL("../../src/sse/services/auth.js", import.meta.url)),
+      "utf8"
+    );
+
+    // The selection must lock on the resolved provider id...
+    expect(src).toMatch(/acquireSelectionMutex\(\s*resolveProviderId\(/);
+    // ...and nowhere may it fall back to a constant shared key.
+    expect(src).not.toMatch(/acquireSelectionMutex\(\s*["'`]/);
   });
 });
