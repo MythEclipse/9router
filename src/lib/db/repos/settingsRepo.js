@@ -8,7 +8,10 @@ const DEFAULT_SETTINGS = {
   cloudEnabled: false,
   tunnelEnabled: false,
   tunnelUrl: "",
-  tunnelProvider: "cloudflare",
+  // No `tunnelProvider` selector: Cloudflare and Tailscale are independent
+  // tunnels (each with its own enable/disable route and its own `*Enabled` flag
+  // below), so a single "which tunnel provider" enum could never be read
+  // without contradicting both. The key used to sit here unread by any code.
   tailscaleEnabled: false,
   tailscaleUrl: "",
   stickyRoundRobinLimit: 3,

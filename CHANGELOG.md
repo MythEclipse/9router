@@ -1,5 +1,55 @@
 # Unreleased
 
+### Fix: audit of the routing + usage data paths (5 defects found by running the app)
+
+Each of these was reproduced live against a running server before and after the
+fix, not inferred from reading code.
+
+- **Combo stopped dead on a model-scoped failure.** `handleComboChat` decided
+  "advance to the next member?" with `checkFallbackError`, which answers a
+  different question ("cool this account down?") and deliberately returns false
+  for a 4xx matching no rule — correct for credentials, wrong for a combo. A
+  deprecated or unavailable seat (410 `ModelDeprecated`, 400 `Model is
+  unavailable`) therefore ended the whole combo, so a two-model list behaved like
+  a one-model request and returned the dead seat's error. Added
+  `shouldAdvanceComboModel` (`open-sse/services/combo.js`): model-scoped statuses
+  (400/404/406/410/422) and wordings advance, request-shaped 4xx still does not,
+  and account-scoped failures keep their cooldown-backed path. Verified: a combo
+  led by a 410 seat now answers 200 from its second member.
+- **Per-account usage collapsed to one row.** `usageDaily.byAccount` was keyed by
+  `connectionId` alone with a single `rawModel` meta field overwritten by
+  whichever model wrote last, so an account running three models reported one row
+  labelled with the last model and carrying all three models' tokens. Re-keyed to
+  `connectionId|model|provider`, with the reader parsing both shapes so an
+  upgrade reads its own history.
+- **Request Logs showed finished requests as pending, and never showed
+  failures.** The tab classifies by substring (`PENDING` pulses, `FAILED` red,
+  `OK` green) while `saveRequestUsage` writes wire-style `ok`/`error`, so every
+  success fell through all three checks and pulsed forever. Separately,
+  `appendRequestLog` was `{}` — a no-op — so the FAILED rows every error path
+  reports were never written at all. Statuses are now normalised on read
+  (`normalizeLogStatus`, with a stale `PENDING` older than the request timeout
+  rendered as `STALE`), and `appendRequestLog` records pending/error rows as
+  log-only writes that a terminal write supersedes, so one request is one row.
+- **Lifecycle rows leaked into usage totals.** Because those log rows live in
+  `usageHistory`, counting them invented zero-token request rows per failure
+  (a dead model showed up in the Account tab with `prompt=0`). `getUsageStats`
+  and `getChartData` now exclude `pending`/`error`, keeping the log complete
+  without moving token, cost or request totals.
+- **Raw API keys were persisted to disk.** `aggregateEntryToDay` wrote
+  `entry.apiKey` verbatim into `usageDaily.byApiKey[].apiKey`. The bucket id was
+  already a SHA-256 digest precisely so the raw key stayed out (AUDIT-002), but
+  the meta field reintroduced it into a long-lived aggregate, and the reader
+  passed it straight back out of `GET /api/usage/stats`. The aggregate now stores
+  the masked form and resolves key names from the bucket id.
+- **`next dev` dirtied a tracked file on every boot.** Next appends a managed
+  "This is NOT the Next.js you know" block to `CLAUDE.md`/`AGENTS.md`; both are
+  hand-maintained here, so every dev boot left an uncommitted modification.
+  Set `agentRules: false` in `next.config.mjs`.
+- Removed the unread `tunnelProvider` setting: Cloudflare and Tailscale are
+  independent tunnels with their own enable/disable routes and `*Enabled` flags,
+  so a single provider enum could never be read without contradicting both.
+
 ### Chore: consolidate CI into one branching workflow
 
 Four workflows (`deploy.yml`, `docker-deploy-imrnes.yml`, `docker-publish.yml`,

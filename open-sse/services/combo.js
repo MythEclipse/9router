@@ -389,10 +389,13 @@ export async function handleComboChat({ body, models, handleSingleModel, log, co
         try { errorText = JSON.stringify(errorText); } catch { errorText = String(errorText); }
       }
 
-      // Check if should fallback to next model
-      const { shouldFallback, cooldownMs } = checkFallbackError(result.status, errorText);
+      // Check if this combo should advance to its next model. NOT the same
+      // question as checkFallbackError's "cool this account down?" — a
+      // model-scoped 400/404/410 says nothing about the other members and must
+      // advance (see shouldAdvanceComboModel).
+      const { cooldownMs } = checkFallbackError(result.status, errorText);
 
-      if (!shouldFallback) {
+      if (!shouldAdvanceComboModel(result.status, errorText)) {
         log.warn("COMBO", `Model ${modelStr} failed (no fallback)`, { status: result.status });
         return result;
       }
@@ -437,6 +440,75 @@ export async function handleComboChat({ body, models, handleSingleModel, log, co
     JSON.stringify({ error: { message: msg } }),
     { status, headers: { "Content-Type": "application/json" } }
   );
+}
+
+// ─── Model-scoped failures inside a combo ────────────────────────────────
+//
+// checkFallbackError() answers "should this ACCOUNT be cooled down?" — and for a
+// 4xx that matched no rule it deliberately answers NO, because burning a healthy
+// credential over one malformed request is wrong (see account-fallback-4xx).
+//
+// A combo asks a different question: "should this combo advance to its next
+// MODEL?" There the asymmetry inverts. A request-shaped 400 (context overflow,
+// bad parameter) is the same failure on every member, so advancing wastes the
+// whole list — but a MODEL-shaped failure says nothing about the other members
+// at all, and refusing to advance turns a combo into a single-model request
+// that dies on the first deprecated/unavailable seat. These statuses and
+// wordings are model-scoped, so they advance without cooldown bookkeeping.
+const MODEL_SCOPED_STATUSES = new Set([400, 404, 406, 410, 422]);
+
+const MODEL_SCOPED_PATTERNS = [
+  "model is unavailable",
+  "model does not support",
+  "model not supported",
+  "model_not_supported",
+  "model is not supported",
+  "model has been deprecated",
+  "modeldeprecated",
+  "model deprecated",
+  "model is deprecated",
+  "model not found",
+  "model_not_found",
+  "no such model",
+  "unsupported model",
+  "invalid model",
+  "unknown model",
+  "model does not exist",
+  "does not support this protocol",
+  "modelprotocolunsupported",
+  "decommissioned",
+];
+
+/**
+ * Should a combo advance to its NEXT model after this response?
+ *
+ * True when the failure is scoped to the model rather than the request or the
+ * account. Account-scoped failures (401/402/403/429, rate-limit/quota wording)
+ * are already handled by checkFallbackError and stay true here as well; only the
+ * request-scoped 4xx verdict is widened for the model-scoped subset.
+ *
+ * @param {number} status - HTTP status from the member call
+ * @param {string} errorText - upstream error message
+ * @returns {boolean}
+ */
+export function shouldAdvanceComboModel(status, errorText) {
+  const code = Number(status) || 0;
+  const lower = typeof errorText === "string"
+    ? errorText.toLowerCase()
+    : errorText ? JSON.stringify(errorText).toLowerCase() : "";
+
+  // Explicit model-scoped wording wins even on a status we would otherwise
+  // treat as request-scoped (an upstream may surface a dead model as 400).
+  if (MODEL_SCOPED_PATTERNS.some((p) => lower.includes(p))) return true;
+
+  // Server-side and connect-level failures always advance.
+  if (code >= 500 || code === 0) return true;
+
+  // Account-scoped statuses keep their existing, cooldown-backed behaviour.
+  if (checkFallbackError(code, errorText).shouldFallback) return true;
+
+  // Remaining model-scoped statuses advance; anything else is request-shaped.
+  return MODEL_SCOPED_STATUSES.has(code);
 }
 
 /**

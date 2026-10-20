@@ -106,12 +106,24 @@ function aggregateEntryToDay(day, entry) {
   addToCounter(day.byModel, modelKey, { ...vals, meta: { rawModel: entry.model, provider: entry.provider } });
 
   if (entry.connectionId) {
-    addToCounter(day.byAccount, entry.connectionId, { ...vals, meta: { rawModel: entry.model, provider: entry.provider } });
+    // Keyed by the model as well as the account: an account's usage is reported
+    // per model (the dashboard groups these rows by accountName), so collapsing
+    // every model into one bucket per account reported the whole account under
+    // whichever model happened to write last, with all other models' tokens
+    // counted inside it. Meta carries rawModel/provider for the reader.
+    const accountKey = `${entry.connectionId}|${entry.model}|${entry.provider || "unknown"}`;
+    addToCounter(day.byAccount, accountKey, { ...vals, meta: { rawModel: entry.model, provider: entry.provider } });
   }
 
   const apiKeyVal = entry.apiKey && typeof entry.apiKey === "string" ? entry.apiKey : "local-no-key";
   const akModelKey = `${apiKeyBucketId(apiKeyVal)}|${entry.model}|${entry.provider || "unknown"}`;
-  addToCounter(day.byApiKey, akModelKey, { ...vals, meta: { rawModel: entry.model, provider: entry.provider, apiKey: entry.apiKey || null } });
+  // `apiKey` here must stay the MASKED form. usageDaily is a persisted,
+  // long-lived aggregate, and byApiKey is returned verbatim by
+  // GET /api/usage/stats — storing the raw secret put a replayable upstream key
+  // on disk and (via the reader's `ak.apiKey` passthrough) on the wire, which is
+  // the exposure apiKeyBucketId exists to prevent. The bucket id keeps
+  // attribution; the reader resolves names from it.
+  addToCounter(day.byApiKey, akModelKey, { ...vals, meta: { rawModel: entry.model, provider: entry.provider, apiKey: maskApiKey(apiKeyVal) } });
 
   const endpoint = entry.endpoint || "Unknown";
   const epKey = `${endpoint}|${entry.model}|${entry.provider || "unknown"}`;
@@ -259,12 +271,17 @@ export async function getActiveRequests() {
   return { activeRequests, recentRequests, errorProvider };
 }
 
-export async function saveRequestUsage(entry) {
+export async function saveRequestUsage(entry, options = {}) {
+  // Lifecycle rows (pending/error) exist for the Request Logs view only. They
+  // are NOT usage: a request that was billed nothing must not move token, cost
+  // or lifetime-counter totals, so logOnly writes usageHistory alone.
+  const logOnly = options.logOnly === true;
+  const allowDuplicate = options.allowDuplicate === true || logOnly;
   try {
     const db = await getAdapter();
 
     if (!entry.timestamp) entry.timestamp = new Date().toISOString();
-    entry.cost = await calculateCost(entry.provider, entry.model, entry.tokens);
+    entry.cost = logOnly ? 0 : await calculateCost(entry.provider, entry.model, entry.tokens);
 
     const tokens = entry.tokens || {};
     const promptTokens = tokens.prompt_tokens || tokens.input_tokens || 0;
@@ -272,31 +289,39 @@ export async function saveRequestUsage(entry) {
 
     let inserted = false;
 
-    // All 3 writes (history insert, daily upsert, lifetime counter) in ONE transaction.
+    // All writes (history insert, daily upsert, lifetime counter) in ONE transaction.
     // better-sqlite3 is sync → no JS yield mid-transaction → no race in same process.
     db.transaction(() => {
-      const existing = db.get(
-        `SELECT id, endpoint FROM usageHistory
-         WHERE timestamp = ?
-           AND COALESCE(provider, '') = COALESCE(?, '')
-           AND COALESCE(model, '') = COALESCE(?, '')
-           AND COALESCE(connectionId, '') = COALESCE(?, '')
-           AND COALESCE(apiKey, '') = COALESCE(?, '')
-           AND promptTokens = ?
-           AND completionTokens = ?
-         ORDER BY id DESC LIMIT 1`,
-        [
-          entry.timestamp, entry.provider || null, entry.model || null,
-          entry.connectionId || null, entry.apiKey || null,
-          promptTokens, completionTokens,
-        ]
-      );
+      // A terminal write closes the request's open PENDING marker, so one
+      // request is one log row rather than a start row plus an end row.
+      if (entry.status !== "pending") {
+        clearPendingRow(db, entry);
+      }
 
-      if (existing) {
-        if (!existing.endpoint && entry.endpoint) {
-          db.run(`UPDATE usageHistory SET endpoint = ? WHERE id = ?`, [entry.endpoint, existing.id]);
+      if (!allowDuplicate) {
+        const existing = db.get(
+          `SELECT id, endpoint FROM usageHistory
+           WHERE timestamp = ?
+             AND COALESCE(provider, '') = COALESCE(?, '')
+             AND COALESCE(model, '') = COALESCE(?, '')
+             AND COALESCE(connectionId, '') = COALESCE(?, '')
+             AND COALESCE(apiKey, '') = COALESCE(?, '')
+             AND promptTokens = ?
+             AND completionTokens = ?
+           ORDER BY id DESC LIMIT 1`,
+          [
+            entry.timestamp, entry.provider || null, entry.model || null,
+            entry.connectionId || null, entry.apiKey || null,
+            promptTokens, completionTokens,
+          ]
+        );
+
+        if (existing) {
+          if (!existing.endpoint && entry.endpoint) {
+            db.run(`UPDATE usageHistory SET endpoint = ? WHERE id = ?`, [entry.endpoint, existing.id]);
+          }
+          return;
         }
-        return;
       }
 
       db.run(
@@ -308,6 +333,11 @@ export async function saveRequestUsage(entry) {
           stringifyJson(tokens), stringifyJson({}),
         ]
       );
+
+      if (logOnly) {
+        inserted = true;
+        return;
+      }
 
       const dateKey = getLocalDateKey(entry.timestamp);
       const row = db.get(`SELECT data FROM usageDaily WHERE dateKey = ?`, [dateKey]);
@@ -326,7 +356,7 @@ export async function saveRequestUsage(entry) {
     });
 
     if (inserted) {
-      pushToRing(entry);
+      if (!logOnly) pushToRing(entry);
       scheduleStatsEvent("update", 250);
     }
   } catch (e) {
@@ -367,6 +397,12 @@ function loadDaysInRange(adapter, maxDays) {
 export async function getUsageStats(period = "all") {
   const db = await getAdapter();
 
+  // Lifecycle rows written by appendRequestLog (pending/error) are LOG entries,
+  // not usage: they carry no tokens and no cost, and counting them inflated
+  // per-provider/per-model request totals and invented a zero-token account row
+  // for every model-scoped failure. usageStats reads usage.
+  const USAGE_ONLY = `COALESCE(status, 'ok') NOT IN ('pending', 'error')`;
+
   const [{ getProviderConnections }, { getApiKeys }, { getProviderNodes }] = await Promise.all([
     import("./connectionsRepo.js"),
     import("./apiKeysRepo.js"),
@@ -387,12 +423,20 @@ export async function getUsageStats(period = "all") {
   let allApiKeys = [];
   try { allApiKeys = await getApiKeys(); } catch {}
   const apiKeyMap = {};
+  // Bucket id → key record. usageDaily stores only the masked key plus the
+  // bucket id embedded in its entry key, so the daily branch cannot look a name
+  // up by raw key the way the live-history branch does.
+  const apiKeyBucketMap = {};
   for (const k of allApiKeys) {
-    if (k.key) apiKeyMap[k.key.trim()] = { name: k.name, id: k.id, createdAt: k.createdAt };
+    if (k.key) {
+      const trimmed = k.key.trim();
+      apiKeyMap[trimmed] = { name: k.name, id: k.id, createdAt: k.createdAt };
+      apiKeyBucketMap[apiKeyBucketId(trimmed)] = { name: k.name, id: k.id, createdAt: k.createdAt };
+    }
   }
 
   // recentRequests from live history (last 100 entries enough for 20 deduped)
-  const recentRows = db.all(`SELECT timestamp, provider, model, tokens, status FROM usageHistory ORDER BY id DESC LIMIT 100`);
+  const recentRows = db.all(`SELECT timestamp, provider, model, tokens, status FROM usageHistory WHERE ${USAGE_ONLY} ORDER BY id DESC LIMIT 100`);
   const seen = new Set();
   const recentRequests = recentRows
     .map((r) => {
@@ -452,7 +496,7 @@ export async function getUsageStats(period = "all") {
     stats.last10Minutes.push(bucketMap[ts]);
   }
   const recent10 = db.all(
-    `SELECT timestamp, promptTokens, completionTokens, cost FROM usageHistory WHERE timestamp >= ? AND timestamp <= ?`,
+    `SELECT timestamp, promptTokens, completionTokens, cost FROM usageHistory WHERE timestamp >= ? AND timestamp <= ? AND ${USAGE_ONLY}`,
     [tenMinutesAgo.toISOString(), now.toISOString()]
   );
   for (const r of recent10) {
@@ -506,10 +550,15 @@ export async function getUsageStats(period = "all") {
         if (dateKey > (stats.byModel[statsKey].lastUsed || "")) stats.byModel[statsKey].lastUsed = dateKey;
       }
 
-      for (const [connId, a] of Object.entries(day.byAccount || {})) {
+      for (const [acctKey, a] of Object.entries(day.byAccount || {})) {
+        // byAccount keys are `connectionId|model|provider`; databases written
+        // before that shape hold a bare connectionId with a single rawModel that
+        // absorbed every model's tokens. Parse both so an upgrade reads its own
+        // history instead of showing "Account undefined...".
+        const [connId, keyModel, keyProvider] = acctKey.split("|");
         const accountName = connectionMap[connId] || `Account ${connId.slice(0, 8)}...`;
-        const rawModel = a.rawModel || "";
-        const provider = a.provider || "";
+        const rawModel = keyModel || a.rawModel || "";
+        const provider = keyProvider || a.provider || "";
         const providerDisplayName = providerNodeNameMap[provider] || provider;
         const accountKey = `${rawModel} (${provider} - ${accountName})`;
         if (!stats.byAccount[accountKey]) {
@@ -527,10 +576,20 @@ export async function getUsageStats(period = "all") {
         const rawModel = ak.rawModel || "";
         const provider = ak.provider || "";
         const providerDisplayName = providerNodeNameMap[provider] || provider;
-        const apiKeyVal = ak.apiKey ? ak.apiKey.trim() : null;
-        const keyInfo = apiKeyVal ? apiKeyMap[apiKeyVal] : null;
-        const apiKeyMasked = maskApiKey(apiKeyVal);
-        const keyName = keyInfo?.name || (apiKeyVal ? (apiKeyMasked || apiKeyVal.slice(0, 8) + "...") : "Local (No API Key)");
+        // `ak.apiKey` in usageDaily is already MASKED (see aggregateEntryToDay);
+        // the raw key never touches this table. Resolve the key's display name
+        // from the bucket id parsed out of the entry key instead, which is what
+        // the bucket was built from.
+        const bucketId = akKey.includes("|") ? akKey.split("|")[0] : null;
+        const keyInfo = bucketId ? apiKeyBucketMap[bucketId] : null;
+        // Legacy rows (written before the mask) still hold either a raw key or
+        // "local-no-key" here; mask whatever survived so nothing replayable
+        // reaches the wire.
+        const storedKey = typeof ak.apiKey === "string" ? ak.apiKey : null;
+        const apiKeyMasked = storedKey && storedKey !== "local-no-key"
+          ? (storedKey.length > 12 ? maskApiKey(storedKey) : storedKey)
+          : null;
+        const keyName = keyInfo?.name || apiKeyMasked || "Local (No API Key)";
         const apiKeyKey = apiKeyMasked || "local-no-key";
         if (!stats.byApiKey[akKey]) {
           stats.byApiKey[akKey] = { requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0, rawModel, provider: providerDisplayName, apiKeyMasked, keyName, apiKeyKey, lastUsed: dateKey };
@@ -604,7 +663,7 @@ export async function getUsageStats(period = "all") {
       cutoff = new Date(Date.now() - PERIOD_MS["24h"]).toISOString();
     }
     const filtered = db.all(
-      `SELECT timestamp, provider, model, connectionId, apiKey, endpoint, promptTokens, completionTokens, cost, tokens FROM usageHistory WHERE timestamp >= ?`,
+      `SELECT timestamp, provider, model, connectionId, apiKey, endpoint, promptTokens, completionTokens, cost, tokens FROM usageHistory WHERE timestamp >= ? AND ${USAGE_ONLY}`,
       [cutoff]
     );
 
@@ -693,6 +752,8 @@ export async function getUsageStats(period = "all") {
 
 export async function getChartData(period = "7d") {
   const db = await getAdapter();
+  // Same rule as getUsageStats: pending/error rows are log entries, not usage.
+  const USAGE_ONLY = `COALESCE(status, 'ok') NOT IN ('pending', 'error')`;
   const now = Date.now();
 
   if (period === "today") {
@@ -706,7 +767,7 @@ export async function getChartData(period = "7d") {
     const buckets = Array.from({ length: bucketCount }, (_, i) => ({ label: labelFn(startTime + i * bucketMs), tokens: 0, cost: 0, requests: 0 }));
 
     const rows = db.all(
-      `SELECT timestamp, promptTokens, completionTokens, cost FROM usageHistory WHERE timestamp >= ?`,
+      `SELECT timestamp, promptTokens, completionTokens, cost FROM usageHistory WHERE timestamp >= ? AND ${USAGE_ONLY}`,
       [new Date(startTime).toISOString()]
     );
     for (const r of rows) {
@@ -730,7 +791,7 @@ export async function getChartData(period = "7d") {
     const buckets = Array.from({ length: bucketCount }, (_, i) => ({ label: labelFn(startTime + i * bucketMs), tokens: 0, cost: 0, requests: 0 }));
 
     const rows = db.all(
-      `SELECT timestamp, promptTokens, completionTokens, cost FROM usageHistory WHERE timestamp >= ?`,
+      `SELECT timestamp, promptTokens, completionTokens, cost FROM usageHistory WHERE timestamp >= ? AND ${USAGE_ONLY}`,
       [new Date(startTime).toISOString()]
     );
     for (const r of rows) {
@@ -798,8 +859,96 @@ function formatLogDate(date = new Date()) {
   return `${pad(date.getDate())}-${pad(date.getMonth() + 1)}-${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-// No-op: request log is now derived from usageHistory table on read.
-export async function appendRequestLog() {}
+/**
+ * The log table's status cell, in the vocabulary RequestLogger.js renders.
+ *
+ * It classifies by substring — "PENDING" pulses, "FAILED" is red, "OK" is green
+ * — while saveRequestUsage writes the wire-style `ok`/`error`. Left raw, every
+ * successful request fell through all three checks and rendered as a pulsing
+ * PENDING row, so a finished request looked like it was still in flight forever.
+ */
+function normalizeLogStatus(status, timestamp) {
+  const raw = typeof status === "string" ? status.trim() : "";
+  if (!raw) return "-";
+  const upper = raw.toUpperCase();
+  if (upper.includes("FAILED") || upper === "ERROR") return upper === "ERROR" ? "FAILED" : upper;
+  if (upper === "PENDING") {
+    // A pending row older than the request timeout has no live request behind
+    // it — the process died or the write never completed. Rendering it as
+    // PENDING would pulse forever, so surface it as the stale marker instead.
+    const startedMs = timestamp ? new Date(timestamp).getTime() : NaN;
+    if (Number.isFinite(startedMs) && Date.now() - startedMs > PENDING_TIMEOUT_MS) return "STALE";
+    return "PENDING";
+  }
+  if (upper === "OK" || upper === "SUCCESS" || /^2\d\d/.test(upper)) {
+    return upper === "OK" ? "200 OK" : upper;
+  }
+  return upper;
+}
+
+// Request log = the usageHistory table read back (getRecentLogs). Successes land
+// there via saveRequestUsage, but FAILURES never do — a failed call has no usage
+// to charge, so nothing wrote a row and the dashboard's Request Logs tab showed a
+// stream of successes with no trace of what broke. Callers already report every
+// failure through this function, so record it: a zero-token usageHistory row is
+// exactly what a billed-nothing failed request looks like.
+//
+// PENDING is the "a request just started" marker chatCore emits before dispatch.
+// It is written as its own row so an in-flight request is visible in the log, and
+// it is superseded by the terminal write: saveRequestUsage() drops the matching
+// open row in the same transaction as it inserts the usage row (see
+// clearPendingRow), so a request ends up as exactly one row. A pending row that
+// outlives PENDING_TIMEOUT_MS means the process went away mid-request; reading it
+// back renders that as STALE rather than pulsing "pending" forever.
+export async function appendRequestLog({ model, provider, connectionId, tokens, apiKey, endpoint, status } = {}) {
+  const upper = typeof status === "string" ? status.toUpperCase() : "";
+  const isFailure = upper.includes("FAILED");
+  const isPending = upper.includes("PENDING");
+  if (!isFailure && !isPending) return;
+
+  try {
+    await saveRequestUsage({
+      provider: provider || "unknown",
+      model: model || "unknown",
+      connectionId: connectionId || undefined,
+      apiKey: apiKey || undefined,
+      endpoint: endpoint || null,
+      tokens: tokens || { prompt_tokens: 0, completion_tokens: 0 },
+      timestamp: new Date().toISOString(),
+      status: isPending ? "pending" : "error",
+    }, {
+      // A start marker or a failed call billed nothing: it belongs in the log,
+      // never in token/cost/lifetime totals.
+      logOnly: true,
+      // The dedupe path collapses duplicate USAGE reports, not distinct
+      // lifecycle events, so these rows are always written.
+      allowDuplicate: true,
+    });
+  } catch (e) {
+    console.error("[usageRepo] appendRequestLog failed:", e.message);
+  }
+}
+
+/**
+ * Drop the open PENDING row a terminal write supersedes.
+ * Scoped to the same provider/model/connection and the pending window, so an
+ * unrelated older request is never touched. Caller runs this inside the usage
+ * transaction.
+ */
+function clearPendingRow(db, { provider, model, connectionId }) {
+  const cutoff = new Date(Date.now() - PENDING_TIMEOUT_MS).toISOString();
+  try {
+    db.run(
+      `DELETE FROM usageHistory
+        WHERE status = 'pending'
+          AND timestamp >= ?
+          AND COALESCE(provider, '') = COALESCE(?, '')
+          AND COALESCE(model, '') = COALESCE(?, '')
+          AND COALESCE(connectionId, '') = COALESCE(?, '')`,
+      [cutoff, provider || null, model || null, connectionId || null]
+    );
+  } catch { /* log bookkeeping must never fail a usage write */ }
+}
 
 export async function getRecentLogs(limit = 200) {
   try {
@@ -825,7 +974,7 @@ export async function getRecentLogs(limit = 200) {
       const tk = r.tokens ? parseJson(r.tokens, {}) : {};
       const sent = r.promptTokens ?? tk.prompt_tokens ?? "-";
       const received = r.completionTokens ?? tk.completion_tokens ?? "-";
-      return `${ts} | ${m} | ${p} | ${account} | ${sent} | ${received} | ${r.status || "-"}`;
+      return `${ts} | ${m} | ${p} | ${account} | ${sent} | ${received} | ${normalizeLogStatus(r.status, r.timestamp)}`;
     });
   } catch (e) {
     console.error("[usageRepo] getRecentLogs failed:", e.message);

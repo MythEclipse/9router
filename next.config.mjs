@@ -24,6 +24,13 @@ const nextConfig = {
   // ~/.aws/config and the SSO token cache from disk at runtime and resolves its credential
   // plugins by dynamic require, neither of which survives bundling.
   serverExternalPackages: ["better-sqlite3", "sql.js", "node:sqlite", "bun:sqlite", "open", "@aws-sdk/credential-providers"],
+  // `next dev` appends a managed "# This is NOT the Next.js you know" block to
+  // CLAUDE.md/AGENTS.md whenever it thinks an AI coding agent is present. Both
+  // files are tracked and hand-maintained here, so that append showed up as an
+  // uncommitted modification after every dev boot and had to be `git checkout`ed
+  // before any commit. The repo's CLAUDE.md already carries the guidance this
+  // block would inject, so the generator is off.
+  agentRules: false,
   turbopack: {
     root: tracingRoot
   },
