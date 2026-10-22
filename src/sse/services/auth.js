@@ -190,6 +190,21 @@ export async function getProviderCredentials(
           return false;
         }
       }
+      // Smart sticky: skip accounts that are still cooling down from a recent
+      // rate limit even if the raw cooldown field has expired — they get a
+      // grace window proportional to how often they've been limited.
+      const rlAt = c.lastRateLimitAt;
+      const rlCount = c.rateLimitCount || 0;
+      if (rlAt && rlCount > 0) {
+        const graceMs = Math.min(rlCount * 10_000, 5 * 60_000); // 10s per strike, cap 5m
+        if (Date.now() - new Date(rlAt).getTime() < graceMs) {
+          log.debug(
+            "SMART_ROTATE",
+            `${provider} | ${c.id?.slice(0, 8)} | smart-cooldown (strikes=${rlCount}, grace=${Math.round(graceMs / 1000)}s)`,
+          );
+          return false;
+        }
+      }
       return true;
     });
 
@@ -433,6 +448,13 @@ export async function markAccountUnavailable(
   const conn = connections.find((c) => c.id === connectionId);
   const backoffLevel = conn?.backoffLevel || 0;
 
+  // Track repeated rate limits per account so the smart rotation can deprioritise
+  // accounts that keep hitting limits instead of returning them to the pool as
+  // soon as the raw cooldown expires.
+  const now = Date.now();
+  const rateLimitCount = (conn?.rateLimitCount || 0) + 1;
+  const lastRateLimitAt = now;
+
   // GitHub premium-request exhaustion is account-wide until the next UTC month.
   const githubResetAtMs = githubMonthlyResetMs(status, errorText, provider);
 
@@ -470,6 +492,8 @@ export async function markAccountUnavailable(
     errorCode: status,
     lastErrorAt: new Date().toISOString(),
     backoffLevel: newBackoffLevel ?? backoffLevel,
+    lastRateLimitAt,
+    rateLimitCount,
   });
 
   const lockKey = Object.keys(lockUpdate)[0];
@@ -530,6 +554,10 @@ export async function clearAccountError(connectionId, currentConnection, model =
       errorCode: null,
       lastErrorAt: null,
       backoffLevel: 0,
+      // Smart sticky: clear rate-limit memory on success so the account can
+      // re-enter the normal rotation without a grace penalty.
+      rateLimitCount: 0,
+      lastRateLimitAt: null,
     });
   }
 
