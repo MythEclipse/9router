@@ -15,7 +15,6 @@ import {
   countCacheControlBlocks,
 } from "./claudeCache.js";
 
-const CACHE_CONTROL_5M = { type: "ephemeral" };
 const CACHE_CONTROL_1H = { type: "ephemeral", ttl: "1h" };
 
 // Anthropic rejects a tool carrying BOTH defer_loading:true and cache_control
@@ -319,7 +318,7 @@ export function ensureTrailingUserTurn(messages, originalLastRole) {
   return [...messages, { role: ROLE.USER, content: [{ type: CLAUDE_BLOCK.TEXT, text: TRAILING_USER_PLACEHOLDER }] }];
 }
 
-// Put a 5m breakpoint on the last cache-eligible block of a message.
+// Put a 1h breakpoint on the last cache-eligible block of a message.
 // thinking/redacted_thinking blocks do not accept cache_control.
 function markLastCacheableBlock(msg) {
   if (!Array.isArray(msg?.content)) return false;
@@ -327,7 +326,7 @@ function markLastCacheableBlock(msg) {
     const block = msg.content[i];
     if (typeof block !== "object" || block === null) continue;
     if (block.type === CLAUDE_BLOCK.THINKING || block.type === CLAUDE_BLOCK.REDACTED_THINKING) continue;
-    block.cache_control = { ...CACHE_CONTROL_5M };
+    block.cache_control = { ...CACHE_CONTROL_1H };
     return true;
   }
   return false;
@@ -336,7 +335,7 @@ function markLastCacheableBlock(msg) {
 // In an agent's tool loop, a request ends with the results of the last
 // assistant turn's tool calls -- after that turn's breakpoint. They go at the
 // full input price, and the next request (which appends to them) writes them
-// into the cache. When the 4-marker budget has room, a 5m breakpoint on that
+// into the cache. When the 4-marker budget has room, a 1h breakpoint on that
 // final user turn caches them now, and the next request reads them.
 function markFinalToolResults(body) {
   const messages = body?.messages;
@@ -349,7 +348,7 @@ function markFinalToolResults(body) {
 }
 
 // Re-anchor cache breakpoints on a Claude passthrough body (same policy as
-// prepareClaudeRequest): last tool + last system block at 1h, last assistant at 5m.
+// prepareClaudeRequest): last tool + last system block + last assistant, all at 1h.
 // The client's own markers point at pre-normalization offsets, so they are dropped.
 // Must run LAST, after every step that can reshape system/tools/messages
 // (normalize, tool dedupe, token savers) — otherwise the anchor drifts off the tail.
@@ -575,7 +574,7 @@ export function prepareClaudeRequest(body, provider = null, apiKey = null, conne
           for (let j = msg.content.length - 1; j >= 0; j--) {
             const block = msg.content[j];
             if (block.type !== CLAUDE_BLOCK.THINKING && block.type !== CLAUDE_BLOCK.REDACTED_THINKING) {
-              block.cache_control = { type: "ephemeral" };
+              block.cache_control = { ...CACHE_CONTROL_1H };
               break;
             }
           }
