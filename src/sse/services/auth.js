@@ -372,11 +372,12 @@ async function markNoAuthProxyUnavailable(status, errorText, provider, resetsAtM
 
   // Even if no proxy pool rotation is configured or available, when OpenCode hits a
   // rate limit or quota block (429/403), invalidate the cached stable session so subsequent
-  // requests do not keep reusing the exhausted session ID.
+  // requests do not keep reusing the exhausted session ID. Scope it to the pool that
+  // hit the limit so other pools still in rotation retain their fresh sessions.
   if (shouldRotate && (providerId === "opencode" || providerId === "opencode-zen")) {
     try {
-      const { clearOpencodeSessionCache } = await import("open-sse/executors/opencode.js");
-      clearOpencodeSessionCache();
+      const { clearOpencodeSessionByPool } = await import("open-sse/executors/opencode.js");
+      clearOpencodeSessionByPool(currentPoolId);
     } catch {
       // Non-blocking
     }

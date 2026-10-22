@@ -142,6 +142,16 @@ export function clearOpencodeSessionCache() {
   stableOpencodeSessions.clear();
 }
 
+/** Clear only the sessions bound to a given proxy pool id, so rotation after a
+ * 429 does not keep reusing the exhausted session id on the next pool. */
+export function clearOpencodeSessionByPool(poolId) {
+  if (!poolId) return;
+  const suffix = `:pool:${String(poolId).slice(0, 32)}`;
+  for (const key of stableOpencodeSessions.keys()) {
+    if (key.endsWith(suffix)) stableOpencodeSessions.delete(key);
+  }
+}
+
 export function stableSessionId(credentials) {
   const key = identityKey(credentials);
   const existing = stableOpencodeSessions.get(key);
