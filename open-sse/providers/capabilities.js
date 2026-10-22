@@ -151,6 +151,12 @@ export const MODEL_CAPABILITIES = {
   // this exact entry before it ever reaches the *glm-5.2* pattern that sets it,
   // so without it GLM-5.2 silently lost reasoning_effort. #4409
   "glm-5.2":           { reasoning: true, thinkingFormat: "zai", thinkingEffortSupported: true, thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 131072 },
+  // OpenCode serves the same weights under this free id from its OWN inference
+  // service, which validates the body strictly: the zai `thinking` object the
+  // *glm-5.3* pattern emits is answered
+  //   400 [unknown_parameter] invalid request body: json: unknown field "thinking"
+  // while reasoning_effort is accepted (none/minimal/low/medium/high/xhigh/max → 200).
+  "glm-5.3-flash-free": { vision: true, videoInput: true, pdf: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 128000 },
 
   // DeepSeek's first V4 model with image input; text limits match V4-Flash.
   "deepseek-v4-flash-vision-exp": { vision: true, reasoning: true, thinkingFormat: "deepseek", contextWindow: 1000000, maxOutput: 384000 },
