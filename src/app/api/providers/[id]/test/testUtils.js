@@ -978,6 +978,7 @@ async function testApiKeyConnection(connection, effectiveProxy = null) {
         );
         return { valid: res.ok, error: res.ok ? null : "Invalid API key" };
       }
+      case "dothoosh":
       case "tokenharbor":
       case "dahl":
       case "atria":
