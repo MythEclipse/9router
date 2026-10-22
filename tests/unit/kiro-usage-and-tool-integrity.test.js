@@ -333,6 +333,84 @@ describe("D: cache tokens survive the kiro -> claude translation", () => {
   });
 });
 
+describe("F: the terminal metadataEvent's real tokenUsage wins over the percentage estimate", () => {
+  // Production shape before this fix: Kiro reports context usage as a PERCENTAGE
+  // of the model's advertised window, and the executor turned that into tokens
+  // via `contextUsagePercentage * contextWindow / 100`. A short conversation on a
+  // 1M-context model therefore recorded ~50k input tokens for a few thousand real
+  // ones. Kiro also sends the real counts in `metadataEvent.tokenUsage`; read them.
+  const NATIVE = [
+    frame("assistantResponseEvent", { content: "Hello." }),
+    frame("metadataEvent", {
+      stopReason: "END_TURN",
+      tokenUsage: {
+        totalTokens: 4000,
+        outputTokens: 40,
+        uncachedInputTokens: 3000,
+        cacheReadInputTokens: 800,
+        cacheWriteInputTokens: 160
+      }
+    }),
+    frame("contextUsageEvent", { contextUsagePercentage: 50 })
+  ];
+
+  it("reports the provider's own counts, not a percentage of the context window", async () => {
+    const usage = usageFrom(await run(NATIVE));
+    expect(usage).toBeDefined();
+    expect(usage.prompt_tokens).toBe(3960);       // 3000 + 800 + 160
+    expect(usage.completion_tokens).toBe(40);
+    expect(usage.total_tokens).toBe(4000);
+    expect(usage.estimated).toBeUndefined();      // real counts are not estimates
+  });
+
+  it("keeps the cache buckets the provider reported", async () => {
+    const usage = usageFrom(await run(NATIVE));
+    expect(usage.cache_read_input_tokens).toBe(800);
+    expect(usage.cache_creation_input_tokens).toBe(160);
+  });
+
+  it("falls back to totalTokens - outputTokens when the input buckets are absent", async () => {
+    const usage = usageFrom(await run([
+      frame("metadataEvent", {
+        stopReason: "END_TURN",
+        tokenUsage: { totalTokens: 4000, outputTokens: 40 }
+      }),
+      frame("contextUsageEvent", { contextUsagePercentage: 50 })
+    ]));
+    expect(usage.prompt_tokens).toBe(3960);
+    expect(usage.completion_tokens).toBe(40);
+    expect(usage.total_tokens).toBe(4000);
+  });
+
+  it("still estimates from the percentage when the stream carried no tokenUsage", async () => {
+    // The percentage estimator stays as the fallback for routes that report
+    // nothing but context usage; the point is that it must be marked estimated
+    // and must not run when real counts exist.
+    const usage = usageFrom(await run([
+      frame("assistantResponseEvent", { content: "x".repeat(400) }),
+      frame("metadataEvent", { stopReason: "END_TURN" }),
+      frame("contextUsageEvent", { contextUsagePercentage: 10 })
+    ]));
+    expect(usage).toBeDefined();
+    expect(usage.estimated).toBe(true);
+  });
+
+  it("does not let a later estimate overwrite counts the provider sent", async () => {
+    // meteringEvent arrives after metadataEvent in some orders; it carries only
+    // credits, so it must leave the token counts alone.
+    const usage = usageFrom(await run([
+      frame("metadataEvent", {
+        stopReason: "END_TURN",
+        tokenUsage: { totalTokens: 4000, outputTokens: 40, uncachedInputTokens: 3960 }
+      }),
+      frame("meteringEvent", { usage: 2, unit: "credit" }),
+      frame("contextUsageEvent", { contextUsagePercentage: 50 })
+    ]));
+    expect(usage.prompt_tokens).toBe(3960);
+    expect(usage.kiro_credits).toBe(2);
+  });
+});
+
 describe("E: the translator valid-guard is defence-in-depth", () => {
   const SPECS = [{ toolSpecification: { name: "read_file", inputSchema: { json: { type: "object" } } } }];
 

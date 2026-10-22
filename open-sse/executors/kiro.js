@@ -54,6 +54,38 @@ function envPositiveInt(name, fallback) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+/**
+ * Read Kiro's native token accounting out of a terminal `metadataEvent`.
+ *
+ * The upstream reports real counts under `tokenUsage`:
+ *   { totalTokens, outputTokens, uncachedInputTokens,
+ *     cacheReadInputTokens, cacheWriteInputTokens }
+ * `prompt_tokens` is the sum of the three input buckets; `totalTokens` is only a
+ * fallback for routes that omit the buckets. Returns null when the event carried
+ * no usable count, so the caller can tell "no usage reported" from "zero usage".
+ */
+function readKiroTokenUsage(tokenUsage) {
+  if (!tokenUsage || typeof tokenUsage !== "object") return null;
+  const num = (value) => (Number.isFinite(Number(value)) ? Number(value) : 0);
+  const output = num(tokenUsage.outputTokens);
+  const uncached = num(tokenUsage.uncachedInputTokens);
+  const cacheRead = num(tokenUsage.cacheReadInputTokens);
+  const cacheWrite = num(tokenUsage.cacheWriteInputTokens);
+  const total = num(tokenUsage.totalTokens);
+  const input = uncached + cacheRead + cacheWrite;
+  if (!input && !output && !total) return null;
+  const prompt = input || Math.max(0, total - output);
+  const usage = {
+    prompt_tokens: prompt,
+    completion_tokens: output,
+    // Prefer totalTokens verbatim when present; otherwise sum the buckets.
+    total_tokens: total || prompt + output
+  };
+  if (cacheRead) usage.cache_read_input_tokens = cacheRead;
+  if (cacheWrite) usage.cache_creation_input_tokens = cacheWrite;
+  return usage;
+}
+
 function concatChunks(chunks, totalBytes) {
   const output = new Uint8Array(totalBytes);
   let offset = 0;
@@ -639,6 +671,7 @@ export class KiroExecutor extends BaseExecutor {
       contextUsagePercentage: 0,
       hasContextUsage: false,
       hasMetering: false,
+      hasNativeUsage: false,
       usage: null,
       inThinking: false,
       toolValidationError: null,
@@ -865,7 +898,7 @@ export class KiroExecutor extends BaseExecutor {
         const merged = mergeStopReason(state.stopReason, reason);
         if (merged !== state.stopReason) state.terminalProvenance = "message_stop_event";
         state.stopReason = merged;
-      } else if (eventType === "metadataEvent" || eventType === "MetadataEvent") {
+      } else if (eventType === "metadataEvent" || eventType === "MetadataEvent" || eventType === "messageMetadataEvent") {
         const metadata = event.payload?.metadataEvent || event.payload?.metadata || event.payload;
         const reason = normalizeStopReason(metadata?.stopReason ?? metadata?.stop_reason);
         if (reason) {
@@ -873,6 +906,14 @@ export class KiroExecutor extends BaseExecutor {
           const merged = mergeStopReason(state.stopReason, reason);
           if (merged !== state.stopReason) state.terminalProvenance = "metadata_stop_reason";
           state.stopReason = merged;
+        }
+        // The terminal metadataEvent carries Kiro's real token accounting under
+        // `tokenUsage`. Read it here: the percentage estimator below is a last
+        // resort, and must never overwrite a count the provider actually sent.
+        const native = readKiroTokenUsage(metadata?.tokenUsage ?? metadata);
+        if (native) {
+          state.usage = { ...(state.usage || {}), ...native };
+          state.hasNativeUsage = true;
         }
       } else if (eventType === "contextUsageEvent") {
         const percentage = Number(event.payload?.contextUsagePercentage);
@@ -906,6 +947,7 @@ export class KiroExecutor extends BaseExecutor {
           const cacheCreate = Number(metrics.cacheCreationInputTokens || metrics.cache_creation_input_tokens) || 0;
           if (cacheRead) state.usage.cache_read_input_tokens = cacheRead;
           if (cacheCreate) state.usage.cache_creation_input_tokens = cacheCreate;
+          state.hasNativeUsage = true;
         }
       }
       return true;
@@ -1087,16 +1129,23 @@ export class KiroExecutor extends BaseExecutor {
         return;
       }
 
-      if (state.hasMetering && state.hasContextUsage && !state.usage?.total_tokens) {
+      // Last-resort estimate. Kiro reports context usage as a PERCENTAGE of the
+      // model's advertised window, not a token count, so this fabricates tokens
+      // from `contextUsagePercentage * contextWindow / 100` — orders of magnitude
+      // too large whenever the conversation is smaller than the window. Run it
+      // only when the stream carried no native usage at all, and mark the result
+      // `estimated` so mergeUsage() never lets it outrank a real count.
+      if (!state.hasNativeUsage && state.hasContextUsage && !state.usage?.total_tokens) {
         const completion = state.totalContentLength
-          ? Math.max(1, Math.floor(state.totalContentLength / 4))
+          ? Math.floor(state.totalContentLength / 4)
           : 0;
         const prompt = Math.floor(state.contextUsagePercentage * contextWindow / 100);
         state.usage = {
           ...(state.usage || {}),
           prompt_tokens: prompt,
           completion_tokens: completion,
-          total_tokens: prompt + completion
+          total_tokens: prompt + completion,
+          estimated: true
         };
       }
       const finishReason = truncatedAfterOutput
