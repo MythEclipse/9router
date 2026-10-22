@@ -75,9 +75,12 @@ export function getAntigravityModelFamily(model) {
 export function getAntigravityModelQuota(quotas, model) {
   if (!quotas || typeof quotas !== "object" || !model) return null;
 
-  const cleanModel = typeof model === "string"
-    ? (model.includes("/") ? model.slice(model.indexOf("/") + 1) : model).replace(/\([^()]+\)\s*$/, "").trim()
-    : "";
+  const cleanModel =
+    typeof model === "string"
+      ? (model.includes("/") ? model.slice(model.indexOf("/") + 1) : model)
+          .replace(/\([^()]+\)\s*$/, "")
+          .trim()
+      : "";
 
   const family = getAntigravityModelFamily(cleanModel);
   const candidates = [];
@@ -128,7 +131,12 @@ export function getAntigravityModelQuota(quotas, model) {
   const exhausted = [];
 
   for (const c of candidates) {
-    if (c && typeof c === "object" && typeof c.remainingPercentage === "number" && c.remainingPercentage <= 0) {
+    if (
+      c &&
+      typeof c === "object" &&
+      typeof c.remainingPercentage === "number" &&
+      c.remainingPercentage <= 0
+    ) {
       if (c.resetAt) {
         const resetMs = new Date(c.resetAt).getTime();
         if (resetMs > now) {
@@ -155,7 +163,7 @@ export function getAntigravityModelQuota(quotas, model) {
   }
 
   // If none exhausted, return the most constrained available bucket
-  const valid = candidates.filter(c => c && typeof c.remainingPercentage === "number");
+  const valid = candidates.filter((c) => c && typeof c.remainingPercentage === "number");
   if (valid.length === 0) return null;
   valid.sort((a, b) => a.remainingPercentage - b.remainingPercentage);
   return valid[0];
@@ -206,7 +214,10 @@ export async function refreshAntigravityQuota(connectionId, accessToken, provide
 
   const lastRefresh = lastRefreshAt.get(connectionId) || 0;
   if (now - lastRefresh < MIN_REFRESH_INTERVAL_MS) {
-    log.debug("AG_QUOTA", `${connectionId.slice(0, 8)} | skip refresh (${Math.round((now - lastRefresh) / 1000)}s ago)`);
+    log.debug(
+      "AG_QUOTA",
+      `${connectionId.slice(0, 8)} | skip refresh (${Math.round((now - lastRefresh) / 1000)}s ago)`,
+    );
     return quotaCache.get(connectionId) || null;
   }
 
@@ -254,7 +265,13 @@ async function _doRefresh(connectionId, accessToken, providerSpecificData, now) 
  * Called from chat handler error path.
  * @returns {number|null} resetAt timestamp ms (for resetsAtMs passthrough) or null
  */
-export async function handleAntigravityQuotaError(connectionId, status, model, accessToken, providerSpecificData) {
+export async function handleAntigravityQuotaError(
+  connectionId,
+  status,
+  model,
+  accessToken,
+  providerSpecificData,
+) {
   log.info("AG_QUOTA", `${connectionId.slice(0, 8)} | ${status} on ${model} — refreshing quota`);
 
   // Throttle applies to error paths too: one quota request per account/30s.
@@ -275,14 +292,18 @@ export async function handleAntigravityQuotaError(connectionId, status, model, a
     const strike = strikeCounts.get(key);
     // Fixed window anchored at the FIRST qualifying strike: three 429s must
     // all land within 60s of that first one, not within 60s of each other.
-    const windowStart = strike && now - strike.windowStart <= STRIKE_WINDOW_MS ? strike.windowStart : now;
+    const windowStart =
+      strike && now - strike.windowStart <= STRIKE_WINDOW_MS ? strike.windowStart : now;
     const count = strike && windowStart === strike.windowStart ? strike.count + 1 : 1;
     strikeCounts.set(key, { count, windowStart });
     if (count >= STRIKE_THRESHOLD) {
       strikeCounts.delete(key);
       const blockedUntil = now + STRIKE_BLOCK_MS;
       const reading = quota ? `${Math.round(quota.remainingPercentage)}%` : "unknown";
-      log.warn("AG_QUOTA", `${connectionId.slice(0, 8)} | STRIKE_${status} ${model} — ${count}x 429 (quota ${reading}); CACHE_BLOCK 15m`);
+      log.warn(
+        "AG_QUOTA",
+        `${connectionId.slice(0, 8)} | STRIKE_${status} ${model} — ${count}x 429 (quota ${reading}); CACHE_BLOCK 15m`,
+      );
       // Synthesize a 0% entry in the shared cache so the auth pre-filter skips
       // this pair on subsequent requests too, not just the current retry loop
       // (the chat handler does not persist modelLock_* for this path).
@@ -307,6 +328,9 @@ export async function handleAntigravityQuotaError(connectionId, status, model, a
   cached[model] = { remainingPercentage: 0, resetAt: quota.resetAt };
   quotaCache.set(connectionId, cached);
 
-  log.warn("AG_QUOTA", `${connectionId.slice(0, 8)} | UPSTREAM_${status} ${model} — quota exhausted; CACHE_BLOCK until ${quota.resetAt}`);
+  log.warn(
+    "AG_QUOTA",
+    `${connectionId.slice(0, 8)} | UPSTREAM_${status} ${model} — quota exhausted; CACHE_BLOCK until ${quota.resetAt}`,
+  );
   return resetMs;
 }

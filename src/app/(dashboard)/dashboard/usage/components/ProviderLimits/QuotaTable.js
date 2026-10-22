@@ -96,11 +96,12 @@ export default function QuotaTable({
   const [page, setPage] = useState(1);
 
   const normalizedQuotas = useMemo(
-    () => quotas.map((quota, index) => ({
-      ...quota,
-      index,
-      remaining: getRemainingPercentage(quota),
-    })),
+    () =>
+      quotas.map((quota, index) => ({
+        ...quota,
+        index,
+        remaining: getRemainingPercentage(quota),
+      })),
     [quotas],
   );
 
@@ -123,10 +124,7 @@ export default function QuotaTable({
     return null;
   }
 
-  const currentPageRows = sortedQuotas.slice(
-    (page - 1) * PAGE_SIZE,
-    page * PAGE_SIZE,
-  );
+  const currentPageRows = sortedQuotas.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const pageStart = sortedQuotas.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const pageEnd = Math.min(page * PAGE_SIZE, sortedQuotas.length);
 
@@ -155,7 +153,12 @@ export default function QuotaTable({
           const isUnlimited = quota.unlimited === true;
           const isCreditBalance = quota.isCreditBalance === true;
           const colors = isCreditBalance
-            ? { text: "text-blue-600 dark:text-blue-400", bg: "bg-blue-500", bgLight: "bg-blue-500/10", emoji: "💰" }
+            ? {
+                text: "text-blue-600 dark:text-blue-400",
+                bg: "bg-blue-500",
+                bgLight: "bg-blue-500/10",
+                emoji: "💰",
+              }
             : getColorClasses(quota.colorPercentage ?? quota.remaining);
           // Qoder flags open-ended plans with `neverExpires` (its API reports a
           // year-9999 sentinel). Return "-"/"Never expires" rather than an empty
@@ -168,10 +171,10 @@ export default function QuotaTable({
           const resetDisplay = quota.emptyMessage
             ? quota.emptyMessage
             : quota.neverExpires
-            ? "Never expires"
-            : seeDetails
-              ? "See details"
-              : formatResetTimeDisplay(quota.resetAt);
+              ? "Never expires"
+              : seeDetails
+                ? "See details"
+                : formatResetTimeDisplay(quota.resetAt);
           const resetSecondaryText = seeDetails && quota.detailUrl ? quota.detailUrl : resetDisplay;
           // recurring defaults true: a missing flag means the quota
           // refreshes at resetAt. Bonus/one-shot packs set recurring:false
@@ -214,36 +217,44 @@ export default function QuotaTable({
               {/* Progress + used/total */}
               <div className={`min-w-0 flex-1 ${compact ? "space-y-1" : "space-y-1.5"}`}>
                 {!isUnlimited && !isCreditBalance && (
-                <div className={`${compact ? "h-1" : "h-1.5"} rounded-full overflow-hidden border ${colors.bgLight} ${
-                  quota.remaining === 0 ? "border-black/10 dark:border-white/10" : "border-transparent"
-                }`}>
                   <div
-                    className={`h-full transition-all duration-300 ${colors.bg}`}
-                    style={{ width: `${Math.min(quota.remaining, 100)}%` }}
-                  />
-                </div>
+                    className={`${compact ? "h-1" : "h-1.5"} rounded-full overflow-hidden border ${colors.bgLight} ${
+                      quota.remaining === 0
+                        ? "border-black/10 dark:border-white/10"
+                        : "border-transparent"
+                    }`}
+                  >
+                    <div
+                      className={`h-full transition-all duration-300 ${colors.bg}`}
+                      style={{ width: `${Math.min(quota.remaining, 100)}%` }}
+                    />
+                  </div>
                 )}
 
-                <div className={`flex items-center justify-between gap-1 min-w-0 ${compact ? "text-[10px]" : "text-xs"}`}>
+                <div
+                  className={`flex items-center justify-between gap-1 min-w-0 ${compact ? "text-[10px]" : "text-xs"}`}
+                >
                   <span
                     className="text-text-muted truncate"
                     title={
                       isUnlimited
                         ? `${quota.used.toLocaleString()} used · Unlimited`
                         : isCreditBalance
-                        ? `Credit balance: ${quota.total.toFixed(2)} ${quota.currency || ""}`
-                        : `${quota.used.toLocaleString()} / ${quota.total > 0 ? quota.total.toLocaleString() : "∞"}`
+                          ? `Credit balance: ${quota.total.toFixed(2)} ${quota.currency || ""}`
+                          : `${quota.used.toLocaleString()} / ${quota.total > 0 ? quota.total.toLocaleString() : "∞"}`
                     }
                   >
                     {isUnlimited
                       ? `${quota.used.toLocaleString()} used · Unlimited`
                       : isCreditBalance
-                      ? `Credit: ${quota.total.toFixed(2)} ${quota.currency || ""}`
-                      : `${quota.used.toLocaleString()} / ${quota.total > 0 ? quota.total.toLocaleString() : "∞"}${
-                          quota.unit ? ` ${quota.unit}` : ""
-                        }`}
+                        ? `Credit: ${quota.total.toFixed(2)} ${quota.currency || ""}`
+                        : `${quota.used.toLocaleString()} / ${quota.total > 0 ? quota.total.toLocaleString() : "∞"}${
+                            quota.unit ? ` ${quota.unit}` : ""
+                          }`}
                   </span>
-                  <span className={`font-medium ${isUnlimited ? "text-green-600 dark:text-green-400" : isCreditBalance ? "text-blue-600 dark:text-blue-400" : colors.text} shrink-0`}>
+                  <span
+                    className={`font-medium ${isUnlimited ? "text-green-600 dark:text-green-400" : isCreditBalance ? "text-blue-600 dark:text-blue-400" : colors.text} shrink-0`}
+                  >
                     {isUnlimited ? "Unlimited" : isCreditBalance ? "" : `${quota.remaining}%`}
                   </span>
                 </div>
@@ -287,9 +298,7 @@ export default function QuotaTable({
                   title="Hide this quota row"
                   aria-label={`Hide quota ${quota.name}`}
                 >
-                  <span className="material-symbols-outlined text-[15px]">
-                    visibility_off
-                  </span>
+                  <span className="material-symbols-outlined text-[15px]">visibility_off</span>
                 </button>
               )}
             </div>

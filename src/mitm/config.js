@@ -8,7 +8,12 @@ const IS_DEV = process.env.NODE_ENV === "development";
 const LSOF_BIN = (() => {
   if (process.platform === "win32") return null;
   for (const p of ["/usr/sbin/lsof", "/usr/bin/lsof", "/sbin/lsof"]) {
-    try { fs.accessSync(p, fs.constants.X_OK); return p; } catch { /* try next */ }
+    try {
+      fs.accessSync(p, fs.constants.X_OK);
+      return p;
+    } catch {
+      /* try next */
+    }
   }
   return "lsof"; // last-resort fallback (depends on PATH)
 })();
@@ -103,22 +108,25 @@ const MODEL_SYNONYMS = {
 // Order matters: more specific patterns first. Catches AG renamed variants (e.g. gemini-pro-agent)
 const MODEL_PATTERNS = {
   antigravity: [
-    { match: /flash.*extra.*low|extra.*low.*flash|flash.*low|low.*flash/i, alias: "gemini-3.8-flash-low" },
-    { match: /flash.*medium|medium.*flash/i,                       alias: "gemini-3.8-flash-medium" },
-    { match: /flash.*agent|agent.*flash|flash/i,                   alias: "gemini-3.8-flash-high" },
-    { match: /pro.*low|low.*pro/i,                                 alias: "gemini-3.1-pro-low" },
-    { match: /gemini.*pro|pro.*gemini/i,                           alias: "gemini-pro-agent" },
-    { match: /opus.*5[.-]5.*high|5[.-]5.*opus.*high/i,             alias: "claude-opus-5-5-high" },
-    { match: /opus.*5[.-]5.*medium|5[.-]5.*opus.*medium/i,         alias: "claude-opus-5-5-medium" },
-    { match: /opus.*5[.-]5.*low|5[.-]5.*opus.*low/i,               alias: "claude-opus-5-5-low" },
-    { match: /sonnet.*5[.-]5.*high|5[.-]5.*sonnet.*high/i,         alias: "claude-sonnet-5-5-high" },
-    { match: /sonnet.*5[.-]5.*medium|5[.-]5.*sonnet.*medium/i,     alias: "claude-sonnet-5-5-medium" },
-    { match: /sonnet.*5[.-]5.*low|5[.-]5.*sonnet.*low/i,           alias: "claude-sonnet-5-5-low" },
-    { match: /opus.*5[.-]5|5[.-]5.*opus/i,                         alias: "claude-opus-5-5" },
-    { match: /sonnet.*5[.-]5|5[.-]5.*sonnet/i,                     alias: "claude-sonnet-5-5" },
-    { match: /opus/i,                                              alias: "claude-opus-4-6-thinking" },
-    { match: /sonnet|claude/i,                                     alias: "claude-sonnet-4-6" },
-    { match: /gpt.*oss|oss/i,                                      alias: "gpt-oss-120b-medium" },
+    {
+      match: /flash.*extra.*low|extra.*low.*flash|flash.*low|low.*flash/i,
+      alias: "gemini-3.8-flash-low",
+    },
+    { match: /flash.*medium|medium.*flash/i, alias: "gemini-3.8-flash-medium" },
+    { match: /flash.*agent|agent.*flash|flash/i, alias: "gemini-3.8-flash-high" },
+    { match: /pro.*low|low.*pro/i, alias: "gemini-3.1-pro-low" },
+    { match: /gemini.*pro|pro.*gemini/i, alias: "gemini-pro-agent" },
+    { match: /opus.*5[.-]5.*high|5[.-]5.*opus.*high/i, alias: "claude-opus-5-5-high" },
+    { match: /opus.*5[.-]5.*medium|5[.-]5.*opus.*medium/i, alias: "claude-opus-5-5-medium" },
+    { match: /opus.*5[.-]5.*low|5[.-]5.*opus.*low/i, alias: "claude-opus-5-5-low" },
+    { match: /sonnet.*5[.-]5.*high|5[.-]5.*sonnet.*high/i, alias: "claude-sonnet-5-5-high" },
+    { match: /sonnet.*5[.-]5.*medium|5[.-]5.*sonnet.*medium/i, alias: "claude-sonnet-5-5-medium" },
+    { match: /sonnet.*5[.-]5.*low|5[.-]5.*sonnet.*low/i, alias: "claude-sonnet-5-5-low" },
+    { match: /opus.*5[.-]5|5[.-]5.*opus/i, alias: "claude-opus-5-5" },
+    { match: /sonnet.*5[.-]5|5[.-]5.*sonnet/i, alias: "claude-sonnet-5-5" },
+    { match: /opus/i, alias: "claude-opus-4-6-thinking" },
+    { match: /sonnet|claude/i, alias: "claude-sonnet-4-6" },
+    { match: /gpt.*oss|oss/i, alias: "gpt-oss-120b-medium" },
   ],
 };
 
@@ -144,8 +152,14 @@ const LOG_BLACKLIST_URL_PARTS = [
 function getToolForHost(host) {
   const h = (host || "").split(":")[0];
   if (h === "api.individual.githubcopilot.com") return "copilot";
-  if (h === "daily-cloudcode-pa.googleapis.com" || h === "cloudcode-pa.googleapis.com") return "antigravity";
-  if (h === "q.us-east-1.amazonaws.com" || h === "codewhisperer.us-east-1.amazonaws.com" || h === "runtime.us-east-1.kiro.dev") return "kiro";
+  if (h === "daily-cloudcode-pa.googleapis.com" || h === "cloudcode-pa.googleapis.com")
+    return "antigravity";
+  if (
+    h === "q.us-east-1.amazonaws.com" ||
+    h === "codewhisperer.us-east-1.amazonaws.com" ||
+    h === "runtime.us-east-1.kiro.dev"
+  )
+    return "kiro";
   if (h === "api2.cursor.sh") return "cursor";
   return null;
 }
@@ -156,12 +170,12 @@ function isBinaryData(buffer) {
   let nonPrintable = 0;
   for (let i = 0; i < sample.length; i++) {
     const byte = sample[i];
-    if (byte < 0x20 && byte !== 0x09 && byte !== 0x0A && byte !== 0x0D) {
+    if (byte < 0x20 && byte !== 0x09 && byte !== 0x0a && byte !== 0x0d) {
       nonPrintable++;
     }
-    if (byte > 0x7E) nonPrintable++;
+    if (byte > 0x7e) nonPrintable++;
   }
-  return (nonPrintable / sample.length) > 0.3;
+  return nonPrintable / sample.length > 0.3;
 }
 
 // Extract model from URL path (Gemini), body (OpenAI/Anthropic), or Kiro conversationState.
@@ -178,10 +192,19 @@ function extractModel(url, body) {
     }
     const model = urlModel || parsed.model || null;
     const cleanModelName = String(model).replace(/^models\//, "");
-    if (cleanModelName === "gemini-3.6-flash-tiered" || cleanModelName === "gemini-3.7-flash-tiered" || cleanModelName === "gemini-3.8-flash-tiered") {
-      const ver = cleanModelName.includes("3.8") ? "3.8" : cleanModelName.includes("3.7") ? "3.7" : "3.6";
-      const rawLevel = parsed.request?.generationConfig?.thinkingConfig?.thinkingLevel
-        || parsed.generationConfig?.thinkingConfig?.thinkingLevel;
+    if (
+      cleanModelName === "gemini-3.6-flash-tiered" ||
+      cleanModelName === "gemini-3.7-flash-tiered" ||
+      cleanModelName === "gemini-3.8-flash-tiered"
+    ) {
+      const ver = cleanModelName.includes("3.8")
+        ? "3.8"
+        : cleanModelName.includes("3.7")
+          ? "3.7"
+          : "3.6";
+      const rawLevel =
+        parsed.request?.generationConfig?.thinkingConfig?.thinkingLevel ||
+        parsed.generationConfig?.thinkingConfig?.thinkingLevel;
       const level = ["high", "medium", "low"].includes(String(rawLevel).toLowerCase())
         ? String(rawLevel).toLowerCase()
         : "medium";
@@ -193,4 +216,16 @@ function extractModel(url, body) {
   }
 }
 
-module.exports = { IS_DEV, LSOF_BIN, TARGET_HOSTS, URL_PATTERNS, MODEL_SYNONYMS, MODEL_PATTERNS, MODEL_NO_MAP, LOG_BLACKLIST_URL_PARTS, getToolForHost, isChatRequest, extractModel };
+module.exports = {
+  IS_DEV,
+  LSOF_BIN,
+  TARGET_HOSTS,
+  URL_PATTERNS,
+  MODEL_SYNONYMS,
+  MODEL_PATTERNS,
+  MODEL_NO_MAP,
+  LOG_BLACKLIST_URL_PARTS,
+  getToolForHost,
+  isChatRequest,
+  extractModel,
+};

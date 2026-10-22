@@ -301,7 +301,12 @@ async function refreshOAuthToken(connection) {
       };
     }
 
-    if (provider === "codex" || provider === "grok-cli" || provider === "xai" || provider === "nous") {
+    if (
+      provider === "codex" ||
+      provider === "grok-cli" ||
+      provider === "xai" ||
+      provider === "nous"
+    ) {
       return await refreshProviderCredentials(provider, connection, console);
     }
 
@@ -407,7 +412,9 @@ async function testOAuthConnection(connection, effectiveProxy = null) {
     return { valid: true, error: null, refreshed: false, newTokens: null };
   }
 
-  let accessToken = config.useApiKey ? (connection.apiKey || connection.accessToken) : connection.accessToken;
+  let accessToken = config.useApiKey
+    ? connection.apiKey || connection.accessToken
+    : connection.accessToken;
   let refreshed = false;
   let newTokens = null;
 
@@ -415,7 +422,7 @@ async function testOAuthConnection(connection, effectiveProxy = null) {
   if (config.refreshable && tokenExpired && connection.refreshToken) {
     const tokens = await refreshOAuthToken(connection);
     if (tokens) {
-      accessToken = config.useApiKey ? (tokens.apiKey || tokens.accessToken) : tokens.accessToken;
+      accessToken = config.useApiKey ? tokens.apiKey || tokens.accessToken : tokens.accessToken;
       refreshed = true;
       newTokens = tokens;
     } else {
@@ -500,7 +507,9 @@ async function testOAuthConnection(connection, effectiveProxy = null) {
     if (res.status === 401 && config.refreshable && !refreshed && connection.refreshToken) {
       const tokens = await refreshOAuthToken(connection);
       if (tokens) {
-        const retryToken = config.useApiKey ? (tokens.apiKey || tokens.accessToken) : tokens.accessToken;
+        const retryToken = config.useApiKey
+          ? tokens.apiKey || tokens.accessToken
+          : tokens.accessToken;
         const retryUrl = config.buildUrl ? config.buildUrl(retryToken) : testUrl;
         const retryHeaders = config.noAuth
           ? { ...config.extraHeaders }
@@ -747,10 +756,14 @@ async function testApiKeyConnection(connection, effectiveProxy = null) {
         // /models is public on Nous; a minimal chat request is required to
         // distinguish an accepted Portal key from an arbitrary Bearer value.
         const probe = createNousApiKeyProbe(connection.apiKey);
-        const res = await fetchWithConnectionProxy(probe.url, {
-          ...probe.options,
-          signal: AbortSignal.timeout(8000),
-        }, effectiveProxy);
+        const res = await fetchWithConnectionProxy(
+          probe.url,
+          {
+            ...probe.options,
+            signal: AbortSignal.timeout(8000),
+          },
+          effectiveProxy,
+        );
         const valid = isNousApiKeyAccepted(res.status);
         return {
           valid,
@@ -1229,20 +1242,27 @@ async function testApiKeyConnection(connection, effectiveProxy = null) {
         return { valid: res.ok, error: res.ok ? null : "Invalid API key or base URL" };
       }
       case "sensenova": {
-        const validateUrl = PROVIDERS.sensenova?.validateUrl || "https://token.sensenova.cn/v1/models";
-        const res = await fetchWithConnectionProxy(validateUrl, {
-          method: "GET",
-          headers: {
-            Authorization: "Bearer " + connection.apiKey,
-            Accept: "application/json",
+        const validateUrl =
+          PROVIDERS.sensenova?.validateUrl || "https://token.sensenova.cn/v1/models";
+        const res = await fetchWithConnectionProxy(
+          validateUrl,
+          {
+            method: "GET",
+            headers: {
+              Authorization: "Bearer " + connection.apiKey,
+              Accept: "application/json",
+            },
           },
-        }, effectiveProxy);
+          effectiveProxy,
+        );
         const valid = res.ok;
         return {
           valid,
-          error: valid ? null : res.status === 401 || res.status === 403
-            ? "Invalid API key"
-            : `SenseNova API error (${res.status})`,
+          error: valid
+            ? null
+            : res.status === 401 || res.status === 403
+              ? "Invalid API key"
+              : `SenseNova API error (${res.status})`,
         };
       }
       case "kimchi": {

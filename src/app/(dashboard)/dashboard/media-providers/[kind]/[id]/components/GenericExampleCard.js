@@ -4,7 +4,11 @@
 
 import { useState, useEffect } from "react";
 import { Card } from "@/shared/components";
-import { MEDIA_PROVIDER_KINDS, getProviderAlias, resolveProviderId } from "@/shared/constants/providers";
+import {
+  MEDIA_PROVIDER_KINDS,
+  getProviderAlias,
+  resolveProviderId,
+} from "@/shared/constants/providers";
 import { getModelsByProviderId, getModelKind } from "@/shared/constants/models";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 import { Row, KIND_EXAMPLE_CONFIG } from "./exampleShared";
@@ -60,7 +64,10 @@ export function GenericExampleCard({ providerId, kind }) {
   const [refImage, setRefImage] = useState("");
   const [maskImage, setMaskImage] = useState("");
   const [extraValues, setExtraValues] = useState(() =>
-    (safeExConfig.extraFields || []).reduce((acc, f) => { acc[f.key] = f.default ?? ""; return acc; }, {})
+    (safeExConfig.extraFields || []).reduce((acc, f) => {
+      acc[f.key] = f.default ?? "";
+      return acc;
+    }, {}),
   );
   const [apiKey, setApiKey] = useState("");
   const [useTunnel, setUseTunnel] = useState(false);
@@ -82,17 +89,23 @@ export function GenericExampleCard({ providerId, kind }) {
     setLocalEndpoint(window.location.origin);
     fetch("/api/keys")
       .then((r) => r.json())
-      .then((d) => { setApiKey((d.keys || []).find((k) => k.isActive !== false)?.key || ""); })
+      .then((d) => {
+        setApiKey((d.keys || []).find((k) => k.isActive !== false)?.key || "");
+      })
       .catch(() => {});
     fetch("/api/tunnel/status")
       .then((r) => r.json())
-      .then((d) => { if (d.publicUrl) setTunnelEndpoint(d.publicUrl); })
+      .then((d) => {
+        if (d.publicUrl) setTunnelEndpoint(d.publicUrl);
+      })
       .catch(() => {});
     // Load active connections of this provider for pinning
     fetch("/api/providers/client")
       .then((r) => r.json())
       .then((d) => {
-        const conns = (d.connections || []).filter((c) => c.provider === providerId && c.isActive !== false);
+        const conns = (d.connections || []).filter(
+          (c) => c.provider === providerId && c.isActive !== false,
+        );
         setConnections(conns);
       })
       .catch(() => {});
@@ -106,7 +119,11 @@ export function GenericExampleCard({ providerId, kind }) {
   // webSearch/webFetch: use safeProviderAlias only. Other kinds: append model when present.
   const modelFull = !needsModel
     ? safeProviderAlias
-    : (selectedModel ? `${safeProviderAlias}/${selectedModel}` : (allowManualModel ? "" : safeProviderAlias));
+    : selectedModel
+      ? `${safeProviderAlias}/${selectedModel}`
+      : allowManualModel
+        ? ""
+        : safeProviderAlias;
   const imageEditDefaults = getImageEditDefaults(providerId, selectedModel);
   const effectiveRefImage = refImage.trim() || imageEditDefaults.image || "";
   const effectiveMaskImage = maskImage.trim() || imageEditDefaults.mask_image || "";
@@ -120,14 +137,17 @@ export function GenericExampleCard({ providerId, kind }) {
     acc[k] = v;
     return acc;
   }, {});
-  const systemoneQuestions = kind === "systemone" ? {
-    questions: {
-      is_urgent: {
-        type: "noul",
-        instructions: question.trim() || "Does this request require urgent attention?",
-      },
-    },
-  } : {};
+  const systemoneQuestions =
+    kind === "systemone"
+      ? {
+          questions: {
+            is_urgent: {
+              type: "noul",
+              instructions: question.trim() || "Does this request require urgent attention?",
+            },
+          },
+        }
+      : {};
   const requestBody = {
     model: modelFull,
     [exConfig.bodyKey]: input,
@@ -154,7 +174,12 @@ export function GenericExampleCard({ providerId, kind }) {
     setResult(null);
     setProgress(null);
     setPartialImage(null);
-    if (binaryImageUrl) { try { URL.revokeObjectURL(binaryImageUrl); } catch {} setBinaryImageUrl(""); }
+    if (binaryImageUrl) {
+      try {
+        URL.revokeObjectURL(binaryImageUrl);
+      } catch {}
+      setBinaryImageUrl("");
+    }
     const start = Date.now();
     try {
       const headers = { "Content-Type": "application/json" };
@@ -178,7 +203,10 @@ export function GenericExampleCard({ providerId, kind }) {
         const blob = await res.blob();
         const objUrl = URL.createObjectURL(blob);
         setBinaryImageUrl(objUrl);
-        setResult({ data: { binary: true, mime: ctype, size: blob.size }, latencyMs: Date.now() - start });
+        setResult({
+          data: { binary: true, mime: ctype, size: blob.size },
+          latencyMs: Date.now() - start,
+        });
         return;
       }
       const isSse = ctype.includes("text/event-stream");
@@ -197,7 +225,8 @@ export function GenericExampleCard({ providerId, kind }) {
           while ((sep = buf.indexOf("\n\n")) !== -1) {
             const block = buf.slice(0, sep);
             buf = buf.slice(sep + 2);
-            let evt = null, dataStr = "";
+            let evt = null,
+              dataStr = "";
             for (const line of block.split("\n")) {
               if (line.startsWith("event:")) evt = line.slice(6).trim();
               else if (line.startsWith("data:")) dataStr += line.slice(5).trim();
@@ -213,7 +242,10 @@ export function GenericExampleCard({ providerId, kind }) {
           }
         }
         const latencyMs = Date.now() - start;
-        if (streamErr) { setError(streamErr); return; }
+        if (streamErr) {
+          setError(streamErr);
+          return;
+        }
         if (finalData) setResult({ data: finalData, latencyMs });
       } else {
         const data = await res.json();
@@ -233,9 +265,10 @@ export function GenericExampleCard({ providerId, kind }) {
     if (Array.isArray(obj)) return obj.map(maskB64);
     const out = {};
     for (const [k, v] of Object.entries(obj)) {
-      out[k] = (k === "b64_json" && typeof v === "string" && v.length > 100)
-        ? `<${v.length} chars base64>`
-        : maskB64(v);
+      out[k] =
+        k === "b64_json" && typeof v === "string" && v.length > 100
+          ? `<${v.length} chars base64>`
+          : maskB64(v);
     }
     return out;
   };
@@ -254,7 +287,9 @@ export function GenericExampleCard({ providerId, kind }) {
               className="w-full px-3 py-1.5 text-sm border border-border rounded-lg bg-background focus:outline-none focus:border-primary"
             >
               {kindModels.map((m) => (
-                <option key={m.id} value={m.id}>{m.name || m.id}</option>
+                <option key={m.id} value={m.id}>
+                  {m.name || m.id}
+                </option>
               ))}
             </select>
           </Row>
@@ -273,14 +308,17 @@ export function GenericExampleCard({ providerId, kind }) {
         <Row label="Endpoint">
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
             <span className="w-full min-w-0 flex-1 px-3 py-1.5 text-sm font-mono text-text-main bg-sidebar rounded-lg truncate">
-              {endpoint}{apiPath}
+              {endpoint}
+              {apiPath}
             </span>
             {tunnelEndpoint && (
               <button
                 onClick={() => setUseTunnel((v) => !v)}
                 title={useTunnel ? "Using tunnel" : "Using local"}
                 className={`flex items-center gap-1 text-xs px-2 py-1.5 rounded-lg border shrink-0 transition-colors ${
-                  useTunnel ? "border-primary/40 bg-primary/10 text-primary" : "border-border text-text-muted hover:text-primary"
+                  useTunnel
+                    ? "border-primary/40 bg-primary/10 text-primary"
+                    : "border-border text-text-muted hover:text-primary"
                 }`}
               >
                 <span className="material-symbols-outlined text-[14px]">wifi_tethering</span>
@@ -293,7 +331,11 @@ export function GenericExampleCard({ providerId, kind }) {
         {/* API Key */}
         <Row label="API Key">
           <span className="px-3 py-1.5 text-sm font-mono text-text-main bg-sidebar rounded-lg truncate block">
-            {apiKey ? `${apiKey.slice(0, 8)}${"\u2022".repeat(Math.min(20, Math.max(0, apiKey.length - 8)))}` : <span className="text-text-muted italic">No key configured</span>}
+            {apiKey ? (
+              `${apiKey.slice(0, 8)}${"\u2022".repeat(Math.min(20, Math.max(0, apiKey.length - 8)))}`
+            ) : (
+              <span className="text-text-muted italic">No key configured</span>
+            )}
           </span>
         </Row>
 
@@ -311,7 +353,8 @@ export function GenericExampleCard({ providerId, kind }) {
                 const label = c.email || c.name || c.id.slice(0, 8);
                 return (
                   <option key={c.id} value={c.id}>
-                    {label}{plan ? ` [${plan}]` : ""}
+                    {label}
+                    {plan ? ` [${plan}]` : ""}
                   </option>
                 );
               })}
@@ -389,10 +432,14 @@ export function GenericExampleCard({ providerId, kind }) {
                   src={refImagePreviewSrc}
                   alt="Reference"
                   className="max-h-40 rounded-lg border border-border object-contain bg-sidebar"
-                  onError={(e) => { e.currentTarget.style.display = "none"; }}
-                  onLoad={(e) => { e.currentTarget.style.display = "block"; }}
-                loading="lazy"
-                decoding="async"
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                  }}
+                  onLoad={(e) => {
+                    e.currentTarget.style.display = "block";
+                  }}
+                  loading="lazy"
+                  decoding="async"
                 />
               )}
             </div>
@@ -424,10 +471,14 @@ export function GenericExampleCard({ providerId, kind }) {
                   src={maskImagePreviewSrc}
                   alt="Mask"
                   className="max-h-40 rounded-lg border border-border object-contain bg-sidebar"
-                  onError={(e) => { e.currentTarget.style.display = "none"; }}
-                  onLoad={(e) => { e.currentTarget.style.display = "block"; }}
-                loading="lazy"
-                decoding="async"
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                  }}
+                  onLoad={(e) => {
+                    e.currentTarget.style.display = "block";
+                  }}
+                  loading="lazy"
+                  decoding="async"
                 />
               )}
             </div>
@@ -436,49 +487,60 @@ export function GenericExampleCard({ providerId, kind }) {
 
         {/* Extra fields — for kinds without model concept (webSearch/webFetch), show all; otherwise filter by model.params */}
         {(exConfig.extraFields || [])
-          .filter((f) => kindModels.length === 0 || (Array.isArray(selectedModelObj?.params) && selectedModelObj.params.includes(f.key)))
+          .filter(
+            (f) =>
+              kindModels.length === 0 ||
+              (Array.isArray(selectedModelObj?.params) && selectedModelObj.params.includes(f.key)),
+          )
           .map((f) => (
-          <Row key={f.key} label={f.label}>
-            {f.type === "select" ? (
-              <select
-                value={extraValues[f.key] ?? ""}
-                onChange={(e) => setExtraValues((s) => ({ ...s, [f.key]: e.target.value }))}
-                className="w-full px-3 py-1.5 text-sm border border-border rounded-lg bg-background focus:outline-none focus:border-primary"
-              >
-                {(f.options || []).map((opt) => (
-                  <option key={opt} value={opt}>{opt === "" ? "(default)" : opt}</option>
-                ))}
-              </select>
-            ) : f.type === "text" ? (
-              <input
-                type="text"
-                value={extraValues[f.key] ?? ""}
-                placeholder={f.placeholder}
-                onChange={(e) => setExtraValues((s) => ({ ...s, [f.key]: e.target.value }))}
-                className="w-full px-3 py-1.5 text-sm border border-border rounded-lg bg-background focus:outline-none focus:border-primary"
-              />
-            ) : f.type === "boolean" ? (
-              <label className="inline-flex items-center gap-2 text-sm text-text-main">
+            <Row key={f.key} label={f.label}>
+              {f.type === "select" ? (
+                <select
+                  value={extraValues[f.key] ?? ""}
+                  onChange={(e) => setExtraValues((s) => ({ ...s, [f.key]: e.target.value }))}
+                  className="w-full px-3 py-1.5 text-sm border border-border rounded-lg bg-background focus:outline-none focus:border-primary"
+                >
+                  {(f.options || []).map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt === "" ? "(default)" : opt}
+                    </option>
+                  ))}
+                </select>
+              ) : f.type === "text" ? (
                 <input
-                  type="checkbox"
-                  checked={extraValues[f.key] === true}
-                  onChange={(e) => setExtraValues((s) => ({ ...s, [f.key]: e.target.checked }))}
-                  className="size-4 accent-primary"
+                  type="text"
+                  value={extraValues[f.key] ?? ""}
+                  placeholder={f.placeholder}
+                  onChange={(e) => setExtraValues((s) => ({ ...s, [f.key]: e.target.value }))}
+                  className="w-full px-3 py-1.5 text-sm border border-border rounded-lg bg-background focus:outline-none focus:border-primary"
                 />
-                {extraValues[f.key] ? "Enabled" : "Disabled"}
-              </label>
-            ) : (
-              <input
-                type="number"
-                value={extraValues[f.key] ?? ""}
-                min={f.min}
-                max={f.max}
-                onChange={(e) => setExtraValues((s) => ({ ...s, [f.key]: e.target.value === "" ? "" : Number(e.target.value) }))}
-                className="w-full px-3 py-1.5 text-sm border border-border rounded-lg bg-background focus:outline-none focus:border-primary"
-              />
-            )}
-          </Row>
-        ))}
+              ) : f.type === "boolean" ? (
+                <label className="inline-flex items-center gap-2 text-sm text-text-main">
+                  <input
+                    type="checkbox"
+                    checked={extraValues[f.key] === true}
+                    onChange={(e) => setExtraValues((s) => ({ ...s, [f.key]: e.target.checked }))}
+                    className="size-4 accent-primary"
+                  />
+                  {extraValues[f.key] ? "Enabled" : "Disabled"}
+                </label>
+              ) : (
+                <input
+                  type="number"
+                  value={extraValues[f.key] ?? ""}
+                  min={f.min}
+                  max={f.max}
+                  onChange={(e) =>
+                    setExtraValues((s) => ({
+                      ...s,
+                      [f.key]: e.target.value === "" ? "" : Number(e.target.value),
+                    }))
+                  }
+                  className="w-full px-3 py-1.5 text-sm border border-border rounded-lg bg-background focus:outline-none focus:border-primary"
+                />
+              )}
+            </Row>
+          ))}
 
         {/* Output Format toggle (image only) — last */}
         {kind === "image" && (
@@ -497,39 +559,53 @@ export function GenericExampleCard({ providerId, kind }) {
         {/* Curl + Run */}
         <div className="mt-1">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-1.5">
-            <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">Request</span>
+            <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">
+              Request
+            </span>
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
               <button
                 onClick={() => copyCurl(curlSnippet)}
                 className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-primary transition-colors"
               >
-                <span className="material-symbols-outlined text-[14px]">{copiedCurl ? "check" : "content_copy"}</span>
+                <span className="material-symbols-outlined text-[14px]">
+                  {copiedCurl ? "check" : "content_copy"}
+                </span>
                 {copiedCurl ? "Copied" : "Copy"}
               </button>
-            <button
-              onClick={handleRun}
-              disabled={running || !input.trim() || !modelFull}
-              className="flex w-full sm:w-auto items-center justify-center gap-1.5 px-3 py-1 rounded-lg bg-primary text-white text-xs font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-                <span className="material-symbols-outlined text-[14px]" style={running ? { animation: "spin 1s linear infinite" } : undefined}>
+              <button
+                onClick={handleRun}
+                disabled={running || !input.trim() || !modelFull}
+                className="flex w-full sm:w-auto items-center justify-center gap-1.5 px-3 py-1 rounded-lg bg-primary text-white text-xs font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span
+                  className="material-symbols-outlined text-[14px]"
+                  style={running ? { animation: "spin 1s linear infinite" } : undefined}
+                >
                   play_arrow
                 </span>
                 {running ? "Running..." : "Run"}
               </button>
             </div>
           </div>
-          <pre className="bg-sidebar rounded-lg px-3 py-2.5 text-xs font-mono text-text-main overflow-x-auto whitespace-pre-wrap break-all">{curlSnippet}</pre>
+          <pre className="bg-sidebar rounded-lg px-3 py-2.5 text-xs font-mono text-text-main overflow-x-auto whitespace-pre-wrap break-all">
+            {curlSnippet}
+          </pre>
         </div>
 
         {/* Streaming progress */}
         {(running || progress) && useStreaming && (
           <div className="flex flex-col gap-2 px-3 py-2 rounded-lg bg-sidebar border border-border sm:flex-row sm:items-center sm:gap-3">
-            <span className="material-symbols-outlined text-[16px] text-primary" style={running ? { animation: "spin 1s linear infinite" } : undefined}>
+            <span
+              className="material-symbols-outlined text-[16px] text-primary"
+              style={running ? { animation: "spin 1s linear infinite" } : undefined}
+            >
               {running ? "progress_activity" : "check_circle"}
             </span>
             <span className="text-xs text-text-muted">
               {progress?.stage || "starting"}
-              {!running && progress?.bytesReceived ? ` · ${(progress.bytesReceived / 1024).toFixed(1)} KB` : ""}
+              {!running && progress?.bytesReceived
+                ? ` · ${(progress.bytesReceived / 1024).toFixed(1)} KB`
+                : ""}
             </span>
           </div>
         )}
@@ -537,13 +613,15 @@ export function GenericExampleCard({ providerId, kind }) {
         {/* Partial image preview (codex stream) */}
         {partialImage?.b64_json && !result && (
           <div>
-            <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">Partial preview</span>
+            <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">
+              Partial preview
+            </span>
             <img
               src={`data:image/png;base64,${partialImage.b64_json}`}
               alt="Partial"
               className="max-w-full rounded-lg border border-border mt-1.5 opacity-80"
-            loading="lazy"
-            decoding="async"
+              loading="lazy"
+              decoding="async"
             />
           </div>
         )}
@@ -555,14 +633,19 @@ export function GenericExampleCard({ providerId, kind }) {
         <div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-1.5">
             <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">
-              Response {result && <span className="font-normal normal-case">&#9889; {result.latencyMs}ms</span>}
+              Response{" "}
+              {result && (
+                <span className="font-normal normal-case">&#9889; {result.latencyMs}ms</span>
+              )}
             </span>
             {result && (
               <button
                 onClick={() => copyRes(resultJson)}
                 className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-primary transition-colors"
               >
-                <span className="material-symbols-outlined text-[14px]">{copiedRes ? "check" : "content_copy"}</span>
+                <span className="material-symbols-outlined text-[14px]">
+                  {copiedRes ? "check" : "content_copy"}
+                </span>
                 {copiedRes ? "Copied" : "Copy"}
               </button>
             )}
@@ -574,7 +657,12 @@ export function GenericExampleCard({ providerId, kind }) {
             <div className="mt-2">
               <div className="flex items-center justify-end mb-1.5">
                 <a
-                  href={binaryImageUrl || (result?.data?.data?.[0]?.b64_json ? `data:image/png;base64,${result.data.data[0].b64_json}` : result?.data?.data?.[0]?.url || "")}
+                  href={
+                    binaryImageUrl ||
+                    (result?.data?.data?.[0]?.b64_json
+                      ? `data:image/png;base64,${result.data.data[0].b64_json}`
+                      : result?.data?.data?.[0]?.url || "")
+                  }
                   download="image.png"
                   className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-primary transition-colors"
                 >
@@ -583,11 +671,16 @@ export function GenericExampleCard({ providerId, kind }) {
                 </a>
               </div>
               <img
-                src={binaryImageUrl || (result?.data?.data?.[0]?.b64_json ? `data:image/png;base64,${result.data.data[0].b64_json}` : result?.data?.data?.[0]?.url)}
+                src={
+                  binaryImageUrl ||
+                  (result?.data?.data?.[0]?.b64_json
+                    ? `data:image/png;base64,${result.data.data[0].b64_json}`
+                    : result?.data?.data?.[0]?.url)
+                }
                 alt="Generated"
                 className="max-w-full rounded-lg border border-border"
-              loading="lazy"
-              decoding="async"
+                loading="lazy"
+                decoding="async"
               />
             </div>
           )}

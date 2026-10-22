@@ -37,7 +37,10 @@ export async function POST(request) {
 
     if (!userRes.ok) {
       const err = await userRes.text();
-      return NextResponse.json({ error: `GitLab token verification failed: ${err}` }, { status: 401 });
+      return NextResponse.json(
+        { error: `GitLab token verification failed: ${err}` },
+        { status: 401 },
+      );
     }
 
     const user = await userRes.json();

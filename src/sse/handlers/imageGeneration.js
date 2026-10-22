@@ -24,8 +24,12 @@ function recordImageRequestUsage({ provider, model, connectionId, apiKey, endpoi
   if (!usage || typeof usage !== "object") return;
   const promptTokens = usage.prompt_tokens;
   const completionTokens = usage.completion_tokens;
-  if (!Number.isSafeInteger(promptTokens) || promptTokens < 0 ||
-      !Number.isSafeInteger(completionTokens) || completionTokens < 0) {
+  if (
+    !Number.isSafeInteger(promptTokens) ||
+    promptTokens < 0 ||
+    !Number.isSafeInteger(completionTokens) ||
+    completionTokens < 0
+  ) {
     return;
   }
 
@@ -77,13 +81,24 @@ export async function handleImageGeneration(request) {
   const comboModels = await getComboModels(modelStr);
   if (comboModels) {
     const comboStrategies = settings.comboStrategies || {};
-    const comboStrategy = comboStrategies[modelStr]?.fallbackStrategy || settings.comboStrategy || "fallback";
+    const comboStrategy =
+      comboStrategies[modelStr]?.fallbackStrategy || settings.comboStrategy || "fallback";
     const comboStickyLimit = settings.comboStickyRoundRobinLimit;
-    log.info("IMAGE", `Combo "${modelStr}" with ${comboModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`);
+    log.info(
+      "IMAGE",
+      `Combo "${modelStr}" with ${comboModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`,
+    );
     return handleComboChat({
       body,
       models: comboModels,
-      handleSingleModel: (b, m) => handleSingleModelImage(b, m, { wantsStream, binaryOutput, preferredConnectionId, apiKey, endpoint: url.pathname }),
+      handleSingleModel: (b, m) =>
+        handleSingleModelImage(b, m, {
+          wantsStream,
+          binaryOutput,
+          preferredConnectionId,
+          apiKey,
+          endpoint: url.pathname,
+        }),
       log,
       comboName: modelStr,
       comboStrategy,
@@ -91,10 +106,20 @@ export async function handleImageGeneration(request) {
     });
   }
 
-  return handleSingleModelImage(body, modelStr, { wantsStream, binaryOutput, preferredConnectionId, apiKey, endpoint: url.pathname });
+  return handleSingleModelImage(body, modelStr, {
+    wantsStream,
+    binaryOutput,
+    preferredConnectionId,
+    apiKey,
+    endpoint: url.pathname,
+  });
 }
 
-async function handleSingleModelImage(body, modelStr, { wantsStream, binaryOutput, preferredConnectionId, apiKey, endpoint } = {}) {
+async function handleSingleModelImage(
+  body,
+  modelStr,
+  { wantsStream, binaryOutput, preferredConnectionId, apiKey, endpoint } = {},
+) {
   const modelInfo = await getModelInfo(modelStr);
   if (!modelInfo.provider) return errorResponse(HTTP_STATUS.BAD_REQUEST, "Invalid model format");
 
@@ -109,7 +134,10 @@ async function handleSingleModelImage(body, modelStr, { wantsStream, binaryOutpu
       binaryOutput,
     });
     if (result.success) return result.response;
-    return errorResponse(result.status || HTTP_STATUS.BAD_GATEWAY, result.error || "Image generation failed");
+    return errorResponse(
+      result.status || HTTP_STATUS.BAD_GATEWAY,
+      result.error || "Image generation failed",
+    );
   }
 
   // Credentialed providers — fallback loop
@@ -118,18 +146,29 @@ async function handleSingleModelImage(body, modelStr, { wantsStream, binaryOutpu
   let lastStatus = null;
 
   while (true) {
-    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model, { preferredConnectionId });
+    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model, {
+      preferredConnectionId,
+    });
 
     if (!credentials || credentials.allRateLimited) {
       if (credentials?.allRateLimited) {
         const errorMsg = lastError || credentials.lastError || "Unavailable";
-        const status = lastStatus || Number(credentials.lastErrorCode) || HTTP_STATUS.SERVICE_UNAVAILABLE;
-        return unavailableResponse(status, `[${provider}/${model}] ${errorMsg}`, credentials.retryAfter, credentials.retryAfterHuman);
+        const status =
+          lastStatus || Number(credentials.lastErrorCode) || HTTP_STATUS.SERVICE_UNAVAILABLE;
+        return unavailableResponse(
+          status,
+          `[${provider}/${model}] ${errorMsg}`,
+          credentials.retryAfter,
+          credentials.retryAfterHuman,
+        );
       }
       if (excludeConnectionIds.size === 0) {
         return errorResponse(HTTP_STATUS.BAD_REQUEST, `No credentials for provider: ${provider}`);
       }
-      return errorResponse(lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE, lastError || "All accounts unavailable");
+      return errorResponse(
+        lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE,
+        lastError || "All accounts unavailable",
+      );
     }
 
     const refreshedCredentials = await checkAndRefreshToken(provider, credentials);
@@ -138,9 +177,14 @@ async function handleSingleModelImage(body, modelStr, { wantsStream, binaryOutpu
     // without locking them: they stay usable for chat.
     const adapter = getImageAdapter(provider);
     if (adapter?.canUseCredentials && !adapter.canUseCredentials(refreshedCredentials)) {
-      log.info("IMAGE", `[${provider}/${model}] skip connection ${credentials.connectionId.slice(0, 8)}: plan not entitled to image generation`);
+      log.info(
+        "IMAGE",
+        `[${provider}/${model}] skip connection ${credentials.connectionId.slice(0, 8)}: plan not entitled to image generation`,
+      );
       excludeConnectionIds.add(credentials.connectionId);
-      lastError = lastError || "No account entitled to image generation (ChatGPT Free plans are not supported)";
+      lastError =
+        lastError ||
+        "No account entitled to image generation (ChatGPT Free plans are not supported)";
       lastStatus = lastStatus || HTTP_STATUS.FORBIDDEN;
       continue;
     }
@@ -156,7 +200,7 @@ async function handleSingleModelImage(body, modelStr, { wantsStream, binaryOutpu
           accessToken: newCreds.accessToken,
           refreshToken: newCreds.refreshToken,
           providerSpecificData: newCreds.providerSpecificData,
-          testStatus: "active"
+          testStatus: "active",
         });
       },
       onUsage: (usage) => {
@@ -171,12 +215,18 @@ async function handleSingleModelImage(body, modelStr, { wantsStream, binaryOutpu
       },
       onRequestSuccess: async () => {
         await clearAccountError(credentials.connectionId, credentials, model);
-      }
+      },
     });
 
     if (result.success) return result.response;
 
-    const { shouldFallback } = await markAccountUnavailable(credentials.connectionId, result.status, result.error, provider, model);
+    const { shouldFallback } = await markAccountUnavailable(
+      credentials.connectionId,
+      result.status,
+      result.error,
+      provider,
+      model,
+    );
 
     if (shouldFallback) {
       excludeConnectionIds.add(credentials.connectionId);

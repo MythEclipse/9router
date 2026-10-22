@@ -10,7 +10,7 @@ const COLORS = {
   reset: "\x1b[0m",
   bold: "\x1b[1m",
   cyan: "\x1b[36m",
-  dim: "\x1b[2m"
+  dim: "\x1b[2m",
 };
 
 // Provider models - static config (synced from open-sse/config/providerModels.js)
@@ -37,11 +37,7 @@ const PROVIDER_MODELS = {
     { id: "gemini-2.5-flash" },
     { id: "gemini-2.5-flash-lite" },
   ],
-  qw: [
-    { id: "qwen3-coder-plus" },
-    { id: "qwen3-coder-flash" },
-    { id: "vision-model" },
-  ],
+  qw: [{ id: "qwen3-coder-plus" }, { id: "qwen3-coder-flash" }, { id: "vision-model" }],
   if: [
     { id: "qwen3-coder-plus" },
     { id: "kimi-k2" },
@@ -98,11 +94,7 @@ const PROVIDER_MODELS = {
     { id: "gemini-2.5-pro" },
     { id: "grok-code-fast-1" },
   ],
-  kr: [
-    { id: "claude-sonnet-5" },
-    { id: "claude-sonnet-4.5" },
-    { id: "claude-haiku-4.5" },
-  ],
+  kr: [{ id: "claude-sonnet-5" }, { id: "claude-sonnet-4.5" }, { id: "claude-haiku-4.5" }],
   openai: [
     { id: "gpt-4o" },
     { id: "gpt-4o-mini" },
@@ -125,19 +117,10 @@ const PROVIDER_MODELS = {
     { id: "gemini-2.5-flash" },
     { id: "gemini-2.5-flash-lite" },
   ],
-  openrouter: [
-    { id: "auto" },
-  ],
-  glm: [
-    { id: "glm-4.7" },
-    { id: "glm-4.6v" },
-  ],
-  kimi: [
-    { id: "kimi-latest" },
-  ],
-  minimax: [
-    { id: "MiniMax-M2.1" },
-  ],
+  openrouter: [{ id: "auto" }],
+  glm: [{ id: "glm-4.7" }, { id: "glm-4.6v" }],
+  kimi: [{ id: "kimi-latest" }],
+  minimax: [{ id: "MiniMax-M2.1" }],
 };
 
 // Provider definitions
@@ -181,7 +164,7 @@ function getAuthType(providerId) {
  */
 function countConnectionsByProvider(connections) {
   const counts = {};
-  connections.forEach(conn => {
+  connections.forEach((conn) => {
     const providerId = conn.provider || conn.providerId;
     counts[providerId] = (counts[providerId] || 0) + 1;
   });
@@ -195,8 +178,8 @@ function countConnectionsByProvider(connections) {
 async function showProvidersMenu(breadcrumb = []) {
   // Build provider items list
   const providerItems = [];
-  
-  Object.values(OAUTH_PROVIDERS).forEach(provider => {
+
+  Object.values(OAUTH_PROVIDERS).forEach((provider) => {
     providerItems.push({
       provider,
       authType: "oauth",
@@ -205,13 +188,16 @@ async function showProvidersMenu(breadcrumb = []) {
         return `${provider.name} (OAuth) - ${count} Connected`;
       },
       action: async (data) => {
-        await showProviderDetail(provider.id, "oauth", data.connections, [...breadcrumb, provider.name]);
+        await showProviderDetail(provider.id, "oauth", data.connections, [
+          ...breadcrumb,
+          provider.name,
+        ]);
         return true;
-      }
+      },
     });
   });
-  
-  Object.values(APIKEY_PROVIDERS).forEach(provider => {
+
+  Object.values(APIKEY_PROVIDERS).forEach((provider) => {
     providerItems.push({
       provider,
       authType: "apikey",
@@ -220,9 +206,12 @@ async function showProvidersMenu(breadcrumb = []) {
         return `${provider.name} (API) - ${count} Connected`;
       },
       action: async (data) => {
-        await showProviderDetail(provider.id, "apikey", data.connections, [...breadcrumb, provider.name]);
+        await showProviderDetail(provider.id, "apikey", data.connections, [
+          ...breadcrumb,
+          provider.name,
+        ]);
         return true;
-      }
+      },
     });
   });
 
@@ -240,7 +229,7 @@ async function showProvidersMenu(breadcrumb = []) {
     action: async () => {
       await showCustomProvidersMenu([...breadcrumb, "Custom Providers"]);
       return true;
-    }
+    },
   });
 
   await showMenuWithBack({
@@ -254,14 +243,14 @@ async function showProvidersMenu(breadcrumb = []) {
         return null;
       }
       const connections = provRes.data.connections || [];
-      const nodes = nodeRes.success ? (nodeRes.data.nodes || nodeRes.data || []) : [];
+      const nodes = nodeRes.success ? nodeRes.data.nodes || nodeRes.data || [] : [];
       return {
         connections,
         counts: countConnectionsByProvider(connections),
         nodeCount: nodes.length,
       };
     },
-    items: providerItems
+    items: providerItems,
   });
 }
 
@@ -273,23 +262,23 @@ async function showProvidersMenu(breadcrumb = []) {
 function buildProviderHeader(providerId) {
   const provider = ALL_PROVIDERS[providerId];
   const alias = provider.alias || providerId;
-  
+
   const lines = [];
   lines.push(`Alias: ${COLORS.cyan}${alias}${COLORS.reset}`);
-  
+
   // Get models from static config
   const models = PROVIDER_MODELS[alias] || [];
   if (models.length > 0) {
     const modelList = models
       .slice(0, 5)
-      .map(m => `${alias}/${m.id}`)
+      .map((m) => `${alias}/${m.id}`)
       .join(", ");
     const more = models.length > 5 ? ` (+${models.length - 5} more)` : "";
     lines.push(`Models: ${COLORS.dim}${modelList}${more}${COLORS.reset}`);
   } else {
     lines.push(`Models: ${COLORS.dim}No models configured${COLORS.reset}`);
   }
-  
+
   return lines.join("\n");
 }
 
@@ -303,7 +292,7 @@ function buildProviderHeader(providerId) {
 async function showProviderDetail(providerId, authType, allConnections, breadcrumb = []) {
   const provider = ALL_PROVIDERS[providerId];
   const { showListMenu } = require("../utils/menuHelper");
-  
+
   await showListMenu({
     title: `🔌 ${provider.name} (${authType.toUpperCase()})`,
     breadcrumb,
@@ -315,8 +304,8 @@ async function showProviderDetail(providerId, authType, allConnections, breadcru
         allConnections.length = 0;
         allConnections.push(...(response.data.connections || []));
       }
-      const providerConns = allConnections.filter(conn => 
-        (conn.provider || conn.providerId) === providerId
+      const providerConns = allConnections.filter(
+        (conn) => (conn.provider || conn.providerId) === providerId,
       );
       return { items: providerConns };
     },
@@ -332,8 +321,8 @@ async function showProviderDetail(providerId, authType, allConnections, breadcru
       label: "Add New Connection",
       action: async () => {
         await handleAddConnection(providerId, authType);
-      }
-    }
+      },
+    },
   });
 }
 
@@ -345,9 +334,13 @@ async function showProviderDetail(providerId, authType, allConnections, breadcru
  */
 async function showConnectionActions(connection, providerId, breadcrumb = []) {
   const name = connection.name || connection.email || connection.displayName || "Unnamed";
-  const status = connection.testStatus === "active" ? "✓ Active" : 
-                 connection.testStatus === "error" ? "✗ Error" : "? Unknown";
-  
+  const status =
+    connection.testStatus === "active"
+      ? "✓ Active"
+      : connection.testStatus === "error"
+        ? "✗ Error"
+        : "? Unknown";
+
   await showMenuWithBack({
     title: `🔌 ${name}`,
     breadcrumb: [...breadcrumb, name],
@@ -369,7 +362,7 @@ async function showConnectionActions(connection, providerId, breadcrumb = []) {
             await pause();
           }
           return true;
-        }
+        },
       },
       {
         label: "Test Connection",
@@ -383,7 +376,7 @@ async function showConnectionActions(connection, providerId, breadcrumb = []) {
           }
           await pause();
           return true;
-        }
+        },
       },
       {
         label: "Delete Connection",
@@ -400,9 +393,9 @@ async function showConnectionActions(connection, providerId, breadcrumb = []) {
             return false; // Exit menu after delete
           }
           return true;
-        }
-      }
-    ]
+        },
+      },
+    ],
   });
 }
 
@@ -442,35 +435,35 @@ async function handleAddApiKeyConnection(providerId) {
   clearScreen();
   const provider = ALL_PROVIDERS[providerId];
   console.log(`\n➕ Add ${provider.name} API Key Connection\n`);
-  
+
   const name = await prompt("Connection Name: ");
   if (!name) {
     showStatus("Cancelled", "warning");
     await pause();
     return;
   }
-  
+
   const apiKey = await prompt("API Key: ");
   if (!apiKey) {
     showStatus("Cancelled", "warning");
     await pause();
     return;
   }
-  
+
   showStatus("Creating connection...", "info");
-  
+
   const result = await api.createApiKeyProvider({
     provider: providerId,
     name,
-    apiKey
+    apiKey,
   });
-  
+
   if (result.success) {
     showStatus("✓ Connection created successfully!", "success");
   } else {
     showStatus(`✗ Failed: ${result.error}`, "error");
   }
-  
+
   await pause();
 }
 
@@ -482,33 +475,33 @@ async function handleAddApiKeyConnection(providerId) {
 async function handleAddOAuthConnection(providerId) {
   clearScreen();
   const provider = ALL_PROVIDERS[providerId];
-  
+
   // Step 1: Get auth URL
   showStatus("Requesting authorization URL...", "info");
   const authResult = await api.getOAuthAuthUrl(providerId);
-  
+
   if (!authResult.success) {
     showStatus(`Failed: ${authResult.error}`, "error");
     await pause();
     return;
   }
-  
+
   const authData = authResult.data || authResult;
   const authUrl = authData.authUrl;
   const codeVerifier = authData.codeVerifier;
   const state = authData.state;
   const redirectUri = authData.redirectUri;
-  
+
   if (!authUrl) {
     showStatus("Failed: No auth URL received", "error");
     await pause();
     return;
   }
-  
+
   // Step 2: Show URL and instructions
   clearScreen();
   showHeader("🔐 OAuth Login", `Providers > ${provider.name} > Add Connection`);
-  
+
   console.log(`  ${COLORS.bold}${COLORS.cyan}1.${COLORS.reset} Open this URL in your browser:`);
   console.log(`     ${COLORS.dim}${authUrl}${COLORS.reset}`);
   if (copyToClipboard(authUrl)) {
@@ -517,17 +510,21 @@ async function handleAddOAuthConnection(providerId) {
   console.log();
   console.log(`  ${COLORS.bold}${COLORS.cyan}2.${COLORS.reset} Complete authorization in browser`);
   console.log();
-  console.log(`  ${COLORS.bold}${COLORS.cyan}3.${COLORS.reset} Copy the callback URL from address bar`);
-  console.log(`     ${COLORS.dim}(looks like: http://localhost:20128/callback?code=...)${COLORS.reset}`);
+  console.log(
+    `  ${COLORS.bold}${COLORS.cyan}3.${COLORS.reset} Copy the callback URL from address bar`,
+  );
+  console.log(
+    `     ${COLORS.dim}(looks like: http://localhost:20128/callback?code=...)${COLORS.reset}`,
+  );
   console.log();
-  
+
   const callbackUrl = await prompt("  Paste callback URL: ");
   if (!callbackUrl) {
     showStatus("Cancelled", "warning");
     await pause();
     return;
   }
-  
+
   // Step 3: Parse callback URL and extract code
   let code, urlState, error;
   try {
@@ -535,14 +532,14 @@ async function handleAddOAuthConnection(providerId) {
     code = url.searchParams.get("code");
     urlState = url.searchParams.get("state");
     error = url.searchParams.get("error");
-    
+
     if (error) {
       const errorDesc = url.searchParams.get("error_description") || error;
       showStatus(`Authorization failed: ${errorDesc}`, "error");
       await pause();
       return;
     }
-    
+
     if (!code) {
       showStatus("No authorization code found in URL", "error");
       await pause();
@@ -553,7 +550,7 @@ async function handleAddOAuthConnection(providerId) {
     await pause();
     return;
   }
-  
+
   // Step 4: Exchange code for tokens
   console.log();
   showStatus("Exchanging code for tokens...", "info");
@@ -561,15 +558,15 @@ async function handleAddOAuthConnection(providerId) {
     code,
     redirectUri,
     codeVerifier,
-    state: urlState || state
+    state: urlState || state,
   });
-  
+
   if (exchangeResult.success) {
     showStatus("Connection created successfully!", "success");
   } else {
     showStatus(`Failed: ${exchangeResult.error}`, "error");
   }
-  
+
   await pause();
 }
 
@@ -580,17 +577,17 @@ async function handleAddOAuthConnection(providerId) {
 async function handleAddDeviceCodeConnection(providerId) {
   clearScreen();
   const provider = ALL_PROVIDERS[providerId];
-  
+
   // Step 1: Request device code
   showStatus("Requesting device code...", "info");
   const deviceResult = await api.getOAuthDeviceCode(providerId);
-  
+
   if (!deviceResult.success) {
     showStatus(`Failed: ${deviceResult.error}`, "error");
     await pause();
     return;
   }
-  
+
   const deviceData = deviceResult.data || deviceResult;
   const device_code = deviceData.device_code;
   const user_code = deviceData.user_code;
@@ -598,58 +595,65 @@ async function handleAddDeviceCodeConnection(providerId) {
   const verification_uri_complete = deviceData.verification_uri_complete;
   const codeVerifier = deviceData.codeVerifier;
   const extraData = deviceData.extraData || deviceData;
-  
+
   if (!device_code) {
     showStatus("Failed: No device code received", "error");
     await pause();
     return;
   }
-  
+
   // Step 2: Show instructions
   clearScreen();
   const deviceUrl = verification_uri_complete || verification_uri;
   showHeader("📱 Device Login", `Providers > ${provider.name} > Add Connection`);
-  
-  console.log(`  ${COLORS.bold}${COLORS.cyan}1.${COLORS.reset} Open: ${COLORS.dim}${deviceUrl}${COLORS.reset}`);
+
+  console.log(
+    `  ${COLORS.bold}${COLORS.cyan}1.${COLORS.reset} Open: ${COLORS.dim}${deviceUrl}${COLORS.reset}`,
+  );
   if (copyToClipboard(deviceUrl)) {
     console.log(`     \x1b[32m✓ Link copied to clipboard!\x1b[0m`);
   }
   console.log();
   if (!verification_uri_complete && user_code) {
-    console.log(`  ${COLORS.bold}${COLORS.cyan}2.${COLORS.reset} Enter code: ${COLORS.bold}${user_code}${COLORS.reset}`);
+    console.log(
+      `  ${COLORS.bold}${COLORS.cyan}2.${COLORS.reset} Enter code: ${COLORS.bold}${user_code}${COLORS.reset}`,
+    );
     console.log();
   }
   console.log(`  ${COLORS.dim}Waiting for authorization...${COLORS.reset}`);
   console.log();
-  
+
   // Step 3: Poll for token
   const maxAttempts = 60; // 5 minutes (5s interval)
   for (let i = 0; i < maxAttempts; i++) {
-    await new Promise(resolve => setTimeout(resolve, 5000));
-    
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+
     const pollResult = await api.pollOAuthToken(providerId, {
       deviceCode: device_code,
       codeVerifier,
-      extraData
+      extraData,
     });
-    
+
     if (pollResult.success) {
       showStatus("\nConnection created successfully!", "success");
       await pause();
       return;
     }
-    
+
     // Check if still pending (pending flag is at root level, not in data)
-    const isPending = pollResult.pending || pollResult.error === "authorization_pending" || pollResult.error === "slow_down";
+    const isPending =
+      pollResult.pending ||
+      pollResult.error === "authorization_pending" ||
+      pollResult.error === "slow_down";
     if (!isPending) {
       showStatus(`\nFailed: ${pollResult.error || "Unknown error"}`, "error");
       await pause();
       return;
     }
-    
+
     process.stdout.write(".");
   }
-  
+
   showStatus("\nTimeout waiting for authorization", "error");
   await pause();
 }
@@ -687,8 +691,8 @@ async function showCustomProvidersMenu(breadcrumb = []) {
       label: "➕ Add Custom Provider",
       action: async () => {
         await handleAddCustomNode();
-      }
-    }
+      },
+    },
   });
 }
 
@@ -710,14 +714,14 @@ async function showCustomNodeDetail(node, breadcrumb = []) {
         action: async () => {
           await showCustomNodeConnections(node, breadcrumb);
           return true;
-        }
+        },
       },
       {
         label: "Edit Node",
         action: async () => {
           await handleEditCustomNode(node);
           return true;
-        }
+        },
       },
       {
         label: "Delete Node",
@@ -734,9 +738,9 @@ async function showCustomNodeDetail(node, breadcrumb = []) {
             return false;
           }
           return true;
-        }
-      }
-    ]
+        },
+      },
+    ],
   });
 }
 
@@ -754,7 +758,7 @@ async function showCustomNodeConnections(node, breadcrumb = []) {
       const res = await api.getProviders();
       if (!res.success) return { items: [] };
       const all = res.data.connections || [];
-      const items = all.filter(c => c.provider === node.id);
+      const items = all.filter((c) => c.provider === node.id);
       return { items };
     },
     formatItem: (conn) => {
@@ -768,8 +772,8 @@ async function showCustomNodeConnections(node, breadcrumb = []) {
       label: "Add API Key Connection",
       action: async () => {
         await handleAddCustomNodeConnection(node);
-      }
-    }
+      },
+    },
   });
 }
 
@@ -781,15 +785,26 @@ async function handleAddCustomNodeConnection(node) {
   console.log(`\n➕ Add Connection to ${node.name}\n`);
 
   const name = await prompt("Connection Name: ");
-  if (!name) { showStatus("Cancelled", "warning"); await pause(); return; }
+  if (!name) {
+    showStatus("Cancelled", "warning");
+    await pause();
+    return;
+  }
 
   const apiKey = await prompt("API Key: ");
-  if (!apiKey) { showStatus("Cancelled", "warning"); await pause(); return; }
+  if (!apiKey) {
+    showStatus("Cancelled", "warning");
+    await pause();
+    return;
+  }
 
   showStatus("Creating connection...", "info");
   const res = await api.createApiKeyProvider({ provider: node.id, name, apiKey });
 
-  showStatus(res.success ? "✓ Connection created!" : `✗ Failed: ${res.error}`, res.success ? "success" : "error");
+  showStatus(
+    res.success ? "✓ Connection created!" : `✗ Failed: ${res.error}`,
+    res.success ? "success" : "error",
+  );
   await pause();
 }
 
@@ -806,19 +821,33 @@ async function handleAddCustomNode() {
   const typeInput = await prompt("Type (1/2): ");
   const typeIdx = parseInt(typeInput) - 1;
   if (isNaN(typeIdx) || !CUSTOM_NODE_TYPES[typeIdx]) {
-    showStatus("Cancelled", "warning"); await pause(); return;
+    showStatus("Cancelled", "warning");
+    await pause();
+    return;
   }
   const type = CUSTOM_NODE_TYPES[typeIdx];
 
   // Step 2: Inputs
   const name = await prompt("Name: ");
-  if (!name) { showStatus("Cancelled", "warning"); await pause(); return; }
+  if (!name) {
+    showStatus("Cancelled", "warning");
+    await pause();
+    return;
+  }
 
   const prefix = await prompt("Prefix (used in model IDs, e.g. myapi): ");
-  if (!prefix) { showStatus("Cancelled", "warning"); await pause(); return; }
+  if (!prefix) {
+    showStatus("Cancelled", "warning");
+    await pause();
+    return;
+  }
 
   const baseUrl = await prompt("Base URL (e.g. https://api.example.com/v1): ");
-  if (!baseUrl) { showStatus("Cancelled", "warning"); await pause(); return; }
+  if (!baseUrl) {
+    showStatus("Cancelled", "warning");
+    await pause();
+    return;
+  }
 
   // Step 3: API type (OpenAI only)
   let apiType;
@@ -834,7 +863,10 @@ async function handleAddCustomNode() {
   const body = { name, prefix, baseUrl, type, ...(apiType && { apiType }) };
   const res = await api.createProviderNode(body);
 
-  showStatus(res.success ? "✓ Provider created!" : `✗ Failed: ${res.error}`, res.success ? "success" : "error");
+  showStatus(
+    res.success ? "✓ Provider created!" : `✗ Failed: ${res.error}`,
+    res.success ? "success" : "error",
+  );
   await pause();
 }
 
@@ -856,7 +888,9 @@ async function handleEditCustomNode(node) {
   if (prefix && prefix.trim()) updates.prefix = prefix.trim();
 
   if (!Object.keys(updates).length) {
-    showStatus("No changes", "warning"); await pause(); return;
+    showStatus("No changes", "warning");
+    await pause();
+    return;
   }
 
   showStatus("Updating...", "info");

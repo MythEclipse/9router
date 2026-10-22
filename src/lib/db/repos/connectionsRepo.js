@@ -5,11 +5,27 @@ import { getCombos } from "./combosRepo.js";
 import { getModelInfoCore } from "open-sse/services/model.js";
 
 const OPTIONAL_FIELDS = [
-  "displayName", "email", "globalPriority", "defaultModel",
-  "accessToken", "refreshToken", "expiresAt", "tokenType",
-  "scope", "projectId", "apiKey", "testStatus",
-  "lastTested", "lastError", "lastErrorAt", "rateLimitedUntil", "expiresIn", "errorCode",
-  "consecutiveUseCount", "idToken", "lastRefreshAt",
+  "displayName",
+  "email",
+  "globalPriority",
+  "defaultModel",
+  "accessToken",
+  "refreshToken",
+  "expiresAt",
+  "tokenType",
+  "scope",
+  "projectId",
+  "apiKey",
+  "testStatus",
+  "lastTested",
+  "lastError",
+  "lastErrorAt",
+  "rateLimitedUntil",
+  "expiresIn",
+  "errorCode",
+  "consecutiveUseCount",
+  "idToken",
+  "lastRefreshAt",
 ];
 
 const MODEL_LOCK_PREFIX = "modelLock_";
@@ -52,7 +68,8 @@ function rowToConn(row) {
 }
 
 function connToRow(c) {
-  const { id, provider, authType, name, email, priority, isActive, createdAt, updatedAt, ...rest } = c;
+  const { id, provider, authType, name, email, priority, isActive, createdAt, updatedAt, ...rest } =
+    c;
   return {
     id,
     provider,
@@ -76,17 +93,30 @@ function upsert(db, c) {
        provider=excluded.provider, authType=excluded.authType, name=excluded.name,
        email=excluded.email, priority=excluded.priority, isActive=excluded.isActive,
        data=excluded.data, updatedAt=excluded.updatedAt`,
-    [r.id, r.provider, r.authType, r.name, r.email, r.priority, r.isActive, r.data, r.createdAt, r.updatedAt]
+    [
+      r.id,
+      r.provider,
+      r.authType,
+      r.name,
+      r.email,
+      r.priority,
+      r.isActive,
+      r.data,
+      r.createdAt,
+      r.updatedAt,
+    ],
   );
 }
 
 function deriveConnectionName(data, fallbackName) {
   if (data.provider === "github") {
-    return data.providerSpecificData?.githubLogin
-      || data.providerSpecificData?.githubEmail
-      || data.email
-      || data.providerSpecificData?.githubName
-      || fallbackName;
+    return (
+      data.providerSpecificData?.githubLogin ||
+      data.providerSpecificData?.githubEmail ||
+      data.email ||
+      data.providerSpecificData?.githubName ||
+      fallbackName
+    );
   }
   return fallbackName;
 }
@@ -95,8 +125,14 @@ export async function getProviderConnections(filter = {}) {
   const db = await getAdapter();
   const where = [];
   const params = [];
-  if (filter.provider) { where.push("provider = ?"); params.push(filter.provider); }
-  if (filter.isActive !== undefined) { where.push("isActive = ?"); params.push(filter.isActive ? 1 : 0); }
+  if (filter.provider) {
+    where.push("provider = ?");
+    params.push(filter.provider);
+  }
+  if (filter.isActive !== undefined) {
+    where.push("isActive = ?");
+    params.push(filter.isActive ? 1 : 0);
+  }
   const sql = `SELECT * FROM providerConnections${where.length ? ` WHERE ${where.join(" AND ")}` : ""}`;
   const rows = db.all(sql, params);
   const list = rows.map(rowToConn);
@@ -120,7 +156,9 @@ export async function getProviderConnectionById(id) {
 // identical with or without the rewrite. Skipping it there is what makes
 // import O(1) per key instead of O(pool) — see createProviderConnection.
 function reorderInTx(db, providerId) {
-  const list = db.all(`SELECT * FROM providerConnections WHERE provider = ?`, [providerId]).map(rowToConn);
+  const list = db
+    .all(`SELECT * FROM providerConnections WHERE provider = ?`, [providerId])
+    .map(rowToConn);
   list.sort((a, b) => {
     const pDiff = (a.priority || 0) - (b.priority || 0);
     if (pDiff !== 0) return pDiff;
@@ -147,20 +185,25 @@ export async function createProviderConnection(data) {
     // inside providerSpecificData and have no single-column equivalent.
     const isApikey = data.authType === "apikey" && !!data.name;
     const all = isApikey
-      ? db.all(
-          `SELECT * FROM providerConnections WHERE provider = ? AND authType = ? AND name = ?`,
-          [data.provider, "apikey", data.name]
-        ).map(rowToConn)
-      : db.all(`SELECT * FROM providerConnections WHERE provider = ?`, [data.provider]).map(rowToConn);
+      ? db
+          .all(
+            `SELECT * FROM providerConnections WHERE provider = ? AND authType = ? AND name = ?`,
+            [data.provider, "apikey", data.name],
+          )
+          .map(rowToConn)
+      : db
+          .all(`SELECT * FROM providerConnections WHERE provider = ?`, [data.provider])
+          .map(rowToConn);
     const poolSize = isApikey
-      ? db.get(`SELECT COUNT(*) AS n FROM providerConnections WHERE provider = ?`, [data.provider])?.n ?? all.length
+      ? (db.get(`SELECT COUNT(*) AS n FROM providerConnections WHERE provider = ?`, [data.provider])
+          ?.n ?? all.length)
       : all.length;
 
     let existing = null;
     if (data.authType === "oauth" && data.email) {
       const incomingUsername = data.providerSpecificData?.username;
       const incomingWs = data.providerSpecificData?.chatgptAccountId;
-      existing = all.find(c => {
+      existing = all.find((c) => {
         if (c.authType !== "oauth" || c.email !== data.email) return false;
 
         // Codex/OpenAI can issue multiple OAuth grants for the same email.
@@ -191,7 +234,7 @@ export async function createProviderConnection(data) {
         return true;
       });
     } else if (data.authType === "apikey" && data.name) {
-      existing = all.find(c => c.authType === "apikey" && c.name === data.name);
+      existing = all.find((c) => c.authType === "apikey" && c.name === data.name);
     }
     // access_token: never dedup — user manages duplicates manually
 
@@ -204,7 +247,7 @@ export async function createProviderConnection(data) {
       if (data.allowOverwrite === false) {
         const err = new Error(
           `A connection named "${existing.name}" already exists for provider "${data.provider}". ` +
-          `Pass allowOverwrite: true to replace it.`
+            `Pass allowOverwrite: true to replace it.`,
         );
         err.code = "PROVIDER_NAME_CONFLICT";
         err.existingId = existing.id;
@@ -227,7 +270,10 @@ export async function createProviderConnection(data) {
       // MAX(priority)+1 in SQL rather than a reduce over the loaded pool: the
       // apikey path no longer has the whole pool in memory, and the aggregate
       // is served by the index instead of a row scan. #4311
-      const maxRow = db.get(`SELECT MAX(priority) AS m FROM providerConnections WHERE provider = ?`, [data.provider]);
+      const maxRow = db.get(
+        `SELECT MAX(priority) AS m FROM providerConnections WHERE provider = ?`,
+        [data.provider],
+      );
       connectionPriority = (maxRow?.m || 0) + 1;
     }
 
@@ -267,7 +313,10 @@ export async function updateProviderConnection(id, data) {
   let result;
   db.transaction(() => {
     const row = db.get(`SELECT * FROM providerConnections WHERE id = ?`, [id]);
-    if (!row) { result = null; return; }
+    if (!row) {
+      result = null;
+      return;
+    }
     const existing = rowToConn(row);
     const normalized = resetHealthStateOnActivation(existing, data);
     const merged = { ...existing, ...normalized, updatedAt: new Date().toISOString() };
@@ -309,10 +358,10 @@ export async function deleteProviderConnection(id) {
           // Combo became empty - delete it to avoid 500 on use
           db.run(`DELETE FROM combos WHERE name = ?`, [combo.name]);
         } else {
-          db.run(
-            `UPDATE combos SET models = ?, updatedAt = datetime('now') WHERE name = ?`,
-            [stringifyJson(filtered), combo.name]
-          );
+          db.run(`UPDATE combos SET models = ?, updatedAt = datetime('now') WHERE name = ?`, [
+            stringifyJson(filtered),
+            combo.name,
+          ]);
         }
       }
     }
@@ -323,7 +372,9 @@ export async function deleteProviderConnection(id) {
 
 export async function deleteProviderConnectionsByProvider(providerId) {
   const db = await getAdapter();
-  const before = db.get(`SELECT COUNT(*) AS n FROM providerConnections WHERE provider = ?`, [providerId]);
+  const before = db.get(`SELECT COUNT(*) AS n FROM providerConnections WHERE provider = ?`, [
+    providerId,
+  ]);
   db.run(`DELETE FROM providerConnections WHERE provider = ?`, [providerId]);
   return before?.n || 0;
 }
@@ -336,10 +387,23 @@ export async function reorderProviderConnections(providerId) {
 export async function cleanupProviderConnections() {
   const db = await getAdapter();
   const fieldsToCheck = [
-    "displayName", "email", "globalPriority", "defaultModel",
-    "accessToken", "refreshToken", "expiresAt", "tokenType",
-    "scope", "projectId", "apiKey", "testStatus",
-    "lastTested", "lastError", "lastErrorAt", "rateLimitedUntil", "expiresIn",
+    "displayName",
+    "email",
+    "globalPriority",
+    "defaultModel",
+    "accessToken",
+    "refreshToken",
+    "expiresAt",
+    "tokenType",
+    "scope",
+    "projectId",
+    "apiKey",
+    "testStatus",
+    "lastTested",
+    "lastError",
+    "lastErrorAt",
+    "rateLimitedUntil",
+    "expiresIn",
     "consecutiveUseCount",
   ];
   let cleaned = 0;
@@ -350,7 +414,11 @@ export async function cleanupProviderConnections() {
       let dirty = false;
       for (const f of fieldsToCheck) {
         if (conn[f] === null || conn[f] === undefined) {
-          if (f in conn) { delete conn[f]; cleaned++; dirty = true; }
+          if (f in conn) {
+            delete conn[f];
+            cleaned++;
+            dirty = true;
+          }
         }
       }
       if (conn.providerSpecificData && Object.keys(conn.providerSpecificData).length === 0) {

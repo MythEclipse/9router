@@ -7,7 +7,13 @@ import {
   isAnthropicCompatibleProvider,
   isOpenAICompatibleProvider,
 } from "@/shared/constants/providers";
-import { getProviderConnections, getCombos, getCustomModels, getModelAliases, getSettings } from "@/lib/localDb";
+import {
+  getProviderConnections,
+  getCombos,
+  getCustomModels,
+  getModelAliases,
+  getSettings,
+} from "@/lib/localDb";
 import { getDisabledModels } from "@/lib/disabledModelsDb";
 import { getKeyAccessContext, filterModelsListForKey } from "@/sse/services/keyAccess.js";
 import { resolveKiroModels } from "open-sse/services/kiroModels.js";
@@ -20,7 +26,13 @@ import { resolveCursorModels } from "open-sse/services/cursorModels.js";
 import { resolveZedModels } from "open-sse/shared/zedAuth.js";
 import { updateProviderCredentials } from "@/sse/services/tokenRefresh";
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy";
-import { capabilitiesFromServiceKind, getCapabilitiesForModel, aggregateComboCapabilities, comboContextWindow, comboWindowSetting } from "open-sse/providers/capabilities.js";
+import {
+  capabilitiesFromServiceKind,
+  getCapabilitiesForModel,
+  aggregateComboCapabilities,
+  comboContextWindow,
+  comboWindowSetting,
+} from "open-sse/providers/capabilities.js";
 
 // Qoder shares one live resolver across intl (qoder) and CN (qoder-cn); the
 // credentials carry the provider id so qoderModels picks the right region's
@@ -35,7 +47,7 @@ async function resolveQoderLiveModels(conn, provider) {
     refreshToken: conn.refreshToken,
     email: conn.email,
     displayName: conn.displayName,
-    providerSpecificData: conn.providerSpecificData || {}
+    providerSpecificData: conn.providerSpecificData || {},
   });
   // Visible + hidden (enable:false) catalog keys — chat routes all of them.
   const models = routableQoderModels(result);
@@ -46,9 +58,7 @@ async function resolveQoderLiveModels(conn, provider) {
 // Combo seats use UI aliases; the model registry also has transport aliases.
 // Capability overrides and catalog limits are keyed by provider id.
 const ALIAS_TO_PROVIDER_ID = {
-  ...Object.fromEntries(
-    Object.entries(PROVIDER_ID_TO_ALIAS).map(([id, alias]) => [alias, id])
-  ),
+  ...Object.fromEntries(Object.entries(PROVIDER_ID_TO_ALIAS).map(([id, alias]) => [alias, id])),
   ...ALIAS_TO_ID,
 };
 
@@ -64,38 +74,47 @@ function comboSeatCapabilities(seat) {
 // Adding a provider here makes /v1/models prefer the live catalog for it.
 const LIVE_MODEL_RESOLVERS = {
   kiro: async (conn) => {
-    const result = await resolveKiroModels({
-      accessToken: conn.accessToken,
-      refreshToken: conn.refreshToken,
-      providerSpecificData: conn.providerSpecificData || {}
-    }, { log: console });
+    const result = await resolveKiroModels(
+      {
+        accessToken: conn.accessToken,
+        refreshToken: conn.refreshToken,
+        providerSpecificData: conn.providerSpecificData || {},
+      },
+      { log: console },
+    );
     return result?.models?.length ? { models: result.models } : null;
   },
   qoder: async (conn) => resolveQoderLiveModels(conn, "qoder"),
   "qoder-cn": async (conn) => resolveQoderLiveModels(conn, "qoder-cn"),
   kimchi: async (conn) => {
-    const result = await resolveKimchiModels({
-      accessToken: conn.accessToken,
-      apiKey: conn.apiKey,
-      providerSpecificData: conn.providerSpecificData || {}
-    }, { log: console });
+    const result = await resolveKimchiModels(
+      {
+        accessToken: conn.accessToken,
+        apiKey: conn.apiKey,
+        providerSpecificData: conn.providerSpecificData || {},
+      },
+      { log: console },
+    );
     return result?.models?.length ? { models: result.models } : null;
   },
   github: async (conn) => {
-    const result = await resolveCopilotModels({
-      accessToken: conn.accessToken,
-      refreshToken: conn.refreshToken,
-      providerSpecificData: conn.providerSpecificData || {}
-    }, {
-      log: console,
-      onCredentialsRefreshed: async (refreshed) => {
-        await updateProviderCredentials(conn.id, {
-          copilotToken: refreshed.copilotToken,
-          copilotTokenExpiresAt: refreshed.copilotTokenExpiresAt,
-          existingProviderSpecificData: conn.providerSpecificData || {},
-        });
+    const result = await resolveCopilotModels(
+      {
+        accessToken: conn.accessToken,
+        refreshToken: conn.refreshToken,
+        providerSpecificData: conn.providerSpecificData || {},
       },
-    });
+      {
+        log: console,
+        onCredentialsRefreshed: async (refreshed) => {
+          await updateProviderCredentials(conn.id, {
+            copilotToken: refreshed.copilotToken,
+            copilotTokenExpiresAt: refreshed.copilotTokenExpiresAt,
+            existingProviderSpecificData: conn.providerSpecificData || {},
+          });
+        },
+      },
+    );
     return result?.models?.length ? { models: result.models } : null;
   },
   clinepass: async (conn) => {
@@ -114,32 +133,38 @@ const LIVE_MODEL_RESOLVERS = {
   },
   "grok-cli": async (conn) => {
     const proxy = await resolveConnectionProxyConfig(conn.providerSpecificData || {});
-    const result = await resolveGrokCliModels({
-      ...conn,
-      connectionId: conn.id,
-    }, {
-      log: console,
-      proxyOptions: {
-        connectionProxyEnabled: proxy.connectionProxyEnabled === true,
-        connectionProxyUrl: proxy.connectionProxyUrl || "",
-        connectionNoProxy: proxy.connectionNoProxy || "",
-        vercelRelayUrl: proxy.vercelRelayUrl || "",
-        strictProxy: proxy.strictProxy === true,
+    const result = await resolveGrokCliModels(
+      {
+        ...conn,
+        connectionId: conn.id,
       },
-      onCredentialsRefreshed: async (refreshed) => {
-        await updateProviderCredentials(conn.id, {
-          ...refreshed,
-          existingProviderSpecificData: conn.providerSpecificData || {},
-        });
+      {
+        log: console,
+        proxyOptions: {
+          connectionProxyEnabled: proxy.connectionProxyEnabled === true,
+          connectionProxyUrl: proxy.connectionProxyUrl || "",
+          connectionNoProxy: proxy.connectionNoProxy || "",
+          vercelRelayUrl: proxy.vercelRelayUrl || "",
+          strictProxy: proxy.strictProxy === true,
+        },
+        onCredentialsRefreshed: async (refreshed) => {
+          await updateProviderCredentials(conn.id, {
+            ...refreshed,
+            existingProviderSpecificData: conn.providerSpecificData || {},
+          });
+        },
       },
-    });
+    );
     return result?.models?.length ? { models: result.models } : null;
   },
   cursor: async (conn) => {
-    const result = await resolveCursorModels({
-      accessToken: conn.accessToken,
-      providerSpecificData: conn.providerSpecificData || {},
-    }, { log: console });
+    const result = await resolveCursorModels(
+      {
+        accessToken: conn.accessToken,
+        providerSpecificData: conn.providerSpecificData || {},
+      },
+      { log: console },
+    );
     return result?.models?.length ? { models: result.models } : null;
   },
   zed: async (conn) => {
@@ -202,9 +227,10 @@ function inferKindFromUnknownModelId(modelId) {
 async function fetchCompatibleModelIds(connection) {
   if (!connection?.apiKey) return [];
 
-  const baseUrl = typeof connection?.providerSpecificData?.baseUrl === "string"
-    ? connection.providerSpecificData.baseUrl.trim().replace(/\/$/, "")
-    : "";
+  const baseUrl =
+    typeof connection?.providerSpecificData?.baseUrl === "string"
+      ? connection.providerSpecificData.baseUrl.trim().replace(/\/$/, "")
+      : "";
 
   if (!baseUrl) return [];
 
@@ -248,8 +274,8 @@ async function fetchCompatibleModelIds(connection) {
       new Set(
         rawModels
           .map((model) => model?.id || model?.name || model?.model)
-          .filter((modelId) => typeof modelId === "string" && modelId.trim() !== "")
-      )
+          .filter((modelId) => typeof modelId === "string" && modelId.trim() !== ""),
+      ),
     );
   } catch {
     return [];
@@ -260,9 +286,10 @@ async function fetchCompatibleModelIds(connection) {
 // LLM is the default kind for providers missing serviceKinds.
 function providerMatchesKinds(providerId, kindFilter) {
   const provider = AI_PROVIDERS[providerId];
-  const kinds = Array.isArray(provider?.serviceKinds) && provider.serviceKinds.length > 0
-    ? provider.serviceKinds
-    : [LLM_KIND];
+  const kinds =
+    Array.isArray(provider?.serviceKinds) && provider.serviceKinds.length > 0
+      ? provider.serviceKinds
+      : [LLM_KIND];
   return kindFilter.some((k) => kinds.includes(k));
 }
 
@@ -297,8 +324,10 @@ function comboSeatLimits(combo, combosByName, comboStrategies = {}, visiting = n
           // A nested combo is one seat: it contributes the window it publishes for
           // itself, i.e. its own override already applied.
           const nestedLimits = comboSeatLimits(nested, combosByName, comboStrategies, visiting);
-          if (Number.isFinite(nestedLimits.contextWindow)) seatWindows.push(nestedLimits.contextWindow);
-          if (Number.isFinite(nestedLimits.maxOutput)) maxOutput = Math.min(maxOutput, nestedLimits.maxOutput);
+          if (Number.isFinite(nestedLimits.contextWindow))
+            seatWindows.push(nestedLimits.contextWindow);
+          if (Number.isFinite(nestedLimits.maxOutput))
+            maxOutput = Math.min(maxOutput, nestedLimits.maxOutput);
           continue;
         }
       }
@@ -333,7 +362,7 @@ export async function buildModelsList(kindFilter, options = {}) {
   let connections = [];
   try {
     connections = await getProviderConnections();
-    connections = connections.filter(c => c.isActive !== false);
+    connections = connections.filter((c) => c.isActive !== false);
   } catch (e) {
     console.log("Could not fetch providers, returning all models");
   }
@@ -374,7 +403,8 @@ export async function buildModelsList(kindFilter, options = {}) {
   } catch (e) {
     console.log("Could not fetch disabled models");
   }
-  const isDisabled = (alias, modelId) => Array.isArray(disabledByAlias[alias]) && disabledByAlias[alias].includes(modelId);
+  const isDisabled = (alias, modelId) =>
+    Array.isArray(disabledByAlias[alias]) && disabledByAlias[alias].includes(modelId);
 
   const activeConnectionByProvider = new Map();
   for (const conn of connections) {
@@ -426,7 +456,11 @@ export async function buildModelsList(kindFilter, options = {}) {
     if (combo.kind === "webSearch" || combo.kind === "webFetch") {
       entry.kind = combo.kind;
     } else {
-      const comboCaps = aggregateComboCapabilities(combo.models, comboByName, comboSeatCapabilities);
+      const comboCaps = aggregateComboCapabilities(
+        combo.models,
+        comboByName,
+        comboSeatCapabilities,
+      );
       if (comboCaps) entry.capabilities = comboCaps;
       // Any seat can serve the request, so the only window a combo can promise is
       // its smallest. Combo entries were the only models on this endpoint that
@@ -485,21 +519,18 @@ export async function buildModelsList(kindFilter, options = {}) {
 
       const staticAlias = PROVIDER_ID_TO_ALIAS[providerId] || providerId;
       const outputAlias = (
-        conn?.providerSpecificData?.prefix
-        || getProviderAlias(providerId)
-        || staticAlias
+        conn?.providerSpecificData?.prefix ||
+        getProviderAlias(providerId) ||
+        staticAlias
       ).trim();
       const providerModels = PROVIDER_MODELS[staticAlias] || [];
       const enabledModels = conn?.providerSpecificData?.enabledModels;
-      const hasExplicitEnabledModels =
-        Array.isArray(enabledModels) && enabledModels.length > 0;
+      const hasExplicitEnabledModels = Array.isArray(enabledModels) && enabledModels.length > 0;
       const isCompatibleProvider =
         isOpenAICompatibleProvider(providerId) || isAnthropicCompatibleProvider(providerId);
 
       // Build kind lookup for static models so we can filter even when only IDs are exposed
-      const staticModelKindById = new Map(
-        providerModels.map((m) => [m.id, modelKind(m)])
-      );
+      const staticModelKindById = new Map(providerModels.map((m) => [m.id, modelKind(m)]));
       let liveModelKindById = new Map();
       let liveCapabilitiesById = new Map();
 
@@ -520,7 +551,11 @@ export async function buildModelsList(kindFilter, options = {}) {
           const kind = getModelKind(m) || LLM_KIND;
           // imageToText custom models are vision-capable chat models: expose them
           // both in the default LLM list and in /v1/models/image-to-text.
-          if (!kindFilter.includes(kind) && !(kind === "imageToText" && kindFilter.includes(LLM_KIND))) return false;
+          if (
+            !kindFilter.includes(kind) &&
+            !(kind === "imageToText" && kindFilter.includes(LLM_KIND))
+          )
+            return false;
           const alias = m.providerAlias;
           return alias === staticAlias || alias === outputAlias || alias === providerId;
         })
@@ -531,27 +566,33 @@ export async function buildModelsList(kindFilter, options = {}) {
         })
         .filter((modelId) => modelId !== "");
 
-      if (isCompatibleProvider && rawModelIds.length === 0 && customModelIds.length === 0 && !skipDynamicFetch) {
+      if (
+        isCompatibleProvider &&
+        rawModelIds.length === 0 &&
+        customModelIds.length === 0 &&
+        !skipDynamicFetch
+      ) {
         rawModelIds = await fetchCompatibleModelIds(conn);
       }
 
       // Config-driven live catalog override for providers that have no static list (or explicit enabledModels).
       // If provider has static or custom models configured in UI, do not override with upstream live catalog.
       const liveResolver = LIVE_MODEL_RESOLVERS[providerId];
-      if (liveResolver && !hasExplicitEnabledModels && providerModels.length === 0 && customModelIds.length === 0) {
+      if (
+        liveResolver &&
+        !hasExplicitEnabledModels &&
+        providerModels.length === 0 &&
+        customModelIds.length === 0
+      ) {
         try {
           const live = await liveResolver(conn);
           if (live?.models?.length) {
             rawModelIds = live.models.map((m) => m.id);
             liveModelKindById = new Map(
-              live.models
-                .filter((m) => m?.id)
-                .map((m) => [m.id, modelKind(m)])
+              live.models.filter((m) => m?.id).map((m) => [m.id, modelKind(m)]),
             );
             liveCapabilitiesById = new Map(
-              live.models
-                .filter((m) => m?.id && m.capabilities)
-                .map((m) => [m.id, m.capabilities])
+              live.models.filter((m) => m?.id && m.capabilities).map((m) => [m.id, m.capabilities]),
             );
           }
         } catch (err) {
@@ -597,17 +638,28 @@ export async function buildModelsList(kindFilter, options = {}) {
         })
         .filter((modelId) => typeof modelId === "string" && modelId.trim() !== "");
 
-      const mergedModelIds = Array.from(new Set([...modelIds, ...customModelIds, ...aliasModelIds]));
+      const mergedModelIds = Array.from(
+        new Set([...modelIds, ...customModelIds, ...aliasModelIds]),
+      );
 
       for (const modelId of mergedModelIds) {
         // Resolve kind: prefer custom/live metadata, then static, then ID heuristics.
         const customKind = customModelKindById.get(modelId);
         const liveKind = liveModelKindById.get(modelId);
-        const kind = customKind || liveKind || staticModelKindById.get(modelId) || inferKindFromUnknownModelId(modelId);
+        const kind =
+          customKind ||
+          liveKind ||
+          staticModelKindById.get(modelId) ||
+          inferKindFromUnknownModelId(modelId);
         // imageToText custom models stay in the LLM list (vision-capable chat models)
         const allowAsLlm = kind === "imageToText" && kindFilter.includes(LLM_KIND);
         if (!kindFilter.includes(kind) && !allowAsLlm) continue;
-        if (isDisabled(outputAlias, modelId) || isDisabled(staticAlias, modelId) || isDisabled(providerId, modelId)) continue;
+        if (
+          isDisabled(outputAlias, modelId) ||
+          isDisabled(staticAlias, modelId) ||
+          isDisabled(providerId, modelId)
+        )
+          continue;
 
         const model = {
           id: `${outputAlias}/${modelId}`,
@@ -621,7 +673,10 @@ export async function buildModelsList(kindFilter, options = {}) {
         // dynamically-discovered LLM models still surface vision/reasoning/search/tools.
         const liveCaps = liveCapabilitiesById.get(modelId);
         const serviceCaps = capabilitiesFromServiceKind(customKind || liveKind);
-        const caps = liveCaps || serviceCaps || (kind === LLM_KIND ? getCapabilitiesForModel(providerId, modelId) : null);
+        const caps =
+          liveCaps ||
+          serviceCaps ||
+          (kind === LLM_KIND ? getCapabilitiesForModel(providerId, modelId) : null);
         if (caps) model.capabilities = caps;
         // Token limits under the snake_case names the OpenAI/OpenRouter
         // convention uses. `capabilities.contextWindow` is camelCase and nested,
@@ -704,16 +759,19 @@ export async function GET(request) {
     const skipDynamicFetch = request?.headers?.get(INTERNAL_MODELS_FETCH_HEADER) === "1";
     const data = await filterModelsListForKey(
       await getKeyAccessContext(request),
-      await buildModelsList([LLM_KIND], { skipDynamicFetch })
+      await buildModelsList([LLM_KIND], { skipDynamicFetch }),
     );
-    return Response.json({ object: "list", data }, {
-      headers: { "Access-Control-Allow-Origin": "*" },
-    });
+    return Response.json(
+      { object: "list", data },
+      {
+        headers: { "Access-Control-Allow-Origin": "*" },
+      },
+    );
   } catch (error) {
     console.log("Error fetching models:", error);
     return Response.json(
       { error: { message: error.message, type: "server_error" } },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

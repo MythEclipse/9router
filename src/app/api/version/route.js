@@ -23,10 +23,13 @@ function fetchLatestVersion() {
             resolve(null);
           }
         });
-      }
+      },
     );
     req.on("error", () => resolve(null));
-    req.on("timeout", () => { req.destroy(); resolve(null); });
+    req.on("timeout", () => {
+      req.destroy();
+      resolve(null);
+    });
   });
 }
 

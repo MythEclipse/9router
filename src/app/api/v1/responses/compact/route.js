@@ -16,8 +16,8 @@ export async function OPTIONS() {
     headers: {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "*"
-    }
+      "Access-Control-Allow-Headers": "*",
+    },
   });
 }
 
@@ -31,7 +31,12 @@ export async function POST(request) {
   try {
     body = await parseJsonBody(request);
   } catch {
-    return Response.json({ error: { message: "Invalid JSON body", type: "invalid_request_error", code: "bad_request" } }, { status: 400 });
+    return Response.json(
+      {
+        error: { message: "Invalid JSON body", type: "invalid_request_error", code: "bad_request" },
+      },
+      { status: 400 },
+    );
   }
   body._compact = true;
   const headers = new Headers(request.headers);
@@ -41,7 +46,7 @@ export async function POST(request) {
   const newRequest = new Request(request.url, {
     method: "POST",
     headers,
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
   });
   return await handleChat(newRequest);
 }

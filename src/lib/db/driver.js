@@ -90,7 +90,8 @@ async function initAdapter() {
   if (!adapter) adapter = await tryBetterSqlite();
   if (!adapter) adapter = await tryNodeSqlite();
   if (!adapter) adapter = await trySqlJs();
-  if (!adapter) throw new Error("[DB] No SQLite driver available (bun/better/node/sql.js all failed)");
+  if (!adapter)
+    throw new Error("[DB] No SQLite driver available (bun/better/node/sql.js all failed)");
 
   adapter = withNullByteSafeParams(adapter);
 
@@ -106,7 +107,11 @@ async function initAdapter() {
 
 export async function getAdapter() {
   if (state.instance) return state.instance;
-  if (!state.initPromise) state.initPromise = initAdapter().then((a) => { state.instance = a; return a; });
+  if (!state.initPromise)
+    state.initPromise = initAdapter().then((a) => {
+      state.instance = a;
+      return a;
+    });
   return state.initPromise;
 }
 

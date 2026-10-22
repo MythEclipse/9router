@@ -3,9 +3,21 @@
 import { useParams, notFound, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { Card, Badge, Button, AddCustomEmbeddingModal, NoAuthProxyCard, ProviderInfoCard } from "@/shared/components";
+import {
+  Card,
+  Badge,
+  Button,
+  AddCustomEmbeddingModal,
+  NoAuthProxyCard,
+  ProviderInfoCard,
+} from "@/shared/components";
 import ProviderIcon from "@/shared/components/ProviderIcon";
-import { MEDIA_PROVIDER_KINDS, AI_PROVIDERS, OAUTH_PROVIDERS, isCustomEmbeddingProvider } from "@/shared/constants/providers";
+import {
+  MEDIA_PROVIDER_KINDS,
+  AI_PROVIDERS,
+  OAUTH_PROVIDERS,
+  isCustomEmbeddingProvider,
+} from "@/shared/constants/providers";
 import ConnectionsCard from "@/app/(dashboard)/dashboard/providers/components/ConnectionsCard";
 import ModelsCard from "@/app/(dashboard)/dashboard/providers/components/ModelsCard";
 import { KIND_EXAMPLE_CONFIG } from "./components/exampleShared";
@@ -46,8 +58,12 @@ export default function MediaProviderDetailPage() {
         setCustomNode((d.nodes || []).find((n) => n.id === id) || null);
         setCustomLoading(false);
       })
-      .catch(() => { if (!cancelled) setCustomLoading(false); });
-    return () => { cancelled = true; };
+      .catch(() => {
+        if (!cancelled) setCustomLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [id, isCustom]);
 
   if (!kindConfig) return notFound();
@@ -56,7 +72,9 @@ export default function MediaProviderDetailPage() {
 
   // For custom embedding nodes, build a synthetic provider object
   const provider = isCustom
-    ? (customNode ? { id, name: customNode.name || "Custom Embedding", color: "#6366F1", textIcon: "CE" } : null)
+    ? customNode
+      ? { id, name: customNode.name || "Custom Embedding", color: "#6366F1", textIcon: "CE" }
+      : null
     : builtInProvider;
 
   if (!isCustom && !builtInProvider) return notFound();
@@ -82,7 +100,10 @@ export default function MediaProviderDetailPage() {
 
         {/* Header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-          <div className="size-12 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: `${provider.color}15` }}>
+          <div
+            className="size-12 rounded-lg flex items-center justify-center shrink-0"
+            style={{ backgroundColor: `${provider.color}15` }}
+          >
             <ProviderIcon
               src={`/providers/${provider.id}.png`}
               alt={provider.name}
@@ -108,7 +129,11 @@ export default function MediaProviderDetailPage() {
               )}
             </div>
             <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-              {isCustom && <Badge variant="default" size="sm">Custom · {customNode?.prefix}</Badge>}
+              {isCustom && (
+                <Badge variant="default" size="sm">
+                  Custom · {customNode?.prefix}
+                </Badge>
+              )}
               {kinds.map((k) => (
                 <Badge key={k} variant={k === kind ? "primary" : "default"} size="sm">
                   {k.toUpperCase()}
@@ -118,7 +143,12 @@ export default function MediaProviderDetailPage() {
           </div>
           {isCustom && (
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-              <Button size="sm" variant="secondary" icon="edit" onClick={() => setShowEditModal(true)}>
+              <Button
+                size="sm"
+                variant="secondary"
+                icon="edit"
+                onClick={() => setShowEditModal(true)}
+              >
                 Edit
               </Button>
               <Button size="sm" variant="secondary" icon="delete" onClick={handleDeleteCustom}>
@@ -141,7 +171,9 @@ export default function MediaProviderDetailPage() {
       {!isCustom && provider.notice?.text && !provider.deprecated && (
         <div className="flex flex-col gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2 sm:flex-row sm:items-center">
           <span className="material-symbols-outlined text-[16px] text-blue-500 shrink-0">info</span>
-          <p className="min-w-0 flex-1 text-xs leading-relaxed text-blue-600 dark:text-blue-400">{provider.notice.text}</p>
+          <p className="min-w-0 flex-1 text-xs leading-relaxed text-blue-600 dark:text-blue-400">
+            {provider.notice.text}
+          </p>
           {provider.notice.apiKeyUrl && (
             <a
               href={provider.notice.apiKeyUrl}
@@ -160,8 +192,12 @@ export default function MediaProviderDetailPage() {
         <NoAuthProxyCard providerId={id} />
       ) : OAUTH_PROVIDERS[id] ? (
         <Card>
-          <p className="text-sm text-text-muted mb-3">This service shares your existing OAuth connections.</p>
-          <Link href={`/dashboard/providers/${id}`} className="text-primary hover:underline">Manage OAuth connections →</Link>
+          <p className="text-sm text-text-muted mb-3">
+            This service shares your existing OAuth connections.
+          </p>
+          <Link href={`/dashboard/providers/${id}`} className="text-primary hover:underline">
+            Manage OAuth connections →
+          </Link>
         </Card>
       ) : (
         <ConnectionsCard providerId={id} isOAuth={false} />
@@ -177,20 +213,37 @@ export default function MediaProviderDetailPage() {
       )}
 
       {/* Provider Info — config-driven, supports searchConfig, fetchConfig, ttsConfig, embeddingConfig, systemoneConfig, searchViaChat */}
-      {!isCustom && (provider.searchConfig || provider.fetchConfig || provider.ttsConfig || provider.sttConfig || provider.embeddingConfig || provider.systemoneConfig || provider.searchViaChat) && (
-        <ProviderInfoCard
-          config={
-            kind === "webFetch" ? provider.fetchConfig
-              : kind === "tts" ? provider.ttsConfig
-              : kind === "stt" ? provider.sttConfig
-              : kind === "embedding" ? provider.embeddingConfig
-              : kind === "systemone" ? provider.systemoneConfig
-              : provider.searchConfig || { mode: "chat-completions", defaultModel: provider.searchViaChat?.defaultModel, pricingUrl: provider.searchViaChat?.pricingUrl, freeTier: provider.searchViaChat?.freeTier }
-          }
-          provider={provider}
-          title={`${kindConfig.label} Config`}
-        />
-      )}
+      {!isCustom &&
+        (provider.searchConfig ||
+          provider.fetchConfig ||
+          provider.ttsConfig ||
+          provider.sttConfig ||
+          provider.embeddingConfig ||
+          provider.systemoneConfig ||
+          provider.searchViaChat) && (
+          <ProviderInfoCard
+            config={
+              kind === "webFetch"
+                ? provider.fetchConfig
+                : kind === "tts"
+                  ? provider.ttsConfig
+                  : kind === "stt"
+                    ? provider.sttConfig
+                    : kind === "embedding"
+                      ? provider.embeddingConfig
+                      : kind === "systemone"
+                        ? provider.systemoneConfig
+                        : provider.searchConfig || {
+                            mode: "chat-completions",
+                            defaultModel: provider.searchViaChat?.defaultModel,
+                            pricingUrl: provider.searchViaChat?.pricingUrl,
+                            freeTier: provider.searchViaChat?.freeTier,
+                          }
+            }
+            provider={provider}
+            title={`${kindConfig.label} Config`}
+          />
+        )}
 
       {/* Example — per kind */}
       {kind === "embedding" && (

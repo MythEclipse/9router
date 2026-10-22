@@ -13,7 +13,8 @@ const cache = new Map(); // key: fetcher.url → { data, expiresAt }
 export async function fetchSuggestedModels(fetcher, providerId) {
   if (!fetcher?.url || !fetcher?.type) return [];
 
-  const type = (providerId === "nous" || fetcher.url?.includes("nousresearch")) ? "nous" : fetcher.type;
+  const type =
+    providerId === "nous" || fetcher.url?.includes("nousresearch") ? "nous" : fetcher.type;
   const cacheKey = `${fetcher.url}#${type}`;
   const cached = cache.get(cacheKey);
   if (cached && Date.now() < cached.expiresAt) return cached.data;

@@ -7,8 +7,37 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { getProviderIconSrc, markProviderIconMissing } from "@/shared/utils/providerIcon";
-import { Card, Button, Badge, Input, Modal, CardSkeleton, OAuthModal, KiroOAuthWrapper, CursorAuthModal, ZedAuthModal, XiaomiMimoAuthModal, IFlowCookieModal, GitLabAuthModal, Toggle, Select, EditConnectionModal, NoAuthProxyCard, ConfirmModal } from "@/shared/components";
-import { OAUTH_PROVIDERS, APIKEY_PROVIDERS, FREE_PROVIDERS, FREE_TIER_PROVIDERS, WEB_COOKIE_PROVIDERS, getProviderAlias, isOpenAICompatibleProvider, isAnthropicCompatibleProvider, AI_PROVIDERS } from "@/shared/constants/providers";
+import {
+  Card,
+  Button,
+  Badge,
+  Input,
+  Modal,
+  CardSkeleton,
+  OAuthModal,
+  KiroOAuthWrapper,
+  CursorAuthModal,
+  ZedAuthModal,
+  XiaomiMimoAuthModal,
+  IFlowCookieModal,
+  GitLabAuthModal,
+  Toggle,
+  Select,
+  EditConnectionModal,
+  NoAuthProxyCard,
+  ConfirmModal,
+} from "@/shared/components";
+import {
+  OAUTH_PROVIDERS,
+  APIKEY_PROVIDERS,
+  FREE_PROVIDERS,
+  FREE_TIER_PROVIDERS,
+  WEB_COOKIE_PROVIDERS,
+  getProviderAlias,
+  isOpenAICompatibleProvider,
+  isAnthropicCompatibleProvider,
+  AI_PROVIDERS,
+} from "@/shared/constants/providers";
 import { getModelsByProviderId, getModelKind } from "@/shared/constants/models";
 import { getThinkingLevels } from "open-sse/providers/thinkingLevels.js";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
@@ -149,38 +178,54 @@ export default function ProviderDetailPage() {
   const providerInfo = providerNode
     ? {
         id: providerNode.id,
-        name: providerNode.name || (providerNode.type === "anthropic-compatible" ? "Anthropic Compatible" : "OpenAI Compatible"),
+        name:
+          providerNode.name ||
+          (providerNode.type === "anthropic-compatible"
+            ? "Anthropic Compatible"
+            : "OpenAI Compatible"),
         color: providerNode.type === "anthropic-compatible" ? "#D97757" : "#10A37F",
         textIcon: providerNode.type === "anthropic-compatible" ? "AC" : "OC",
         apiType: providerNode.apiType,
         baseUrl: providerNode.baseUrl,
         type: providerNode.type,
       }
-    : (OAUTH_PROVIDERS[providerId] || APIKEY_PROVIDERS[providerId] || FREE_PROVIDERS[providerId] || FREE_TIER_PROVIDERS[providerId] || WEB_COOKIE_PROVIDERS[providerId]);
+    : OAUTH_PROVIDERS[providerId] ||
+      APIKEY_PROVIDERS[providerId] ||
+      FREE_PROVIDERS[providerId] ||
+      FREE_TIER_PROVIDERS[providerId] ||
+      WEB_COOKIE_PROVIDERS[providerId];
   const authModes = providerInfo?.authModes || [];
-  const isOAuth = !!OAUTH_PROVIDERS[providerId] || !!FREE_PROVIDERS[providerId] || authModes.includes("oauth");
+  const isOAuth =
+    !!OAUTH_PROVIDERS[providerId] || !!FREE_PROVIDERS[providerId] || authModes.includes("oauth");
   const supportsApiKeyAuth = !!APIKEY_PROVIDERS[providerId] || authModes.includes("apikey");
   const isFreeNoAuth = !!FREE_PROVIDERS[providerId]?.noAuth;
   const staticModels = getModelsByProviderId(providerId);
-  const models = (providerId === "cursor" || providerId === "zed") && liveModels.length > 0
-    ? liveModels
-    : staticModels;
+  const models =
+    (providerId === "cursor" || providerId === "zed") && liveModels.length > 0
+      ? liveModels
+      : staticModels;
   const providerAlias = getProviderAlias(providerId);
-  
+
   const isOpenAICompatible = isOpenAICompatibleProvider(providerId);
   const isAnthropicCompatible = isAnthropicCompatibleProvider(providerId);
   const isCompatible = isOpenAICompatible || isAnthropicCompatible;
   const hasDualAuthModes = !isCompatible && isOAuth && supportsApiKeyAuth;
   const oauthConnectionLabel =
-    providerId === "xai" ? "Grok Build OAuth"
-    : providerId === "grok-cli" ? "Grok CLI Device Login"
-    : providerId === "kimi" ? "Kimi Coding OAuth"
-    : "OAuth";
+    providerId === "xai"
+      ? "Grok Build OAuth"
+      : providerId === "grok-cli"
+        ? "Grok CLI Device Login"
+        : providerId === "kimi"
+          ? "Kimi Coding OAuth"
+          : "OAuth";
   const apiKeyConnectionLabel =
-    providerId === "xai" ? "xAI API Key"
-    : providerId === "kimi" ? "Kimi API Key"
-    : (providerId === "qoder" || providerId === "qoder-cn") ? "PAT"
-    : "API Key";
+    providerId === "xai"
+      ? "xAI API Key"
+      : providerId === "kimi"
+        ? "Kimi API Key"
+        : providerId === "qoder" || providerId === "qoder-cn"
+          ? "PAT"
+          : "API Key";
   // Resolve suffix "(level)" for a model when a thinking level is picked and the model supports it.
   const resolveThinkingSuffix = (modelId) => {
     if (!thinkingMode || thinkingMode === "auto") return null;
@@ -197,7 +242,10 @@ export default function ProviderDetailPage() {
       if (!modelId || seen.has(modelId)) return;
       seen.add(modelId);
       const lv = getThinkingLevels(providerId, modelId);
-      if (lv) lv.forEach((l) => { if (l !== "none") set.add(l); });
+      if (lv)
+        lv.forEach((l) => {
+          if (l !== "none") set.add(l);
+        });
     };
     for (const m of models) addLevels(m.id);
     for (const m of kiloFreeModels) addLevels(m.id);
@@ -208,13 +256,14 @@ export default function ProviderDetailPage() {
     }
     return set.size ? ["auto", ...[...set]] : null;
   })();
-  const providerDisplayAlias = isCompatible
-    ? (providerNode?.prefix || providerId)
-    : providerAlias;
+  const providerDisplayAlias = isCompatible ? providerNode?.prefix || providerId : providerAlias;
 
   const fetchDisabledModels = useCallback(async () => {
     try {
-      const res = await fetch(`/api/models/disabled?providerAlias=${encodeURIComponent(providerStorageAlias)}`, { cache: "no-store" });
+      const res = await fetch(
+        `/api/models/disabled?providerAlias=${encodeURIComponent(providerStorageAlias)}`,
+        { cache: "no-store" },
+      );
       const data = await res.json();
       if (res.ok) setDisabledModelIds(data.ids || []);
     } catch (error) {
@@ -237,7 +286,10 @@ export default function ProviderDetailPage() {
 
   const handleEnableModel = async (modelId) => {
     try {
-      const res = await fetch(`/api/models/disabled?providerAlias=${encodeURIComponent(providerStorageAlias)}&id=${encodeURIComponent(modelId)}`, { method: "DELETE" });
+      const res = await fetch(
+        `/api/models/disabled?providerAlias=${encodeURIComponent(providerStorageAlias)}&id=${encodeURIComponent(modelId)}`,
+        { method: "DELETE" },
+      );
       if (res.ok) await fetchDisabledModels();
     } catch (error) {
       console.log("Error enabling model:", error);
@@ -261,13 +313,16 @@ export default function ProviderDetailPage() {
         } catch (error) {
           console.log("Error disabling all models:", error);
         }
-      }
+      },
     });
   };
 
   const handleEnableAll = async () => {
     try {
-      const res = await fetch(`/api/models/disabled?providerAlias=${encodeURIComponent(providerStorageAlias)}`, { method: "DELETE" });
+      const res = await fetch(
+        `/api/models/disabled?providerAlias=${encodeURIComponent(providerStorageAlias)}`,
+        { method: "DELETE" },
+      );
       if (res.ok) await fetchDisabledModels();
     } catch (error) {
       console.log("Error enabling all models:", error);
@@ -304,7 +359,9 @@ export default function ProviderDetailPage() {
     if (providerId !== "kilocode") return;
     fetch("/api/providers/kilo/free-models")
       .then((res) => res.json())
-      .then((data) => { if (data.models?.length) setKiloFreeModels(data.models); })
+      .then((data) => {
+        if (data.models?.length) setKiloFreeModels(data.models);
+      })
       .catch(() => {});
   }, [providerId]);
 
@@ -321,7 +378,9 @@ export default function ProviderDetailPage() {
       const proxyPoolsData = await proxyPoolsRes.json();
       const settingsData = settingsRes.ok ? await settingsRes.json() : {};
       if (connectionsRes.ok) {
-        const filtered = (connectionsData.connections || []).filter(c => c.provider === providerId);
+        const filtered = (connectionsData.connections || []).filter(
+          (c) => c.provider === providerId,
+        );
         setConnections(filtered);
       }
       if (proxyPoolsRes.ok) {
@@ -330,13 +389,19 @@ export default function ProviderDetailPage() {
       // Load per-provider strategy override
       const override = (settingsData.providerStrategies || {})[providerId] || {};
       setProviderStrategy(override.fallbackStrategy || null);
-      setProviderStickyLimit(override.stickyRoundRobinLimit != null ? String(override.stickyRoundRobinLimit) : "1");
+      setProviderStickyLimit(
+        override.stickyRoundRobinLimit != null ? String(override.stickyRoundRobinLimit) : "1",
+      );
       // Load per-provider thinking config
       const thinkingCfg = (settingsData.providerThinking || {})[providerId] || {};
       setThinkingMode(thinkingCfg.mode || "auto");
       const autoPingSettingsKey = AUTO_PING_SETTINGS_KEYS[providerId];
       const apCfg = autoPingSettingsKey ? settingsData[autoPingSettingsKey] || {} : {};
-      setAutoPing({ enabled: apCfg.enabled === true, connections: apCfg.connections || {}, schedules: apCfg.schedules || {} });
+      setAutoPing({
+        enabled: apCfg.enabled === true,
+        connections: apCfg.connections || {},
+        schedules: apCfg.schedules || {},
+      });
       if (nodesRes.ok) {
         let node = (nodesData.nodes || []).find((entry) => entry.id === providerId) || null;
 
@@ -412,7 +477,7 @@ export default function ProviderDetailPage() {
 
   const handleRoundRobinToggle = (enabled) => {
     const strategy = enabled ? "round-robin" : null;
-    const sticky = enabled ? (providerStickyLimit || "1") : providerStickyLimit;
+    const sticky = enabled ? providerStickyLimit || "1" : providerStickyLimit;
     if (enabled && !providerStickyLimit) setProviderStickyLimit("1");
     setProviderStrategy(strategy);
     saveProviderStrategy(strategy, sticky);
@@ -521,12 +586,19 @@ export default function ProviderDetailPage() {
         }
       });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [providerId, connections]);
 
   // Fetch suggested models from provider's public API (if configured)
   useEffect(() => {
-    const fetcher = (OAUTH_PROVIDERS[providerId] || APIKEY_PROVIDERS[providerId] || FREE_PROVIDERS[providerId] || FREE_TIER_PROVIDERS[providerId])?.modelsFetcher;
+    const fetcher = (
+      OAUTH_PROVIDERS[providerId] ||
+      APIKEY_PROVIDERS[providerId] ||
+      FREE_PROVIDERS[providerId] ||
+      FREE_TIER_PROVIDERS[providerId]
+    )?.modelsFetcher;
     if (!fetcher) return;
     fetchSuggestedModels(fetcher, providerId).then(setSuggestedModels);
   }, [providerId]);
@@ -565,16 +637,29 @@ export default function ProviderDetailPage() {
 
   // `transport` pins a realtime STT dispatch marker (shared whitelist
   // STT_TRANSPORT_META); the API only honours it on type "stt" records.
-  const handleAddCustomModel = async (modelId, type = "llm", providerAliasOverride = providerStorageAlias, caps, transport) => {
+  const handleAddCustomModel = async (
+    modelId,
+    type = "llm",
+    providerAliasOverride = providerStorageAlias,
+    caps,
+    transport,
+  ) => {
     try {
       const res = await fetch("/api/models/custom", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ providerAlias: providerAliasOverride, id: modelId, type, ...(caps ? { caps } : {}), ...(transport ? { transport } : {}) }),
+        body: JSON.stringify({
+          providerAlias: providerAliasOverride,
+          id: modelId,
+          type,
+          ...(caps ? { caps } : {}),
+          ...(transport ? { transport } : {}),
+        }),
       });
       if (res.ok) {
         await fetchCustomModels();
-        if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("customModelChanged"));
+        if (typeof window !== "undefined")
+          window.dispatchEvent(new CustomEvent("customModelChanged"));
       } else {
         const data = await res.json();
         alert(data.error || "Failed to add custom model");
@@ -584,13 +669,22 @@ export default function ProviderDetailPage() {
     }
   };
 
-  const handleDeleteCustomModel = async (modelId, type = "llm", providerAliasOverride = providerStorageAlias) => {
+  const handleDeleteCustomModel = async (
+    modelId,
+    type = "llm",
+    providerAliasOverride = providerStorageAlias,
+  ) => {
     try {
-      const params = new URLSearchParams({ providerAlias: providerAliasOverride, id: modelId, type });
+      const params = new URLSearchParams({
+        providerAlias: providerAliasOverride,
+        id: modelId,
+        type,
+      });
       const res = await fetch(`/api/models/custom?${params}`, { method: "DELETE" });
       if (res.ok) {
         await fetchCustomModels();
-        if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("customModelChanged"));
+        if (typeof window !== "undefined")
+          window.dispatchEvent(new CustomEvent("customModelChanged"));
       }
     } catch (error) {
       console.log("Error deleting custom model:", error);
@@ -624,13 +718,17 @@ export default function ProviderDetailPage() {
       for (const model of models) {
         const modelId = model.id || model.name;
         if (!modelId) continue;
-        
+
         // Qoder model ID format may be "qoder/auto", "qoder-cn/auto" or "auto",
         // need to remove the provider prefix before storing.
         const cleanModelId = modelId.replace(/^(qoder-cn|qoder)\//, "");
-        const alreadyExists = customModels.some(
-          (entry) => entry.providerAlias === providerStorageAlias && entry.id === cleanModelId && (entry.kind || entry.type || "llm") === "llm"
-        ) || Object.values(modelAliases).includes(`${providerStorageAlias}/${cleanModelId}`);
+        const alreadyExists =
+          customModels.some(
+            (entry) =>
+              entry.providerAlias === providerStorageAlias &&
+              entry.id === cleanModelId &&
+              (entry.kind || entry.type || "llm") === "llm",
+          ) || Object.values(modelAliases).includes(`${providerStorageAlias}/${cleanModelId}`);
         if (alreadyExists) {
           continue;
         }
@@ -638,7 +736,7 @@ export default function ProviderDetailPage() {
         await handleAddCustomModel(cleanModelId, "llm", providerStorageAlias);
         importedCount += 1;
       }
-      
+
       if (importedCount === 0) {
         alert(translate("All models already exist, no new models added"));
       } else {
@@ -677,9 +775,13 @@ export default function ProviderDetailPage() {
       for (const model of models) {
         const modelId = model.id || model.name;
         if (!modelId) continue;
-        const alreadyExists = customModels.some(
-          (entry) => entry.providerAlias === providerStorageAlias && entry.id === modelId && (entry.kind || entry.type || "llm") === "llm"
-        ) || Object.values(modelAliases).includes(`${providerStorageAlias}/${modelId}`);
+        const alreadyExists =
+          customModels.some(
+            (entry) =>
+              entry.providerAlias === providerStorageAlias &&
+              entry.id === modelId &&
+              (entry.kind || entry.type || "llm") === "llm",
+          ) || Object.values(modelAliases).includes(`${providerStorageAlias}/${modelId}`);
         if (alreadyExists) {
           continue;
         }
@@ -705,7 +807,8 @@ export default function ProviderDetailPage() {
     setImportingNousModels(true);
     try {
       let modelsList = [];
-      const activeConnection = connections.find((conn) => conn.isActive !== false) || connections[0];
+      const activeConnection =
+        connections.find((conn) => conn.isActive !== false) || connections[0];
       if (activeConnection) {
         const res = await fetch(`/api/providers/${activeConnection.id}/models`);
         const data = await res.json();
@@ -714,9 +817,16 @@ export default function ProviderDetailPage() {
         }
       }
       if (modelsList.length === 0) {
-        const fetcher = (OAUTH_PROVIDERS[providerId] || APIKEY_PROVIDERS[providerId] || FREE_PROVIDERS[providerId] || FREE_TIER_PROVIDERS[providerId])?.modelsFetcher;
+        const fetcher = (
+          OAUTH_PROVIDERS[providerId] ||
+          APIKEY_PROVIDERS[providerId] ||
+          FREE_PROVIDERS[providerId] ||
+          FREE_TIER_PROVIDERS[providerId]
+        )?.modelsFetcher;
         if (fetcher?.url) {
-          const res = await fetch(`/api/providers/suggested-models?url=${encodeURIComponent(fetcher.url)}&type=nous`);
+          const res = await fetch(
+            `/api/providers/suggested-models?url=${encodeURIComponent(fetcher.url)}&type=nous`,
+          );
           const data = await res.json();
           if (res.ok && Array.isArray(data.data)) {
             modelsList = data.data;
@@ -732,9 +842,15 @@ export default function ProviderDetailPage() {
         const rawId = model.id || model.name;
         if (!rawId) continue;
         const cleanModelId = rawId.replace(/^nous\//, "");
-        const alreadyExists = customModels.some(
-          (entry) => entry.providerAlias === providerStorageAlias && entry.id === cleanModelId && (entry.kind || entry.type || "llm") === "llm"
-        ) || Object.values(modelAliases).includes(`${providerStorageAlias}/${cleanModelId}`) || staticModels.some((m) => m.id === cleanModelId);
+        const alreadyExists =
+          customModels.some(
+            (entry) =>
+              entry.providerAlias === providerStorageAlias &&
+              entry.id === cleanModelId &&
+              (entry.kind || entry.type || "llm") === "llm",
+          ) ||
+          Object.values(modelAliases).includes(`${providerStorageAlias}/${cleanModelId}`) ||
+          staticModels.some((m) => m.id === cleanModelId);
         if (alreadyExists) continue;
         await handleAddCustomModel(cleanModelId, "llm", providerStorageAlias);
         importedCount += 1;
@@ -764,7 +880,13 @@ export default function ProviderDetailPage() {
     setOneByOneStopping(false);
     setOneByOneCurrentConnectionId(null);
     setOneByOneResults(queuedState);
-    setOneByOneSummary({ total: connections.length, completed: 0, passed: 0, failed: 0, stopped: false });
+    setOneByOneSummary({
+      total: connections.length,
+      completed: 0,
+      passed: 0,
+      failed: 0,
+      stopped: false,
+    });
 
     let passed = 0;
     let failed = 0;
@@ -804,7 +926,7 @@ export default function ProviderDetailPage() {
             ...prev,
             [connection.id]: {
               state: valid ? "success" : "failed",
-              error: valid ? null : (data.error || null),
+              error: valid ? null : data.error || null,
             },
           }));
         } catch (error) {
@@ -853,12 +975,12 @@ export default function ProviderDetailPage() {
         try {
           const res = await fetch(`/api/providers/${id}`, { method: "DELETE" });
           if (res.ok) {
-            setConnections(prev => prev.filter(c => c.id !== id));
+            setConnections((prev) => prev.filter((c) => c.id !== id));
           }
         } catch (error) {
           console.log("Error deleting connection:", error);
         }
-      }
+      },
     });
   };
 
@@ -881,10 +1003,11 @@ export default function ProviderDetailPage() {
             failed += 1;
           }
         }
-        setConnections(prev => prev.filter(c => !idsToDelete.includes(c.id)));
+        setConnections((prev) => prev.filter((c) => !idsToDelete.includes(c.id)));
         setSelectedConnectionIds([]);
-        if (failed > 0) alert(`Deleted ${idsToDelete.length - failed} connection(s), ${failed} failed.`);
-      }
+        if (failed > 0)
+          alert(`Deleted ${idsToDelete.length - failed} connection(s), ${failed} failed.`);
+      },
     });
   };
 
@@ -951,7 +1074,7 @@ export default function ProviderDetailPage() {
         body: JSON.stringify({ isActive }),
       });
       if (res.ok) {
-        setConnections(prev => prev.map(c => c.id === id ? { ...c, isActive } : c));
+        setConnections((prev) => prev.map((c) => (c.id === id ? { ...c, isActive } : c)));
       }
     } catch (error) {
       console.log("Error updating connection status:", error);
@@ -961,7 +1084,10 @@ export default function ProviderDetailPage() {
   const handleSwapPriority = async (index1, index2) => {
     // Optimistic update state
     const newConnections = [...connections];
-    [newConnections[index1], newConnections[index2]] = [newConnections[index2], newConnections[index1]];
+    [newConnections[index1], newConnections[index2]] = [
+      newConnections[index2],
+      newConnections[index1],
+    ];
     setConnections(newConnections);
 
     try {
@@ -987,11 +1113,11 @@ export default function ProviderDetailPage() {
   const allSelected = connections.length > 0 && selectedConnectionIds.length === connections.length;
 
   const toggleSelectConnection = (connectionId) => {
-    setSelectedConnectionIds((prev) => (
+    setSelectedConnectionIds((prev) =>
       prev.includes(connectionId)
         ? prev.filter((id) => id !== connectionId)
-        : [...prev, connectionId]
-    ));
+        : [...prev, connectionId],
+    );
   };
 
   const toggleSelectAllConnections = () => {
@@ -1008,12 +1134,16 @@ export default function ProviderDetailPage() {
   };
 
   useEffect(() => {
-    setSelectedConnectionIds((prev) => prev.filter((id) => connections.some((conn) => conn.id === id)));
+    setSelectedConnectionIds((prev) =>
+      prev.filter((id) => connections.some((conn) => conn.id === id)),
+    );
   }, [connections]);
 
   const selectedProxySummary = (() => {
     if (selectedConnections.length === 0) return "";
-    const poolIds = new Set(selectedConnections.map((conn) => conn.providerSpecificData?.proxyPoolId || "__none__"));
+    const poolIds = new Set(
+      selectedConnections.map((conn) => conn.providerSpecificData?.proxyPoolId || "__none__"),
+    );
     if (poolIds.size === 1) {
       const onlyId = [...poolIds][0];
       if (onlyId === "__none__") return "All selected currently unbound";
@@ -1025,7 +1155,11 @@ export default function ProviderDetailPage() {
 
   const openBulkProxyModal = () => {
     if (selectedConnections.length === 0) return;
-    const uniquePoolIds = [...new Set(selectedConnections.map((conn) => conn.providerSpecificData?.proxyPoolId || "__none__"))];
+    const uniquePoolIds = [
+      ...new Set(
+        selectedConnections.map((conn) => conn.providerSpecificData?.proxyPoolId || "__none__"),
+      ),
+    ];
     setBulkProxyPoolId(uniquePoolIds.length === 1 ? uniquePoolIds[0] : "__none__");
     setShowBulkProxyModal(true);
   };
@@ -1078,68 +1212,82 @@ export default function ProviderDetailPage() {
     return applyProxyAssignments(targets);
   };
 
-
   const isSelected = (connectionId) => selectedConnectionIds.includes(connectionId);
 
   const connectionsList = (
     <div className="flex min-w-0 flex-col divide-y divide-black/[0.03] dark:divide-white/[0.03] max-h-[500px] overflow-y-auto pr-1">
-      {connections
-        .map((conn, index) => (
-          <div key={conn.id} className="flex min-w-0 items-stretch">
-            <div className="flex shrink-0 items-center pl-1 sm:pl-2">
-              <input
-                type="checkbox"
-                checked={isSelected(conn.id)}
-                onChange={() => toggleSelectConnection(conn.id)}
-                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-              />
-            </div>
-            <div className="flex-1 min-w-0">
-              <ConnectionRow
-                connection={conn}
-                proxyPools={proxyPools}
-                isOAuth={isOAuth}
-                isFirst={index === 0}
-                isLast={index === connections.length - 1}
-                onMoveUp={() => handleSwapPriority(index, index - 1)}
-                onMoveDown={() => handleSwapPriority(index, index + 1)}
-                onToggleActive={(isActive) => handleUpdateConnectionStatus(conn.id, isActive)}
-                autoPing={AUTO_PING_SETTINGS_KEYS[providerId] && conn.authType === "oauth" ? {
-                  isActive: autoPing.connections[conn.id] === true || autoPing.schedules?.[conn.id]?.enabled === true,
-                  reactiveOn: autoPing.connections[conn.id] === true,
-                  provider: providerId,
-                  scheduleOn: autoPing.schedules?.[conn.id]?.enabled === true,
-                  scheduleSummary: getScheduleSlotLabels(autoPing.schedules?.[conn.id]).join(" / "),
-                  onConfigure: () => setScheduleConnection(conn),
-                } : null}
-                onUpdateProxy={async (proxyPoolId) => {
-                  try {
-                    const res = await fetch(`/api/providers/${conn.id}`, {
-                      method: "PUT",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ proxyPoolId: proxyPoolId || null }),
-                    });
-                    if (res.ok) {
-                      setConnections(prev => prev.map(c =>
-                        c.id === conn.id
-                          ? { ...c, providerSpecificData: { ...c.providerSpecificData, proxyPoolId: proxyPoolId || null } }
-                          : c
-                      ));
-                    }
-                  } catch (error) {
-                    console.log("Error updating proxy:", error);
-                  }
-                }}
-                onEdit={() => {
-                  setSelectedConnection(conn);
-                  setShowEditModal(true);
-                }}
-                onDelete={() => handleDelete(conn.id)}
-                oneByOneStatus={oneByOneResults[conn.id] || null}
-              />
-            </div>
+      {connections.map((conn, index) => (
+        <div key={conn.id} className="flex min-w-0 items-stretch">
+          <div className="flex shrink-0 items-center pl-1 sm:pl-2">
+            <input
+              type="checkbox"
+              checked={isSelected(conn.id)}
+              onChange={() => toggleSelectConnection(conn.id)}
+              className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+            />
           </div>
-        ))}
+          <div className="flex-1 min-w-0">
+            <ConnectionRow
+              connection={conn}
+              proxyPools={proxyPools}
+              isOAuth={isOAuth}
+              isFirst={index === 0}
+              isLast={index === connections.length - 1}
+              onMoveUp={() => handleSwapPriority(index, index - 1)}
+              onMoveDown={() => handleSwapPriority(index, index + 1)}
+              onToggleActive={(isActive) => handleUpdateConnectionStatus(conn.id, isActive)}
+              autoPing={
+                AUTO_PING_SETTINGS_KEYS[providerId] && conn.authType === "oauth"
+                  ? {
+                      isActive:
+                        autoPing.connections[conn.id] === true ||
+                        autoPing.schedules?.[conn.id]?.enabled === true,
+                      reactiveOn: autoPing.connections[conn.id] === true,
+                      provider: providerId,
+                      scheduleOn: autoPing.schedules?.[conn.id]?.enabled === true,
+                      scheduleSummary: getScheduleSlotLabels(autoPing.schedules?.[conn.id]).join(
+                        " / ",
+                      ),
+                      onConfigure: () => setScheduleConnection(conn),
+                    }
+                  : null
+              }
+              onUpdateProxy={async (proxyPoolId) => {
+                try {
+                  const res = await fetch(`/api/providers/${conn.id}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ proxyPoolId: proxyPoolId || null }),
+                  });
+                  if (res.ok) {
+                    setConnections((prev) =>
+                      prev.map((c) =>
+                        c.id === conn.id
+                          ? {
+                              ...c,
+                              providerSpecificData: {
+                                ...c.providerSpecificData,
+                                proxyPoolId: proxyPoolId || null,
+                              },
+                            }
+                          : c,
+                      ),
+                    );
+                  }
+                } catch (error) {
+                  console.log("Error updating proxy:", error);
+                }
+              }}
+              onEdit={() => {
+                setSelectedConnection(conn);
+                setShowEditModal(true);
+              }}
+              onDelete={() => handleDelete(conn.id)}
+              oneByOneStatus={oneByOneResults[conn.id] || null}
+            />
+          </div>
+        </div>
+      ))}
     </div>
   );
 
@@ -1187,7 +1335,12 @@ export default function ProviderDetailPage() {
 
         {bulkUpdatingProxy && <p className="text-xs text-text-muted">Applying...</p>}
 
-        <Button onClick={closeBulkProxyModal} variant="ghost" fullWidth disabled={bulkUpdatingProxy}>
+        <Button
+          onClick={closeBulkProxyModal}
+          variant="ghost"
+          fullWidth
+          disabled={bulkUpdatingProxy}
+        >
           Cancel
         </Button>
       </div>
@@ -1205,12 +1358,16 @@ export default function ProviderDetailPage() {
       });
       const data = await res.json();
       setModelTestResults((prev) => ({ ...prev, [modelId]: data.ok ? "ok" : "error" }));
-      setModelsTestError(data.ok ? "" : (data.error || "Model not reachable"));
+      setModelsTestError(data.ok ? "" : data.error || "Model not reachable");
     } catch {
       setModelTestResults((prev) => ({ ...prev, [modelId]: "error" }));
       setModelsTestError("Network error");
     } finally {
-      setTestingModelIds((prev) => { const n = new Set(prev); n.delete(modelId); return n; });
+      setTestingModelIds((prev) => {
+        const n = new Set(prev);
+        n.delete(modelId);
+        return n;
+      });
     }
   };
 
@@ -1227,7 +1384,9 @@ export default function ProviderDetailPage() {
           onSetAlias={handleSetAlias}
           onDeleteAlias={handleDeleteAlias}
           onAddCustomModel={(modelId) => handleAddCustomModel(modelId, "llm", providerStorageAlias)}
-          onDeleteCustomModel={(modelId) => handleDeleteCustomModel(modelId, "llm", providerStorageAlias)}
+          onDeleteCustomModel={(modelId) =>
+            handleDeleteCustomModel(modelId, "llm", providerStorageAlias)
+          }
           connections={connections}
           isAnthropic={isAnthropicCompatible}
         />
@@ -1238,7 +1397,10 @@ export default function ProviderDetailPage() {
     const allModels = [
       ...models,
       ...kiloFreeModels.filter((fm) => !models.some((m) => m.id === fm.id)),
-    ].filter((m) => { const k = getModelKind(m); return !k || k === "llm"; });
+    ].filter((m) => {
+      const k = getModelKind(m);
+      return !k || k === "llm";
+    });
     const disabledSet = new Set(disabledModelIds);
     const displayModels = allModels.filter((m) => !disabledSet.has(m.id));
     const disabledDisplayModels = allModels.filter((m) => disabledSet.has(m.id));
@@ -1270,7 +1432,9 @@ export default function ProviderDetailPage() {
               }
             }}
             testStatus={modelTestResults[model.id]}
-            onTest={connections.length > 0 || isFreeNoAuth ? () => handleTestModel(model.id) : undefined}
+            onTest={
+              connections.length > 0 || isFreeNoAuth ? () => handleTestModel(model.id) : undefined
+            }
             isTesting={testingModelIds.has(model.id)}
             isCustom
             isFree={false}
@@ -1280,11 +1444,13 @@ export default function ProviderDetailPage() {
         ))}
 
         {displayModels.map((model) => {
-          const cleanModelId = model.id.startsWith(`${providerStorageAlias}/`) ? model.id.slice(providerStorageAlias.length + 1) : model.id;
+          const cleanModelId = model.id.startsWith(`${providerStorageAlias}/`)
+            ? model.id.slice(providerStorageAlias.length + 1)
+            : model.id;
           const fullModel = `${providerStorageAlias}/${cleanModelId}`;
           const oldFormatModel = `${providerId}/${cleanModelId}`;
           const existingAlias = Object.entries(modelAliases).find(
-            ([, m]) => m === fullModel || m === oldFormatModel
+            ([, m]) => m === fullModel || m === oldFormatModel,
           )?.[0];
           return (
             <ModelRow
@@ -1297,7 +1463,11 @@ export default function ProviderDetailPage() {
               onSetAlias={(alias) => handleSetAlias(cleanModelId, alias, providerStorageAlias)}
               onDeleteAlias={() => handleDeleteAlias(existingAlias)}
               testStatus={modelTestResults[cleanModelId] || modelTestResults[model.id]}
-              onTest={connections.length > 0 || isFreeNoAuth ? () => handleTestModel(cleanModelId) : undefined}
+              onTest={
+                connections.length > 0 || isFreeNoAuth
+                  ? () => handleTestModel(cleanModelId)
+                  : undefined
+              }
               isTesting={testingModelIds.has(cleanModelId) || testingModelIds.has(model.id)}
               isFree={model.isFree}
               onDisable={() => handleDisableModel(cleanModelId)}
@@ -1317,32 +1487,40 @@ export default function ProviderDetailPage() {
         </button>
 
         {/* Import Qoder models button — only show for qoder/qoder-cn provider */}
-        {(providerId === "qoder" || providerId === "qoder-cn") && connections.some((conn) => conn.isActive !== false) && (
-          <button
-            onClick={handleImportQoderModels}
-            disabled={importingQoderModels}
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-blue-500/40 px-3 py-2 text-xs text-blue-600 dark:text-blue-400 transition-colors hover:border-blue-500 hover:bg-blue-500/5 sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <span className="material-symbols-outlined text-sm" style={importingQoderModels ? { animation: "spin 1s linear infinite" } : undefined}>
-              {importingQoderModels ? "progress_activity" : "download"}
-            </span>
-            {importingQoderModels ? translate("Fetching...") : translate("Fetch Qoder Models")}
-          </button>
-        )}
+        {(providerId === "qoder" || providerId === "qoder-cn") &&
+          connections.some((conn) => conn.isActive !== false) && (
+            <button
+              onClick={handleImportQoderModels}
+              disabled={importingQoderModels}
+              className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-blue-500/40 px-3 py-2 text-xs text-blue-600 dark:text-blue-400 transition-colors hover:border-blue-500 hover:bg-blue-500/5 sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span
+                className="material-symbols-outlined text-sm"
+                style={importingQoderModels ? { animation: "spin 1s linear infinite" } : undefined}
+              >
+                {importingQoderModels ? "progress_activity" : "download"}
+              </span>
+              {importingQoderModels ? translate("Fetching...") : translate("Fetch Qoder Models")}
+            </button>
+          )}
 
         {/* Import Cline /models catalog button — only show for cline and clinepass providers */}
-        {(providerId === "cline" || providerId === "clinepass") && connections.some((conn) => conn.isActive !== false) && (
-          <button
-            onClick={handleImportClineModels}
-            disabled={importingClineModels}
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-blue-500/40 px-3 py-2 text-xs text-blue-600 dark:text-blue-400 transition-colors hover:border-blue-500 hover:bg-blue-500/5 sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <span className="material-symbols-outlined text-sm" style={importingClineModels ? { animation: "spin 1s linear infinite" } : undefined}>
-              {importingClineModels ? "progress_activity" : "download"}
-            </span>
-            {importingClineModels ? translate("Fetching...") : translate("Import from /models")}
-          </button>
-        )}
+        {(providerId === "cline" || providerId === "clinepass") &&
+          connections.some((conn) => conn.isActive !== false) && (
+            <button
+              onClick={handleImportClineModels}
+              disabled={importingClineModels}
+              className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-blue-500/40 px-3 py-2 text-xs text-blue-600 dark:text-blue-400 transition-colors hover:border-blue-500 hover:bg-blue-500/5 sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span
+                className="material-symbols-outlined text-sm"
+                style={importingClineModels ? { animation: "spin 1s linear infinite" } : undefined}
+              >
+                {importingClineModels ? "progress_activity" : "download"}
+              </span>
+              {importingClineModels ? translate("Fetching...") : translate("Import from /models")}
+            </button>
+          )}
 
         {/* Import Nous /models catalog button — show for nous provider */}
         {providerId === "nous" && (
@@ -1351,7 +1529,10 @@ export default function ProviderDetailPage() {
             disabled={importingNousModels}
             className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-blue-500/40 px-3 py-2 text-xs text-blue-600 dark:text-blue-400 transition-colors hover:border-blue-500 hover:bg-blue-500/5 sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <span className="material-symbols-outlined text-sm" style={importingNousModels ? { animation: "spin 1s linear infinite" } : undefined}>
+            <span
+              className="material-symbols-outlined text-sm"
+              style={importingNousModels ? { animation: "spin 1s linear infinite" } : undefined}
+            >
               {importingNousModels ? "progress_activity" : "download"}
             </span>
             {importingNousModels ? translate("Fetching...") : translate("Import from /models")}
@@ -1359,48 +1540,57 @@ export default function ProviderDetailPage() {
         )}
 
         {/* Suggested models from provider API — show only models not yet added */}
-        {suggestedModels.length > 0 && (() => {
-          const addedFullModels = new Set([
-            ...Object.values(modelAliases),
-            ...customModelRows.map((model) => model.fullModel),
-          ]);
-          const hardcodedIds = new Set(models.map((m) => m.id));
-          const notAdded = suggestedModels.filter(
-            (m) => {
+        {suggestedModels.length > 0 &&
+          (() => {
+            const addedFullModels = new Set([
+              ...Object.values(modelAliases),
+              ...customModelRows.map((model) => model.fullModel),
+            ]);
+            const hardcodedIds = new Set(models.map((m) => m.id));
+            const notAdded = suggestedModels.filter((m) => {
               const cleanId = m.id.replace(/^nous\//, "");
-              return !addedFullModels.has(`${providerStorageAlias}/${cleanId}`) && !hardcodedIds.has(cleanId) && !hardcodedIds.has(m.id);
-            }
-          );
-          if (notAdded.length === 0) return null;
-          return (
-            <div className="w-full mt-2">
-              <p className="text-xs text-text-muted mb-2">{providerId === "nous" ? translate("Suggested models (≥200k context):") : translate("Suggested free models (≥200k context):")}</p>
-              <div className="flex flex-wrap gap-2">
-                {notAdded.map((m) => {
-                  const cleanId = m.id.replace(/^nous\//, "");
-                  return (
-                    <button
-                      key={m.id}
-                      onClick={async () => {
-                        await handleAddCustomModel(cleanId, "llm", providerStorageAlias);
-                      }}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-black/10 dark:border-white/10 text-xs text-text-muted hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-colors"
-                      title={`${m.name} · ${(m.contextLength / 1000).toFixed(0)}k ctx`}
-                    >
-                      <span className="material-symbols-outlined text-[13px]">add</span>
-                      {cleanId.split("/").pop()}
-                    </button>
-                  );
-                })}
+              return (
+                !addedFullModels.has(`${providerStorageAlias}/${cleanId}`) &&
+                !hardcodedIds.has(cleanId) &&
+                !hardcodedIds.has(m.id)
+              );
+            });
+            if (notAdded.length === 0) return null;
+            return (
+              <div className="w-full mt-2">
+                <p className="text-xs text-text-muted mb-2">
+                  {providerId === "nous"
+                    ? translate("Suggested models (≥200k context):")
+                    : translate("Suggested free models (≥200k context):")}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {notAdded.map((m) => {
+                    const cleanId = m.id.replace(/^nous\//, "");
+                    return (
+                      <button
+                        key={m.id}
+                        onClick={async () => {
+                          await handleAddCustomModel(cleanId, "llm", providerStorageAlias);
+                        }}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-black/10 dark:border-white/10 text-xs text-text-muted hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-colors"
+                        title={`${m.name} · ${(m.contextLength / 1000).toFixed(0)}k ctx`}
+                      >
+                        <span className="material-symbols-outlined text-[13px]">add</span>
+                        {cleanId.split("/").pop()}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          );
-        })()}
+            );
+          })()}
 
         {/* Disabled models — restorable */}
         {disabledDisplayModels.length > 0 && (
           <div className="w-full mt-2">
-            <p className="text-xs text-text-muted mb-2">Disabled models ({disabledDisplayModels.length}):</p>
+            <p className="text-xs text-text-muted mb-2">
+              Disabled models ({disabledDisplayModels.length}):
+            </p>
             <div className="flex flex-wrap gap-2">
               {disabledDisplayModels.map((m) => (
                 <button
@@ -1427,7 +1617,7 @@ export default function ProviderDetailPage() {
         <CardSkeleton />
       </div>
     );
-}
+  }
 
   if (!providerInfo) {
     return (
@@ -1443,7 +1633,9 @@ export default function ProviderDetailPage() {
   // Determine icon path: OpenAI Compatible providers use specialized icons
   const getHeaderIconPath = () => {
     if (isOpenAICompatible && providerInfo.apiType) {
-      return providerInfo.apiType === "responses" ? "/providers/oai-r.png" : "/providers/oai-cc.png";
+      return providerInfo.apiType === "responses"
+        ? "/providers/oai-r.png"
+        : "/providers/oai-cc.png";
     }
     if (isAnthropicCompatible) {
       return "/providers/anthropic-m.png";
@@ -1483,17 +1675,25 @@ export default function ProviderDetailPage() {
                   markProviderIconMissing(providerInfo.id);
                   setHeaderImgError(true);
                 }}
-              loading="lazy"
-              decoding="async"
+                loading="lazy"
+                decoding="async"
               />
             )}
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="truncate text-2xl font-semibold tracking-tight sm:text-3xl">{providerInfo.name}</h1>
-              {(providerInfo.notice?.apiKeyUrl || providerInfo.notice?.signupUrl || providerInfo.website) && (
+              <h1 className="truncate text-2xl font-semibold tracking-tight sm:text-3xl">
+                {providerInfo.name}
+              </h1>
+              {(providerInfo.notice?.apiKeyUrl ||
+                providerInfo.notice?.signupUrl ||
+                providerInfo.website) && (
                 <a
-                  href={providerInfo.notice?.apiKeyUrl || providerInfo.notice?.signupUrl || providerInfo.website}
+                  href={
+                    providerInfo.notice?.apiKeyUrl ||
+                    providerInfo.notice?.signupUrl ||
+                    providerInfo.website
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs text-primary hover:underline inline-flex items-center gap-1"
@@ -1512,15 +1712,21 @@ export default function ProviderDetailPage() {
 
       {providerInfo.deprecated && (
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
-          <span className="material-symbols-outlined text-[16px] text-yellow-500 mt-0.5 shrink-0">warning</span>
-          <p className="text-xs text-red-600 dark:text-yellow-400 leading-relaxed">{providerInfo.deprecationNotice}</p>
+          <span className="material-symbols-outlined text-[16px] text-yellow-500 mt-0.5 shrink-0">
+            warning
+          </span>
+          <p className="text-xs text-red-600 dark:text-yellow-400 leading-relaxed">
+            {providerInfo.deprecationNotice}
+          </p>
         </div>
       )}
 
       {providerInfo.notice?.text && !providerInfo.deprecated && (
         <div className="flex flex-col gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2 sm:flex-row sm:items-center">
           <span className="material-symbols-outlined text-[16px] text-blue-500 shrink-0">info</span>
-          <p className="min-w-0 flex-1 text-xs leading-relaxed text-blue-600 dark:text-blue-400">{providerInfo.notice.text}</p>
+          <p className="min-w-0 flex-1 text-xs leading-relaxed text-blue-600 dark:text-blue-400">
+            {providerInfo.notice.text}
+          </p>
           {providerInfo.notice.apiKeyUrl && (
             <a
               href={providerInfo.notice.apiKeyUrl}
@@ -1538,10 +1744,23 @@ export default function ProviderDetailPage() {
         <Card>
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
-              <h2 className="text-lg font-semibold">{isAnthropicCompatible ? "Anthropic Compatible Details" : "OpenAI Compatible Details"}</h2>
+              <h2 className="text-lg font-semibold">
+                {isAnthropicCompatible
+                  ? "Anthropic Compatible Details"
+                  : "OpenAI Compatible Details"}
+              </h2>
               <p className="break-all text-sm text-text-muted">
-                {isAnthropicCompatible ? "Messages API" : (providerNode.apiType === "responses" ? "Responses API" : "Chat Completions")} · {(providerNode.baseUrl || "").replace(/\/$/, "")}/
-                {isAnthropicCompatible ? "messages" : (providerNode.apiType === "responses" ? "responses" : "chat/completions")}
+                {isAnthropicCompatible
+                  ? "Messages API"
+                  : providerNode.apiType === "responses"
+                    ? "Responses API"
+                    : "Chat Completions"}{" "}
+                · {(providerNode.baseUrl || "").replace(/\/$/, "")}/
+                {isAnthropicCompatible
+                  ? "messages"
+                  : providerNode.apiType === "responses"
+                    ? "responses"
+                    : "chat/completions"}
               </p>
             </div>
             <div className="grid grid-cols-1 gap-2 sm:flex sm:items-center">
@@ -1576,14 +1795,16 @@ export default function ProviderDetailPage() {
                     onConfirm: async () => {
                       setConfirmState(null);
                       try {
-                        const res = await fetch(`/api/provider-nodes/${providerId}`, { method: "DELETE" });
+                        const res = await fetch(`/api/provider-nodes/${providerId}`, {
+                          method: "DELETE",
+                        });
                         if (res.ok) {
                           router.push("/dashboard/providers");
                         }
                       } catch (error) {
                         console.log("Error deleting provider node:", error);
                       }
-                    }
+                    },
                   });
                 }}
                 className="w-full sm:w-auto"
@@ -1616,12 +1837,7 @@ export default function ProviderDetailPage() {
               {connections.length > 0 && (
                 <>
                   {selectedConnectionIds.length > 0 && (
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      icon="delete"
-                      onClick={handleBulkDelete}
-                    >
+                    <Button size="sm" variant="danger" icon="delete" onClick={handleBulkDelete}>
                       Delete Selected ({selectedConnectionIds.length})
                     </Button>
                   )}
@@ -1632,7 +1848,9 @@ export default function ProviderDetailPage() {
                     onClick={handleRunOneByOneTest}
                     disabled={oneByOneRunning}
                   >
-                    {oneByOneRunning ? "Testing Connection One-by-One..." : "Test Connection One-by-One"}
+                    {oneByOneRunning
+                      ? "Testing Connection One-by-One..."
+                      : "Test Connection One-by-One"}
                   </Button>
                   {oneByOneRunning && (
                     <Button
@@ -1675,7 +1893,9 @@ export default function ProviderDetailPage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
                 <div className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-primary/10 text-primary shrink-0">
-                  <span className="material-symbols-outlined text-[18px]">{isOAuth ? "lock" : "key"}</span>
+                  <span className="material-symbols-outlined text-[18px]">
+                    {isOAuth ? "lock" : "key"}
+                  </span>
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm text-text-muted">No connections yet</p>
@@ -1689,7 +1909,12 @@ export default function ProviderDetailPage() {
               <div className="flex gap-2">
                 {hasDualAuthModes ? (
                   <>
-                    <Button size="sm" icon="lock" variant="secondary" onClick={triggerOAuthConnection}>
+                    <Button
+                      size="sm"
+                      icon="lock"
+                      variant="secondary"
+                      onClick={triggerOAuthConnection}
+                    >
                       {oauthConnectionLabel}
                     </Button>
                     <Button size="sm" icon="key" onClick={triggerApiKeyConnection}>
@@ -1699,26 +1924,41 @@ export default function ProviderDetailPage() {
                 ) : (
                   <>
                     {!isCompatible && providerId === "iflow" && (
-                      <Button size="sm" icon="cookie" variant="secondary" onClick={() => setShowIFlowCookieModal(true)}>
+                      <Button
+                        size="sm"
+                        icon="cookie"
+                        variant="secondary"
+                        onClick={() => setShowIFlowCookieModal(true)}
+                      >
                         Cookie
                       </Button>
                     )}
                     {providerId === "codex" && (
-                      <Button size="sm" icon="playlist_add" variant="secondary" onClick={() => setShowBulkImportCodex(true)}>
+                      <Button
+                        size="sm"
+                        icon="playlist_add"
+                        variant="secondary"
+                        onClick={() => setShowBulkImportCodex(true)}
+                      >
                         {translate("Bulk Add")}
                       </Button>
                     )}
                     {providerId === "grok-cli" && (
-                      <Button size="sm" icon="playlist_add" variant="secondary" onClick={() => setShowBulkImportGrokCli(true)}>
+                      <Button
+                        size="sm"
+                        icon="playlist_add"
+                        variant="secondary"
+                        onClick={() => setShowBulkImportGrokCli(true)}
+                      >
                         {translate("Bulk Add")}
                       </Button>
                     )}
-                    <Button
-                      size="sm"
-                      icon="add"
-                      onClick={triggerAddConnection}
-                    >
-                      {isCompatible ? "Add API Key" : (providerId === "iflow" ? "OAuth" : "Add Connection")}
+                    <Button size="sm" icon="add" onClick={triggerAddConnection}>
+                      {isCompatible
+                        ? "Add API Key"
+                        : providerId === "iflow"
+                          ? "OAuth"
+                          : "Add Connection"}
                     </Button>
                   </>
                 )}
@@ -1737,7 +1977,11 @@ export default function ProviderDetailPage() {
                       <span className="text-amber-600 dark:text-amber-400">Stopped</span>
                     )}
                     {oneByOneRunning && oneByOneCurrentConnectionId && (
-                      <span>Running: {connections.find((conn) => conn.id === oneByOneCurrentConnectionId)?.name || oneByOneCurrentConnectionId}</span>
+                      <span>
+                        Running:{" "}
+                        {connections.find((conn) => conn.id === oneByOneCurrentConnectionId)
+                          ?.name || oneByOneCurrentConnectionId}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -1838,9 +2082,7 @@ export default function ProviderDetailPage() {
       <Card>
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <h2 className="text-lg font-semibold">
-              {"Available Models"}
-            </h2>
+            <h2 className="text-lg font-semibold">{"Available Models"}</h2>
             {providerThinkingLevels && (
               <select
                 value={thinkingMode}
@@ -1849,60 +2091,85 @@ export default function ProviderDetailPage() {
                 className="rounded-md border border-border bg-background px-2 py-1 text-xs focus:border-primary focus:outline-none"
               >
                 {providerThinkingLevels.map((opt) => (
-                  <option key={opt} value={opt}>{`Thinking: ${opt.charAt(0).toUpperCase() + opt.slice(1)}`}</option>
+                  <option
+                    key={opt}
+                    value={opt}
+                  >{`Thinking: ${opt.charAt(0).toUpperCase() + opt.slice(1)}`}</option>
                 ))}
               </select>
             )}
           </div>
-          {!isCompatible && (() => {
-            const allIds = [
-              ...models,
-              ...kiloFreeModels.filter((fm) => !models.some((m) => m.id === fm.id)),
-            ].filter((m) => { const k = getModelKind(m); return !k || k === "llm"; }).map((m) => m.id);
-            const activeIds = allIds.filter((id) => !disabledModelIds.includes(id));
-            return (
-              <div className="flex gap-2">
-                {disabledModelIds.length > 0 && (
-                  <Button size="sm" variant="secondary" icon="restart_alt" onClick={handleEnableAll}>
-                    Active All
-                  </Button>
-                )}
-                {activeIds.length > 0 && (
-                  <Button size="sm" variant="secondary" icon="block" onClick={() => handleDisableAll(activeIds)}>
-                    Disable All
-                  </Button>
-                )}
-              </div>
-            );
-          })()}
+          {!isCompatible &&
+            (() => {
+              const allIds = [
+                ...models,
+                ...kiloFreeModels.filter((fm) => !models.some((m) => m.id === fm.id)),
+              ]
+                .filter((m) => {
+                  const k = getModelKind(m);
+                  return !k || k === "llm";
+                })
+                .map((m) => m.id);
+              const activeIds = allIds.filter((id) => !disabledModelIds.includes(id));
+              return (
+                <div className="flex gap-2">
+                  {disabledModelIds.length > 0 && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      icon="restart_alt"
+                      onClick={handleEnableAll}
+                    >
+                      Active All
+                    </Button>
+                  )}
+                  {activeIds.length > 0 && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      icon="block"
+                      onClick={() => handleDisableAll(activeIds)}
+                    >
+                      Disable All
+                    </Button>
+                  )}
+                </div>
+              );
+            })()}
         </div>
         {!!modelsTestError && (
           <div className="mb-3">
             <p className="text-xs text-red-500 break-words">{modelsTestError}</p>
-            {/RegionError|hosted in China|regionNotAllowed/i.test(modelsTestError) && (() => {
-              const str = typeof modelsTestError === "string" ? modelsTestError : JSON.stringify(modelsTestError);
-              const linkMatch = str.match(/https:\/\/opencode\.ai\/workspace\/[^\s"')]+/);
-              const wrkMatch = str.match(/wrk_[0-9A-Za-z]+/);
-              const targetUrl = linkMatch
-                ? (linkMatch[0].endsWith("/go") ? linkMatch[0] : `${linkMatch[0]}/go`)
-                : wrkMatch
-                  ? `https://opencode.ai/workspace/${wrkMatch[0]}/go`
-                  : "https://opencode.ai";
+            {/RegionError|hosted in China|regionNotAllowed/i.test(modelsTestError) &&
+              (() => {
+                const str =
+                  typeof modelsTestError === "string"
+                    ? modelsTestError
+                    : JSON.stringify(modelsTestError);
+                const linkMatch = str.match(/https:\/\/opencode\.ai\/workspace\/[^\s"')]+/);
+                const wrkMatch = str.match(/wrk_[0-9A-Za-z]+/);
+                const targetUrl = linkMatch
+                  ? linkMatch[0].endsWith("/go")
+                    ? linkMatch[0]
+                    : `${linkMatch[0]}/go`
+                  : wrkMatch
+                    ? `https://opencode.ai/workspace/${wrkMatch[0]}/go`
+                    : "https://opencode.ai";
 
-              return (
-                <div className="mt-1.5">
-                  <a
-                    href={targetUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-600 hover:bg-amber-500/20 dark:text-amber-400 transition-colors"
-                  >
-                    <span>Allow China-hosted models</span>
-                    <span className="material-symbols-outlined text-[13px]">open_in_new</span>
-                  </a>
-                </div>
-              );
-            })()}
+                return (
+                  <div className="mt-1.5">
+                    <a
+                      href={targetUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-600 hover:bg-amber-500/20 dark:text-amber-400 transition-colors"
+                    >
+                      <span>Allow China-hosted models</span>
+                      <span className="material-symbols-outlined text-[13px]">open_in_new</span>
+                    </a>
+                  </div>
+                );
+              })()}
           </div>
         )}
         {providerId === "zed" && !!liveModelsError && (
@@ -2007,7 +2274,13 @@ export default function ProviderDetailPage() {
           onSave={async (modelId, caps, transport) => {
             // caps.stt is a UI-only flag; the API accepts transports only on
             // type "stt" records, so the save derives the type from it.
-            await handleAddCustomModel(modelId, caps?.stt ? "stt" : "llm", providerStorageAlias, caps, transport);
+            await handleAddCustomModel(
+              modelId,
+              caps?.stt ? "stt" : "llm",
+              providerStorageAlias,
+              caps,
+              transport,
+            );
             setShowAddCustomModel(false);
           }}
           onClose={() => setShowAddCustomModel(false)}

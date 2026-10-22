@@ -7,7 +7,10 @@ import {
   extractApiKey,
   isValidApiKey,
 } from "../services/auth.js";
-import { handleAntigravityQuotaError, clearAntigravityStrikes } from "../services/antigravityQuota.js";
+import {
+  handleAntigravityQuotaError,
+  clearAntigravityStrikes,
+} from "../services/antigravityQuota.js";
 import { getSettings } from "@/lib/localDb";
 import { getProviderConnections } from "@/lib/db/repos/connectionsRepo";
 import { getModelInfo, getComboModels } from "../services/model.js";
@@ -19,8 +22,16 @@ import { getTransform as getPxpipeTransform } from "@/lib/pxpipe/loader.js";
 import { appendPxpipeEvent } from "@/lib/pxpipe/events.js";
 import { errorResponse, unavailableResponse } from "open-sse/utils/error.js";
 import { upstreamResponseHeaders } from "open-sse/utils/upstreamHeaders.js";
-import { handleComboChat, handleFusionChat, detectRequiredCapabilities } from "open-sse/services/combo.js";
-import { augmentModelsWithCapacityAdapter, withCapacityAdapterStripping, getActiveAdapterStrategy } from "open-sse/services/capacityAdapter.js";
+import {
+  handleComboChat,
+  handleFusionChat,
+  detectRequiredCapabilities,
+} from "open-sse/services/combo.js";
+import {
+  augmentModelsWithCapacityAdapter,
+  withCapacityAdapterStripping,
+  getActiveAdapterStrategy,
+} from "open-sse/services/capacityAdapter.js";
 import { handleBypassRequest } from "open-sse/utils/bypassHandler.js";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig.js";
 import { detectFormatByEndpoint } from "open-sse/translator/formats.js";
@@ -31,7 +42,11 @@ import * as log from "../utils/logger.js";
 import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh.js";
 import { getProjectIdForConnection } from "open-sse/services/projectId.js";
 import { stripModelContextMarker } from "open-sse/utils/modelMarkers.js";
-import { getKeyAccessContext, enforceKeyAccess, filterAdapterModels } from "../services/keyAccess.js";
+import {
+  getKeyAccessContext,
+  enforceKeyAccess,
+  filterAdapterModels,
+} from "../services/keyAccess.js";
 
 import { parseJsonBody } from "@/shared/utils/parseJsonBody.js";
 
@@ -68,7 +83,10 @@ function pathnameOf(request) {
  * the response body parsed out. This keeps the bridge on the single supported
  * search path instead of duplicating combo/auth/fallback logic here.
  */
-async function runSearchViaSearchEndpoint({ model, query, max_results, search_type, domain_filter }, { apiKey = null } = {}) {
+async function runSearchViaSearchEndpoint(
+  { model, query, max_results, search_type, domain_filter },
+  { apiKey = null } = {},
+) {
   const headers = { "content-type": "application/json" };
   // The caller's key must ride on the synthetic request: /v1/search authenticates
   // it, and combo expansion resolves permissions from it. `apiKey` is a local of
@@ -161,7 +179,7 @@ export async function handleChat(request, clientRawRequest = null) {
     clientRawRequest = {
       endpoint: requestPathname,
       body,
-      headers: Object.fromEntries(request.headers.entries())
+      headers: Object.fromEntries(request.headers.entries()),
     };
   }
   // Claude Code marks a 1M-context request as `<model>[1m]`; the marker matches
@@ -222,7 +240,11 @@ export async function handleChat(request, clientRawRequest = null) {
     const comboStrategies = settings.comboStrategies || {};
     const comboSpecificStrategy = comboStrategies[modelStr]?.fallbackStrategy;
     const comboStrategy = comboSpecificStrategy || settings.comboStrategy || "fallback";
-    const augmentedModels = await filterAdapterModels(keyAccess, augmentModelsWithCapacityAdapter(comboModels, requiredCapabilities, settings), comboModels);
+    const augmentedModels = await filterAdapterModels(
+      keyAccess,
+      augmentModelsWithCapacityAdapter(comboModels, requiredCapabilities, settings),
+      comboModels,
+    );
     const adapterAdded = augmentedModels.filter((m) => !comboModels.includes(m));
 
     if (comboStrategy === "fusion") {
@@ -246,47 +268,71 @@ export async function handleChat(request, clientRawRequest = null) {
     }
 
     const comboStickyLimit = settings.comboStickyRoundRobinLimit;
-    log.info("CHAT", `Combo "${modelStr}" with ${augmentedModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`);
+    log.info(
+      "CHAT",
+      `Combo "${modelStr}" with ${augmentedModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`,
+    );
     return handleComboChat({
       body,
       models: augmentedModels,
       handleSingleModel: withCapacityAdapterStripping(
         (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey),
-        adapterAdded
+        adapterAdded,
       ),
       log,
       comboName: modelStr,
       comboStrategy,
-      comboStickyLimit
+      comboStickyLimit,
     });
   }
 
   // Single model request — may still switch to a capacity-adapter model if the
   // target lacks a capability the request needs (e.g. no vision, request has an image).
-  const soloAugmented = await filterAdapterModels(keyAccess, augmentModelsWithCapacityAdapter([modelStr], requiredCapabilities, settings), [modelStr]);
+  const soloAugmented = await filterAdapterModels(
+    keyAccess,
+    augmentModelsWithCapacityAdapter([modelStr], requiredCapabilities, settings),
+    [modelStr],
+  );
   if (soloAugmented.length > 1) {
     const adapterAdded = soloAugmented.filter((m) => m !== modelStr);
-    log.info("CHAT", `Capacity adapter for [${[...requiredCapabilities].join(",")}] on "${modelStr}" → trying ${soloAugmented.join(", ")}`);
+    log.info(
+      "CHAT",
+      `Capacity adapter for [${[...requiredCapabilities].join(",")}] on "${modelStr}" → trying ${soloAugmented.join(", ")}`,
+    );
     return handleComboChat({
       body,
       models: soloAugmented,
       handleSingleModel: withCapacityAdapterStripping(
         (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey),
-        adapterAdded
+        adapterAdded,
       ),
       log,
       comboName: modelStr,
-      comboStrategy: getActiveAdapterStrategy(requiredCapabilities, settings)
+      comboStrategy: getActiveAdapterStrategy(requiredCapabilities, settings),
     });
   }
 
-  return handleSingleModelChat(body, modelStr, clientRawRequest, request, apiKey, contextMarker ? `${modelStr.slice(modelStr.indexOf("/") + 1)}[${contextMarker}]` : null);
+  return handleSingleModelChat(
+    body,
+    modelStr,
+    clientRawRequest,
+    request,
+    apiKey,
+    contextMarker ? `${modelStr.slice(modelStr.indexOf("/") + 1)}[${contextMarker}]` : null,
+  );
 }
 
 /**
  * Handle single model chat request
  */
-async function handleSingleModelChat(body, modelStr, clientRawRequest = null, request = null, apiKey = null, requestedModel = null) {
+async function handleSingleModelChat(
+  body,
+  modelStr,
+  clientRawRequest = null,
+  request = null,
+  apiKey = null,
+  requestedModel = null,
+) {
   // Error envelope this client's endpoint expects (Anthropic vs OpenAI).
   const clientFormat = isClaudeEndpoint(clientRawRequest?.endpoint) ? FORMATS.CLAUDE : null;
   const modelInfo = await getModelInfo(modelStr);
@@ -304,11 +350,18 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       // Nested combo (a combo member that is itself a combo): the access decision
       // was made on the outer target; only drop adapter models the key may not call.
       const keyAccess = await getKeyAccessContext(request);
-      const augmentedModels = await filterAdapterModels(keyAccess, augmentModelsWithCapacityAdapter(comboModels, requiredCapabilities, chatSettings), comboModels);
+      const augmentedModels = await filterAdapterModels(
+        keyAccess,
+        augmentModelsWithCapacityAdapter(comboModels, requiredCapabilities, chatSettings),
+        comboModels,
+      );
       const adapterAdded = augmentedModels.filter((m) => !comboModels.includes(m));
 
       if (comboStrategy === "fusion") {
-        log.info("CHAT", `Combo "${modelStr}" with ${comboModels.length} models (strategy: fusion)`);
+        log.info(
+          "CHAT",
+          `Combo "${modelStr}" with ${comboModels.length} models (strategy: fusion)`,
+        );
         return handleFusionChat({
           body,
           models: comboModels,
@@ -328,18 +381,21 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       }
 
       const comboStickyLimit = chatSettings.comboStickyRoundRobinLimit;
-      log.info("CHAT", `Combo "${modelStr}" with ${augmentedModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`);
+      log.info(
+        "CHAT",
+        `Combo "${modelStr}" with ${augmentedModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`,
+      );
       return handleComboChat({
         body,
         models: augmentedModels,
         handleSingleModel: withCapacityAdapterStripping(
           (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey),
-          adapterAdded
+          adapterAdded,
         ),
         log,
         comboName: modelStr,
         comboStrategy,
-        comboStickyLimit
+        comboStickyLimit,
       });
     }
     log.warn("CHAT", "Invalid model format", { model: modelStr });
@@ -362,7 +418,10 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
   let lastHeaders = null;
 
   while (true) {
-    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model, { requestedModel: requestedModel || model, excludePoolIds });
+    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model, {
+      requestedModel: requestedModel || model,
+      excludePoolIds,
+    });
 
     // All accounts unavailable
     if (!credentials || credentials.allRateLimited) {
@@ -370,26 +429,50 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
         const errorMsg = lastError || credentials.lastError || "Unavailable";
         const status = HTTP_STATUS.SERVICE_UNAVAILABLE;
         log.warn("CHAT", `[${provider}/${model}] ${errorMsg} (${credentials.retryAfterHuman})`);
-        return unavailableResponse(status, `[${provider}/${model}] ${errorMsg}`, credentials.retryAfter, credentials.retryAfterHuman, lastHeaders, clientFormat);
+        return unavailableResponse(
+          status,
+          `[${provider}/${model}] ${errorMsg}`,
+          credentials.retryAfter,
+          credentials.retryAfterHuman,
+          lastHeaders,
+          clientFormat,
+        );
       }
       if (excludeConnectionIds.size === 0) {
         log.warn("AUTH", `No active credentials for provider: ${provider}`);
-        return errorResponse(HTTP_STATUS.NOT_FOUND, `No active credentials for provider: ${provider}`, null, clientFormat);
+        return errorResponse(
+          HTTP_STATUS.NOT_FOUND,
+          `No active credentials for provider: ${provider}`,
+          null,
+          clientFormat,
+        );
       }
       log.warn("CHAT", "No more accounts available", { provider });
-      return errorResponse(lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE, lastError || "All accounts unavailable", lastHeaders, clientFormat);
+      return errorResponse(
+        lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE,
+        lastError || "All accounts unavailable",
+        lastHeaders,
+        clientFormat,
+      );
     }
 
     // Account selection shown in the unified "▶" line (acc:...)
     const refreshedCredentials = await checkAndRefreshToken(provider, credentials);
 
     // Ensure real project ID is available for providers that need it (P0 fix: cold miss)
-    if ((provider === "antigravity" || provider === "gemini-cli") && !refreshedCredentials.projectId) {
-      const pid = await getProjectIdForConnection(credentials.connectionId, refreshedCredentials.accessToken, provider);
+    if (
+      (provider === "antigravity" || provider === "gemini-cli") &&
+      !refreshedCredentials.projectId
+    ) {
+      const pid = await getProjectIdForConnection(
+        credentials.connectionId,
+        refreshedCredentials.accessToken,
+        provider,
+      );
       if (pid) {
         refreshedCredentials.projectId = pid;
         // Persist to DB in background so subsequent requests have it immediately
-        updateProviderCredentials(credentials.connectionId, { projectId: pid }).catch(() => { });
+        updateProviderCredentials(credentials.connectionId, { projectId: pid }).catch(() => {});
       }
     }
 
@@ -451,21 +534,23 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       // only in that handler.
       searchEndpointRunner: runSearchViaSearchEndpoint,
       // Detect source format by endpoint + body
-      sourceFormatOverride: request?.url ? detectFormatByEndpoint(new URL(request.url).pathname, body) : null,
+      sourceFormatOverride: request?.url
+        ? detectFormatByEndpoint(new URL(request.url).pathname, body)
+        : null,
       // Error envelope the client's endpoint expects (Anthropic vs OpenAI)
       clientFormat,
       onCredentialsRefreshed: async (newCreds) => {
         await updateProviderCredentials(credentials.connectionId, {
           ...newCreds,
           existingProviderSpecificData: credentials.providerSpecificData,
-          testStatus: "active"
+          testStatus: "active",
         });
       },
       onRequestSuccess: async () => {
         await clearAccountError(credentials.connectionId, credentials, model);
         // "Consecutive" strikes: a success clears the breaker for this pair.
         clearAntigravityStrikes(credentials.connectionId, model);
-      }
+      },
     });
 
     if (result.success) return result.response;
@@ -475,23 +560,40 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
     let resetsAtMs = result.resetsAtMs;
     if (provider === "antigravity" && (result.status === 409 || result.status === 429)) {
       quotaResetMs = await handleAntigravityQuotaError(
-        credentials.connectionId, result.status, model,
-        refreshedCredentials.accessToken, credentials.providerSpecificData
+        credentials.connectionId,
+        result.status,
+        model,
+        refreshedCredentials.accessToken,
+        credentials.providerSpecificData,
       );
       if (quotaResetMs) resetsAtMs = quotaResetMs;
     }
 
     // Exhausted Antigravity model is blocked only in RAM cache until upstream resetAt.
     // Do not persist a modelLock_* for this path.
-    const shouldFallback = provider === "antigravity" && quotaResetMs
-      ? true
-      : (await markAccountUnavailable(credentials.connectionId, result.status, result.error, provider, model, resetsAtMs, {
-          excludePoolIds,
-          proxyPoolId: credentials.providerSpecificData?.connectionProxyPoolId || null,
-        })).shouldFallback;
+    const shouldFallback =
+      provider === "antigravity" && quotaResetMs
+        ? true
+        : (
+            await markAccountUnavailable(
+              credentials.connectionId,
+              result.status,
+              result.error,
+              provider,
+              model,
+              resetsAtMs,
+              {
+                excludePoolIds,
+                proxyPoolId: credentials.providerSpecificData?.connectionProxyPoolId || null,
+              },
+            )
+          ).shouldFallback;
 
     if (shouldFallback) {
-      log.warn("FALLBACK", `⇄ ACC:${credentials.connectionName} UNAVAILABLE (${result.status}) → NEXT ACCOUNT`);
+      log.warn(
+        "FALLBACK",
+        `⇄ ACC:${credentials.connectionName} UNAVAILABLE (${result.status}) → NEXT ACCOUNT`,
+      );
       excludeConnectionIds.add(credentials.connectionId);
       // Never hand this request the proxy that just failed again (no-auth rotation).
       const failedPoolId = credentials.providerSpecificData?.connectionProxyPoolId;

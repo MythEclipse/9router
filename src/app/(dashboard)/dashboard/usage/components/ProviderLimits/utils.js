@@ -23,10 +23,9 @@ export const QUOTA_SORT_OPTIONS = [
 
 // ─── Pure helpers ─────────────────────────────────────────────────────────────
 export function getConnectionLabel(connection) {
-  return connection.name?.trim()
-    || connection.email?.trim()
-    || connection.displayName?.trim()
-    || null;
+  return (
+    connection.name?.trim() || connection.email?.trim() || connection.displayName?.trim() || null
+  );
 }
 
 export function getConnectionQuotaRemaining(connection, quotaData) {
@@ -59,13 +58,9 @@ export function sortVisibleConnections(
       const remainingA = getConnectionQuotaRemaining(a, quotaData);
       const remainingB = getConnectionQuotaRemaining(b, quotaData);
       const remainingDiff =
-        quotaSortMode === "remaining-asc"
-          ? remainingA - remainingB
-          : remainingB - remainingA;
+        quotaSortMode === "remaining-asc" ? remainingA - remainingB : remainingB - remainingA;
       if (remainingDiff !== 0) return remainingDiff;
-      return (getConnectionLabel(a) || "").localeCompare(
-        getConnectionLabel(b) || "",
-      );
+      return (getConnectionLabel(a) || "").localeCompare(getConnectionLabel(b) || "");
     });
   }
 
@@ -74,14 +69,10 @@ export function sortVisibleConnections(
   const getEarliestResetTime = (connection) => {
     const resetTimes = (quotaData[connection.id]?.quotas || [])
       .map((quota) =>
-        quota.resetAt
-          ? new Date(quota.resetAt).getTime()
-          : Number.POSITIVE_INFINITY,
+        quota.resetAt ? new Date(quota.resetAt).getTime() : Number.POSITIVE_INFINITY,
       )
       .filter((time) => Number.isFinite(time));
-    return resetTimes.length > 0
-      ? Math.min(...resetTimes)
-      : Number.POSITIVE_INFINITY;
+    return resetTimes.length > 0 ? Math.min(...resetTimes) : Number.POSITIVE_INFINITY;
   };
 
   return [...connections].sort((a, b) => {
@@ -116,9 +107,7 @@ export function selectConnectionsToRefresh(connections, { force = false, tick = 
 
 export function filterQuotaStateByConnections(state, connections) {
   const visibleIds = new Set(connections.map((connection) => connection.id));
-  return Object.fromEntries(
-    Object.entries(state).filter(([id]) => visibleIds.has(id)),
-  );
+  return Object.fromEntries(Object.entries(state).filter(([id]) => visibleIds.has(id)));
 }
 
 export function getConnectionsPageRange(pagination) {
@@ -135,8 +124,7 @@ export function getConnectionsEmptyMessage(totals, providerFilter, accountFilter
     return {
       icon: "cloud_off",
       title: "No Providers Connected",
-      description:
-        "Connect to providers with OAuth to track your API quota limits and usage.",
+      description: "Connect to providers with OAuth to track your API quota limits and usage.",
     };
   }
   if (!totals.providerFilteredConnections) {
@@ -152,8 +140,7 @@ export function getConnectionsEmptyMessage(totals, providerFilter, accountFilter
   return {
     icon: "filter_alt_off",
     title: "No Accounts On This Page",
-    description:
-      "Try moving to another page or refreshing the current filters.",
+    description: "Try moving to another page or refreshing the current filters.",
   };
 }
 
@@ -247,20 +234,20 @@ export function formatResetTime(date) {
     if (diffMs <= 0) return "-";
 
     const totalMinutes = Math.ceil(diffMs / (1000 * 60));
-    
+
     // < 60 minutes: show only minutes
     if (totalMinutes < 60) {
       return `${totalMinutes}m`;
     }
-    
+
     const totalHours = Math.floor(totalMinutes / 60);
     const remainingMinutes = totalMinutes % 60;
-    
+
     // < 24 hours: show hours and minutes
     if (totalHours < 24) {
       return `${totalHours}h ${remainingMinutes}m`;
     }
-    
+
     // >= 24 hours: show days, hours, and minutes
     const days = Math.floor(totalHours / 24);
     const remainingHours = totalHours % 24;
@@ -395,12 +382,20 @@ export function parseQuotaData(provider, data) {
           const weeklyKeys = new Set(["gemini_weekly", "claude_gpt_weekly", "argon_weekly"]);
           const sessionKeys = new Set(["gemini_session", "claude_gpt_session", "argon_session"]);
           const summaryKeys = new Set([...weeklyKeys, ...sessionKeys]);
-          const geminiModels = entries.filter(([k]) => k.startsWith("gemini-") && !k.includes("image") && !k.includes("argon"));
+          const geminiModels = entries.filter(
+            ([k]) => k.startsWith("gemini-") && !k.includes("image") && !k.includes("argon"),
+          );
           const argonModels = entries.filter(([k]) => k.includes("argon"));
           const claudeModels = entries.filter(([k]) => k.startsWith("claude-"));
           const imageModels = entries.filter(([k]) => k.includes("image"));
           const summaryModels = entries.filter(([k]) => summaryKeys.has(k));
-          const otherModels = entries.filter(([k]) => !k.startsWith("gemini-") && !k.startsWith("claude-") && !k.includes("image") && !summaryKeys.has(k));
+          const otherModels = entries.filter(
+            ([k]) =>
+              !k.startsWith("gemini-") &&
+              !k.startsWith("claude-") &&
+              !k.includes("image") &&
+              !summaryKeys.has(k),
+          );
 
           // Summary keys from retrieveUserQuotaSummary
           const hasGeminiWeekly = Boolean(data.quotas.gemini_weekly);
@@ -412,23 +407,28 @@ export function parseQuotaData(provider, data) {
 
           // 1. Gemini Family:
           if (hasGeminiSession) {
-            summaryModels.filter(([k]) => k === "gemini_session").forEach(([modelKey, quota]) => {
-              normalizedQuotas.push({
-                name: quota.displayName || modelKey,
-                modelKey,
-                used: quota.used || 0,
-                total: quota.total || 0,
-                resetAt: quota.resetAt || null,
-                remainingPercentage: quota.remainingPercentage,
+            summaryModels
+              .filter(([k]) => k === "gemini_session")
+              .forEach(([modelKey, quota]) => {
+                normalizedQuotas.push({
+                  name: quota.displayName || modelKey,
+                  modelKey,
+                  used: quota.used || 0,
+                  total: quota.total || 0,
+                  resetAt: quota.resetAt || null,
+                  remainingPercentage: quota.remainingPercentage,
+                });
               });
-            });
           } else if (geminiModels.length > 0) {
             const rep = geminiModels.reduce((min, cur) =>
-              (cur[1].remainingPercentage ?? 100) < (min[1].remainingPercentage ?? 100) ? cur : min
+              (cur[1].remainingPercentage ?? 100) < (min[1].remainingPercentage ?? 100) ? cur : min,
             )[1];
             // Only show synthesized Gemini row if its resetAt differs from weekly (i.e. it represents a separate 5h window)
             const weeklyResetAt = data.quotas.gemini_weekly?.resetAt;
-            const isDuplicateOfWeekly = hasGeminiWeekly && rep.resetAt === weeklyResetAt && (rep.remainingPercentage ?? 0) === 0;
+            const isDuplicateOfWeekly =
+              hasGeminiWeekly &&
+              rep.resetAt === weeklyResetAt &&
+              (rep.remainingPercentage ?? 0) === 0;
 
             if (!isDuplicateOfWeekly) {
               normalizedQuotas.push({
@@ -444,36 +444,43 @@ export function parseQuotaData(provider, data) {
 
           // Show Gemini weekly row if present
           if (hasGeminiWeekly) {
-            summaryModels.filter(([k]) => k === "gemini_weekly").forEach(([modelKey, quota]) => {
-              normalizedQuotas.push({
-                name: quota.displayName || modelKey,
-                modelKey,
-                used: quota.used || 0,
-                total: quota.total || 0,
-                resetAt: quota.resetAt || null,
-                remainingPercentage: quota.remainingPercentage,
+            summaryModels
+              .filter(([k]) => k === "gemini_weekly")
+              .forEach(([modelKey, quota]) => {
+                normalizedQuotas.push({
+                  name: quota.displayName || modelKey,
+                  modelKey,
+                  used: quota.used || 0,
+                  total: quota.total || 0,
+                  resetAt: quota.resetAt || null,
+                  remainingPercentage: quota.remainingPercentage,
+                });
               });
-            });
           }
 
           // 2. Gemini 4 Argon Family:
           if (hasArgonSession) {
-            summaryModels.filter(([k]) => k === "argon_session").forEach(([modelKey, quota]) => {
-              normalizedQuotas.push({
-                name: quota.displayName || modelKey,
-                modelKey,
-                used: quota.used || 0,
-                total: quota.total || 0,
-                resetAt: quota.resetAt || null,
-                remainingPercentage: quota.remainingPercentage,
+            summaryModels
+              .filter(([k]) => k === "argon_session")
+              .forEach(([modelKey, quota]) => {
+                normalizedQuotas.push({
+                  name: quota.displayName || modelKey,
+                  modelKey,
+                  used: quota.used || 0,
+                  total: quota.total || 0,
+                  resetAt: quota.resetAt || null,
+                  remainingPercentage: quota.remainingPercentage,
+                });
               });
-            });
           } else if (argonModels.length > 0) {
             const rep = argonModels.reduce((min, cur) =>
-              (cur[1].remainingPercentage ?? 100) < (min[1].remainingPercentage ?? 100) ? cur : min
+              (cur[1].remainingPercentage ?? 100) < (min[1].remainingPercentage ?? 100) ? cur : min,
             )[1];
             const weeklyResetAt = data.quotas.argon_weekly?.resetAt;
-            const isDuplicateOfWeekly = hasArgonWeekly && rep.resetAt === weeklyResetAt && (rep.remainingPercentage ?? 0) === 0;
+            const isDuplicateOfWeekly =
+              hasArgonWeekly &&
+              rep.resetAt === weeklyResetAt &&
+              (rep.remainingPercentage ?? 0) === 0;
 
             if (!isDuplicateOfWeekly) {
               normalizedQuotas.push({
@@ -489,36 +496,43 @@ export function parseQuotaData(provider, data) {
 
           // Show Argon weekly row if present
           if (hasArgonWeekly) {
-            summaryModels.filter(([k]) => k === "argon_weekly").forEach(([modelKey, quota]) => {
-              normalizedQuotas.push({
-                name: quota.displayName || modelKey,
-                modelKey,
-                used: quota.used || 0,
-                total: quota.total || 0,
-                resetAt: quota.resetAt || null,
-                remainingPercentage: quota.remainingPercentage,
+            summaryModels
+              .filter(([k]) => k === "argon_weekly")
+              .forEach(([modelKey, quota]) => {
+                normalizedQuotas.push({
+                  name: quota.displayName || modelKey,
+                  modelKey,
+                  used: quota.used || 0,
+                  total: quota.total || 0,
+                  resetAt: quota.resetAt || null,
+                  remainingPercentage: quota.remainingPercentage,
+                });
               });
-            });
           }
 
           // 3. Claude & GPT Family:
           if (hasClaudeSession) {
-            summaryModels.filter(([k]) => k === "claude_gpt_session").forEach(([modelKey, quota]) => {
-              normalizedQuotas.push({
-                name: quota.displayName || modelKey,
-                modelKey,
-                used: quota.used || 0,
-                total: quota.total || 0,
-                resetAt: quota.resetAt || null,
-                remainingPercentage: quota.remainingPercentage,
+            summaryModels
+              .filter(([k]) => k === "claude_gpt_session")
+              .forEach(([modelKey, quota]) => {
+                normalizedQuotas.push({
+                  name: quota.displayName || modelKey,
+                  modelKey,
+                  used: quota.used || 0,
+                  total: quota.total || 0,
+                  resetAt: quota.resetAt || null,
+                  remainingPercentage: quota.remainingPercentage,
+                });
               });
-            });
           } else if (claudeModels.length > 0) {
             const rep = claudeModels.reduce((min, cur) =>
-              (cur[1].remainingPercentage ?? 100) < (min[1].remainingPercentage ?? 100) ? cur : min
+              (cur[1].remainingPercentage ?? 100) < (min[1].remainingPercentage ?? 100) ? cur : min,
             )[1];
             const weeklyResetAt = data.quotas.claude_gpt_weekly?.resetAt;
-            const isDuplicateOfWeekly = hasClaudeWeekly && rep.resetAt === weeklyResetAt && (rep.remainingPercentage ?? 0) === 0;
+            const isDuplicateOfWeekly =
+              hasClaudeWeekly &&
+              rep.resetAt === weeklyResetAt &&
+              (rep.remainingPercentage ?? 0) === 0;
 
             if (!isDuplicateOfWeekly) {
               normalizedQuotas.push({
@@ -534,16 +548,18 @@ export function parseQuotaData(provider, data) {
 
           // Show Claude & GPT weekly row if present
           if (hasClaudeWeekly) {
-            summaryModels.filter(([k]) => k === "claude_gpt_weekly").forEach(([modelKey, quota]) => {
-              normalizedQuotas.push({
-                name: quota.displayName || modelKey,
-                modelKey,
-                used: quota.used || 0,
-                total: quota.total || 0,
-                resetAt: quota.resetAt || null,
-                remainingPercentage: quota.remainingPercentage,
+            summaryModels
+              .filter(([k]) => k === "claude_gpt_weekly")
+              .forEach(([modelKey, quota]) => {
+                normalizedQuotas.push({
+                  name: quota.displayName || modelKey,
+                  modelKey,
+                  used: quota.used || 0,
+                  total: quota.total || 0,
+                  resetAt: quota.resetAt || null,
+                  remainingPercentage: quota.remainingPercentage,
+                });
               });
-            });
           }
 
           // 3. Standalone Image Generation Models (unique usage)
@@ -673,8 +689,14 @@ export function parseQuotaData(provider, data) {
               name,
               used: quota.used || 0,
               total: quota.total || 0,
-              remaining: quota.remaining !== undefined ? quota.remaining : Math.max(0, (quota.total || 100) - (quota.used || 0)),
-              remainingPercentage: quota.remainingPercentage !== undefined ? quota.remainingPercentage : calculatePercentage(quota.used, quota.total),
+              remaining:
+                quota.remaining !== undefined
+                  ? quota.remaining
+                  : Math.max(0, (quota.total || 100) - (quota.used || 0)),
+              remainingPercentage:
+                quota.remainingPercentage !== undefined
+                  ? quota.remainingPercentage
+                  : calculatePercentage(quota.used, quota.total),
               resetAt: quota.resetAt || null,
             });
           });
@@ -761,7 +783,9 @@ export function parseQuotaData(provider, data) {
               resetAt: quota.resetAt || null,
               remainingPercentage: quota.remainingPercentage,
               isCreditBalance: quota.isCreditBalance ?? true,
-              currency: quota.currency || (name.includes("(") ? name.slice(name.indexOf("(") + 1, name.indexOf(")")) : "USD"),
+              currency:
+                quota.currency ||
+                (name.includes("(") ? name.slice(name.indexOf("(") + 1, name.indexOf(")")) : "USD"),
             });
           });
         }
@@ -886,7 +910,9 @@ export function parseQuotaData(provider, data) {
       "weekly opus (7d)": 3,
       "weekly sonnet (7d)": 4,
     };
-    normalizedQuotas.sort((a, b) => (CLAUDE_QUOTA_ORDER[a.name] ?? 99) - (CLAUDE_QUOTA_ORDER[b.name] ?? 99));
+    normalizedQuotas.sort(
+      (a, b) => (CLAUDE_QUOTA_ORDER[a.name] ?? 99) - (CLAUDE_QUOTA_ORDER[b.name] ?? 99),
+    );
     return normalizedQuotas;
   }
 
@@ -894,7 +920,7 @@ export function parseQuotaData(provider, data) {
   const modelOrder = getModelsByProviderId(provider);
   if (modelOrder.length > 0) {
     const orderMap = new Map(modelOrder.map((m, i) => [m.id, i]));
-    
+
     normalizedQuotas.sort((a, b) => {
       // Use modelKey for antigravity (mapped to family anchor), otherwise use name
       let keyA = a.modelKey || a.name;
