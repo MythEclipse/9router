@@ -33,6 +33,8 @@ import { getProjectIdForConnection } from "open-sse/services/projectId.js";
 import { stripModelContextMarker } from "open-sse/utils/modelMarkers.js";
 import { getKeyAccessContext, enforceKeyAccess, filterAdapterModels } from "../services/keyAccess.js";
 
+import { parseJsonBody } from "@/shared/utils/parseJsonBody.js";
+
 /**
  * Pathname of a request URL, or "" when it cannot be parsed.
  * Every protocol decision in this handler keys off this one value.
@@ -133,7 +135,7 @@ export async function handleChat(request, clientRawRequest = null) {
 
   let body;
   try {
-    body = await request.json();
+    body = await parseJsonBody(request);
   } catch {
     log.warn("CHAT", "Invalid JSON body");
     return errorResponse(HTTP_STATUS.BAD_REQUEST, "Invalid JSON body", null, clientFormat);
