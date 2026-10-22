@@ -126,14 +126,20 @@ if (stableSessionCleanup.unref) stableSessionCleanup.unref();
 
 function identityKey(credentials) {
   const connectionId = credentials?.connectionId || credentials?.id;
-  if (connectionId) return `opencode:conn:${String(connectionId).slice(0, 128)}`;
+  const poolId = credentials?.providerSpecificData?.connectionProxyPoolId || credentials?.proxyPoolId || "";
+  const poolSuffix = poolId ? `:pool:${String(poolId).slice(0, 32)}` : "";
+  if (connectionId) return `opencode:conn:${String(connectionId).slice(0, 128)}${poolSuffix}`;
   const raw = credentials?.rawHeaders || {};
   const auth = raw.authorization || raw.Authorization || raw["x-api-key"] || raw["X-Api-Key"] || "";
   if (auth) {
     const digest = crypto.createHash("sha256").update(String(auth)).digest("hex").slice(0, 32);
-    return `opencode:auth:${digest}`;
+    return `opencode:auth:${digest}${poolSuffix}`;
   }
-  return "opencode:default";
+  return `opencode:default${poolSuffix}`;
+}
+
+export function clearOpencodeSessionCache() {
+  stableOpencodeSessions.clear();
 }
 
 export function stableSessionId(credentials) {

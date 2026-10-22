@@ -21,10 +21,21 @@ export default async function handler(req) {
   const targetUrl = target.replace(/\\/$/, "") + relayPath;
 
   const rawHeaders = {};
-  for (const [k, v] of req.headers.entries()) rawHeaders[k] = v;
-  delete rawHeaders["x-relay-target"];
-  delete rawHeaders["x-relay-path"];
-  delete rawHeaders["host"];
+  for (const [k, v] of req.headers.entries()) {
+    const lower = k.toLowerCase();
+    // Strip relay control headers and serverless/proxy tracing headers
+    if (
+      lower === "x-relay-target" ||
+      lower === "x-relay-path" ||
+      lower === "host" ||
+      lower.startsWith("x-vercel-") ||
+      lower.startsWith("x-forwarded-") ||
+      lower === "x-real-ip"
+    ) {
+      continue;
+    }
+    rawHeaders[k] = v;
+  }
 
   const response = await fetch(targetUrl, {
     method: req.method,
@@ -103,7 +114,7 @@ export async function POST(request) {
       const err = await deployRes.json().catch(() => ({}));
       return NextResponse.json(
         { error: err.error?.message || "Failed to create Vercel deployment" },
-        { status: deployRes.status }
+        { status: deployRes.status },
       );
     }
 

@@ -344,6 +344,13 @@ export async function proxyAwareFetch(url, options = {}, proxyOptions = null) {
       "x-relay-target": `${parsed.protocol}//${parsed.host}`,
       "x-relay-path": `${parsed.pathname}${parsed.search}`,
     };
+    // Strip client-side forwarding headers so Vercel doesn't forward the local IP
+    for (const key of Object.keys(relayHeaders)) {
+      const lower = key.toLowerCase();
+      if (lower.startsWith("x-forwarded-") || lower === "x-real-ip" || lower.startsWith("x-vercel-")) {
+        delete relayHeaders[key];
+      }
+    }
     return originalFetch(vercelRelayUrl, { ...options, headers: relayHeaders });
   }
 

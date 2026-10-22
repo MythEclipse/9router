@@ -1,7 +1,20 @@
-import { getProviderConnections, validateApiKey, updateProviderConnection, getSettings, getProxyPools } from "@/lib/localDb";
+import {
+  getProviderConnections,
+  validateApiKey,
+  updateProviderConnection,
+  getSettings,
+  getProxyPools,
+} from "@/lib/localDb";
 import { resolveConnectionProxyConfig, pickProxyPoolId } from "@/lib/network/connectionProxy";
 import { markProxyUnhealthy } from "@/lib/network/proxyHealth";
-import { formatRetryAfter, checkFallbackError, isModelLockActive, buildModelLockUpdate, getEarliestModelLockUntil, shouldRotateProxy } from "open-sse/services/accountFallback.js";
+import {
+  formatRetryAfter,
+  checkFallbackError,
+  isModelLockActive,
+  buildModelLockUpdate,
+  getEarliestModelLockUntil,
+  shouldRotateProxy,
+} from "open-sse/services/accountFallback.js";
 import { MAX_RATE_LIMIT_COOLDOWN_MS } from "open-sse/config/errorConfig.js";
 import { resolveProviderId, FREE_PROVIDERS } from "@/shared/constants/providers.js";
 import { getAntigravityQuotaCache, getAntigravityModelQuota } from "./antigravityQuota.js";
@@ -34,21 +47,31 @@ const selectionMutexes = new Map();
 export function acquireSelectionMutex(key) {
   const current = selectionMutexes.get(key) || Promise.resolve();
   let release;
-  const next = new Promise((resolve) => { release = resolve; });
+  const next = new Promise((resolve) => {
+    release = resolve;
+  });
   selectionMutexes.set(key, next);
-  return { wait: current, release: () => {
-    release();
-    // Drop the entry once nobody is queued behind us, so the map cannot grow
-    // one promise per provider forever.
-    if (selectionMutexes.get(key) === next) selectionMutexes.delete(key);
-  } };
+  return {
+    wait: current,
+    release: () => {
+      release();
+      // Drop the entry once nobody is queued behind us, so the map cannot grow
+      // one promise per provider forever.
+      if (selectionMutexes.get(key) === next) selectionMutexes.delete(key);
+    },
+  };
 }
 
 const GITHUB_MONTHLY_USAGE_LIMIT = "you've reached your additional usage limit for your plan";
 
 function githubMonthlyResetMs(status, errorText, provider) {
   if (resolveProviderId(provider) !== "github" || Number(status) !== 402) return null;
-  if (!String(errorText || "").toLowerCase().includes(GITHUB_MONTHLY_USAGE_LIMIT)) return null;
+  if (
+    !String(errorText || "")
+      .toLowerCase()
+      .includes(GITHUB_MONTHLY_USAGE_LIMIT)
+  )
+    return null;
   const now = new Date();
   return Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1);
 }
@@ -60,11 +83,19 @@ function githubMonthlyResetMs(status, errorText, provider) {
  * @param {Set<string>|string|null} excludeConnectionIds - Connection ID(s) to exclude (for retry with next account)
  * @param {string|null} model - Model name for per-model rate limit filtering
  */
-export async function getProviderCredentials(provider, excludeConnectionIds = null, model = null, options = {}) {
+export async function getProviderCredentials(
+  provider,
+  excludeConnectionIds = null,
+  model = null,
+  options = {},
+) {
   // Normalize to Set for consistent handling
-  const excludeSet = excludeConnectionIds instanceof Set
-    ? excludeConnectionIds
-    : (excludeConnectionIds ? new Set([excludeConnectionIds]) : new Set());
+  const excludeSet =
+    excludeConnectionIds instanceof Set
+      ? excludeConnectionIds
+      : excludeConnectionIds
+        ? new Set([excludeConnectionIds])
+        : new Set();
   const preferredConnectionId = options?.preferredConnectionId || null;
   const requestedModel = options?.requestedModel || model;
   // Acquire the lock for THIS provider only (see acquireSelectionMutex).
@@ -84,10 +115,12 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       let pickedId = override.proxyPoolId || null;
       if (strategy !== "none") {
         const allPools = await getProxyPools({ isActive: true });
-        const poolIds = allPools.filter(p => p.proxyUrl).map(p => p.id);
+        const poolIds = allPools.filter((p) => p.proxyUrl).map((p) => p.id);
         // excludePoolIds = pools this request already tried after a limit/error,
         // so "smart" can never hand back the pool that just failed.
-        pickedId = pickProxyPoolId(poolIds, strategy, providerId, { excludePoolIds: options.excludePoolIds });
+        pickedId = pickProxyPoolId(poolIds, strategy, providerId, {
+          excludePoolIds: options.excludePoolIds,
+        });
       }
       const resolvedProxy = await resolveConnectionProxyConfig({ proxyPoolId: pickedId || "" });
       return {
@@ -112,7 +145,10 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
     }
 
     const connections = await getProviderConnections({ provider: providerId, isActive: true });
-    log.debug("AUTH", `${provider} | total connections: ${connections.length}, excludeIds: ${excludeSet.size > 0 ? [...excludeSet].join(",") : "none"}, model: ${model || "any"}`);
+    log.debug(
+      "AUTH",
+      `${provider} | total connections: ${connections.length}, excludeIds: ${excludeSet.size > 0 ? [...excludeSet].join(",") : "none"}, model: ${model || "any"}`,
+    );
 
     if (connections.length === 0) {
       log.warn("AUTH", `No credentials for ${provider}`);
@@ -124,38 +160,59 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
     const antigravityQuotaCache = isAntigravity && model ? getAntigravityQuotaCache() : null;
 
     // Filter out model-locked, excluded, and Antigravity quota-exhausted connections.
-    const availableConnections = connections.filter(c => {
+    const availableConnections = connections.filter((c) => {
       if (excludeSet.has(c.id)) return false;
       if (isModelLockActive(c, model)) return false;
       const enabled = c.providerSpecificData?.enabledModels;
-      if (providerId === "codex" && Array.isArray(enabled) && enabled.length && requestedModel && !enabled.includes(requestedModel)) return false;
+      if (
+        providerId === "codex" &&
+        Array.isArray(enabled) &&
+        enabled.length &&
+        requestedModel &&
+        !enabled.includes(requestedModel)
+      )
+        return false;
       // Antigravity: skip if live quota exhausted for this model
       if (isAntigravity && model && antigravityQuotaCache) {
         const connQuotas = antigravityQuotaCache.get(c.id);
         const quota = getAntigravityModelQuota(connQuotas, model) || connQuotas?.[model];
-        if (quota && quota.remainingPercentage <= 0 && quota.resetAt && new Date(quota.resetAt).getTime() > Date.now()) {
+        if (
+          quota &&
+          quota.remainingPercentage <= 0 &&
+          quota.resetAt &&
+          new Date(quota.resetAt).getTime() > Date.now()
+        ) {
           const account = c.id?.slice(0, 8) || "unknown";
-          log.info("AG_QUOTA", `${account} | CACHE_BLOCK ${model} — skip upstream until ${quota.resetAt}`);
+          log.info(
+            "AG_QUOTA",
+            `${account} | CACHE_BLOCK ${model} — skip upstream until ${quota.resetAt}`,
+          );
           return false;
         }
       }
       return true;
     });
 
-    log.debug("AUTH", `${provider} | available: ${availableConnections.length}/${connections.length}`);
-    connections.forEach(c => {
+    log.debug(
+      "AUTH",
+      `${provider} | available: ${availableConnections.length}/${connections.length}`,
+    );
+    connections.forEach((c) => {
       const excluded = excludeSet.has(c.id);
       const locked = isModelLockActive(c, model);
       if (excluded || locked) {
         const lockUntil = getEarliestModelLockUntil(c);
-        log.debug("AUTH", `  → ${c.id?.slice(0, 8)} | ${excluded ? "excluded" : ""} ${locked ? `modelLocked(${model}) until ${lockUntil}` : ""}`);
+        log.debug(
+          "AUTH",
+          `  → ${c.id?.slice(0, 8)} | ${excluded ? "excluded" : ""} ${locked ? `modelLocked(${model}) until ${lockUntil}` : ""}`,
+        );
       }
     });
 
     if (availableConnections.length === 0) {
       // Find earliest persistent lock or lazy Antigravity quota-cache reset for retry timing.
-      const lockedConns = connections.filter(c => isModelLockActive(c, model));
-      const expiries = lockedConns.map(c => getEarliestModelLockUntil(c)).filter(Boolean);
+      const lockedConns = connections.filter((c) => isModelLockActive(c, model));
+      const expiries = lockedConns.map((c) => getEarliestModelLockUntil(c)).filter(Boolean);
       if (isAntigravity && model && antigravityQuotaCache) {
         connections.forEach((c) => {
           const connQuotas = antigravityQuotaCache.get(c.id);
@@ -167,13 +224,16 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       const earliest = expiries.sort()[0] || null;
       if (earliest) {
         const earliestConn = lockedConns[0];
-        log.warn("AUTH", `${provider} | all ${connections.length} accounts locked for ${model || "all"} (${formatRetryAfter(earliest)}) | lastError=${earliestConn?.lastError?.slice(0, 50)}`);
+        log.warn(
+          "AUTH",
+          `${provider} | all ${connections.length} accounts locked for ${model || "all"} (${formatRetryAfter(earliest)}) | lastError=${earliestConn?.lastError?.slice(0, 50)}`,
+        );
         return {
           allRateLimited: true,
           retryAfter: earliest,
           retryAfterHuman: formatRetryAfter(earliest),
           lastError: earliestConn?.lastError || null,
-          lastErrorCode: earliestConn?.errorCode || null
+          lastErrorCode: earliestConn?.errorCode || null,
         };
       }
       log.warn("AUTH", `${provider} | all ${connections.length} accounts unavailable`);
@@ -190,13 +250,17 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
     if (preferredConnectionId) {
       connection = availableConnections.find((c) => c.id === preferredConnectionId);
       if (connection) {
-        log.info("AUTH", `${provider} | pinned to ${connection.id?.slice(0, 8)} (${connection.name || connection.email || "unnamed"})`);
+        log.info(
+          "AUTH",
+          `${provider} | pinned to ${connection.id?.slice(0, 8)} (${connection.name || connection.email || "unnamed"})`,
+        );
       }
     }
     if (connection) {
       // skip strategy
     } else if (strategy === "round-robin") {
-      const stickyLimit = providerOverride.stickyRoundRobinLimit || settings.stickyRoundRobinLimit || 3;
+      const stickyLimit =
+        providerOverride.stickyRoundRobinLimit || settings.stickyRoundRobinLimit || 3;
 
       // Sort by lastUsed (most recent first) to find current candidate
       const byRecency = [...availableConnections].sort((a, b) => {
@@ -215,7 +279,7 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
         // Update lastUsedAt and increment count (await to ensure persistence)
         await updateProviderConnection(connection.id, {
           lastUsedAt: new Date().toISOString(),
-          consecutiveUseCount: (connection.consecutiveUseCount || 0) + 1
+          consecutiveUseCount: (connection.consecutiveUseCount || 0) + 1,
         });
       } else {
         // Pick the least recently used (excluding current if possible)
@@ -231,7 +295,7 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
         // Update lastUsedAt and reset count to 1 (await to ensure persistence)
         await updateProviderConnection(connection.id, {
           lastUsedAt: new Date().toISOString(),
-          consecutiveUseCount: 1
+          consecutiveUseCount: 1,
         });
       }
     } else {
@@ -251,7 +315,8 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       expiresIn: connection.expiresIn,
       lastRefreshAt: connection.lastRefreshAt,
       projectId: connection.projectId,
-      connectionName: connection.displayName || connection.name || connection.email || connection.id,
+      connectionName:
+        connection.displayName || connection.name || connection.email || connection.id,
       copilotToken: connection.providerSpecificData?.copilotToken,
       providerSpecificData: {
         ...(connection.providerSpecificData || {}),
@@ -267,7 +332,7 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       testStatus: connection.testStatus,
       lastError: connection.lastError,
       // Pass full connection for clearAccountError to read modelLock_* keys
-      _connection: connection
+      _connection: connection,
     };
   } finally {
     mutex.release();
@@ -291,7 +356,8 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
 async function markNoAuthProxyUnavailable(status, errorText, provider, resetsAtMs, options) {
   const excludePoolIds = options.excludePoolIds;
   const currentPoolId = options.proxyPoolId;
-  if (!(excludePoolIds instanceof Set) || !currentPoolId) return { shouldFallback: false, cooldownMs: 0 };
+  if (!(excludePoolIds instanceof Set) || !currentPoolId)
+    return { shouldFallback: false, cooldownMs: 0 };
 
   const providerId = resolveProviderId(provider);
   const settings = await getSettings();
@@ -301,24 +367,41 @@ async function markNoAuthProxyUnavailable(status, errorText, provider, resetsAtM
   // Same classifier the account path uses: 429/403/402 + quota wording, 5xx and
   // network failures fall through as retryable; request-scoped 4xx (400/404/422)
   // do not — those say nothing about the IP, so the proxy must NOT rotate.
-  const shouldRotate = resetsAtMs && resetsAtMs > Date.now()
-    ? true
-    : shouldRotateProxy(status, errorText);
+  const shouldRotate =
+    resetsAtMs && resetsAtMs > Date.now() ? true : shouldRotateProxy(status, errorText);
+
+  // Even if no proxy pool rotation is configured or available, when OpenCode hits a
+  // rate limit or quota block (429/403), invalidate the cached stable session so subsequent
+  // requests do not keep reusing the exhausted session ID.
+  if (shouldRotate && (providerId === "opencode" || providerId === "opencode-zen")) {
+    try {
+      const { clearOpencodeSessionCache } = await import("open-sse/executors/opencode.js");
+      clearOpencodeSessionCache();
+    } catch {
+      // Non-blocking
+    }
+  }
+
   if (!shouldRotate) return { shouldFallback: false, cooldownMs: 0 };
 
-  const cooldownMs = resetsAtMs && resetsAtMs > Date.now()
-    ? Math.min(resetsAtMs - Date.now(), MAX_RATE_LIMIT_COOLDOWN_MS)
-    : 30 * 1000;
+  const cooldownMs =
+    resetsAtMs && resetsAtMs > Date.now()
+      ? Math.min(resetsAtMs - Date.now(), MAX_RATE_LIMIT_COOLDOWN_MS)
+      : 30 * 1000;
 
   // Rotate only when another pool is actually available — otherwise return the
   // error instead of looping over the same dead pool.
   const allPools = await getProxyPools({ isActive: true });
-  const poolIds = allPools.filter(p => p.proxyUrl).map(p => p.id);
-  const remaining = poolIds.filter(id => !excludePoolIds.has(id) && id !== currentPoolId);
+  const poolIds = allPools.filter((p) => p.proxyUrl).map((p) => p.id);
+  const remaining = poolIds.filter((id) => !excludePoolIds.has(id) && id !== currentPoolId);
   if (remaining.length === 0) return { shouldFallback: false, cooldownMs: 0 };
 
   markProxyUnhealthy(providerId, currentPoolId, cooldownMs);
-  log.warn("PROXY", `${providerId} | pool ${String(currentPoolId).slice(0, 8)} hit a limit [${status}] → switch (${remaining.length} pool(s) left)`);
+  log.warn(
+    "PROXY",
+    `${providerId} | pool ${String(currentPoolId).slice(0, 8)} hit a limit [${status}] → switch (${remaining.length} pool(s) left)`,
+  );
+
   return { shouldFallback: true, cooldownMs, proxyPoolId: currentPoolId };
 }
 
@@ -333,11 +416,20 @@ async function markNoAuthProxyUnavailable(status, errorText, provider, resetsAtM
  * @param {{ excludePoolIds?: Set<string>, proxyPoolId?: string|null }} [options] - No-auth proxy rotation
  * @returns {{ shouldFallback: boolean, cooldownMs: number }}
  */
-export async function markAccountUnavailable(connectionId, status, errorText, provider = null, model = null, resetsAtMs = null, options = {}) {
+export async function markAccountUnavailable(
+  connectionId,
+  status,
+  errorText,
+  provider = null,
+  model = null,
+  resetsAtMs = null,
+  options = {},
+) {
   if (!connectionId) return { shouldFallback: false, cooldownMs: 0 };
-  if (connectionId === "noauth") return await markNoAuthProxyUnavailable(status, errorText, provider, resetsAtMs, options);
+  if (connectionId === "noauth")
+    return await markNoAuthProxyUnavailable(status, errorText, provider, resetsAtMs, options);
   const connections = await getProviderConnections({ provider });
-  const conn = connections.find(c => c.id === connectionId);
+  const conn = connections.find((c) => c.id === connectionId);
   const backoffLevel = conn?.backoffLevel || 0;
 
   // GitHub premium-request exhaustion is account-wide until the next UTC month.
@@ -352,12 +444,18 @@ export async function markAccountUnavailable(connectionId, status, errorText, pr
   } else if (resetsAtMs && resetsAtMs > Date.now()) {
     shouldFallback = true;
     // Antigravity quota API provides exact per-model resetAt. Do not truncate it.
-    cooldownMs = resolveProviderId(provider) === "antigravity"
-      ? resetsAtMs - Date.now()
-      : Math.min(resetsAtMs - Date.now(), MAX_RATE_LIMIT_COOLDOWN_MS);
+    cooldownMs =
+      resolveProviderId(provider) === "antigravity"
+        ? resetsAtMs - Date.now()
+        : Math.min(resetsAtMs - Date.now(), MAX_RATE_LIMIT_COOLDOWN_MS);
     newBackoffLevel = 0;
   } else {
-    ({ shouldFallback, cooldownMs, newBackoffLevel } = checkFallbackError(status, errorText, backoffLevel, resolveProviderId(provider)));
+    ({ shouldFallback, cooldownMs, newBackoffLevel } = checkFallbackError(
+      status,
+      errorText,
+      backoffLevel,
+      resolveProviderId(provider),
+    ));
   }
   if (!shouldFallback) return { shouldFallback: false, cooldownMs: 0 };
 
@@ -370,12 +468,15 @@ export async function markAccountUnavailable(connectionId, status, errorText, pr
     lastError: reason,
     errorCode: status,
     lastErrorAt: new Date().toISOString(),
-    backoffLevel: newBackoffLevel ?? backoffLevel
+    backoffLevel: newBackoffLevel ?? backoffLevel,
   });
 
   const lockKey = Object.keys(lockUpdate)[0];
   const connName = conn?.displayName || conn?.name || conn?.email || connectionId.slice(0, 8);
-  log.warn("AUTH", `${connName} locked ${lockKey} for ${Math.round(cooldownMs / 1000)}s [${status}]`);
+  log.warn(
+    "AUTH",
+    `${connName} locked ${lockKey} for ${Math.round(cooldownMs / 1000)}s [${status}]`,
+  );
 
   if (provider && status && reason) {
     console.error(`❌ ${provider} [${status}]: ${reason}`);
@@ -397,28 +498,28 @@ export async function clearAccountError(connectionId, currentConnection, model =
   if (!connectionId || connectionId === "noauth") return;
   const conn = currentConnection._connection || currentConnection;
   const now = Date.now();
-  const allLockKeys = Object.keys(conn).filter(k => k.startsWith("modelLock_"));
+  const allLockKeys = Object.keys(conn).filter((k) => k.startsWith("modelLock_"));
 
   if (!conn.testStatus && !conn.lastError && allLockKeys.length === 0) return;
 
   // Keys to clear: current model's lock + all expired locks
-  const keysToClear = allLockKeys.filter(k => {
+  const keysToClear = allLockKeys.filter((k) => {
     if (model && k === `modelLock_${model}`) return true; // succeeded model
-    if (model && k === "modelLock___all") return true;    // account-level lock
+    if (model && k === "modelLock___all") return true; // account-level lock
     const expiry = conn[k];
-    return expiry && new Date(expiry).getTime() <= now;   // expired
+    return expiry && new Date(expiry).getTime() <= now; // expired
   });
 
   if (keysToClear.length === 0 && conn.testStatus !== "unavailable" && !conn.lastError) return;
 
   // Check if any active locks remain after clearing
-  const remainingActiveLocks = allLockKeys.filter(k => {
+  const remainingActiveLocks = allLockKeys.filter((k) => {
     if (keysToClear.includes(k)) return false;
     const expiry = conn[k];
     return expiry && new Date(expiry).getTime() > now;
   });
 
-  const clearObj = Object.fromEntries(keysToClear.map(k => [k, null]));
+  const clearObj = Object.fromEntries(keysToClear.map((k) => [k, null]));
 
   // Only reset error state if no active locks remain
   if (remainingActiveLocks.length === 0) {
@@ -427,7 +528,7 @@ export async function clearAccountError(connectionId, currentConnection, model =
       lastError: null,
       errorCode: null,
       lastErrorAt: null,
-      backoffLevel: 0
+      backoffLevel: 0,
     });
   }
 

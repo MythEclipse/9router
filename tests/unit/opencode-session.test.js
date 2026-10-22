@@ -262,6 +262,17 @@ describe("OpenCode Stable Session Reuse (429 follow-up)", () => {
     expect(first).toMatch(OPENCODE_SESSION_RE);
   });
 
+  it("isolates stable sessions by proxy pool ID and allows clearing cache", async () => {
+    const { clearOpencodeSessionCache } = await import("../../open-sse/executors/opencode.js");
+    const poolA = stableSessionId({ connectionId: "conn", providerSpecificData: { connectionProxyPoolId: "pool-a" } });
+    const poolB = stableSessionId({ connectionId: "conn", providerSpecificData: { connectionProxyPoolId: "pool-b" } });
+    expect(poolA).not.toBe(poolB);
+
+    clearOpencodeSessionCache();
+    const poolANew = stableSessionId({ connectionId: "conn", providerSpecificData: { connectionProxyPoolId: "pool-a" } });
+    expect(poolANew).toMatch(OPENCODE_SESSION_RE);
+  });
+
   it("keeps the standalone buildHeaders session stable across calls", () => {
     const executor = getExecutor("opencode");
     const first = executor.buildHeaders({})["x-opencode-session"];
