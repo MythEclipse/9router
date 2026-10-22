@@ -15,7 +15,7 @@ vi.mock("@/lib/localDb", () => ({
 vi.mock("@/sse/utils/logger.js", () => ({ warn: vi.fn(), info: vi.fn(), debug: vi.fn(), error: vi.fn() }));
 
 const { createCombo, deleteCombo, getComboById } = await import("../../src/lib/db/repos/combosRepo.js");
-const { getApiKeyByKey } = await import("../../src/lib/db/repos/apiKeysRepo.js");
+const { getApiKeyByKey, invalidateApiKeyCache } = await import("../../src/lib/db/repos/apiKeysRepo.js");
 const { getKeyAccessContext, enforceKeyAccess, enforceKeyAccessProvider, filterModelsListForKey } =
   await import("../../src/sse/services/keyAccess.js");
 
@@ -26,6 +26,7 @@ beforeAll(async () => {
 });
 afterAll(() => fx.db?.close());
 beforeEach(() => {
+  invalidateApiKeyCache();
   fx.db.exec("DROP TRIGGER IF EXISTS fail_key_update; DROP TRIGGER IF EXISTS fail_combo_delete;");
   fx.db.exec("DELETE FROM combos; DELETE FROM apiKeys;");
   fx.aliases = {};

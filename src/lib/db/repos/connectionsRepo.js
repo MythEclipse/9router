@@ -294,7 +294,7 @@ export async function deleteProviderConnection(id) {
 
   // Cascade: clean up orphaned models in combos that reference this provider
   if (ok) {
-    const combos = getCombos();
+    const combos = (await getCombos()) || [];
     for (const combo of combos) {
       if (!combo.models || !Array.isArray(combo.models)) continue;
       const originalLength = combo.models.length;

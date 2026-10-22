@@ -139,7 +139,7 @@ import p135 from "./minimax-code-global.js";
 import p136 from "./bedrock.js";
 import p137 from "./bedrock-xai.js";
 import p138 from "./nous.js";
-import p139 from "./dothoosh.js";
+import p140 from "./dothoosh.js";
 export default [
   p0,
   p1,
@@ -279,5 +279,5 @@ export default [
   p136,
   p137,
   p138,
-  p139,
+  p140,
 ];

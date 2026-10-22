@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from "uuid";
 import { getAdapter } from "../driver.js";
 import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
 import { normalizeAllowList } from "@/shared/utils/keyAccess.js";
+import { invalidateApiKeyCache } from "./apiKeysRepo.js";
 
 function rowToCombo(row) {
   if (!row) return null;
@@ -91,6 +92,7 @@ export async function deleteCombo(id) {
       // Never clear accessRestricted: an empty allow list must still deny all.
       db.run(`UPDATE apiKeys SET accessAllow = ? WHERE id = ?`, [stringifyJson(remaining), key.id]);
     }
+    invalidateApiKeyCache();
     return true;
   });
 }

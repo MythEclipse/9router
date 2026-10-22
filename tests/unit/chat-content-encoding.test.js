@@ -11,10 +11,15 @@ vi.mock("open-sse/handlers/chatCore.js", () => ({ handleChatCore: vi.fn() }));
 import { handleChat } from "../../src/sse/handlers/chat.js";
 
 describe("chat compressed JSON validation", () => {
+  const bodies = {
+    "/v1/responses": JSON.stringify({ input: "hello" }),
+    "/v1/chat/completions": JSON.stringify({}),
+    "/v1/messages": JSON.stringify({ max_tokens: 100, messages: [{ role: "user", content: "hello" }] }),
+  };
   for (const path of ["/v1/responses", "/v1/chat/completions", "/v1/messages"]) {
     it(`parses zstd at ${path} before model validation without upstream calls`, async () => {
       const response = await handleChat(new Request(`http://localhost${path}`, {
-        method: "POST", body: zstdCompressSync("{}"), headers: { "content-encoding": "zstd" },
+        method: "POST", body: zstdCompressSync(bodies[path]), headers: { "content-encoding": "zstd" },
       }));
       expect(response.status).toBe(400);
       expect((await response.json()).error.message).toBe("Missing model");

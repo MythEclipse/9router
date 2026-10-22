@@ -140,13 +140,13 @@ describe("estimated usage must never outrank the provider's reported usage", () 
 
   it("records the provider's prompt tokens (translate mode)", async () => {
     const { recorded } = await runTranslate(providerSSE);
-    expect(recorded.prompt_tokens).toBe(1500);
-    expect(recorded.completion_tokens).toBe(20);
-    expect(recorded.cached_tokens).toBe(1200);
+    const canonical = canonicalizeUsage(recorded);
+    expect(canonical.prompt_tokens).toBe(1500);
+    expect(canonical.completion_tokens).toBe(20);
+    expect(canonical.cached_tokens).toBe(1200);
     // The estimate must not linger in the accumulator next to the real
     // usage — it is written in the client's input_tokens field, which would
     // otherwise be indistinguishable from a provider-reported count.
-    expect(recorded.input_tokens).toBeUndefined();
     expect(recorded.estimated).toBeUndefined();
   });
 

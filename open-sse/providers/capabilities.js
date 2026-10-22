@@ -200,7 +200,7 @@ export const MODEL_CAPABILITIES = {
   "longcat-2.5-preview-free":{ vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 131072 },
   // Go's other two unlimited free models (https://opencode.ai/docs/go/). Step 5
   // takes image+video input, Cat Jam Free is text-only — taken from models.dev.
-  "step-5-preview-free":     { vision: true, videoInput: true, reasoning: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 65536 },
+  "step-5-preview-free":     { vision: true, videoInput: true, reasoning: true, thinkingFormat: "step", contextWindow: 1000000, maxOutput: 65536 },
   "cat-jam-free":            { reasoning: true, thinkingFormat: "openai", contextWindow: 262144, maxOutput: 131072 },
   "north-mini-code-free":    { reasoning: true, thinkingFormat: "openai", contextWindow: 256000, maxOutput: 64000 },
   "ring-2.6-1t-free":        { reasoning: true, thinkingFormat: "openai", contextWindow: 262000, maxOutput: 66000 },
