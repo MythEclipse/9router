@@ -1,11 +1,37 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
-import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+/* eslint-disable react-hooks/immutability, react-hooks/set-state-in-effect */
+
+import { useState, useMemo, useEffect } from "react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { restrictToVerticalAxis, restrictToParentElement } from "@dnd-kit/modifiers";
-import { Card, Button, Modal, Input, CardSkeleton, ModelSelectModal, ConfirmModal, CapacityBadges, Select, Toggle } from "@/shared/components";
+import {
+  Card,
+  Button,
+  Modal,
+  Input,
+  CardSkeleton,
+  ModelSelectModal,
+  ConfirmModal,
+  CapacityBadges,
+  Select,
+  Toggle,
+} from "@/shared/components";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 import { useModelCaps } from "@/shared/hooks/useModelCaps";
 import { aggregateComboCapabilities } from "open-sse/providers/capabilities.js";
@@ -34,13 +60,19 @@ const upgradeLegacyModel = (m) => (m === "oc/mimo-v2.5-free" ? DEFAULT_FALLBACK_
 // Backward-compat: legacy stored form was an array of {model, enabled}.
 function normalizeCapEntry(entry) {
   if (Array.isArray(entry)) {
-    return { enabled: true, roundRobin: false, models: entry.map((e) => upgradeLegacyModel(e?.model || e)).filter(Boolean) };
+    return {
+      enabled: true,
+      roundRobin: false,
+      models: entry.map((e) => upgradeLegacyModel(e?.model || e)).filter(Boolean),
+    };
   }
   if (entry && typeof entry === "object") {
     return {
       enabled: entry.enabled !== false,
       roundRobin: !!entry.roundRobin,
-      models: Array.isArray(entry.models) ? entry.models.map(upgradeLegacyModel).filter(Boolean) : [],
+      models: Array.isArray(entry.models)
+        ? entry.models.map(upgradeLegacyModel).filter(Boolean)
+        : [],
     };
   }
   return { ...EMPTY_CAP_ENTRY };
@@ -108,7 +140,7 @@ export default function CombosPage() {
 
   useEffect(() => {
     fetchData();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // Drop stale selection when the combo list changes (delete / refresh).
   useEffect(() => {
@@ -124,19 +156,23 @@ export default function CombosPage() {
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const filteredCombos = normalizedQuery
     ? combos.filter((c) => {
-        if (String(c.name || "").toLowerCase().includes(normalizedQuery)) return true;
+        if (
+          String(c.name || "")
+            .toLowerCase()
+            .includes(normalizedQuery)
+        )
+          return true;
         return (c.models || []).some((m) => String(m).toLowerCase().includes(normalizedQuery));
       })
     : combos;
 
   // Select-all follows the search: with a query active it must only reach the
   // rows on screen, otherwise the bulk Delete would take out hidden combos.
-  const allSelected = filteredCombos.length > 0 && filteredCombos.every((c) => selectedIds.includes(c.id));
+  const allSelected =
+    filteredCombos.length > 0 && filteredCombos.every((c) => selectedIds.includes(c.id));
 
   const toggleSelect = (id) => {
-    setSelectedIds((prev) => (
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    ));
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
   const toggleSelectAll = () => {
@@ -176,7 +212,7 @@ export default function CombosPage() {
         confirmText: "Generate",
         variant: "primary",
         onConfirm: async () => {
-          setConfirmState((prev) => prev ? { ...prev, loading: true } : null);
+          setConfirmState((prev) => (prev ? { ...prev, loading: true } : null));
           try {
             const res = await fetch("/api/combos/presets", {
               method: "POST",
@@ -193,7 +229,7 @@ export default function CombosPage() {
           } catch (error) {
             console.log(`Error generating ${label}:`, error);
             alert(`Failed to generate ${label}`);
-            setConfirmState((prev) => prev ? { ...prev, loading: false } : null);
+            setConfirmState((prev) => (prev ? { ...prev, loading: false } : null));
           }
         },
       });
@@ -217,7 +253,8 @@ export default function CombosPage() {
       const settingsData = settingsRes.ok ? await settingsRes.json() : {};
 
       // Only LLM combos here - webSearch/webFetch combos belong to media-providers/web
-      if (combosRes.ok) setCombos((combosData.combos || []).filter(c => !c.kind || c.kind === "llm"));
+      if (combosRes.ok)
+        setCombos((combosData.combos || []).filter((c) => !c.kind || c.kind === "llm"));
       if (providersRes.ok) {
         setActiveProviders((providersData.connections || []).filter((c) => c.isActive !== false));
       }
@@ -265,9 +302,10 @@ export default function CombosPage() {
       delete entry.contextWindow;
     }
 
-    const keep = entry.contextWindowMode
-      || entry.judgeModel
-      || (entry.fallbackStrategy && entry.fallbackStrategy !== "fallback");
+    const keep =
+      entry.contextWindowMode ||
+      entry.judgeModel ||
+      (entry.fallbackStrategy && entry.fallbackStrategy !== "fallback");
     if (keep) updated[name] = entry;
     else delete updated[name];
 
@@ -339,7 +377,7 @@ export default function CombosPage() {
       title: "Delete Combo",
       message: combo ? `Delete combo "${combo.name}"?` : "Delete this combo?",
       onConfirm: async () => {
-        setConfirmState((prev) => prev ? { ...prev, loading: true } : null);
+        setConfirmState((prev) => (prev ? { ...prev, loading: true } : null));
         try {
           const res = await fetch(`/api/combos/${id}`, { method: "DELETE" });
           if (res.ok) {
@@ -352,9 +390,9 @@ export default function CombosPage() {
           setConfirmState(null);
         } catch (error) {
           console.log("Error deleting combo:", error);
-          setConfirmState((prev) => prev ? { ...prev, loading: false } : null);
+          setConfirmState((prev) => (prev ? { ...prev, loading: false } : null));
         }
-      }
+      },
     });
   };
 
@@ -367,13 +405,13 @@ export default function CombosPage() {
       confirmText: "Delete",
       variant: "danger",
       onConfirm: async () => {
-        setConfirmState((prev) => prev ? { ...prev, loading: true } : null);
+        setConfirmState((prev) => (prev ? { ...prev, loading: true } : null));
         setBulkBusy(true);
         try {
           const ids = selectedCombos.map((c) => c.id);
           const names = selectedCombos.map((c) => c.name);
           const results = await Promise.all(
-            ids.map((id) => fetch(`/api/combos/${id}`, { method: "DELETE" }))
+            ids.map((id) => fetch(`/api/combos/${id}`, { method: "DELETE" })),
           );
           const failed = results.filter((r) => !r.ok).length;
           await persistComboStrategies(pruneStrategiesForNames(names));
@@ -384,7 +422,7 @@ export default function CombosPage() {
         } catch (error) {
           console.log("Error bulk deleting combos:", error);
           alert("Failed to delete selected combos");
-          setConfirmState((prev) => prev ? { ...prev, loading: false } : null);
+          setConfirmState((prev) => (prev ? { ...prev, loading: false } : null));
         } finally {
           setBulkBusy(false);
         }
@@ -400,7 +438,8 @@ export default function CombosPage() {
       const next = { ...(updated[comboName] || {}), ...patch };
       // Prune to keep settings clean: default fallback with no extras = no entry.
       // A context-window choice is an extra, so it keeps the entry alive on its own.
-      const hasWindowChoice = next.contextWindowMode === "max" || next.contextWindowMode === "custom";
+      const hasWindowChoice =
+        next.contextWindowMode === "max" || next.contextWindowMode === "custom";
       if ((!next.fallbackStrategy || next.fallbackStrategy === "fallback") && !hasWindowChoice) {
         delete updated[comboName];
       } else {
@@ -455,13 +494,30 @@ export default function CombosPage() {
             Group models under one name, then pick a strategy per combo:
           </p>
           <ul className="text-sm text-text-muted mt-2 flex flex-col gap-1">
-            <li><span className="font-medium text-text-main">Fallback</span> — tries models in order (next on failure)</li>
-            <li><span className="font-medium text-text-main">Round Robin</span> — rotates models across requests to spread load</li>
-            <li><span className="font-medium text-text-main">Fusion</span> — queries all models in parallel, then a judge synthesizes one answer. Best quality, but costs the most: every request bills all panel models + the judge (N+1 calls)</li>
+            <li>
+              <span className="font-medium text-text-main">Fallback</span> — tries models in order
+              (next on failure)
+            </li>
+            <li>
+              <span className="font-medium text-text-main">Round Robin</span> — rotates models
+              across requests to spread load
+            </li>
+            <li>
+              <span className="font-medium text-text-main">Fusion</span> — queries all models in
+              parallel, then a judge synthesizes one answer. Best quality, but costs the most: every
+              request bills all panel models + the judge (N+1 calls)
+            </li>
           </ul>
           <p className="hidden text-xs text-text-muted mt-3 max-w-2xl">
-            <span className="font-medium text-text-main">Cursor / Claude Default</span> create combos named exactly like those clients&apos; model IDs (e.g. <code className="font-mono">composer-2.5</code>, <code className="font-mono">opus</code>), seeded with the matching <code className="font-mono">cu/…</code> or <code className="font-mono">cc/…</code> route so traffic can hit 9router without the prefix.
-            {" "}Note: Cursor IDE itself often blocks built-in Composer / Grok from Override OpenAI Base URL (&quot;model does not support custom API&quot;); add them via Cursor&apos;s <span className="font-medium text-text-main">Add Custom Model</span> using the combo name, or pick a model Cursor allows through the custom endpoint.
+            <span className="font-medium text-text-main">Cursor / Claude Default</span> create
+            combos named exactly like those clients&apos; model IDs (e.g.{" "}
+            <code className="font-mono">composer-2.5</code>, <code className="font-mono">opus</code>
+            ), seeded with the matching <code className="font-mono">cu/…</code> or{" "}
+            <code className="font-mono">cc/…</code> route so traffic can hit 9router without the
+            prefix. Note: Cursor IDE itself often blocks built-in Composer / Grok from Override
+            OpenAI Base URL (&quot;model does not support custom API&quot;); add them via
+            Cursor&apos;s <span className="font-medium text-text-main">Add Custom Model</span> using
+            the combo name, or pick a model Cursor allows through the custom endpoint.
           </p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-stretch">
@@ -488,7 +544,11 @@ export default function CombosPage() {
               </button>
             )}
           </div>
-          <Button icon="add" onClick={() => setShowCreateModal(true)} className="w-full sm:w-auto whitespace-nowrap">
+          <Button
+            icon="add"
+            onClick={() => setShowCreateModal(true)}
+            className="w-full sm:w-auto whitespace-nowrap"
+          >
             Create Combo
           </Button>
           <div className="hidden">
@@ -526,8 +586,14 @@ export default function CombosPage() {
               <span className="material-symbols-outlined text-[32px]">layers</span>
             </div>
             <p className="text-text-main font-medium mb-1">No combos yet</p>
-            <p className="text-sm text-text-muted mb-4">Create model combos with fallback support</p>
-            <Button icon="add" onClick={() => setShowCreateModal(true)} className="w-full sm:w-auto">
+            <p className="text-sm text-text-muted mb-4">
+              Create model combos with fallback support
+            </p>
+            <Button
+              icon="add"
+              onClick={() => setShowCreateModal(true)}
+              className="w-full sm:w-auto"
+            >
               Create Combo
             </Button>
           </div>
@@ -585,12 +651,7 @@ export default function CombosPage() {
                   >
                     Delete ({selectedIds.length})
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={clearSelection}
-                    disabled={bulkBusy}
-                  >
+                  <Button size="sm" variant="ghost" onClick={clearSelection} disabled={bulkBusy}>
                     Clear
                   </Button>
                 </>
@@ -605,8 +666,12 @@ export default function CombosPage() {
                 return (
                   <Card>
                     <div className="text-center py-10">
-                      <p className="text-text-main font-medium mb-1">No combos match “{searchQuery.trim()}”</p>
-                      <p className="text-sm text-text-muted mb-4">Try a shorter query, or clear the search to see all {combos.length} combos.</p>
+                      <p className="text-text-main font-medium mb-1">
+                        No combos match “{searchQuery.trim()}”
+                      </p>
+                      <p className="text-sm text-text-muted mb-4">
+                        Try a shorter query, or clear the search to see all {combos.length} combos.
+                      </p>
                       <Button variant="secondary" onClick={() => setSearchQuery("")}>
                         Clear search
                       </Button>
@@ -695,7 +760,20 @@ const fmtK = (n) => {
   return `${Math.round(n / 1000)}k`;
 };
 
-function ComboCard({ combo, getCaps, comboByName = {}, activeProviders = [], copied, onCopy, onEdit, onDelete, strategy = {}, onSetStrategy, selected = false, onToggleSelect }) {
+function ComboCard({
+  combo,
+  getCaps,
+  comboByName = {},
+  activeProviders = [],
+  copied,
+  onCopy,
+  onEdit,
+  onDelete,
+  strategy = {},
+  onSetStrategy,
+  selected = false,
+  onToggleSelect,
+}) {
   const [showJudgeSelect, setShowJudgeSelect] = useState(false);
   const current = strategy.fallbackStrategy || "fallback";
   const judge = strategy.judgeModel || "";
@@ -705,12 +783,17 @@ function ComboCard({ combo, getCaps, comboByName = {}, activeProviders = [], cop
   // answer for /api/models.
   const comboCaps = aggregateComboCapabilities(combo.models, comboByName, getCaps);
 
-
   return (
-    <Card padding="sm" className={`group ${selected ? "ring-1 ring-primary/40 bg-primary/[0.03]" : ""}`}>
+    <Card
+      padding="sm"
+      className={`group ${selected ? "ring-1 ring-primary/40 bg-primary/[0.03]" : ""}`}
+    >
       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 flex-1 items-start gap-3 sm:items-center">
-          <label className="flex shrink-0 items-center pt-1 sm:pt-0 cursor-pointer" title="Select combo">
+          <label
+            className="flex shrink-0 items-center pt-1 sm:pt-0 cursor-pointer"
+            title="Select combo"
+          >
             <input
               type="checkbox"
               checked={selected}
@@ -730,13 +813,18 @@ function ComboCard({ combo, getCaps, comboByName = {}, activeProviders = [], cop
                 <span className="text-xs text-text-muted italic">No models</span>
               ) : (
                 combo.models.slice(0, 3).map((model, index) => (
-                  <code key={index} className="inline-flex items-center gap-1 rounded bg-black/5 px-1.5 py-0.5 font-mono text-xs text-text-muted dark:bg-white/5">
+                  <code
+                    key={index}
+                    className="inline-flex items-center gap-1 rounded bg-black/5 px-1.5 py-0.5 font-mono text-xs text-text-muted dark:bg-white/5"
+                  >
                     <span>{model}</span>
-                    <CapacityBadges caps={
-                      comboByName[model]
-                        ? aggregateComboCapabilities(comboByName[model], comboByName, getCaps)
-                        : getCaps?.(model)
-                    } />
+                    <CapacityBadges
+                      caps={
+                        comboByName[model]
+                          ? aggregateComboCapabilities(comboByName[model], comboByName, getCaps)
+                          : getCaps?.(model)
+                      }
+                    />
                   </code>
                 ))
               )}
@@ -761,7 +849,9 @@ function ComboCard({ combo, getCaps, comboByName = {}, activeProviders = [], cop
                   title="Pick the model that fuses panel answers"
                 >
                   <span className="material-symbols-outlined text-[13px]">gavel</span>
-                  <span className="truncate">{judge || `Auto — ${combo.models[0] || "first model"}`}</span>
+                  <span className="truncate">
+                    {judge || `Auto — ${combo.models[0] || "first model"}`}
+                  </span>
                 </button>
                 {judge && (
                   <button
@@ -789,10 +879,12 @@ function ComboCard({ combo, getCaps, comboByName = {}, activeProviders = [], cop
             />
           </div>
 
-
           <div className="grid grid-cols-3 gap-1 sm:flex">
             <button
-              onClick={(e) => { e.stopPropagation(); onCopy(combo.name, `combo-${combo.id}`); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onCopy(combo.name, `combo-${combo.id}`);
+              }}
               className="flex flex-col items-center rounded px-2 py-1 text-text-muted transition-colors hover:bg-black/5 hover:text-primary dark:hover:bg-white/5"
               title="Copy combo name"
             >
@@ -826,7 +918,10 @@ function ComboCard({ combo, getCaps, comboByName = {}, activeProviders = [], cop
         <ModelSelectModal
           isOpen={showJudgeSelect}
           onClose={() => setShowJudgeSelect(false)}
-          onSelect={(m) => { onSetStrategy({ judgeModel: m?.value || "" }); setShowJudgeSelect(false); }}
+          onSelect={(m) => {
+            onSetStrategy({ judgeModel: m?.value || "" });
+            setShowJudgeSelect(false);
+          }}
           activeProviders={activeProviders}
           title="Select Judge Model"
           addedModelValues={judge ? [judge] : []}
@@ -958,7 +1053,10 @@ function CapacityAdapterCap({ cap, entry, onChange, activeProviders, getCaps }) 
             </thead>
             <tbody className="divide-y divide-border/30 font-mono">
               {models.map((model, index) => (
-                <tr key={`${model}-${index}`} className="hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors">
+                <tr
+                  key={`${model}-${index}`}
+                  className="hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors"
+                >
                   <td className="px-3 py-2 text-center text-text-muted text-[11px] font-sans">
                     #{index + 1}
                   </td>
@@ -986,7 +1084,9 @@ function CapacityAdapterCap({ cap, entry, onChange, activeProviders, getCaps }) 
                         }`}
                         title="Move up"
                       >
-                        <span className="material-symbols-outlined text-[16px] leading-none">arrow_upward</span>
+                        <span className="material-symbols-outlined text-[16px] leading-none">
+                          arrow_upward
+                        </span>
                       </button>
                       <button
                         type="button"
@@ -999,7 +1099,9 @@ function CapacityAdapterCap({ cap, entry, onChange, activeProviders, getCaps }) 
                         }`}
                         title="Move down"
                       >
-                        <span className="material-symbols-outlined text-[16px] leading-none">arrow_downward</span>
+                        <span className="material-symbols-outlined text-[16px] leading-none">
+                          arrow_downward
+                        </span>
                       </button>
                     </div>
                   </td>
@@ -1015,7 +1117,9 @@ function CapacityAdapterCap({ cap, entry, onChange, activeProviders, getCaps }) 
                       }`}
                       title="Remove model"
                     >
-                      <span className="material-symbols-outlined text-[16px] leading-none">close</span>
+                      <span className="material-symbols-outlined text-[16px] leading-none">
+                        close
+                      </span>
                     </button>
                   </td>
                 </tr>
@@ -1061,7 +1165,10 @@ function ModelItem({ id, index, model, isFirst, isLast, onEdit, onMoveUp, onMove
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter") commit();
-    if (e.key === "Escape") { setDraft(model); setEditing(false); }
+    if (e.key === "Escape") {
+      setDraft(model);
+      setEditing(false);
+    }
   };
 
   return (
@@ -1079,14 +1186,19 @@ function ModelItem({ id, index, model, isFirst, isLast, onEdit, onMoveUp, onMove
         title="Drag to reorder"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-          <circle cx="9" cy="4" r="2"/><circle cx="15" cy="4" r="2"/>
-          <circle cx="9" cy="12" r="2"/><circle cx="15" cy="12" r="2"/>
-          <circle cx="9" cy="20" r="2"/><circle cx="15" cy="20" r="2"/>
+          <circle cx="9" cy="4" r="2" />
+          <circle cx="15" cy="4" r="2" />
+          <circle cx="9" cy="12" r="2" />
+          <circle cx="15" cy="12" r="2" />
+          <circle cx="9" cy="20" r="2" />
+          <circle cx="15" cy="20" r="2" />
         </svg>
       </button>
 
       {/* Index badge */}
-      <span className="text-[10px] font-medium text-text-muted w-3 text-center shrink-0">{index + 1}</span>
+      <span className="text-[10px] font-medium text-text-muted w-3 text-center shrink-0">
+        {index + 1}
+      </span>
 
       {/* Inline editable model value */}
       {editing ? (
@@ -1140,7 +1252,17 @@ function ModelItem({ id, index, model, isFirst, isLast, onEdit, onMoveUp, onMove
   );
 }
 
-function ComboFormModal({ isOpen, combo, onClose, onSave, activeProviders, kindFilter = null, strategy = {}, comboByName = {}, getCaps = null }) {
+function ComboFormModal({
+  isOpen,
+  combo,
+  onClose,
+  onSave,
+  activeProviders,
+  kindFilter = null,
+  strategy = {},
+  comboByName = {},
+  getCaps = null,
+}) {
   // Initialize state with combo values - key prop on parent handles reset on remount
   const [name, setName] = useState(combo?.name || "");
   const [models, setModels] = useState(combo?.models || []);
@@ -1152,21 +1274,25 @@ function ComboFormModal({ isOpen, combo, onClose, onSave, activeProviders, kindF
   // Advertised context window. Persisted in settings.comboStrategies[name], not on
   // the combo row, so switching it never rewrites the combo itself.
   const initialWindow = Number(strategy.contextWindow);
-  const hasPinnedWindow = strategy.contextWindowMode === "custom" && Number.isFinite(initialWindow) && initialWindow > 0;
+  const hasPinnedWindow =
+    strategy.contextWindowMode === "custom" && Number.isFinite(initialWindow) && initialWindow > 0;
   const [windowChoice, setWindowChoice] = useState(hasPinnedWindow ? `w:${initialWindow}` : "min");
   const [windowInput, setWindowInput] = useState(hasPinnedWindow ? String(initialWindow) : "");
 
   // Seat windows follow the model list as it is edited, so the choices offered are
   // always the windows this combo can actually reach.
   const seatEntries = (models || [])
-    .map((m) => ({ model: m, window: aggregateComboCapabilities([m], comboByName, getCaps)?.contextWindow }))
+    .map((m) => ({
+      model: m,
+      window: aggregateComboCapabilities([m], comboByName, getCaps)?.contextWindow,
+    }))
     .filter((e) => Number.isFinite(e.window) && e.window > 0);
   const seatWindows = seatEntries.map((e) => e.window);
   const seatMin = seatWindows.length ? Math.min(...seatWindows) : undefined;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
   // Use stable index-based IDs so duplicates and similar names are handled correctly
@@ -1253,7 +1379,8 @@ function ComboFormModal({ isOpen, combo, onClose, onSave, activeProviders, kindF
       name: name.trim(),
       models,
       contextWindowMode: windowChoice === "min" ? "min" : "custom",
-      contextWindow: windowChoice === "min" ? null : (Number(windowInput) > 0 ? Number(windowInput) : null),
+      contextWindow:
+        windowChoice === "min" ? null : Number(windowInput) > 0 ? Number(windowInput) : null,
     });
     setSaving(false);
   };
@@ -1262,11 +1389,7 @@ function ComboFormModal({ isOpen, combo, onClose, onSave, activeProviders, kindF
 
   return (
     <>
-      <Modal
-        isOpen={isOpen}
-        onClose={onClose}
-        title={isEdit ? "Edit Combo" : "Create Combo"}
-      >
+      <Modal isOpen={isOpen} onClose={onClose} title={isEdit ? "Edit Combo" : "Create Combo"}>
         <div className="flex flex-col gap-3">
           {/* Name */}
           <div>
@@ -1288,34 +1411,44 @@ function ComboFormModal({ isOpen, combo, onClose, onSave, activeProviders, kindF
 
             {models.length === 0 ? (
               <div className="text-center py-4 border border-dashed border-black/10 dark:border-white/10 rounded-lg bg-black/[0.01] dark:bg-white/[0.01]">
-                <span className="material-symbols-outlined text-text-muted text-xl mb-1">layers</span>
+                <span className="material-symbols-outlined text-text-muted text-xl mb-1">
+                  layers
+                </span>
                 <p className="text-xs text-text-muted">No models added yet</p>
               </div>
             ) : (
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd} modifiers={[restrictToVerticalAxis, restrictToParentElement]}>
-              <SortableContext items={modelItems.map((m) => m.uid)} strategy={verticalListSortingStrategy}>
-                <div className="flex max-h-[55vh] min-w-0 flex-col gap-1 overflow-y-auto sm:max-h-[350px]">
-                  {modelItems.map(({ uid, model }, index) => (
-                    <ModelItem
-                      key={uid}
-                      id={uid}
-                      index={index}
-                      model={model}
-                      isFirst={index === 0}
-                      isLast={index === modelItems.length - 1}
-                      onEdit={(newVal) => {
-                        const updated = [...models];
-                        updated[index] = newVal;
-                        setModels(updated);
-                      }}
-                      onMoveUp={() => handleMoveUp(index)}
-                      onMoveDown={() => handleMoveDown(index)}
-                      onRemove={() => handleRemoveModel(index)}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+                modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+              >
+                <SortableContext
+                  items={modelItems.map((m) => m.uid)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="flex max-h-[55vh] min-w-0 flex-col gap-1 overflow-y-auto sm:max-h-[350px]">
+                    {modelItems.map(({ uid, model }, index) => (
+                      <ModelItem
+                        key={uid}
+                        id={uid}
+                        index={index}
+                        model={model}
+                        isFirst={index === 0}
+                        isLast={index === modelItems.length - 1}
+                        onEdit={(newVal) => {
+                          const updated = [...models];
+                          updated[index] = newVal;
+                          setModels(updated);
+                        }}
+                        onMoveUp={() => handleMoveUp(index)}
+                        onMoveDown={() => handleMoveDown(index)}
+                        onRemove={() => handleRemoveModel(index)}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
             )}
 
             {/* Add Model button */}

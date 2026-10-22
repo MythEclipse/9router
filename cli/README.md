@@ -108,10 +108,10 @@ Supported tools: `claude`, `codex`, `opencode`, `droid`, `crush`, `kilo`, `cline
 
 Models come from the **server's own CLI-tools configuration**, so a client gets whatever the operator already picked on the dashboard. Nothing is hardcoded.
 
-| Tool | Model taken from (first match wins) |
-|---|---|
-| `claude` | tier flag (`--opus` …) → server's Claude tier → *left unset* (Claude Code's own default) |
-| others | `--model` → that tool's own model on the server → server's OpenCode model → *tool skipped* |
+| Tool     | Model taken from (first match wins)                                                        |
+| -------- | ------------------------------------------------------------------------------------------ |
+| `claude` | tier flag (`--opus` …) → server's Claude tier → _left unset_ (Claude Code's own default)   |
+| others   | `--model` → that tool's own model on the server → server's OpenCode model → _tool skipped_ |
 
 `kilo` has no readable model on the server, so it always uses `--model` or the OpenCode model. `omp` (Oh My Pi) needs no model: it uses proxy discovery, so every server model appears under `9router` in `/model`. A Claude tier the server doesn't set is removed from your config rather than kept from an earlier run. A skipped tool makes the command exit `1`.
 
@@ -165,14 +165,14 @@ Tools not pointed at 9router are listed as `not configured`. For Codex, OpenCode
 
 ### Other options
 
-| Option | Purpose |
-|---|---|
-| `--password <pw>` | Dashboard password (or `NINE_ROUTER_PASSWORD`); prompted if omitted — preferred, keeps it out of shell history |
-| `--save` | After a successful login, save the password for this server to `~/.9router/connect.env` (plain text, mode 600) so later runs skip the prompt. Delete the file to forget it |
-| `--api-key <key>` | Use this key and skip login. The server's models can't be read without a login, so pass model flags |
-| `--key-name <name>` | API key name to reuse/create (default `cli-<hostname>`) |
-| `--print-env` | Also print `OPENAI_BASE_URL` / `OPENAI_API_KEY` for other CLIs |
-| `--reset` | Remove the 9router settings from the selected tools |
+| Option              | Purpose                                                                                                                                                                    |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--password <pw>`   | Dashboard password (or `NINE_ROUTER_PASSWORD`); prompted if omitted — preferred, keeps it out of shell history                                                             |
+| `--save`            | After a successful login, save the password for this server to `~/.9router/connect.env` (plain text, mode 600) so later runs skip the prompt. Delete the file to forget it |
+| `--api-key <key>`   | Use this key and skip login. The server's models can't be read without a login, so pass model flags                                                                        |
+| `--key-name <name>` | API key name to reuse/create (default `cli-<hostname>`)                                                                                                                    |
+| `--print-env`       | Also print `OPENAI_BASE_URL` / `OPENAI_API_KEY` for other CLIs                                                                                                             |
+| `--reset`           | Remove the 9router settings from the selected tools                                                                                                                        |
 
 See `9router connect --help` for the full list.
 
