@@ -788,7 +788,8 @@
           "combined": true,
           "header": "Authorization",
           "scheme": "bearer"
-        }
+        },
+        "thinkingFormat": "openai-responses"
       },
       {
         "format": "gemini",
@@ -1190,7 +1191,8 @@
           "hooks": [
             "museHeaders"
           ]
-        }
+        },
+        "thinkingFormat": "openai-responses"
       }
     ]
   },
