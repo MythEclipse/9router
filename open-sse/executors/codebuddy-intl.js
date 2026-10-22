@@ -1,5 +1,28 @@
-import { createHash, randomUUID } from "node:crypto";
+import crypto, { createHash, randomUUID } from "node:crypto";
 import { DefaultExecutor } from "./default.js";
+import { resolveContinuationId, resolveSessionIdentity } from "../utils/sessionManager.js";
+
+function findHeaderKey(headers, name) {
+  if (!headers || typeof headers !== "object") return null;
+  return Object.keys(headers).find((key) => key.toLowerCase() === name.toLowerCase()) || null;
+}
+
+function copyClientHeader(headers, rawHeaders, name) {
+  const existing = findHeaderKey(headers, name);
+  if (existing) return headers[existing];
+  if (typeof rawHeaders?.get === "function") {
+    const value = rawHeaders.get(name);
+    if (typeof value === "string" && value.trim()) {
+      headers[name] = value.trim();
+      return headers[name];
+    }
+    return null;
+  }
+  const source = findHeaderKey(rawHeaders, name);
+  if (!source || typeof rawHeaders[source] !== "string" || !rawHeaders[source].trim()) return null;
+  headers[source] = rawHeaders[source].trim();
+  return headers[source];
+}
 
 /**
  * CodeBuddyIntlExecutor — talks to https://www.codebuddy.ai/v2/chat/completions
@@ -44,34 +67,34 @@ export class CodeBuddyIntlExecutor extends DefaultExecutor {
   // gated yet, so only the intl executor grows these headers.
   buildHeaders(credentials, stream = true, url, model, body = null) {
     const headers = super.buildHeaders(credentials, stream, url, model, body);
+    const rawHeaders = credentials?.rawHeaders || {};
+    const suppliedConversationId = copyClientHeader(headers, rawHeaders, "X-Conversation-ID");
+    copyClientHeader(headers, rawHeaders, "X-Conversation-Request-ID");
+    copyClientHeader(headers, rawHeaders, "X-Conversation-Message-ID");
 
-    // Stable per-conversation id: prefer whatever session key the client sent,
-    // else derive from the opening user message (stable across retries of the
-    // same turn and across accounts), else fall back to a random UUID.
-    const sessionKey =
-      (typeof body?.session_id === "string" && body.session_id) ||
-      (typeof body?.prompt_cache_key === "string" && body.prompt_cache_key) ||
-      (typeof body?.conversation_id === "string" && body.conversation_id) ||
-      null;
-    const firstUser = Array.isArray(body?.messages)
-      ? body.messages.find((m) => m?.role === "user")
-      : null;
-    const userText =
-      typeof firstUser?.content === "string"
-        ? firstUser.content
-        : Array.isArray(firstUser?.content)
-          ? firstUser.content
-              .map((b) => (b && typeof b.text === "string" ? b.text : ""))
-              .join("\n")
-          : "";
-    const conversationKey = sessionKey || (userText ? `cbai:${userText}` : null);
-
-    headers["X-Conversation-ID"] = conversationKey
-      ? stableUuidFrom(conversationKey)
-      : randomUUID();
-    headers["X-Conversation-Request-ID"] = randomUUID();
-    headers["X-Conversation-Message-ID"] = randomUUID();
-
+    if (!suppliedConversationId) {
+      const sessionHeaders = typeof rawHeaders.entries === "function"
+        ? Object.fromEntries(rawHeaders.entries())
+        : Object.fromEntries(Object.entries(rawHeaders).map(([key, value]) => [key.toLowerCase(), value]));
+      // Only explicit client identity can join turns; account or text is not a conversation.
+      const identity = credentials?._codebuddySessionIdentity || resolveSessionIdentity({
+        headers: sessionHeaders,
+        body: body ? { ...body, messages: undefined, input: undefined } : null,
+        scope: "codebuddy-intl",
+      });
+      headers["X-Conversation-ID"] = resolveContinuationId({
+        sessionId: identity.sessionId,
+        connectionId: credentials?.connectionId,
+        scope: "codebuddy-intl",
+        ephemeral: identity.ephemeral,
+      });
+    }
+    if (!findHeaderKey(headers, "X-Conversation-Request-ID")) {
+      headers["X-Conversation-Request-ID"] = crypto.randomUUID();
+    }
+    if (!findHeaderKey(headers, "X-Conversation-Message-ID")) {
+      headers["X-Conversation-Message-ID"] = crypto.randomUUID();
+    }
     return headers;
   }
 
