@@ -21,7 +21,7 @@ describe("CodeBuddyIntlExecutor sends the X-Conversation-* family (#4892)", () =
   });
 
   it("keeps the conversation id stable across retries of the same turn", () => {
-    const body = { messages: [{ role: "user", content: "same opening message" }] };
+    const body = { session_id: "retry-turn", messages: [{ role: "user", content: "same opening message" }] };
     const a = exec.buildHeaders(creds, true, "u", "m", body);
     const b = exec.buildHeaders(creds, true, "u", "m", body);
     expect(a["X-Conversation-ID"]).toBe(b["X-Conversation-ID"]);

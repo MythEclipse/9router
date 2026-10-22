@@ -2,7 +2,7 @@ import { claudeToOpenAIRequest } from "../translator/request/claude-to-openai.js
 import { openaiToClaudeRequest } from "../translator/request/openai-to-claude.js";
 import { FORMATS } from "../translator/formats.js";
 import { ROLE, OPENAI_BLOCK, COMMANDCODE_BLOCK, RESPONSES_ITEM } from "../translator/schema/index.js";
-import { HEADROOM_TOOL_OUTPUT_MAX_DEPTH } from "./constants.js";
+import { RAW_CAP, MIN_COMPRESS_SIZE, HEADROOM_TOOL_OUTPUT_MAX_DEPTH } from "./constants.js";
 import {
   openaiResponsesToOpenAIRequest,
   openaiToOpenAIResponsesRequest,
@@ -49,7 +49,7 @@ function captureSizeSnapshot(body) {
   return {
     bodyBytes: jsonBytes(body),
     messageBytes: messages ? jsonBytes(messages) : 0,
-    toolSchemaBytes: jsonBytes(body?.tools || body?.request?.tools || []),
+    toolSchemaBytes: jsonBytes(body?.tools || body?.request?.tools || body?.params?.tools || []),
     toolHistoryBytes: jsonBytes(toolHistory),
   };
 }
@@ -115,7 +115,7 @@ function collectToolOutputText(body, format) {
     if (depth > HEADROOM_TOOL_OUTPUT_MAX_DEPTH) return;
     const value = object?.[key];
     if (typeof value === "string") {
-      if (!value.trim()) return;
+      if (!value.trim() || value.length < MIN_COMPRESS_SIZE) return;
       try { JSON.parse(value); return; } catch { /* plain text */ }
       messages.push({ role: ROLE.TOOL, tool_call_id: `headroom-tool-${messages.length}`, content: value });
       targets.push({ object, key, text: value });
@@ -377,7 +377,11 @@ export async function compressWithHeadroom(body, { enabled, url, model, format, 
     const toolOutputs = collectToolOutputText(body, format);
     if (toolOutputs) {
       if (!toolOutputs.messages.length) {
-        setDiagnostic(diagnostics, "no eligible plain-text tool output");
+        if (format === FORMATS.OPENAI_RESPONSES && hasUnsafeResponsesInputForCompression(body)) {
+          setDiagnostic(diagnostics, "skipped: openai-responses tool/reasoning input is not safe to compress");
+        } else {
+          setDiagnostic(diagnostics, "no eligible plain-text tool output");
+        }
         return null;
       }
       const data = await callCompress(url, toolOutputs.messages, model, timeoutMs, compressUserMessages, diagnostics || {});
