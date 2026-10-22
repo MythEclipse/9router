@@ -7,7 +7,7 @@ import {
   isAnthropicCompatibleProvider,
   isOpenAICompatibleProvider,
 } from "@/shared/constants/providers";
-import { getProviderConnections, getCombos, getCustomModels, getModelAliases } from "@/lib/localDb";
+import { getProviderConnections, getCombos, getCustomModels, getModelAliases, getSettings } from "@/lib/localDb";
 import { getDisabledModels } from "@/lib/disabledModelsDb";
 import { getKeyAccessContext, filterModelsListForKey } from "@/sse/services/keyAccess.js";
 import { resolveKiroModels } from "open-sse/services/kiroModels.js";
@@ -20,7 +20,7 @@ import { resolveCursorModels } from "open-sse/services/cursorModels.js";
 import { resolveZedModels } from "open-sse/shared/zedAuth.js";
 import { updateProviderCredentials } from "@/sse/services/tokenRefresh";
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy";
-import { capabilitiesFromServiceKind, getCapabilitiesForModel, aggregateComboCapabilities } from "open-sse/providers/capabilities.js";
+import { capabilitiesFromServiceKind, getCapabilitiesForModel, aggregateComboCapabilities, comboContextWindow, comboWindowSetting } from "open-sse/providers/capabilities.js";
 
 // Qoder shares one live resolver across intl (qoder) and CN (qoder-cn); the
 // credentials carry the provider id so qoderModels picks the right region's
@@ -278,14 +278,14 @@ function comboMatchesKinds(combo, kindFilter) {
 // treated as a literal model and publishes the 200k floor. Expand nested
 // names (cycle-guarded) so the published window is the true min across the
 // whole chain.
-function comboSeatLimits(combo, combosByName, visiting = new Set()) {
+function comboSeatLimits(combo, combosByName, comboStrategies = {}, visiting = new Set()) {
   const name = typeof combo?.name === "string" ? combo.name : null;
   if (name) {
     if (visiting.has(name)) return { contextWindow: undefined, maxOutput: undefined };
     visiting.add(name);
   }
 
-  let contextWindow = Infinity;
+  const seatWindows = [];
   let maxOutput = Infinity;
   try {
     for (const seat of Array.isArray(combo?.models) ? combo.models : []) {
@@ -294,22 +294,29 @@ function comboSeatLimits(combo, combosByName, visiting = new Set()) {
       if (slash <= 0) {
         const nested = combosByName.get(seat);
         if (nested) {
-          const nestedLimits = comboSeatLimits(nested, combosByName, visiting);
-          if (Number.isFinite(nestedLimits.contextWindow)) contextWindow = Math.min(contextWindow, nestedLimits.contextWindow);
+          // A nested combo is one seat: it contributes the window it publishes for
+          // itself, i.e. its own override already applied.
+          const nestedLimits = comboSeatLimits(nested, combosByName, comboStrategies, visiting);
+          if (Number.isFinite(nestedLimits.contextWindow)) seatWindows.push(nestedLimits.contextWindow);
           if (Number.isFinite(nestedLimits.maxOutput)) maxOutput = Math.min(maxOutput, nestedLimits.maxOutput);
           continue;
         }
       }
       const caps = comboSeatCapabilities(seat) || getCapabilitiesForModel(null, seat);
-      if (Number.isFinite(caps?.contextWindow)) contextWindow = Math.min(contextWindow, caps.contextWindow);
+      if (Number.isFinite(caps?.contextWindow)) seatWindows.push(caps.contextWindow);
       if (Number.isFinite(caps?.maxOutput)) maxOutput = Math.min(maxOutput, caps.maxOutput);
     }
   } finally {
     if (name) visiting.delete(name);
   }
 
+  // What the combo promises is its own decision: min (every seat), max (the chain
+  // via rollover), or an explicit number. See comboContextWindow.
+  const { mode, custom } = comboWindowSetting(comboStrategies?.[name]);
   return {
-    contextWindow: Number.isFinite(contextWindow) ? contextWindow : undefined,
+    contextWindow: comboContextWindow(seatWindows, mode, custom),
+    seatMinWindow: seatWindows.length ? Math.min(...seatWindows) : undefined,
+    seatMaxWindow: seatWindows.length ? Math.max(...seatWindows) : undefined,
     maxOutput: Number.isFinite(maxOutput) ? maxOutput : undefined,
   };
 }
@@ -336,6 +343,15 @@ export async function buildModelsList(kindFilter, options = {}) {
     combos = await getCombos();
   } catch (e) {
     console.log("Could not fetch combos");
+  }
+
+  // Per-combo presentation settings live in settings.comboStrategies[name] next to
+  // fallbackStrategy/judgeModel. A combo's published context window is one of them.
+  let comboStrategies = {};
+  try {
+    comboStrategies = (await getSettings())?.comboStrategies || {};
+  } catch (e) {
+    console.log("Could not fetch combo strategies");
   }
 
   let customModels = [];
@@ -416,8 +432,13 @@ export async function buildModelsList(kindFilter, options = {}) {
       // its smallest. Combo entries were the only models on this endpoint that
       // published no limits at all, which leaves a client to guess from the name —
       // and it guesses high (see the snake_case note on the per-provider path).
-      const { contextWindow, maxOutput } = comboSeatLimits(combo, combosByName);
-      if (Number.isFinite(contextWindow)) entry.context_length = contextWindow;
+      const { contextWindow, maxOutput } = comboSeatLimits(combo, combosByName, comboStrategies);
+      if (Number.isFinite(contextWindow)) {
+        entry.context_length = contextWindow;
+        // capabilities is the min/max union from aggregateComboCapabilities; keep its
+        // window in step with the published limit so a client reading either agrees.
+        if (entry.capabilities) entry.capabilities.contextWindow = contextWindow;
+      }
       if (Number.isFinite(maxOutput)) entry.max_completion_tokens = maxOutput;
     }
     models.push(entry);
