@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable react-hooks/purity, react-hooks/set-state-in-effect */
+
 import { useState, useEffect } from "react";
 import { Card } from "@/shared/components";
 import { getProviderAlias } from "@/shared/constants/providers";
