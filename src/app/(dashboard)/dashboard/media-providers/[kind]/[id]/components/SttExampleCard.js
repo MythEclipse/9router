@@ -1,7 +1,5 @@
 "use client";
 
-/* eslint-disable react-hooks/purity, react-hooks/set-state-in-effect */
-
 import { useState, useEffect } from "react";
 import { Card } from "@/shared/components";
 import { getProviderAlias } from "@/shared/constants/providers";
@@ -12,26 +10,14 @@ import { Row } from "./exampleShared";
 
 export function SttExampleCard({ providerId }) {
   const providerAlias = getProviderAlias(providerId);
-  const builtinSttModels = getModelsByProviderId(providerId).filter(
-    (m) => getModelKind(m) === "stt",
-  );
+  const builtinSttModels = getModelsByProviderId(providerId).filter((m) => getModelKind(m) === "stt");
   const [customSttModels, setCustomSttModels] = useState([]);
   const sttModels = [...builtinSttModels, ...customSttModels];
 
   const [selectedModel, setSelectedModel] = useState(builtinSttModels[0]?.id ?? "");
   const selectedModelObj = sttModels.find((m) => m.id === selectedModel);
   const allowedParams = Array.isArray(selectedModelObj?.params) ? selectedModelObj.params : [];
-<<<<<<< HEAD
-  const responseFormats = selectedModelObj?.responseFormats || [
-    "json",
-    "text",
-    "srt",
-    "verbose_json",
-    "vtt",
-  ];
-=======
   const responseFormats = selectedModelObj?.responseFormats || ["json", "text", "srt", "verbose_json", "vtt"];
->>>>>>> upstream/master
 
   const [audioFile, setAudioFile] = useState(null);
   const [language, setLanguage] = useState("");
@@ -57,23 +43,17 @@ export function SttExampleCard({ providerId }) {
     setLocalEndpoint(window.location.origin);
     fetch("/api/keys")
       .then((r) => r.json())
-      .then((d) => {
-        setApiKey((d.keys || []).find((k) => k.isActive !== false)?.key || "");
-      })
+      .then((d) => { setApiKey((d.keys || []).find((k) => k.isActive !== false)?.key || ""); })
       .catch(() => {});
     fetch("/api/tunnel/status")
       .then((r) => r.json())
-      .then((d) => {
-        if (d.publicUrl) setTunnelEndpoint(d.publicUrl);
-      })
+      .then((d) => { if (d.publicUrl) setTunnelEndpoint(d.publicUrl); })
       .catch(() => {});
     const loadCustom = () => {
       fetch("/api/models/custom", { cache: "no-store" })
         .then((r) => r.json())
         .then((d) => {
-          const list = (d.models || []).filter(
-            (m) => getModelKind(m) === "stt" && m.providerAlias === providerAlias,
-          );
+          const list = (d.models || []).filter((m) => getModelKind(m) === "stt" && m.providerAlias === providerAlias);
           setCustomSttModels(list);
         })
         .catch(() => {});
@@ -107,8 +87,7 @@ export function SttExampleCard({ providerId }) {
       fd.append("model", modelFull);
       if (allowedParams.includes("language") && language) fd.append("language", language);
       if (allowedParams.includes("response_format")) fd.append("response_format", responseFormat);
-      if (allowedParams.includes("temperature") && temperature)
-        fd.append("temperature", temperature);
+      if (allowedParams.includes("temperature") && temperature) fd.append("temperature", temperature);
       if (allowedParams.includes("prompt") && prompt) fd.append("prompt", prompt);
       if (allowedParams.includes("timestamps_granularity") && granularity) {
         fd.append("timestamps_granularity", granularity);
@@ -125,11 +104,7 @@ export function SttExampleCard({ providerId }) {
 
       const headers = {};
       if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
-      const res = await fetch("/api/v1/audio/transcriptions", {
-        method: "POST",
-        headers,
-        body: fd,
-      });
+      const res = await fetch("/api/v1/audio/transcriptions", { method: "POST", headers, body: fd });
       setLatency(Date.now() - start);
       const ct = res.headers.get("content-type") || "";
       const data = ct.includes("application/json") ? await res.json() : await res.text();
@@ -145,12 +120,7 @@ export function SttExampleCard({ providerId }) {
     }
   };
 
-  const resultStr =
-    typeof result === "string"
-      ? result
-      : result
-        ? JSON.stringify(result, null, 2)
-        : `{\n  "text": "Hello world..."\n}`;
+  const resultStr = typeof result === "string" ? result : (result ? JSON.stringify(result, null, 2) : `{\n  "text": "Hello world..."\n}`);
 
   return (
     <Card>
@@ -165,9 +135,7 @@ export function SttExampleCard({ providerId }) {
               className="w-full px-3 py-1.5 text-sm border border-border rounded-lg bg-background focus:outline-none focus:border-primary"
             >
               {sttModels.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name || m.id}
-                </option>
+                <option key={m.id} value={m.id}>{m.name || m.id}</option>
               ))}
             </select>
           </Row>
@@ -193,9 +161,7 @@ export function SttExampleCard({ providerId }) {
                 onClick={() => setUseTunnel((v) => !v)}
                 title={useTunnel ? "Using tunnel" : "Using local"}
                 className={`flex items-center gap-1 text-xs px-2 py-1.5 rounded-lg border shrink-0 transition-colors ${
-                  useTunnel
-                    ? "border-primary/40 bg-primary/10 text-primary"
-                    : "border-border text-text-muted hover:text-primary"
+                  useTunnel ? "border-primary/40 bg-primary/10 text-primary" : "border-border text-text-muted hover:text-primary"
                 }`}
               >
                 <span className="material-symbols-outlined text-[14px]">wifi_tethering</span>
@@ -208,11 +174,7 @@ export function SttExampleCard({ providerId }) {
         {/* API Key */}
         <Row label="API Key">
           <span className="px-3 py-1.5 text-sm font-mono text-text-main bg-sidebar rounded-lg truncate block">
-            {apiKey ? (
-              `${apiKey.slice(0, 8)}${"\u2022".repeat(Math.min(20, Math.max(0, apiKey.length - 8)))}`
-            ) : (
-              <span className="text-text-muted italic">No key configured</span>
-            )}
+            {apiKey ? `${apiKey.slice(0, 8)}${"\u2022".repeat(Math.min(20, Math.max(0, apiKey.length - 8)))}` : <span className="text-text-muted italic">No key configured</span>}
           </span>
         </Row>
 
@@ -281,15 +243,7 @@ export function SttExampleCard({ providerId }) {
               onChange={(e) => setResponseFormat(e.target.value)}
               className="w-full px-3 py-1.5 text-sm border border-border rounded-lg bg-background focus:outline-none focus:border-primary"
             >
-<<<<<<< HEAD
-              {responseFormats.map((format) => (
-                <option key={format} value={format}>
-                  {format}
-                </option>
-              ))}
-=======
               {responseFormats.map((format) => <option key={format} value={format}>{format}</option>)}
->>>>>>> upstream/master
             </select>
           </Row>
         )}
@@ -357,17 +311,13 @@ export function SttExampleCard({ providerId }) {
         {/* Curl + Run */}
         <div className="mt-1">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-1.5">
-            <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">
-              Request
-            </span>
+            <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">Request</span>
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
               <button
                 onClick={() => copyCurl(curlSnippet)}
                 className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-primary transition-colors"
               >
-                <span className="material-symbols-outlined text-[14px]">
-                  {copiedCurl ? "check" : "content_copy"}
-                </span>
+                <span className="material-symbols-outlined text-[14px]">{copiedCurl ? "check" : "content_copy"}</span>
                 {copiedCurl ? "Copied" : "Copy"}
               </button>
               <button
@@ -375,19 +325,14 @@ export function SttExampleCard({ providerId }) {
                 disabled={running || !audioFile || !modelFull}
                 className="flex w-full sm:w-auto items-center justify-center gap-1.5 px-3 py-1 rounded-lg bg-primary text-white text-xs font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <span
-                  className="material-symbols-outlined text-[14px]"
-                  style={running ? { animation: "spin 1s linear infinite" } : undefined}
-                >
+                <span className="material-symbols-outlined text-[14px]" style={running ? { animation: "spin 1s linear infinite" } : undefined}>
                   play_arrow
                 </span>
                 {running ? "Transcribing..." : "Run"}
               </button>
             </div>
           </div>
-          <pre className="bg-sidebar rounded-lg px-3 py-2.5 text-xs font-mono text-text-main overflow-x-auto whitespace-pre-wrap break-all">
-            {curlSnippet}
-          </pre>
+          <pre className="bg-sidebar rounded-lg px-3 py-2.5 text-xs font-mono text-text-main overflow-x-auto whitespace-pre-wrap break-all">{curlSnippet}</pre>
         </div>
 
         {error && <p className="text-xs text-red-500 break-words">{error}</p>}
@@ -396,19 +341,14 @@ export function SttExampleCard({ providerId }) {
         <div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-1.5">
             <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">
-              Response{" "}
-              {result && latency && (
-                <span className="font-normal normal-case">&#9889; {latency}ms</span>
-              )}
+              Response {result && latency && <span className="font-normal normal-case">&#9889; {latency}ms</span>}
             </span>
             {result && (
               <button
                 onClick={() => copyRes(resultStr)}
                 className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-primary transition-colors"
               >
-                <span className="material-symbols-outlined text-[14px]">
-                  {copiedRes ? "check" : "content_copy"}
-                </span>
+                <span className="material-symbols-outlined text-[14px]">{copiedRes ? "check" : "content_copy"}</span>
                 {copiedRes ? "Copied" : "Copy"}
               </button>
             )}
