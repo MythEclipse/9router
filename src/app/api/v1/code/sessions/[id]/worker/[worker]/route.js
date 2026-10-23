@@ -22,7 +22,7 @@
  * This route answers Claude Code's own worker contract.
  */
 import { handleSearch } from "@/sse/handlers/search.js";
-import { getProviderConnections } from "@/lib/db/repos/connectionsRepo.js";
+import { listProvidersWithCredentials } from "@/sse/handlers/chat.js";
 import { getSettings } from "@/lib/localDb";
 import { resolveSearchProvider } from "open-sse/handlers/webSearchCredentials.js";
 
@@ -73,8 +73,7 @@ async function resolveSearchTarget() {
   const trimmedPinned = typeof pinned === "string" ? pinned.trim() : "";
   if (trimmedPinned) return trimmedPinned;
 
-  const connections = await getProviderConnections({ isActive: true });
-  const candidates = [...new Set(connections.map(({ provider }) => provider))];
+  const candidates = await listProvidersWithCredentials();
   const resolved = resolveSearchProvider({ candidates });
   return resolved.providerId || null;
 }

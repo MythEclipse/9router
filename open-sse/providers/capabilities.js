@@ -645,7 +645,7 @@ export const PATTERN_CAPABILITIES = [
  * Union:        vision, pdf, audioInput, videoInput, imageOutput, audioOutput, search
  * Intersection: tools
  * Primary:      reasoning fields from the first (primary) model
- * Conservative: contextWindow = min; maxOutput = min
+ * Conservative: contextWindow = min; maxOutput = max
  *
  * @param {string[]} comboModels
  * @param {Object|null} [comboLookup] optional map of combo name → models array for nested resolution
@@ -657,20 +657,6 @@ export const PATTERN_CAPABILITIES = [
  * @param {number} [_depth] internal recursion depth guard
  * @returns {object|null} full capabilities object, or null for empty input
  */
-export function comboWindowSetting(strategy = {}) {
-  const requestedMode = strategy?.contextWindowMode;
-  const mode = ["min", "max", "custom"].includes(requestedMode) ? requestedMode : "min";
-  const custom = Number(strategy?.contextWindow);
-  return { mode, custom: Number.isFinite(custom) && custom > 0 ? custom : null };
-}
-
-export function comboContextWindow(windows, mode = "min", custom = null) {
-  const valid = (windows || []).filter((window) => Number.isFinite(window) && window > 0);
-  if (Number.isFinite(custom) && custom > 0) return custom;
-  if (!valid.length) return undefined;
-  return mode === "max" ? Math.max(...valid) : Math.min(...valid);
-}
-
 export function aggregateComboCapabilities(comboModels, comboLookup = null, resolveCaps = null, _depth = 0) {
   if (!comboModels?.length || _depth > 6) return null;
   const allCaps = comboModels.map((fullId) => {
@@ -702,7 +688,7 @@ export function aggregateComboCapabilities(comboModels, comboLookup = null, reso
     thinkingCanDisable: first.thinkingCanDisable,
     thinkingRange:      first.thinkingRange,
     contextWindow: Math.min(...allCaps.map((c) => c.contextWindow)),
-    maxOutput:     Math.min(...allCaps.map((c) => c.maxOutput)),
+    maxOutput:     Math.max(...allCaps.map((c) => c.maxOutput)),
   };
 }
 

@@ -12,12 +12,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const handleSearch = vi.fn();
-const getProviderConnections = vi.fn();
+const listProvidersWithCredentials = vi.fn();
 const getSettings = vi.fn();
 
 vi.mock("@/sse/handlers/search.js", () => ({ handleSearch: (...a) => handleSearch(...a) }));
-vi.mock("@/lib/db/repos/connectionsRepo.js", () => ({
-  getProviderConnections: (...a) => getProviderConnections(...a),
+vi.mock("@/sse/handlers/chat.js", () => ({
+  listProvidersWithCredentials: (...a) => listProvidersWithCredentials(...a),
 }));
 vi.mock("@/lib/localDb", () => ({ getSettings: (...a) => getSettings(...a) }));
 vi.mock("open-sse/handlers/webSearchCredentials.js", () => ({
@@ -60,7 +60,7 @@ const request = (body) =>
 beforeEach(() => {
   vi.clearAllMocks();
   getSettings.mockResolvedValue({ webSearchProvider: "" });
-  getProviderConnections.mockResolvedValue([{ provider: "tinyfish" }, { provider: "antigravity" }]);
+  listProvidersWithCredentials.mockResolvedValue(["tinyfish", "antigravity"]);
   handleSearch.mockResolvedValue(searchOk([searchResult()]));
 });
 
@@ -150,7 +150,7 @@ describe("Claude Code CCR worker web-search route", () => {
   });
 
   it("returns 503 when nothing connected can search", async () => {
-    getProviderConnections.mockResolvedValue([{ provider: "antigravity" }]);
+    listProvidersWithCredentials.mockResolvedValue(["antigravity"]);
     const res = await POST(request({ query: "q" }), { params });
     expect(res.status).toBe(503);
     expect((await res.json()).error.error_type).toBe("no_search_provider");
@@ -176,11 +176,7 @@ describe("Claude Code CCR worker web-search route", () => {
     // antigravity is connected and `supportsSearch` is true for it, but it
     // returns Vertex grounding redirect URLs that resolve nowhere useful. A
     // connected dedicated engine must still win.
-    getProviderConnections.mockResolvedValue([
-      { provider: "antigravity" },
-      { provider: "tinyfish" },
-      { provider: "exa" },
-    ]);
+    listProvidersWithCredentials.mockResolvedValue(["antigravity", "tinyfish", "exa"]);
     await POST(request({ query: "q" }), { params });
     const sent = JSON.parse(await handleSearch.mock.calls[0][0].text());
     expect(sent.model).toBe("tinyfish");
