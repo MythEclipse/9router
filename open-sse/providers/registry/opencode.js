@@ -13,7 +13,7 @@ export default {
   category: "free",
   noAuth: true,
   transport: {
-    baseUrl: "https://opencode.ai",
+    baseUrl: "https://opencode.ai/zen/v1",
     headers: {
       "x-opencode-client": "desktop",
     },
@@ -53,3 +53,4 @@ export default {
   modelsFetcher: { url: "https://opencode.ai/inference/v1/models", type: "opencode-free" },
   passthroughModels: true,
 };
+
