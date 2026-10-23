@@ -1,398 +1,48 @@
-# Unreleased
-
-### Fix: audit of the routing + usage data paths (5 defects found by running the app)
-
-Each of these was reproduced live against a running server before and after the
-fix, not inferred from reading code.
-
-- **Combo stopped dead on a model-scoped failure.** `handleComboChat` decided
-  "advance to the next member?" with `checkFallbackError`, which answers a
-  different question ("cool this account down?") and deliberately returns false
-  for a 4xx matching no rule — correct for credentials, wrong for a combo. A
-  deprecated or unavailable seat (410 `ModelDeprecated`, 400 `Model is
-  unavailable`) therefore ended the whole combo, so a two-model list behaved like
-  a one-model request and returned the dead seat's error. Added
-  `shouldAdvanceComboModel` (`open-sse/services/combo.js`): model-scoped statuses
-  (400/404/406/410/422) and wordings advance, request-shaped 4xx still does not,
-  and account-scoped failures keep their cooldown-backed path. Verified: a combo
-  led by a 410 seat now answers 200 from its second member.
-- **Per-account usage collapsed to one row.** `usageDaily.byAccount` was keyed by
-  `connectionId` alone with a single `rawModel` meta field overwritten by
-  whichever model wrote last, so an account running three models reported one row
-  labelled with the last model and carrying all three models' tokens. Re-keyed to
-  `connectionId|model|provider`, with the reader parsing both shapes so an
-  upgrade reads its own history.
-- **Request Logs showed finished requests as pending, and never showed
-  failures.** The tab classifies by substring (`PENDING` pulses, `FAILED` red,
-  `OK` green) while `saveRequestUsage` writes wire-style `ok`/`error`, so every
-  success fell through all three checks and pulsed forever. Separately,
-  `appendRequestLog` was `{}` — a no-op — so the FAILED rows every error path
-  reports were never written at all. Statuses are now normalised on read
-  (`normalizeLogStatus`, with a stale `PENDING` older than the request timeout
-  rendered as `STALE`), and `appendRequestLog` records pending/error rows as
-  log-only writes that a terminal write supersedes, so one request is one row.
-- **Lifecycle rows leaked into usage totals.** Because those log rows live in
-  `usageHistory`, counting them invented zero-token request rows per failure
-  (a dead model showed up in the Account tab with `prompt=0`). `getUsageStats`
-  and `getChartData` now exclude `pending`/`error`, keeping the log complete
-  without moving token, cost or request totals.
-- **Raw API keys were persisted to disk.** `aggregateEntryToDay` wrote
-  `entry.apiKey` verbatim into `usageDaily.byApiKey[].apiKey`. The bucket id was
-  already a SHA-256 digest precisely so the raw key stayed out (AUDIT-002), but
-  the meta field reintroduced it into a long-lived aggregate, and the reader
-  passed it straight back out of `GET /api/usage/stats`. The aggregate now stores
-  the masked form and resolves key names from the bucket id.
-- **`next dev` dirtied a tracked file on every boot.** Next appends a managed
-  "This is NOT the Next.js you know" block to `CLAUDE.md`/`AGENTS.md`; both are
-  hand-maintained here, so every dev boot left an uncommitted modification.
-  Set `agentRules: false` in `next.config.mjs`.
-- Removed the unread `tunnelProvider` setting: Cloudflare and Tailscale are
-  independent tunnels with their own enable/disable routes and `*Enabled` flags,
-  so a single provider enum could never be read without contradicting both.
-
-### Chore: consolidate CI into one branching workflow
-
-Four workflows (`deploy.yml`, `docker-deploy-imrnes.yml`, `docker-publish.yml`,
-`tray-binaries.yml`) are merged into `.github/workflows/ci.yml`, branching by
-`needs` and `if` instead of by file:
-
-- `test` (single shared regression gate) fans out to `deploy-orange`, and to
-  `image` → `smoke` → `deploy-imrnes`; the release lane
-  (`release-prepare` → `release-build` → `release-publish`) runs on `v*` tags
-  or dispatch with `release_tag`; `tray` runs on dispatch with `tray_publish`.
-- Per-host deploy concurrency groups are kept at job level, and all steps are
-  verbatim copies — only triggers, conditions and env scoping changed.
-
-### Fix: OpenCode Free 403 FreeTierError on the live free tier
-
-Live probes (2026-10-15) show the free tier moved from `/zen/v1/*` to
-`/inference/v1/*`: the same fingerprint returns 403 on `/zen/v1/chat/completions`
-and `/zen/v1/responses` but 200 on the `/inference/v1` equivalents. Upstream also
-validates authentic OpenCode tool schemas — dummy descriptions 403 while the
-canonical defs return 200 — and rejects `stream:false` with 403.
-
-- `open-sse/executors/opencode.js`: `buildUrl` routes per model to
-  `/inference/v1/responses` (Muse Spark), `/inference/v1/messages`
-  (`union-alpha`), else `/inference/v1/chat/completions`. Collapsing everything
-  to chat broke Muse Spark with 400 `ModelProtocolUnsupported`.
-- `open-sse/utils/opencodeFingerprint.js`: keep the authentic tool defs
-  (required live) but restore the legacy `tool_choice` defaults. Chat with
-  `none`/absent and Responses with absent all return 200; only Responses with
-  explicit `none`/named on `muse-spark-1.3-free` 400s, already demoted to `auto`
-  by the executor quirk. Forcing `auto` globally would let the model pick decoy
-  fingerprint tools on the chat lane.
-- `open-sse/executors/opencode-zen.js`: drop the local dummy fingerprint stubs
-  and use the shared `applyFingerprintTools()` so both executors send authentic
-  schemas; add `x-opencode-session-id` / `x-opencode-request` /
-  `x-opencode-project` headers for parity with the free lane.
-- Registry/test-endpoint updates (`/inference/v1/models`, systemone baseUrl,
-  UA `opencode/1.19.0`, `x-opencode-client: cli`) kept — verified 200 live.
-
-Verified live: `big-pickle` chat and `muse-spark-1.3-contributor-free`
-responses both HTTP 200 via the executor wire shape. Suites green:
-`unit/` 3456 passed, `translator/` 440 passed.
-
-### Fix: bridged Claude Code search now goes through /v1/search
-
-Web Search still returned empty after the client-tool fix. The bridge was
-dispatching directly to `handleSearchCore`, bypassing the app's `/v1/search`
-handler — the only layer that expands combos, enforces per-key access and
-applies combo fallback. A combo name like `search-combo-1` is not in
-`AI_PROVIDERS`, so it could never be selected by provider-id resolution.
-
-- The runner takes an injected `runSearchViaEndpoint`, and `chat.js` provides one
-  that dispatches through `handleSearch` with a synthetic `Request`, so a
-  bridged search sees exactly what a user's curl sees.
-- `resolveSearchProvider` now prefers a connected candidate over the request's
-  own provider. `searchViaChat` (openai -> gpt-4o-mini) only works if that model
-  has search access and the account is connected; on this deployment neither
-  held, so every search failed. The request-provider fallback is now marked
-  `needsCredentials` so callers can tell it apart from a known-good pick.
-- The plan carries `searchTargetModel` (the configured provider or combo) so the
-  bridge targets the same thing the operator configured.
-- **The endpoint target is resolved before dispatch, never defaulted to the chat
-  provider.** `claude-opus-5-5` resolves to the `antigravity` provider, which
-  has no search access, so the previous fallback made every Claude Code search
-  return zero results. With nothing connected the runner now raises instead of
-  calling `/v1/search` with a provider that cannot search.
-- A pinned target that is a combo name is not run through provider-id selection
-  (combos are not in `AI_PROVIDERS`); the endpoint handles it.
-- **`stop_reason` is corrected to `end_turn` once the bridge has answered the
-  turn's only tool call.** The upstream ends with `tool_use` because *it* had just
-  emitted a call; the bridge answers that call with the native server-tool pair,
-  so nothing is pending. Anthropic's own completed search ends with `end_turn`
-  (web-search response docs), and leaving `tool_use` in place advertises a tool
-  result that never arrives — which is what Claude Code was rejecting as "The
-  model's tool call could not be parsed". Corrected on both the streaming and
-  non-streaming paths, and only when no other client `tool_use` survives.
-- **Suppressed blocks are renumbered so indices stay contiguous.** Dropping a
-  block left a hole in the `index` sequence, and a Claude client rejects a stream
-  whose content-block indices skip. Forwarded blocks are now remapped to a dense
-  `0..n`, with the injected pair continuing from the end.
-- **Search results are injected before the turn's terminal frames.** Deferring
-  `message_stop` alone was not enough: the upstream's final `message_delta`
-  carries `stop_reason`, and a Claude client treats that as end-of-turn too, so
-  results injected between the two still failed with "The model's tool call could
-  not be parsed". Both frames are now held back and replayed, in Anthropic's
-  order, after the search pair: blocks → results → stop_reason → message_stop.
-  Non-terminal `message_delta` frames (safeguard verdicts) stay in place.
-- **Injected stream blocks are now numbered after the highest index already on
-  the wire.** `buildBlocksSse` hardcoded `index: 0` for every block it emitted,
-  so the server-tool pair collided with the blocks upstream had already sent.
-  Anthropic numbers content blocks strictly increasing, and Claude Code rejected
-  the whole turn with "The model's tool call could not be parsed".
-- **The streaming bridge now suppresses the model's own search `tool_use`.**
-  This is why live Claude Code reported "Did 0 searches" even with the bridge
-  returning 5 results: the response contained both the model's original
-  `tool_use` *and* the native server-tool pair. Claude Code executes a client
-  `tool_use` itself, locally, so it ran WebSearch locally and ignored the
-  results already sent for the same call. Only the native pair is emitted now.
-  The whole `content_block_start`/`delta`/`stop` triple is dropped together, and
-  non-search tool calls (Read, Bash, …) are still forwarded untouched.
-- **The streaming bridge now recognises OpenAI-shaped `tool_calls`.** It wraps
-  the *provider* response, so for any OpenAI-compatible upstream (antigravity,
-  and every provider Claude Code traffic uses) the frames are chat-completions
-  deltas — Anthropic `content_block` events only appear after translation.
-  Recognising only the Anthropic shape made the bridge a no-op on every such
-  provider. Arguments split across chunks are reassembled per `index`, and the
-  call is only recorded once its accumulated JSON parses.
-- **`isClaudeCodeSearchTool` no longer requires a falsy `type`.** A streamed
-  block always carries `type: "tool_use"`, so the old check rejected every real
-  Claude Code `WebSearch` block — only a `web_search_*` server-tool type should
-  disqualify the match.
-- **The bridge now runs on the forced-SSE-to-JSON path.** A `stream:false`
-  Anthropic request whose provider requires streaming never reaches the normal
-  non-streaming handler — it goes through `handleForcedSSEToJson`, which had no
-  web search wiring at all. Since `claude-opus-5-5` resolves to a force-stream
-  provider, *every* Claude Code search took this path and returned an unanswered
-  tool call. The plan and runner are now passed through and the bridge runs
-  before the Claude body is serialized.
-
-
-### Fix: Claude Code's WebSearch tool returned empty results
-
-Claude Code calling Web Search through 9router got `Did 0 searches` and a stub
-("I'll run a few complementary searches in parallel") with no sources, on every
-query. Two independent causes, both confirmed against a live Claude Code 2.1.296
-request captured on the wire:
-
-1. **The decoy told the model search was dead.** `CC_DECOY_TOOLS` declared
-   `WebSearch` with "This tool is currently unavailable.", so the model narrated
-   a search that never returned anything instead of surfacing an error.
-   WebSearch is no longer a decoy.
-
-2. **The plan keyed off a tool Claude Code never sends.** `resolveWebSearchPlan`
-   only activated on Anthropic's server tool (`type: "web_search_2025xxxx"`).
-   Claude Code declares its own client tool `WebSearch` with **no `type`** and
-   emits `name: "WebSearch"` — a shape the matcher did not recognise, so the
-   bridge never ran. Now both shapes are recognised, and the client-tool shape
-   always takes the bridge lane: there is no upstream server tool to forward,
-   so passthrough would return nothing.
-
-Also:
-
-- `findWebSearchCall` and the streaming observer match `WebSearch` as well as
-  `web_search`.
-- `installBridgeTool` leaves CC's own declaration intact (replacing it would
-  drop `allowed_domains`/`blocked_domains` from the schema and rename a tool the
-  client expects to call itself).
-- `readToolOptions` also reads `input_schema.properties`, where CC keeps the
-  domain filters as schema rather than values.
-
-
-### Claude Code WebSearch: the CCR worker route
-
-Claude Code's own `WebSearch` client tool does **not** use the Anthropic Messages
-tool-call protocol. Reading the installed 2.1.296 binary, it has two paths:
-
-- **gateway path** — `POST {base}/v1/code/sessions/{ccrSessionId}/worker/web-search`
-  expecting `{ results: [{ title, url, snippet? }] }`, gated behind
-  `CLAUDE_CODE_WEBSEARCH_USE_CCR_PROXY` **and** a CCR session id;
-- **local path** (the default) — synthesises `Web search results for query: "…"`
-  plus the `REMINDER: You MUST include the sources above` suffix, with **zero**
-  results. That is the "Did 0 searches" / empty-placeholder behaviour.
-
-So none of the Anthropic-protocol bridge work below reaches this tool: the
-`server_tool_use`/`web_search_tool_result` pair is the *server-tool* lane, a
-different protocol that this client does not read. With the route absent (404)
-the client silently takes the local stub.
-
-New `POST /api/v1/code/sessions/[id]/worker/[worker]` route serves it:
-
-- reuses the one supported `/v1/search` path, so combo expansion, per-key access
-  and combo fallback behave exactly as for a direct call;
-- forwards the caller's key so per-key access still applies;
-- picks the engine through the existing `resolveSearchProvider`, so an
-  operator-pinned provider wins and otherwise a connected *dedicated* engine is
-  chosen over the chat provider — candidate order would pick `antigravity` for a
-  `claude-opus-5-5` request and return Vertex grounding redirect URLs;
-- honours `allowed_domains` / `blocked_domains` using `/v1/search`'s own fields;
-- preserves `snippet`, which the client needs — with
-  `CLAUDE_CODE_WEBSEARCH_CITATIONS` set it builds the model's tool_result text
-  from `content[].snippet` and drops hits that have none;
-- uses the client's own error envelope, `{error:{error_type,error_message}}`. The
-  API-wide `{error:{type,message}}` shape leaves both fields undefined, so a real
-  failure reaches the user as an empty message;
-- derives the result cap from `search_profile` (`standard` → 5, `extended` → 10).
-  `max_uses` is the field the client's *internal* search subrequest uses; the
-  worker route never receives it;
-- returns `{results: []}` for a genuinely empty search instead of an error.
-
-### Exa: snippets silently dropped by upstream API drift
-
-`buildExaRequest` sent `text: true` / `highlights: true` at the top level. Exa
-still accepts that shape but no longer honours it — content options now live under
-a `contents` object — so **every** Exa result came back with an empty `snippet`.
-
-This is what left the CCR worker route returning bare `{title, url}`: with
-`CLAUDE_CODE_WEBSEARCH_CITATIONS` set, Claude Code builds the model's tool_result
-from `snippet` and drops hits that have none, so a snippet-less engine looks
-identical to a broken search. `contents` is now sent, and `normalizeExa` accepts
-both the nested and flat response shapes.
-
-### Bringing it up in Claude Code (three client-side traps)
-
-Served and verified working in production, but the client gates this on state
-that is easy to get wrong:
-
-1. **`CLAUDE_CODE_WEBSEARCH_USE_CCR_PROXY=1`** — otherwise the local stub wins
-   and returns zero results no matter what the gateway does.
-2. **`CLAUDE_CODE_SESSION_ID`** matching `/^(session_|cse_)/`. A value that fails
-   this check is silently ignored by the gate.
-3. **`CLAUDE_CODE_SESSION_ACCESS_TOKEN`** must carry the gateway key. The worker
-   request is authenticated with this token, **not** `ANTHROPIC_API_KEY`; without
-   it the client sends no `Authorization` header and the route answers 401.
-
-The trap that cost the most time: **these must be in the real process
-environment, not `settings.json`'s `env` block.** The `CLAUDE_CODE_*` config is
-snapshotted before settings env is applied, so settings.json silently does
-nothing for the CCR gate — while `ANTHROPIC_BASE_URL`/`ANTHROPIC_API_KEY` from
-the same block work fine. Exported via `.bashrc`/`.profile`.
-
-Verified against production through a plain `bash -lc` shell: all three queries
-that previously returned "Did 0 searches" now return real titles and URLs.
-
-### Web search for the Anthropic protocol (Claude Code)
-
-Claude Code connecting to 9router over the Anthropic protocol now gets working
-web search. Two lanes, chosen automatically per request:
-
-- **passthrough** — the upstream runs the search (Anthropic-family providers);
-  `tools` is left untouched.
-- **bridge** — 9router runs the search through its own `/v1/search` path and
-  splices the Anthropic `server_tool_use` + `web_search_tool_result` block pair
-  into the response, so the client cannot tell the difference.
-
-Details:
-
-- Bridge search bodies reuse the existing `/v1/search` contract: `query`,
-  `max_results`, `search_type`, and `allowed_domains` mapped to `domain_filter`.
-- Tool-use ids are normalised to Anthropic's `srvtoolu_*` shape on both the
-  streaming and non-streaming paths; an unnormalised id is rejected upstream.
-- The bridge tool declaration is emitted in the body format's own shape
-  (`{type,name,input_schema}` for Claude, `{type:"function",function}` for
-  OpenAI) so the provider can actually invoke it.
-- Streaming: `input_json_delta` frames are parsed and merged into the pending
-  call, since Anthropic sends tool arguments out-of-band from the block start.
-- Domain filters are enforced locally as well as forwarded to the engine, with
-  block taking precedence over allow.
-- Credentials resolve at call time through an injected resolver (never inlined)
-  and are namespaced per search provider, so a search failure cannot lock the
-  chat lane's account. Lookup failures degrade to "no credentials" instead of
-  failing the turn.
-- New settings: `webSearchEnabled` (unset = auto-activate on tool declaration,
-  `false` = force off) and `webSearchProvider` (pin the search engine).
-
-### Fix: OpenCode Free 403 FreeTierError for non-OpenCode clients
-
-Every free-tier request arriving from a client that is not OpenCode itself —
-Claude Code, curl, omp, pi — was refused:
-
-```json
-{"type":"error","error":{"type":"FreeTierError","message":"OpenCode's free tier can only be used from within OpenCode. Download it at https://opencode.ai and keep building."}}
-```
-
-`translateSessionId()` turns a generic downstream session id into an OpenCode
-`ses_` id by SHA-256-hashing it and taking the first 6 digest bytes as the
-12-hex prefix. Upstream Zen validates that prefix: it has to decode to a recent
-inverted timestamp `~(BigInt(Date.now()) * 4096n + counter)` — the same shape the
-CLI's `generateSessionId()` emits. A SHA-256 digest carries random bits there, so
-the decoded timestamp was essentially never recent, and Zen classified the caller
-as not an authentic OpenCode client.
-
-- The prefix is now produced by `generateSessionId()` instead of a digest, in
-  both `open-sse/executors/opencode.js` and `open-sse/executors/opencode-zen.js`.
-  A session id that is already a valid `ses_` still passes through untouched, so
-  a real OpenCode client keeps its own identity.
-- The translation is memoised in a TTL/LRU cache (max 1000 entries, driven by
-  `MEMORY_CONFIG.sessionTtlMs`) so one downstream conversation still maps to one
-  stable upstream session across turns — generating a fresh id per request would
-  churn the upstream session affinity instead of preserving it.
-- Verified live on `space-bunny-free`: digest-derived ids returned 403 4/4,
-  generated ids returned 200 4/4, with the difference visible in the prefix
-  itself (`c67251c513c6` vs `ecc5937c7ffe`).
-
-Upstream: PR #4782. Fixes #4780, #4778, #4777, #4101, #4127, #4781.
-
-### Fix: OpenCode Free sessions were shared between users and reset mid-conversation
-
-On the free tier every caller is handed the same literal `connectionId`
-(`"noauth"`, `src/sse/services/auth.js`), so two unrelated users of one 9router
-instance resolved to the **same** upstream `ses_` — two different API keys
-produced one shared session, and two clients that both sent the literal
-`session_id: "default"` collided on it as well. Separately, a conversation
-silently changed session part-way through: with no client session id, resolution
-fell through to `resolveSessionId`, whose assistant-text key activates only past
-its 50-character threshold (`ASSISTANT_MIN_LEN`/`ASSISTANT_CAP_LEN`), so the
-session flipped the moment the accumulated assistant text crossed 50 chars —
-re-minting a quota bucket mid-thread and reproducing the 429 the session-reuse
-work was meant to prevent.
-
-- Session resolution is now scoped to the calling user. `callerIdentity()` hashes
-  the caller's own credential to 9router (already on `credentials.rawHeaders`,
-  set in `chatCore.js:183`) and that identity is part of the translation cache
-  key, so a shared literal session id no longer merges two users. The identity is
-  a cache key only and never goes on the wire.
-- `"noauth"` is treated as a sentinel rather than an identity: it no longer
-  selects or separates sessions, which had made `identityKey()`'s per-user hash
-  unreachable for every no-auth provider.
-- When the caller has an identity, that identity now pins the session for the
-  whole conversation instead of the assistant-text heuristic, so a long thread
-  keeps one `ses_` from the first turn to the last.
-- Applied to `open-sse/executors/opencode.js` and `open-sse/executors/opencode-zen.js`.
-  `sessionManager.js` is untouched, so no other provider changes behaviour.
-- Verified live on `space-bunny-free`: two callers get distinct sessions and each
-  keeps its own across turns, including when both send `session_id: "default"`.
-
-
-## Fixes
-- **GLM-5.2 lost `reasoning_effort`**: `resolveCapabilities` returns from an exact `MODEL_CAPABILITIES` entry before it reaches `PATTERN_CAPABILITIES`, so the exact `glm-5.2` entry silently shadowed the `*glm-5.2*` pattern that sets `thinkingEffortSupported`. GLM-5.2 requests went out without the effort level z.ai expects. The flag is now declared on the exact entry, with a regression test pinning that the gate stays version-exact (pre-5.2 GLM still ignores the field).
-- Kiro integrity retry: a retryable status (e.g. 401) walks every base URL before the response is returned, and a caller that assumed a single response per retry could crash on the exhausted queue instead of seeing the retry error.
-
-## Tests
-- **Suite is fully green: 97 → 0 failures** (3660 passing, 0 non-passing files). Every entry in `known-fails.txt` was resolved by fixing a real defect, never by rebaselining; the file is now empty and `verify-no-regression.mjs` is a green gate rather than a way to absorb breakage.
-- `verify-no-regression.mjs` now also gates **collection failures**. A file that fails to collect (`Cannot find package 'lowdb'`, "No test suite found") has an empty `assertionResults`, so assertion-only counting reported a clean run while six files were broken — including a Kimchi assertion that had been failing since `6d96e24b`.
-- Three suites written against `node:test` are now actually executed: vitest collected them by glob, ran none of their assertions, and failed each file with "No test suite found", so they were gated by nothing. They are excluded in `vitest.config.js` and run by a new `node:test suites` step in `deploy.yml`.
-- Deleted `tests/auth/saml.test.js`, a node:test duplicate that could not load (`@/` alias) and was a strict subset of the 12-test `tests/unit/saml.test.js`.
-- `unit/db-benchmark.test.js` no longer imports `lowdb`, which left the stack in the SQLite migration; the file failed collection on every run. It now benchmarks the SQLite layer only.
-- Kimchi's registry assertion no longer pins `category === "oauth"` (UI grouping, moved to `freeTier` in `6d96e24b`); it asserts `authModes: ["oauth","apikey"]`, which is what actually matters.
-- Root causes, not per-test patches: the kiro `systemPrompt` field was removed by design (kiro returns `400 REQUEST_BODY_INVALID`), so 28 assertions were checking a field that no longer exists; `security-audit` resolved paths against the vitest cwd, so 13 reads hit `tests/src/...`; the CodeWhisperer/scan endpoints, Codex CLI version and refresh-lead constants were each pinned as copied literals and went stale on bump.
-- Fixed tests now assert against the source of truth (registry entries, `parseSSELine`'s format argument, the ollama boundary that actually flattens content) instead of duplicated values, so the next bump cannot desync them again.
-- CLAUDE.md now states the real numbers and how to keep them true.
-- Bugs the tests were papering over, now fixed: the observability gate read a settings key nothing set (request details were silently never persisted); the DNS mock shape meant the SSRF private-IP assertions passed without ever exercising `isPrivateIp`; the Cursor catalog test mocked `global.fetch` after the transport moved to raw HTTP/2; a kiro 401 retry consumed one mocked response but the fallback loop needed one per base URL; the got-scraping and search-capability tests asserted transports and features that are explicitly disabled, and now pin the disabled contract instead.
+# v0.5.109 (2026-10-23)
 
 ## Features
-- **Claude Code auto mode**: implement the `dangerous_tool_use` safeguard protocol so 9router answers Claude Code's server-side classifier reviews. Forwards the `safeguards` request field with its paired `dangerous-tool-use-2026-09-03` beta, and returns `safeguard_results` on both non-streaming bodies and the final `message_delta` of a stream. When the routed upstream cannot run the review itself, 9router bridges it with the System One decision engine (`safeguardsClassifierModel` setting overrides the reviewer). Verdicts are keyed by `tool_use.id`; an engine outage reports `unavailable`/`unsupported` so Claude Code re-classifies with its own classifier rather than treating the failure as approval.
-
-## Security
-- **Usage stats**: stop using raw API keys as `byApiKey` JSON object keys. `GET /api/usage/stats` returns that map verbatim, so every key the instance had ever used was readable as a property name by any authenticated dashboard session — the exact exposure AUDIT-002 (#1962) closed, reintroduced by the team-key collision fix (4a57df8b). Buckets are now keyed by a truncated SHA-256 digest of the key, which keeps the distinctness that fix bought (keys sharing a machine-id prefix no longer collapse) while putting nothing reversible on the wire. Applies to the live path, the daily rollup and the `lastUsed` overlay, which all three now share one digest key so the freshness update still matches its bucket.
+- **Combos**: add Smart Router (System One) evaluation with adaptive session stickiness (Smart Switch, Strict Lock, Per-Turn) to retain prompt cache; introduce SmartPolicyModal and System One router picker in dashboard (#4975)
+- **Combos**: add search box for combo list with case-insensitive filtering by name and model IDs, filtered count, clear action, and selective bulk actions (#9b4ea9e)
+- **Image & MITM**: support reference image inputs (base64 and data URIs) for Gemini and Antigravity image generation; ensure MITM directory is auto-created on startup (#4981)
+- **Web Providers**: add web provider executors (`deepseek-web`, `gemini-web`, `muse-web`, `chatgpt-web`, `uc-web`, `veoaifree-web`), shared browser pool (`browserPool`), TLS impersonation via `wreq-js` for `grok-web`, lazy runtime installer for Playwright/wreq-js, and browser session cookie capture (#38a0c44)
+- **Providers**: add SenseNova provider support (`sensenova-6.8-flash-lite`, U1.5 image models) with image configuration options and connection validation (#5079)
+- **Ollama**: support System One decision models (`clef`, `clef-flash`) with host path normalization (#4731)
+- **RTK**: support user-authored custom system prompt injected across OpenAI, Responses, Claude, Gemini, and Kiro request shapes (#8a84204)
+- **STT**: add Codex OAuth transcription provider (`cx/transcribe`), reusing existing Codex OAuth chat connections with 24 kHz PCM16 WAV conversion and bounded private temp files (#5074)
 
 ## Fixes
-- **Streaming**: close the SSE controller on the normal end-of-stream path in the safeguard stream wrapper (an unclosed controller left Claude Code clients hanging forever) and pump in `pull` so upstream backpressure is preserved
-- **Streaming**: observe Claude tool ids from the accumulated frame rather than the raw chunk — a chunk boundary falling mid-JSON silently dropped the tool_use frame and its verdict
-- **System One**: keep the decision model provider-qualified (`openrouter/typesafe/jev-1.13`) in the auto-mode review request, so the model parser no longer reads `typesafe` as a provider and fails credential lookup
-- **OpenCode Free reasoning was silently stripped** (upstream decolua/9router#4737). Eleven OpenCode Free ids — including `space-bunny-free`, `space-bunny`, `big-pickle`, `exo-free`, `fledge-alpha-free`, `longcat-2.0(-free)`, `longcat-2.5-preview-free`, `north-mini-code-free`, `ring-2.6-1t-free`, `x-preview-f-free` — had no `MODEL_CAPABILITIES` entry, so `getCapabilitiesForModel()` fell through to `DEFAULT_CAPABILITIES` (`reasoning: false`) and `applyThinking()` dropped the client's `reasoning_effort` before the request left. All eleven now carry their models.dev modalities and limits, with `reasoning: true` and `thinkingFormat: "openai"`. Regression tests pin both the capability entry and that the unified thinking pass keeps the effort on the wire.
-- **OpenCode Free sessions are resolved from the payload, not from the caller's key** (supersedes the identity-scoped fix above). The free tier authenticates everyone with the same literal credential (`Bearer public`) and hands every caller the `connectionId` sentinel `"noauth"`, so neither a key nor a connection identifies a user — on a shared deployment every caller landed back on one upstream session. The previous fix keyed on a hash of the caller's `authorization` header, which is the same shared string for the whole team, so it separated nobody. What is actually per-caller is the request: the session id the client sends (header or `session_id` / `conversation_id` / `prompt_cache_key` / `request.sessionId`) paired with the conversation's **first** user turn. Both parts are constant across a thread's turns, so one conversation keeps one `ses_` for its whole life, while two threads that happen to share a literal like `session_id: "default"` still land apart because their opening turns differ. Keying on the opening turn rather than accumulated assistant text also removes the mid-thread flip once assistant text crosses `sessionManager`'s 50-char threshold. The credential no longer appears in any cache key; a native `ses_` still passes through untouched. Applied to `open-sse/executors/opencode.js` and `open-sse/executors/opencode-zen.js` — `sessionManager.js` is still untouched, so no other provider changes behaviour. Verified live on `space-bunny-free`: three growing turns of one conversation sent the same `ses_`, an unrelated conversation sent a different one, and two conversations both sending `x-opencode-session: default` under one shared key sent two different ones — all HTTP 200.
+- **Combos**: advance past request-scoped 4xx rejections (validation, unsupported parameter, context overflow) instead of terminating combo (#5057)
+- **Combos**: fall through to next member when streaming response returns HTTP 200 but produces zero content frames (#ca7b540)
+- **Combos**: try next model when provider returns HTTP 400 for insufficient credits or balance too low (#4713)
+- **Antigravity**: dynamically resolve unadorned models to tiered variants from client `reasoning_effort` (#82aeb90)
+- **Antigravity**: update User-Agent to `hub/2.24.0` resolving HTTP 404 on Gemini 4 Argon; add `gemini-4-argon-medium` and `gemini-4-argon-low` tiers, including them in quota tracking (#4816)
+- **OpenCode**: send `reasoning_effort` instead of `thinking` object for `glm-5.3-flash-free` to prevent upstream 400 rejection (#32c5f30)
+- **OpenCode Free**: honor `low|high|max` reasoning efforts for `oc/deepseek-v4.1-flash-free` instead of collapsing `low` to `high` (#313559f)
+- **OpenCode Free**: full reasoning support for `oc/mimo-v2.6-flash-free` across plain OpenAI `reasoning_effort` enum and SSE aggregation / translators (#b833128)
+- **Transports**: allow transports to declare thinking format; nest `reasoning:{effort,summary}` for OpenCode Go and Muse on `/responses` routes (#3014)
+- **Streaming**: synthesize missing `id` on streamed tool-call fragments so strict OpenAI clients do not abort (#4992)
+- **Streaming**: restore original caller tool names on OpenAI passthrough path when renamed by OpenCode fingerprinting (#4986, #4994)
+- **DB**: strip NUL bytes from bound strings across all SQLite drivers to prevent write errors or truncation on raw binary values (#5055, #4917)
+- **Usage**: support `/api/balance` for Ollama Cloud quota tracking (session 5h, weekly 7d resets, allowance/credits) (#5026)
+- **CommandCode**: resolve short plan IDs (`go`, `individual-go-v1`) with 10-credit cap, colored percentages, and dedicated `/alpha/whoami` connection probe (#4a76b8d)
+- **CodeBuddy**: back off and advance combo on international connection errors (HTTP 400 "request illegal" / "conversation id missing") (#5024)
+- **Codex**: skip ChatGPT Free accounts for image generation and use Go-compatible `gpt-5.6-terra` main model (#b08f12d)
+- **Qoder**: treat 10605 queue capacity signals as transient rather than billing blocks; add static model config for Sonus/Cantus; restore `PROVIDER_CAPABILITIES` table (#2720cd2)
+- **Capabilities**: advertise 500k context window for Grok 4.7 matching upstream limit (#b065531)
+- **GitHub**: refresh Copilot fallback model catalog with current models and set default fallback to `gpt-5-mini` (#dbdbb64)
+- **OpenAI**: strip and rename `max_tokens` to `max_completion_tokens` to prevent 400 rejections on modern models (#7c42d8f)
+- **Kiro**: normalize Anthropic model IDs and snapshot dates to Kiro-accepted upstream aliases; fix MiniMax casing to `minimax-m2.5` (#3ce2b82)
+- **Headroom**: compress native Gemini, Antigravity, and Responses tool output text (#4070)
+- **Headroom**: support native CommandCode requests stored under `params.messages` (#4552)
+- **Security**: bump `undici` to 7.30.1 and bind Headroom port to `127.0.0.1` in docker-compose.yml (#08ef047)
+- **Docker**: pin `node:22.23.4-alpine` and `.nvmrc` to address October 2026 security CVEs (CVE-2026-111497) (#32a064e)
+- **Dependencies**: upgrade Monaco editor to 0.57.0 (DOMPurify 3.4.15) and pin CDN loader copy (#5883110)
+- **Dashboard**: clarify API Key Created modal guidance that keys can be viewed or copied later from the list (#a3ca2f9)
+- **Media Providers**: keep connection card for OAuth providers with API-key media lanes (#00dd3df)
+- **Search**: reset regex state between model matches in search filters (#5853a88)
+- **Pi Settings**: declare `existingProvider` before use in POST handler to prevent ReferenceError 500 (#342ecb0)
+- **Tests**: triage master test suite (GLM-5.2 effort, gpt-6.1-sol codex capabilities, image SSRF mocks, refresh known-fails) (#b6a9ca4)
+
 # v0.5.104 (2026-10-15)
 
 ## Features
@@ -404,6 +54,8 @@ work was meant to prevent.
 - **UI**: model picker regex/negation search, Select/Deselect All, provider filtering, and per-provider wildcards
 
 ## Fixes
+- **Streaming**: fill a missing `id` on streamed tool-call fragments so strict OpenAI-compatible clients stop aborting the turn with "Expected 'id' to be a string" (#4992)
+- **OpenCode**: restore the caller's tool name on the openai→openai passthrough path, so a fingerprint-renamed tool (`read` → `read_client`) no longer reaches the client as a tool it never declared (#4986, #4994)
 - **Nous**: add missing attribution tags to API-key requests through compatible Chat Completions connections, preserving caller tags and identities (#4745)
 - **Cursor**: recover long sessions from empty AgentService turns (#4690); hold strictProxy on the AgentService h2 path (#4696)
 - **OpenCode**: encode inverted timestamp in translated session IDs so non-OpenCode clients pass Zen free-tier checks (#4780); inject `reasoning_content` placeholder for Zen multi-turn chats (#4805); move free tier to `/inference/v1` with the v2 client fingerprint (#4842)
@@ -413,7 +65,6 @@ work was meant to prevent.
 - **Combos**: fallback when a model returns HTTP 200 with zero usable content (#4750)
 - **Qoder**: surface add-on (free-credit promo) quota in the quota tracker (#4758)
 - **Translator**: return Claude messages for forced SSE JSON responses (#4789)
-- **Translator**: report `prompt_tokens_details.cached_tokens` to OpenAI clients when a Claude stream ends without a `message_delta`, so a cached upstream request is not billed as a 0% cache hit (#5030)
 - **Vertex**: honor API-key project/location for Gemini 4 Argon (#4821)
 - **GitHub**: route Copilot embeddings to `api.githubcopilot.com` (#4793)
 - **Codex**: drop retired gpt-5.5 from registry, image, and auto-ping; CLI preset default to `gpt-6.1-sol`

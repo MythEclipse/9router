@@ -300,7 +300,13 @@ export function calculatePercentage(used, total) {
  */
 export function getRemainingPercentage(quota) {
   if (quota?.percentage !== undefined) {
+<<<<<<< HEAD
     return Math.max(0, Math.round(quota.percentage));
+=======
+    // Providers may report the used share; the UI renders the remaining one.
+    const value = quota.percentageIsUsed === true ? 100 - quota.percentage : quota.percentage;
+    return Math.max(0, Math.round(value));
+>>>>>>> upstream/master
   }
 
   if (quota?.remaining !== undefined) {

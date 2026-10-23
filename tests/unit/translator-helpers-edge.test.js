@@ -14,30 +14,20 @@ describe("normalizeClaudePassthrough — haiku adaptive thinking (docs 11 §1)",
     expect(out.thinking).toEqual({ type: "adaptive" });
   });
 
-  it("folds mid-conversation system messages into the neighbouring user turn", () => {
-    // Not hoisted into body.system: that would put volatile content ahead of the
-    // whole conversation and invalidate the prefix cache on every request.
-    const body = {
+  // 7e5f5a88 folds these into the neighbouring user turn instead of hoisting them into
+  // body.system: volatile reminders ahead of the conversation broke the prefix cache.
+  it("folds mid-conversation system messages into the preceding user turn", () => {
+    const out = normalizeClaudePassthrough({
       messages: [
         { role: "user", content: "hi" },
         { role: "system", content: "be brief" },
       ],
-    };
-    const original = body.messages;
-    const out = normalizeClaudePassthrough(body, "claude-sonnet-4-6");
-
-    // No top-level system is created, and no system-role message survives.
+    });
     expect(out.system).toBeUndefined();
+    expect(out.messages).toEqual([
+      { role: "user", content: [{ type: "text", text: "hi" }, { type: "text", text: "be brief" }] },
+    ]);
     expect(out.messages.every((m) => m.role !== "system")).toBe(true);
-    // The text is preserved on the preceding user turn instead.
-    expect(JSON.stringify(out.messages)).toContain("be brief");
-
-    // The caller's original messages array is not mutated in place: normalize
-    // builds a fresh array and folds copy-on-write, so the array captured before
-    // the call still holds the untouched turns.
-    expect(out.messages).not.toBe(original);
-    expect(original[1].role).toBe("system");
-    expect(original[0].content).toBe("hi");
   });
 });
 

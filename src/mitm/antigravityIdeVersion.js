@@ -4,7 +4,7 @@
 // backend accepts them. Catalog and other passthrough requests retain the
 // client's current identity. Hardcoded MVP — toggle/version configurable later.
 
-const ANTIGRAVITY_IDE_VERSION = "2.23.0";
+const ANTIGRAVITY_IDE_VERSION = "2.24.0";
 const ANTIGRAVITY_IDE_VERSION_OVERRIDE_ENABLED = true;
 
 function shouldRewriteMetadata(metadata) {
@@ -20,46 +20,28 @@ function rewriteAntigravityUserAgent(userAgent, version) {
 }
 
 function applyAntigravityIdeVersionOverride(bodyBuffer, headers, requestUrl) {
-  const isGenerationEndpoint =
-    requestUrl?.includes(":generateContent") || requestUrl?.includes(":streamGenerateContent");
+  const isGenerationEndpoint = requestUrl?.includes(":generateContent") ||
+    requestUrl?.includes(":streamGenerateContent");
   if (!ANTIGRAVITY_IDE_VERSION_OVERRIDE_ENABLED || !isGenerationEndpoint) {
     return { bodyBuffer, headers, applied: false, version: ANTIGRAVITY_IDE_VERSION };
   }
 
   const nextHeaders = { ...headers };
-  const nextUserAgent = rewriteAntigravityUserAgent(
-    nextHeaders["user-agent"],
-    ANTIGRAVITY_IDE_VERSION,
-  );
+  const nextUserAgent = rewriteAntigravityUserAgent(nextHeaders["user-agent"], ANTIGRAVITY_IDE_VERSION);
   const userAgentChanged = nextUserAgent !== nextHeaders["user-agent"];
   if (userAgentChanged) nextHeaders["user-agent"] = nextUserAgent;
 
   try {
     const parsed = JSON.parse(bodyBuffer.toString());
     if (!shouldRewriteMetadata(parsed?.metadata)) {
-      return {
-        bodyBuffer,
-        headers: nextHeaders,
-        applied: userAgentChanged,
-        version: ANTIGRAVITY_IDE_VERSION,
-      };
+      return { bodyBuffer, headers: nextHeaders, applied: userAgentChanged, version: ANTIGRAVITY_IDE_VERSION };
     }
 
     parsed.metadata.ideVersion = ANTIGRAVITY_IDE_VERSION;
     const nextBodyBuffer = Buffer.from(JSON.stringify(parsed));
-    return {
-      bodyBuffer: nextBodyBuffer,
-      headers: nextHeaders,
-      applied: true,
-      version: ANTIGRAVITY_IDE_VERSION,
-    };
+    return { bodyBuffer: nextBodyBuffer, headers: nextHeaders, applied: true, version: ANTIGRAVITY_IDE_VERSION };
   } catch {
-    return {
-      bodyBuffer,
-      headers: nextHeaders,
-      applied: userAgentChanged,
-      version: ANTIGRAVITY_IDE_VERSION,
-    };
+    return { bodyBuffer, headers: nextHeaders, applied: userAgentChanged, version: ANTIGRAVITY_IDE_VERSION };
   }
 }
 

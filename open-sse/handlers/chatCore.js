@@ -3,7 +3,6 @@ import { translateRequest } from "../translator/index.js";
 import { applyThinking, extractThinking, stripThinkingSuffix } from "../translator/concerns/thinkingUnified.js";
 import { FORMATS } from "../translator/formats.js";
 import { normalizeClaudePassthrough, anchorClaudeCache } from "../translator/formats/claude.js";
-import { applyClaudeCacheLimits, cacheConfigFrom, newCacheLimit } from "../translator/formats/claudeCache.js";
 import { createStreamController } from "../utils/streamHandler.js";
 import { refreshWithRetry } from "../services/tokenRefresh.js";
 import { createRequestLogger } from "../utils/requestLogger.js";
@@ -25,6 +24,7 @@ import { dedupeTools } from "../utils/toolDeduper.js";
 import { takeRenamedToolNames } from "../utils/opencodeFingerprint.js";
 import { injectCaveman } from "../rtk/caveman.js";
 import { injectPonytail } from "../rtk/ponytail.js";
+import { injectCustomPrompt } from "../rtk/customPrompt.js";
 import { compressMessages, formatRtkLog } from "../rtk/index.js";
 import { compressWithHeadroom, formatHeadroomLog, formatHeadroomSizeLog, isHeadroomPhantomSavings } from "../rtk/headroom.js";
 import { compressWithPxpipe } from "../rtk/pxpipe.js";
@@ -33,9 +33,6 @@ import { stripUnsupportedModalities } from "../translator/concerns/modality.js";
 import { prefetchRemoteImages } from "../translator/concerns/prefetch.js";
 import { defaultClaudeToolType, shouldDefaultClaudeToolType } from "../translator/concerns/toolCall.js";
 import { resolveSessionId } from "../utils/sessionManager.js";
-import { resolveSafeguardsReviewPlan, ensureSafeguardsForwarded } from "./safeguardsReview.js";
-import { resolveWebSearchPlan, installBridgeTool } from "./webSearchProtocol.js";
-import { createSearchRunner } from "./webSearchRunner.js";
 
 /**
  * Core chat handler - shared between SSE and Worker
@@ -64,14 +61,9 @@ export function stripContinuityFields(body) {
   return body;
 }
 
-export async function handleChatCore({ body, modelInfo, credentials, log, onCredentialsRefreshed, onRequestSuccess, onDisconnect, clientRawRequest, connectionId, userAgent, apiKey, ccFilterNaming, rtkEnabled, headroomEnabled, headroomUrl, headroomCompressUserMessages, headroomTimeoutMs, cavemanEnabled, cavemanLevel, ponytailEnabled, ponytailLevel, pxpipeEnabled, pxpipeMinChars, pxpipeTimeoutMs, pxpipeTransform, onPxpipeEvent, sourceFormatOverride, providerThinking, providerOverrides, safeguardsClassifierModel, webSearchEnabled, webSearchProvider, searchCredentialResolver, searchProviderResolver, searchEndpointRunner = null, clientFormat = null }) {
+export async function handleChatCore({ body, modelInfo, credentials, log, onCredentialsRefreshed, onRequestSuccess, onDisconnect, clientRawRequest, connectionId, userAgent, apiKey, ccFilterNaming, rtkEnabled, headroomEnabled, headroomUrl, headroomCompressUserMessages, headroomTimeoutMs, cavemanEnabled, cavemanLevel, ponytailEnabled, ponytailLevel, customPromptEnabled, customPrompt, pxpipeEnabled, pxpipeMinChars, pxpipeTimeoutMs, pxpipeTransform, onPxpipeEvent, sourceFormatOverride, providerThinking, providerOverrides }) {
   const { provider, model } = modelInfo;
   const requestStartTime = Date.now();
-  // Per-request identity for the usage row. Every caller stamps its own
-  // timestamp, so it can never identify a request — this can, and it is what
-  // lets saveRequestUsage dedupe a genuine double-report without collapsing two
-  // distinct requests that happen to share a millisecond.
-  const requestId = `${requestStartTime}-${Math.random().toString(36).slice(2, 11)}`;
   // Stable per-session color so all lines of one CLI conversation share a tag
   const sessionSeed = (() => {
     try {
@@ -225,7 +217,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     translatedBody = translateRequest(sourceFormat, targetFormat, upstreamModel, body, stream, credentials, provider, reqLogger, stripList, connectionId, clientTool);
     if (!translatedBody) {
       trackPendingRequest(model, provider, connectionId, false, true);
-      return createErrorResult(HTTP_STATUS.BAD_REQUEST, `Failed to translate request for ${sourceFormat} → ${targetFormat}`, undefined, null, clientFormat);
+      return createErrorResult(HTTP_STATUS.BAD_REQUEST, `Failed to translate request for ${sourceFormat} → ${targetFormat}`);
     }
     toolNameMap = translatedBody._toolNameMap;
     delete translatedBody._toolNameMap;
@@ -243,61 +235,6 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
       translatedBody.tools = deduped;
       log?.debug?.("TOOLDEDUP", `stripped ${stripped.length}: ${stripped.slice(0, 3).join(", ")}${stripped.length > 3 ? "..." : ""}`);
     }
-  }
-
-  // Claude Code auto-mode review: resolve BEFORE dispatch so the `safeguards`
-  // field rides along with its beta (splitting the pair is a hard 400 upstream).
-  const safeguardsPlan = resolveSafeguardsReviewPlan({
-    body,
-    translatedBody,
-    modelInfo: { provider, model },
-    settings: { safeguardsClassifierModel },
-  });
-  if (safeguardsPlan.active) {
-    ensureSafeguardsForwarded(translatedBody, safeguardsPlan, body);
-    log?.debug?.(
-      "SAFEGUARD",
-      `auto-mode review requested · lane=${safeguardsPlan.lane}` +
-      (safeguardsPlan.reviewer ? ` · reviewer=${safeguardsPlan.reviewer.provider}/${safeguardsPlan.reviewer.model}` : " · upstream review")
-    );
-  }
-
-  // Claude Code web search: resolve BEFORE dispatch so the server tool can be
-  // swapped for the bridge tool on the same body the request is sent with.
-  // Passthrough lane leaves `tools` untouched — the upstream runs the search.
-  const webSearchPlan = resolveWebSearchPlan({
-    body,
-    translatedBody,
-    provider,
-    settings: { webSearchEnabled, searchProviderId: webSearchProvider },
-  });
-  // Route bridged searches through the app's own /v1/search handler so the
-  // bridge sees exactly what a user's curl sees: combo expansion, per-key
-  // access and combo fallback all live there and nowhere else.
-  const runSearchViaEndpoint = searchEndpointRunner
-    ? (payload, options) => searchEndpointRunner(payload, options)
-    : null;
-
-  let runSearch = null;
-  if (webSearchPlan.active) {
-    // targetFormat is the format translatedBody is already in, so the bridge
-    // tool must be declared in that same shape (Anthropic's
-    // {type,name,input_schema} vs OpenAI's {type:"function",function}).
-    if (installBridgeTool(translatedBody, webSearchPlan, targetFormat)) {
-      runSearch = createSearchRunner({
-        webSearchPlan,
-        requestProvider: provider,
-        getProviderCredentials: searchCredentialResolver,
-        listCandidateProviders: searchProviderResolver,
-        runSearchViaEndpoint,
-        requestApiKey: apiKey,
-        log,
-      });
-    }
-    log?.debug?.(
-      "WEBSEARCH",
-      `web search requested · lane=${webSearchPlan.lane} · maxUses=${webSearchPlan.maxUses}`
-    );
   }
 
   // Token savers: applied at the final body just before dispatch
@@ -373,6 +310,11 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     xf.push(`PONYTAIL:${ponytailLevel}`);
   }
 
+  // Custom prompt: user-authored instruction, independent of the savers above
+  if (customPromptEnabled && injectCustomPrompt(translatedBody, finalFormat, customPrompt)) {
+    xf.push(`CUSTOMPROMPT:${customPrompt.trim().length}c`);
+  }
+
   // PXPIPE: image bulky context (Claude-format bodies only), last saver before dispatch
   let pxpipeSummary = null;
   if (pxpipeEnabled) {
@@ -392,19 +334,9 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   // system/tools/messages, and a stale anchor costs a full prefix rewrite.
   if (passthrough && clientTool === "claude") anchorClaudeCache(translatedBody);
 
-  // Marker budget for the final body: client-supplied cache_control markers
-  // survive translation, and the upstream API rejects a request carrying more
-  // than the model/turn allows. This is the last point where the surplus can be
-  // dropped — the next step is the upstream call itself.
-  if (finalFormat === FORMATS.CLAUDE) {
-    const cacheConfig = cacheConfigFrom(providerOverrides);
-    const { dropped } = applyClaudeCacheLimits(translatedBody, cacheConfig);
-    if (dropped > 0) log?.debug?.("CACHE", `dropped ${dropped} marker(s) over the ${newCacheLimit(cacheConfig)}-marker budget`);
-  }
-
   const executor = getExecutor(provider);
   trackPendingRequest(model, provider, connectionId, true);
-  appendRequestLog({ model, provider, connectionId, status: "PENDING", requestId }).catch(() => { });
+  appendRequestLog({ model, provider, connectionId, status: "PENDING" }).catch(() => { });
 
   const msgCount = translatedBody.messages?.length || translatedBody.input?.length || translatedBody.contents?.length || translatedBody.request?.contents?.length || 0;
   log?.debug?.("REQUEST", `${provider.toUpperCase()} | ${model} | ${msgCount} msgs`);
@@ -485,7 +417,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     reqLogger.logTargetRequest(providerUrl, providerHeaders, finalBody);
   } catch (error) {
     trackPendingRequest(model, provider, connectionId, false, true);
-    appendRequestLog({ model, provider, connectionId, status: `FAILED ${error.name === "AbortError" ? 499 : HTTP_STATUS.BAD_GATEWAY}`, requestId }).catch(() => { });
+    appendRequestLog({ model, provider, connectionId, status: `FAILED ${error.name === "AbortError" ? 499 : HTTP_STATUS.BAD_GATEWAY}` }).catch(() => { });
     saveRequestDetail(buildRequestDetail({
       provider, model, connectionId,
       latency: { ttft: 0, total: Date.now() - requestStartTime },
@@ -499,13 +431,13 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
 
     if (error.name === "AbortError") {
       streamController.handleError(error);
-      return createErrorResult(499, "Request aborted", undefined, null, clientFormat);
+      return createErrorResult(499, "Request aborted");
     }
     const errMsg = formatProviderError(error, provider, model, HTTP_STATUS.BAD_GATEWAY);
     if (log?.errorLine) {
       log.errorLine(reqTag, "✗", `ERROR 502 · ${provider}/${model} · ${Date.now() - requestStartTime}ms\n    ${errMsg}${error.stack ? `\n    ${error.stack}` : ""}`);
     }
-    return createErrorResult(HTTP_STATUS.BAD_GATEWAY, errMsg, undefined, null, clientFormat);
+    return createErrorResult(HTTP_STATUS.BAD_GATEWAY, errMsg);
   }
 
   // Handle 401/403 - try token refresh (skip for noAuth providers)
@@ -560,7 +492,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   if (!providerResponse.ok) {
     trackPendingRequest(model, provider, connectionId, false, true);
     const { statusCode, message, resetsAtMs } = await parseUpstreamError(providerResponse, executor);
-    appendRequestLog({ model, provider, connectionId, status: `FAILED ${statusCode}`, requestId }).catch(() => { });
+    appendRequestLog({ model, provider, connectionId, status: `FAILED ${statusCode}` }).catch(() => { });
     saveRequestDetail(buildRequestDetail({
       provider, model, connectionId,
       latency: { ttft: 0, total: Date.now() - requestStartTime },
@@ -578,11 +510,11 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
       log.errorLine(reqTag, "✗", `ERROR ${statusCode} · ${provider}/${model} · ${Date.now() - requestStartTime}ms${urlStr}\n    ${errMsg}`);
     }
     reqLogger.logError(new Error(message), finalBody || translatedBody);
-    return createErrorResult(statusCode, errMsg, resetsAtMs, upstreamResponseHeaders(providerResponse.headers), clientFormat);
+    return createErrorResult(statusCode, errMsg, resetsAtMs, upstreamResponseHeaders(providerResponse.headers));
   }
 
-  const sharedCtx = { provider, model, body, stream, translatedBody, finalBody, requestStartTime, requestId, connectionId, apiKey, clientRawRequest, onRequestSuccess, pxpipe: pxpipeSummary, reqTag, log, clientFormat };
-  const appendLog = (extra) => appendRequestLog({ model, provider, connectionId, requestId, ...extra }).catch(() => { });
+  const sharedCtx = { provider, model, body, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, clientRawRequest, onRequestSuccess, pxpipe: pxpipeSummary, reqTag, log };
+  const appendLog = (extra) => appendRequestLog({ model, provider, connectionId, ...extra }).catch(() => { });
   const trackDone = () => trackPendingRequest(model, provider, connectionId, false);
 
   // Provider forced streaming but client wants JSON. The Responses wire always
@@ -590,20 +522,20 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   // non-stream OpenAI/native client behind a Responses upstream must also take
   // this path — handleForcedSSEToJson returns null when the body is not SSE.
   if (!clientRequestedStreaming && (providerRequiresStreaming || providerResponseFormat === FORMATS.OPENAI_RESPONSES)) {
-    const result = await handleForcedSSEToJson({ ...sharedCtx, providerResponse, sourceFormat, targetFormat: providerResponseFormat, customToolNames, toolNameMap, trackDone, appendLog, webSearchPlan, runSearch });
+    const result = await handleForcedSSEToJson({ ...sharedCtx, providerResponse, sourceFormat, targetFormat: providerResponseFormat, customToolNames, toolNameMap, trackDone, appendLog });
     if (result) { streamController.handleComplete(); return result; }
   }
 
   // True non-streaming response
   if (!stream) {
-    const result = await handleNonStreamingResponse({ ...sharedCtx, providerResponse, sourceFormat, targetFormat: providerResponseFormat, reqLogger, toolNameMap, customToolNames, trackDone, appendLog, safeguardsPlan, webSearchPlan, runSearch });
+    const result = await handleNonStreamingResponse({ ...sharedCtx, providerResponse, sourceFormat, targetFormat: providerResponseFormat, reqLogger, toolNameMap, customToolNames, trackDone, appendLog });
     streamController.handleComplete();
     return result;
   }
 
   // Streaming response
   const { onStreamComplete, streamDetailId } = buildOnStreamComplete({ ...sharedCtx });
-  return handleStreamingResponse({ ...sharedCtx, providerResponse, sourceFormat, targetFormat: providerResponseFormat, userAgent, reqLogger, toolNameMap, customToolNames, streamController, onStreamComplete, streamDetailId, credentials, safeguardsPlan, webSearchPlan, runSearch });
+  return handleStreamingResponse({ ...sharedCtx, providerResponse, sourceFormat, targetFormat: providerResponseFormat, userAgent, reqLogger, toolNameMap, customToolNames, streamController, onStreamComplete, streamDetailId, credentials });
 }
 
 export function isTokenExpiringSoon(expiresAt, bufferMs = 5 * 60 * 1000) {

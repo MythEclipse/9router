@@ -4,8 +4,8 @@ import { PROVIDERS } from "../config/providers.js";
 import { liftReasoningAliases } from "../translator/concerns/reasoning.js";
 import { trackPendingRequest, appendRequestLog } from "@/lib/usageDb.js";
 import { extractUsage, mergeUsage, hasValidUsage, estimateUsage, logUsage, addBufferToUsage, filterUsageForFormat, COLORS } from "./usageTracking.js";
-import { parseSSELine, hasValuableContent, fixInvalidId, formatSSE, buildStreamErrorBytes, extractReasoningText } from "./streamHelpers.js";
-import { HTTP_STATUS } from "../config/runtimeConfig.js";
+import { parseSSELine, hasValuableContent, fixInvalidId, formatSSE, ensureStreamToolCallIds } from "./streamHelpers.js";
+import { restoreToolNames } from "./opencodeFingerprint.js";
 import { getOpenAIResponsesEventName, isOpenAIResponsesTerminalEvent, formatIncompleteOpenAIResponsesStreamFailure } from "./responsesStreamHelpers.js";
 import { dbg, isDebugEnabled } from "./debugLog.js";
 
@@ -63,10 +63,12 @@ export function createSSEStream(options = {}) {
 
   let buffer = "";
   let usage = null;
-  // Body-size estimate kept apart from the provider-reported usage: it is a
-  // fallback for providers that report no usage at all, never a candidate to
-  // be merged with it (see mergeUsage).
-  let estimatedUsage = null;
+
+  // Tool-call ids already sent to the client, keyed by the tool-call index.
+  // A late fragment that opens a NEW index without an id must not reach the
+  // client as-is: strict OpenAI-compatible SDKs abort the turn on a
+  // tool_call without a string id (#4992).
+  const seenToolCallIds = new Map();
 
   // Per-stream decoder with stream:true to correctly handle multi-byte chars split across chunks
   const decoder = new TextDecoder("utf-8", { fatal: false });
@@ -114,9 +116,7 @@ export function createSSEStream(options = {}) {
     let finalUsage = isPassthrough ? usage : state?.usage;
 
     if (!hasValidUsage(finalUsage) && totalContentLength > 0) {
-      // The provider reported no usage at all: fall back to the body-size
-      // estimate, if one was already computed for the finish chunk.
-      finalUsage = estimatedUsage || estimateUsage(body, totalContentLength, isPassthrough ? FORMATS.OPENAI : sourceFormat);
+      finalUsage = estimateUsage(body, totalContentLength, isPassthrough ? FORMATS.OPENAI : sourceFormat);
       if (isPassthrough) usage = finalUsage; else state.usage = finalUsage;
     }
 
@@ -181,9 +181,27 @@ export function createSSEStream(options = {}) {
 
           if (trimmed.startsWith("data:") && trimmed.slice(5).trim() !== "[DONE]") {
             try {
-              const parsed = JSON.parse(trimmed.slice(5).trim());
+              let parsed = JSON.parse(trimmed.slice(5).trim());
 
               const idFixed = fixInvalidId(parsed);
+
+              // A fragment that opens a new tool-call index without an id breaks
+              // strict OpenAI-compatible clients. Mint/reuse one before the
+              // chunk reaches the client.
+              const toolCallIdFixed = ensureStreamToolCallIds(parsed, seenToolCallIds);
+
+              // The fingerprint pass renames a colliding caller tool to an alias
+              // (read -> read_client). On this path nothing restored it, so the
+              // client received a call to a tool it never declared and answered
+              // "Model tried to call unavailable tool 'read_client'" (#4986).
+              let toolNameRestored = false;
+              if (toolNameMap?.size) {
+                const restored = restoreToolNames(parsed, toolNameMap);
+                if (restored !== parsed) {
+                  parsed = restored;
+                  toolNameRestored = true;
+                }
+              }
 
               // Ensure OpenAI-required fields are present on streaming chunks (Letta compat)
               let fieldsInjected = false;
@@ -240,7 +258,7 @@ export function createSSEStream(options = {}) {
 
               const delta = parsed.choices?.[0]?.delta;
               const content = delta?.content;
-              const reasoning = extractReasoningText(delta);
+              const reasoning = delta?.reasoning_content;
               if (content && typeof content === "string") {
                 totalContentLength += content.length;
                 accumulatedContent += content;
@@ -262,18 +280,14 @@ export function createSSEStream(options = {}) {
                 const estimated = estimateUsage(body, totalContentLength, FORMATS.OPENAI);
                 parsed.usage = filterUsageForFormat(estimated, FORMATS.OPENAI);
                 output = `data: ${JSON.stringify(parsed)}\n`;
-                // Keep the estimate out of the accumulator: a provider that
-                // reports its usage in a trailing chunk (stream_options
-                // include_usage) sends it AFTER this chunk, and merging the
-                // two by max would let the guess outvote the real number.
-                estimatedUsage = estimated;
+                usage = estimated;
                 injectedUsage = true;
               } else if (isFinishChunk && usage) {
                 const buffered = addBufferToUsage(usage);
                 parsed.usage = filterUsageForFormat(buffered, FORMATS.OPENAI);
                 output = `data: ${JSON.stringify(parsed)}\n`;
                 injectedUsage = true;
-              } else if (idFixed || fieldsInjected) {
+              } else if (idFixed || fieldsInjected || toolCallIdFixed || toolNameRestored) {
                 output = `data: ${JSON.stringify(parsed)}\n`;
                 injectedUsage = true;
               }
@@ -363,11 +377,10 @@ export function createSSEStream(options = {}) {
           totalContentLength += parsed.choices[0].delta.content.length;
           accumulatedContent += parsed.choices[0].delta.content;
         }
-        // OpenAI format - reasoning (any provider's key name)
-        const openaiReasoning = extractReasoningText(parsed.choices?.[0]?.delta);
-        if (openaiReasoning) {
-          totalContentLength += openaiReasoning.length;
-          accumulatedThinking += openaiReasoning;
+        // OpenAI format - reasoning
+        if (parsed.choices?.[0]?.delta?.reasoning_content) {
+          totalContentLength += parsed.choices[0].delta.reasoning_content.length;
+          accumulatedThinking += parsed.choices[0].delta.reasoning_content;
         }
         
         // Gemini format
@@ -427,9 +440,7 @@ export function createSSEStream(options = {}) {
             if (state.finishReason && isFinishChunk && !hasValidUsage(item.usage) && totalContentLength > 0) {
               const estimated = estimateUsage(body, totalContentLength, sourceFormat);
               item.usage = filterUsageForFormat(estimated, sourceFormat); // Filter + already has buffer
-              // Same rule as the passthrough path: the estimate is a fallback,
-              // not something to merge with the provider's own usage.
-              estimatedUsage = estimated;
+              state.usage = estimated;
             } else if (state.finishReason && isFinishChunk && state.usage) {
               // Add buffer and filter usage for client (but keep original in state.usage for logging)
               const buffered = addBufferToUsage(state.usage);
@@ -522,7 +533,6 @@ export function createSSEStream(options = {}) {
                 const output = formatSSE(item, sourceFormat);
                 reqLogger?.appendConvertedChunk?.(output);
                 controller.enqueue(sharedEncoder.encode(output));
-                sseEmittedCount++;
               }
             }
           }
@@ -543,25 +553,7 @@ export function createSSEStream(options = {}) {
             const output = formatSSE(item, sourceFormat);
             reqLogger?.appendConvertedChunk?.(output);
             controller.enqueue(sharedEncoder.encode(output));
-            sseEmittedCount++;
           }
-        }
-
-        // Anthropic client + a translate stream that never produced a single
-        // event (sseEmittedCount stayed at 0) is an HTTP 200 body with ZERO
-        // events — the SDK's StreamNoEventsError / "API returned an empty or
-        // malformed response (HTTP 200)". Close silently and the client can
-        // only guess; emit a structured error frame instead, mirroring the 502
-        // the non-streaming path returns for the same empty upstream.
-        // Keyed on emitted frames rather than messageStartSent so it stays
-        // correct for whichever response translator ran.
-        if (mode === STREAM_MODE.TRANSLATE && sourceFormat === FORMATS.CLAUDE &&
-            sseEmittedCount === 0) {
-          const emptyOutput = new TextDecoder().decode(
-            buildStreamErrorBytes(HTTP_STATUS.BAD_GATEWAY, "Upstream returned an empty stream", sourceFormat)
-          );
-          reqLogger?.appendConvertedChunk?.(emptyOutput);
-          controller.enqueue(sharedEncoder.encode(emptyOutput));
         }
 
         // Synthesize response.failed if a Responses passthrough stream never reached a terminal event
@@ -608,11 +600,12 @@ export function createSSETransformStreamWithLogger(targetFormat, sourceFormat, p
   });
 }
 
-export function createPassthroughStreamWithLogger(provider = null, reqLogger = null, model = null, connectionId = null, body = null, onStreamComplete = null, apiKey = null) {
+export function createPassthroughStreamWithLogger(provider = null, reqLogger = null, model = null, connectionId = null, body = null, onStreamComplete = null, apiKey = null, toolNameMap = null) {
   return createSSEStream({
     mode: STREAM_MODE.PASSTHROUGH,
     provider,
     reqLogger,
+    toolNameMap,
     model,
     connectionId,
     body,

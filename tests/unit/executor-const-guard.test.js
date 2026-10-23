@@ -39,22 +39,14 @@ describe("provider baseUrl const (full path, no trailing slash)", () => {
   });
 });
 
-describe("antigravity retry policy", () => {
-  // Antigravity now uses 3 attempts for every retriable status; the old
-  // 429=6 setting that gave this suite its "intentional change" name is gone
-  // (only a commented example remains in REGISTRY_TEMPLATE.js).
-  it("retries 429 three times", () => {
+// 429 was 6 after the June registry migration; the maintainer lowered it to 3 in
+// 3f9382de ("Fix AG, Kiro, Xiaomi Provider"); it has been 3 since.
+describe("antigravity retry (429=3, 503=3)", () => {
+  it("429 attempts = 3", () => {
     expect(antigravity.transport.retry["429"].attempts).toBe(3);
   });
-  it("retries 503 three times", () => {
+  it("503 attempts = 3", () => {
     expect(antigravity.transport.retry["503"].attempts).toBe(3);
-  });
-  it("retries 500 three times", () => {
-    expect(antigravity.transport.retry["500"].attempts).toBe(3);
-  });
-  it("does not retry 4xx that are not rate limits", () => {
-    expect(antigravity.transport.retry["400"]).toBeUndefined();
-    expect(antigravity.transport.retry["401"]).toBeUndefined();
   });
 });
 

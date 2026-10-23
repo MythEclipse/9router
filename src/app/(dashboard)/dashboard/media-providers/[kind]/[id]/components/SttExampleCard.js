@@ -21,6 +21,7 @@ export function SttExampleCard({ providerId }) {
   const [selectedModel, setSelectedModel] = useState(builtinSttModels[0]?.id ?? "");
   const selectedModelObj = sttModels.find((m) => m.id === selectedModel);
   const allowedParams = Array.isArray(selectedModelObj?.params) ? selectedModelObj.params : [];
+<<<<<<< HEAD
   const responseFormats = selectedModelObj?.responseFormats || [
     "json",
     "text",
@@ -28,6 +29,9 @@ export function SttExampleCard({ providerId }) {
     "verbose_json",
     "vtt",
   ];
+=======
+  const responseFormats = selectedModelObj?.responseFormats || ["json", "text", "srt", "verbose_json", "vtt"];
+>>>>>>> upstream/master
 
   const [audioFile, setAudioFile] = useState(null);
   const [language, setLanguage] = useState("");
@@ -277,11 +281,15 @@ export function SttExampleCard({ providerId }) {
               onChange={(e) => setResponseFormat(e.target.value)}
               className="w-full px-3 py-1.5 text-sm border border-border rounded-lg bg-background focus:outline-none focus:border-primary"
             >
+<<<<<<< HEAD
               {responseFormats.map((format) => (
                 <option key={format} value={format}>
                   {format}
                 </option>
               ))}
+=======
+              {responseFormats.map((format) => <option key={format} value={format}>{format}</option>)}
+>>>>>>> upstream/master
             </select>
           </Row>
         )}

@@ -56,6 +56,7 @@ export const KIND_EXAMPLE_CONFIG = {
     defaultResponse: `{\n  "data": [\n    { "url": "...", "b64_json": "..." }\n  ]\n}`,
     extraFields: [
       { key: "n", label: "n", type: "number", default: 1, min: 1, max: 4 },
+<<<<<<< HEAD
       {
         key: "size",
         label: "Size",
@@ -105,6 +106,15 @@ export const KIND_EXAMPLE_CONFIG = {
         default: "png",
         options: ["png", "jpeg", "webp"],
       },
+=======
+      { key: "size", label: "Size", type: "select", default: "auto", options: ["auto", "1024x1024", "1024x1536", "1536x1024", "1024x1792", "1792x1024"] },
+      { key: "quality", label: "Quality", type: "select", default: "auto", options: ["auto", "low", "medium", "high", "standard", "hd"] },
+      { key: "background", label: "Background", type: "select", default: "auto", options: ["auto", "transparent", "opaque"] },
+      { key: "style", label: "Style", type: "select", default: "", options: ["", "vivid", "natural"] },
+      { key: "response_format", label: "Format", type: "select", default: "", options: ["", "url", "b64_json"] },
+      { key: "image_detail", label: "Image Detail", type: "select", default: "high", options: ["auto", "low", "high", "original"] },
+      { key: "output_format", label: "Codec", type: "select", default: "png", options: ["png", "jpeg", "webp"] },
+>>>>>>> upstream/master
       { key: "watermark", label: "Watermark", type: "boolean", default: true },
       { key: "prompt_extend", label: "Prompt Extend", type: "boolean", default: true },
     ],
@@ -124,6 +134,11 @@ export const KIND_EXAMPLE_CONFIG = {
     defaultInput: "A serene lake at sunset",
     bodyKey: "prompt",
     defaultResponse: `{\n  "data": [\n    { "url": "..." }\n  ]\n}`,
+    extraFields: [
+      // Image-to-video (muse-web and other executor-driven providers):
+      // an image URL or an uploaded file (sent as a data: URL).
+      { key: "image", label: "Image (URL or upload)", type: "image", default: "" },
+    ],
   },
   music: {
     inputLabel: "Prompt",

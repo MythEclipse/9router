@@ -1,9 +1,6 @@
 import {
-  extractApiKey,
-  isValidApiKey,
-  getProviderCredentials,
-  markAccountUnavailable,
-  clearAccountError,
+  extractApiKey, isValidApiKey,
+  getProviderCredentials, markAccountUnavailable, clearAccountError,
 } from "../services/auth.js";
 import { getSettings, getCustomModels } from "@/lib/localDb";
 import { getModelInfo } from "../services/model.js";
@@ -19,10 +16,8 @@ import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy.js";
 // Providers requiring credentials for STT
 const CREDENTIALED_PROVIDERS = new Set(
   Object.entries(AI_PROVIDERS)
-    .filter(
-      ([, p]) => p.serviceKinds?.includes("stt") && !p.noAuth && p.sttConfig?.authType !== "none",
-    )
-    .map(([id]) => id),
+    .filter(([, p]) => p.serviceKinds?.includes("stt") && !p.noAuth && p.sttConfig?.authType !== "none")
+    .map(([id]) => id)
 );
 
 // Custom-model transport marker: models registered through
@@ -33,15 +28,9 @@ const CREDENTIALED_PROVIDERS = new Set(
 async function resolveCustomModelTransport(provider, model) {
   try {
     const customModels = await getCustomModels();
-    const hit = customModels.find(
-      (c) =>
-        c &&
-        c.type === "stt" &&
-        c.providerAlias === provider &&
-        c.id === model &&
-        typeof c.transport === "string" &&
-        c.transport.trim(),
-    );
+    const hit = customModels.find((c) => c && c.type === "stt"
+      && c.providerAlias === provider && c.id === model
+      && typeof c.transport === "string" && c.transport.trim());
     return hit ? hit.transport.trim() : null;
   } catch {
     return null; // DB unreadable → built-in registry marker still applies
@@ -68,23 +57,16 @@ export async function handleStt(request) {
   }
 
   if (!modelStr) return errorResponse(HTTP_STATUS.BAD_REQUEST, "Missing model");
-  if (!formData.get("file"))
-    return errorResponse(HTTP_STATUS.BAD_REQUEST, "Missing required field: file");
+  if (!formData.get("file")) return errorResponse(HTTP_STATUS.BAD_REQUEST, "Missing required field: file");
 
   const modelInfo = await getModelInfo(modelStr);
   if (!modelInfo.provider) return errorResponse(HTTP_STATUS.BAD_REQUEST, "Invalid model format");
 
   const { provider, model } = modelInfo;
-  if (provider === "codex" && model !== "transcribe")
-    return errorResponse(400, "Use model cx/transcribe for Codex STT");
+  if (provider === "codex" && model !== "transcribe") return errorResponse(400, "Use model cx/transcribe for Codex STT");
 
   // Per-key access control: checked before any credential lookup.
-  const keyAccessDenied = await enforceKeyAccessResolved(
-    await getKeyAccessContext(request),
-    modelStr,
-    provider,
-    model,
-  );
+  const keyAccessDenied = await enforceKeyAccessResolved(await getKeyAccessContext(request), modelStr, provider, model);
   if (keyAccessDenied) return keyAccessDenied;
 
   log.info("ROUTING", `Provider: ${provider}, Model: ${model}`);
@@ -93,13 +75,7 @@ export async function handleStt(request) {
 
   // noAuth providers
   if (!CREDENTIALED_PROVIDERS.has(provider)) {
-    const result = await handleSttCore({
-      provider,
-      model,
-      formData,
-      sttConfig: AI_PROVIDERS[provider]?.sttConfig,
-      transport: modelTransport,
-    });
+    const result = await handleSttCore({ provider, model, formData, sttConfig: AI_PROVIDERS[provider]?.sttConfig, transport: modelTransport });
     if (result.success) return result.response;
     return errorResponse(result.status || HTTP_STATUS.BAD_GATEWAY, result.error || "STT failed");
   }
@@ -115,21 +91,11 @@ export async function handleStt(request) {
     if (!credentials || credentials.allRateLimited) {
       if (credentials?.allRateLimited) {
         const msg = lastError || credentials.lastError || "Unavailable";
-        const status =
-          lastStatus || Number(credentials.lastErrorCode) || HTTP_STATUS.SERVICE_UNAVAILABLE;
-        return unavailableResponse(
-          status,
-          `[${provider}/${model}] ${msg}`,
-          credentials.retryAfter,
-          credentials.retryAfterHuman,
-        );
+        const status = lastStatus || Number(credentials.lastErrorCode) || HTTP_STATUS.SERVICE_UNAVAILABLE;
+        return unavailableResponse(status, `[${provider}/${model}] ${msg}`, credentials.retryAfter, credentials.retryAfterHuman);
       }
-      if (excludeConnectionIds.size === 0)
-        return errorResponse(HTTP_STATUS.BAD_REQUEST, `No credentials for provider: ${provider}`);
-      return errorResponse(
-        lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE,
-        lastError || "All accounts unavailable",
-      );
+      if (excludeConnectionIds.size === 0) return errorResponse(HTTP_STATUS.BAD_REQUEST, `No credentials for provider: ${provider}`);
+      return errorResponse(lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE, lastError || "All accounts unavailable");
     }
 
     log.info("AUTH", `\x1b[32mUsing ${provider} account: ${credentials.connectionName}\x1b[0m`);
@@ -139,26 +105,14 @@ export async function handleStt(request) {
       const isCodex = provider === "codex";
       if (isCodex) credentials = await checkAndRefreshToken(provider, credentials);
       const proxyOptions = isCodex
-        ? await resolveConnectionProxyConfig(
-            credentials._connection?.providerSpecificData || credentials.providerSpecificData,
-          )
+        ? await resolveConnectionProxyConfig(credentials._connection?.providerSpecificData || credentials.providerSpecificData)
         : undefined;
-      const args = {
-        provider,
-        model,
-        formData,
-        credentials,
-        sttConfig: AI_PROVIDERS[provider]?.sttConfig,
-        transport: modelTransport,
-        signal: request.signal,
-        proxyOptions,
-      };
+      const args = { provider, model, formData, credentials, sttConfig: AI_PROVIDERS[provider]?.sttConfig, transport: modelTransport, signal: request.signal, proxyOptions };
       result = await handleSttCore(args);
       if (isCodex && result.status === 401 && credentials.refreshToken && !request.signal.aborted) {
         const previous = credentials.accessToken;
         credentials = await checkAndRefreshToken(provider, credentials, { force: true });
-        if (credentials.accessToken !== previous)
-          result = await handleSttCore({ ...args, credentials });
+        if (credentials.accessToken !== previous) result = await handleSttCore({ ...args, credentials });
       }
       if (result.success) {
         if (isCodex) await clearAccountError(credentials.connectionId, credentials, model);
@@ -174,13 +128,7 @@ export async function handleStt(request) {
       return result.response || errorResponse(result.status, result.error);
     }
 
-    const { shouldFallback } = await markAccountUnavailable(
-      credentials.connectionId,
-      result.status,
-      result.error,
-      provider,
-      model,
-    );
+    const { shouldFallback } = await markAccountUnavailable(credentials.connectionId, result.status, result.error, provider, model);
     if (shouldFallback) {
       excludeConnectionIds.add(credentials.connectionId);
       lastError = result.error;

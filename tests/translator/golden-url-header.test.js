@@ -29,6 +29,9 @@ const SPECIALIZED = new Set([
   "bedrock", "bedrock-xai", "minimax-code", "minimax-code-global",
 ]);
 
+// Per-process / per-request values: kimi's random device name, minimax's session UUID.
+const VOLATILE_HEADERS = new Set(["x-msh-device-name", "x-mavis-session-id"]);
+
 // Sanitize header: khử token + field thời gian động (kimi X-Msh-Device-Id) để snapshot ổn định.
 //
 // APP_VERSION is package.json's `version`, which open-sse/shared/clineAuth.js
@@ -42,6 +45,7 @@ const APP_VERSION = pkg.version || "0.0.0";
 function sanitize(headers) {
   const out = {};
   for (const [k, v] of Object.entries(headers)) {
+    if (VOLATILE_HEADERS.has(k.toLowerCase())) { out[k] = "<VOLATILE>"; continue; }
     out[k] = typeof v === "string"
       ? v.replace(/Bearer .+/, "Bearer <TOK>")
           .replace(/«redacted:sk-…»|tok-test-ACCESS/g, "<CRED>")

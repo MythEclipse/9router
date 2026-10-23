@@ -11,11 +11,17 @@ import { openaiToKiroRequest } from "../../open-sse/translator/request/openai-to
 
 const contentOf = (result) =>
   result.conversationState.currentMessage.userInputMessage.content;
-
-// Since fix(kiro) never send a top-level systemPrompt (400 REQUEST_BODY_INVALID),
-// the system prompt travels inside the first user turn's content. Read it from
-// the wire field that actually carries it.
-const systemPromptOf = (result) => contentOf(result);
+// Kiro rejects a top-level systemPrompt (400 REQUEST_BODY_INVALID; 1892ed77), so the
+// system prompt, thinking tags and agentic prompt travel at the start of the first user
+// turn, ahead of the "[Context: Current time …]" line. This returns that prompt part.
+const kiroPromptOf = (out) => {
+  const cs = out?.conversationState || {};
+  const content = (cs.history || []).find((t) => t.userInputMessage)?.userInputMessage?.content
+    ?? cs.currentMessage?.userInputMessage?.content ?? "";
+  const at = content.indexOf("[Context: Current time");
+  return (at >= 0 ? content.slice(0, at) : content).trim();
+};
+const systemPromptOf = kiroPromptOf;
 
 describe("openaiToKiroRequest", () => {
   describe("basic message conversion", () => {
@@ -536,8 +542,7 @@ describe("openaiToKiroRequest", () => {
       const result = openaiToKiroRequest("claude-sonnet-4.6", body, true, {});
 
       expect(systemPromptOf(result)).toContain("<max_thinking_length>32000</max_thinking_length>");
-      // fix(thinking) made max a valid Kiro effort tier; it used to be silently
-      // clamped to high, which made reasoning_effort:"max" a no-op on Kiro.
+      // 4.6 models accept max on Kiro (7894f3d3); only xhigh clamps to high there.
       expect(result.additionalModelRequestFields?.output_config?.effort).toBe("max");
     });
 
@@ -574,7 +579,7 @@ describe("openaiToKiroRequest", () => {
       expect(systemPromptOf(result)).toContain("<max_thinking_length>16000</max_thinking_length>");
     });
 
-    it("keeps the replayable system prefix stable across turns while current time stays fresh", () => {
+    it("keeps the prompt stable across turns and never sends a top-level systemPrompt", () => {
       const first = openaiToKiroRequest(
         "claude-sonnet-4.6-thinking",
         { messages: [{ role: "user", content: "first" }] },
@@ -588,15 +593,10 @@ describe("openaiToKiroRequest", () => {
         {}
       );
 
-      // There is no top-level systemPrompt on the wire (kiro rejects it); the
-      // replayable prefix is the part of the current turn that precedes the
-      // volatile current-time context.
-      const prefixOf = (result) => {
-        const content = result.conversationState.currentMessage.userInputMessage.content;
-        return content.slice(0, content.indexOf("[Context: Current time is"));
-      };
-      expect(prefixOf(first)).toBe(prefixOf(second));
-      expect(prefixOf(first)).not.toContain("Current time");
+      expect(first).not.toHaveProperty("systemPrompt");
+      expect(kiroPromptOf(first)).toContain("<thinking_mode>enabled</thinking_mode>");
+      expect(kiroPromptOf(first)).toBe(kiroPromptOf(second));
+      expect(kiroPromptOf(first)).not.toContain("Current time");
       expect(first.conversationState.currentMessage.userInputMessage.content).toContain("Current time");
     });
 

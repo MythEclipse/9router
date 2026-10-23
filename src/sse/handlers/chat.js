@@ -7,179 +7,49 @@ import {
   extractApiKey,
   isValidApiKey,
 } from "../services/auth.js";
-import {
-  handleAntigravityQuotaError,
-  clearAntigravityStrikes,
-} from "../services/antigravityQuota.js";
+import { handleAntigravityQuotaError, clearAntigravityStrikes } from "../services/antigravityQuota.js";
 import { getSettings } from "@/lib/localDb";
-import { getProviderConnections } from "@/lib/db/repos/connectionsRepo";
 import { getModelInfo, getComboModels } from "../services/model.js";
 import { handleChatCore } from "open-sse/handlers/chatCore.js";
-import { supportsSearch } from "open-sse/handlers/webSearchCredentials.js";
-import { handleSearch } from "@/sse/handlers/search.js";
 import { DEFAULT_HEADROOM_URL } from "@/lib/headroom/detect";
 import { getTransform as getPxpipeTransform } from "@/lib/pxpipe/loader.js";
 import { appendPxpipeEvent } from "@/lib/pxpipe/events.js";
 import { errorResponse, unavailableResponse } from "open-sse/utils/error.js";
 import { upstreamResponseHeaders } from "open-sse/utils/upstreamHeaders.js";
-import {
-  handleComboChat,
-  handleFusionChat,
-  detectRequiredCapabilities,
-} from "open-sse/services/combo.js";
-import {
-  augmentModelsWithCapacityAdapter,
-  withCapacityAdapterStripping,
-  getActiveAdapterStrategy,
-} from "open-sse/services/capacityAdapter.js";
+import { handleComboChat, handleFusionChat, detectRequiredCapabilities } from "open-sse/services/combo.js";
+import { augmentModelsWithCapacityAdapter, withCapacityAdapterStripping, getActiveAdapterStrategy } from "open-sse/services/capacityAdapter.js";
 import { handleBypassRequest } from "open-sse/utils/bypassHandler.js";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig.js";
 import { detectFormatByEndpoint } from "open-sse/translator/formats.js";
-import { FORMATS } from "open-sse/translator/formats.js";
-import { isClaudeEndpoint, validateClaudeMessageBody } from "../protocol/claudeValidation.js";
-import { isResponsesEndpoint, validateResponsesBody } from "../protocol/responsesValidation.js";
+import { resolveSessionIdentity } from "open-sse/utils/sessionManager.js";
 import * as log from "../utils/logger.js";
 import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh.js";
 import { getProjectIdForConnection } from "open-sse/services/projectId.js";
 import { stripModelContextMarker } from "open-sse/utils/modelMarkers.js";
-import {
-  getKeyAccessContext,
-  enforceKeyAccess,
-  filterAdapterModels,
-} from "../services/keyAccess.js";
-
-import { parseJsonBody } from "@/shared/utils/parseJsonBody.js";
-
-/**
- * Pathname of a request URL, or "" when it cannot be parsed.
- * Every protocol decision in this handler keys off this one value.
- */
-function pathnameOf(request) {
-  try {
-    return new URL(request.url).pathname;
-  } catch {
-    return "";
-  }
-}
+import { getKeyAccessContext, enforceKeyAccess, filterAdapterModels } from "../services/keyAccess.js";
+import { resolveSmartChoice } from "../services/systemoneRouter.js";
 
 /**
  * Handle chat completion request
  * Supports: OpenAI, Claude, Gemini, OpenAI Responses API formats
  * Format detection and translation handled by translator
  */
-/**
- * Providers that can run a web search and hold an active connection.
- *
- * Feeds web search auto-selection: without a candidate list, a request whose
- * own provider cannot search has nothing to fall back to. Ordered by the
- * registry's own preference list (via supportsSearch/resolveSearchProvider), so
- * connection priority does not override which engine is preferred.
- */
-/**
- * Dispatch one search through the /v1/search handler in-process.
- *
- * The handler is built around a web `Request`, so a synthetic one is constructed
- * with the same headers the HTTP route would carry (the caller's API key) and
- * the response body parsed out. This keeps the bridge on the single supported
- * search path instead of duplicating combo/auth/fallback logic here.
- */
-async function runSearchViaSearchEndpoint(
-  { model, query, max_results, search_type, domain_filter },
-  { apiKey = null } = {},
-) {
-  const headers = { "content-type": "application/json" };
-  // The caller's key must ride on the synthetic request: /v1/search authenticates
-  // it, and combo expansion resolves permissions from it. `apiKey` is a local of
-  // handleSingleModelChat, so this module-level runner cannot close over it — it
-  // is bound at the injection site below. Omitting it produced "apiKey is not
-  // defined" at runtime and every bridged search came back `unavailable`.
-  if (apiKey) headers.authorization = `Bearer ${apiKey}`;
-
-  const req = new Request("http://local/v1/search", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      model,
-      query,
-      max_results,
-      ...(search_type ? { search_type } : {}),
-      ...(Array.isArray(domain_filter) && domain_filter.length ? { domain_filter } : {}),
-    }),
-  });
-
-  const res = await handleSearch(req);
-  const text = await res.text();
-  let parsed;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    throw new Error(`search endpoint returned non-JSON (HTTP ${res.status})`);
-  }
-  if (!res.ok || parsed?.error) {
-    const msg = parsed?.error?.message || parsed?.error || `HTTP ${res.status}`;
-    throw new Error(typeof msg === "string" ? msg : "search failed");
-  }
-  return parsed;
-}
-
-/**
- * Providers that are connected and can serve web search.
- *
- * Used by the Claude Code CCR worker route to pick a search engine: the chat
- * provider is often not one (claude-opus-5-5 resolves to `antigravity`, which
- * has no search access), so a fallback to it yields zero results.
- */
-export async function listProvidersWithCredentials() {
-  try {
-    const conns = await getProviderConnections({ isActive: true });
-    const ids = new Set();
-    for (const c of conns) {
-      const id = c.provider || c.providerId;
-      if (id && supportsSearch(id)) ids.add(id);
-    }
-    return [...ids];
-  } catch {
-    // Credential enumeration is a convenience; failure must not block the chat
-    // request, which falls back to the request's own provider.
-    return [];
-  }
-}
-
 export async function handleChat(request, clientRawRequest = null) {
-  // Parsed once: it decides which protocol's error envelope every validation
-  // and auth failure below must speak.
-  const requestPathname = pathnameOf(request);
-  const clientFormat = isClaudeEndpoint(requestPathname) ? FORMATS.CLAUDE : null;
-
   let body;
   try {
-    body = await parseJsonBody(request);
+    body = await request.json();
   } catch {
     log.warn("CHAT", "Invalid JSON body");
-    return errorResponse(HTTP_STATUS.BAD_REQUEST, "Invalid JSON body", null, clientFormat);
-  }
-
-  // Protocol-specific required-field checks. Officially reject violations with
-  // a protocol-shaped 400 instead of forwarding a doomed body upstream.
-  // Anthropic Messages: max_tokens is mandatory, messages must be non-empty.
-  if (isClaudeEndpoint(requestPathname)) {
-    const validationError = validateClaudeMessageBody(body);
-    if (validationError) return validationError;
-  }
-
-  // OpenAI Responses: `input` is mandatory. The translator would otherwise pass
-  // it through and the pipeline would 502.
-  if (isResponsesEndpoint(requestPathname)) {
-    const validationError = validateResponsesBody(body);
-    if (validationError) return validationError;
+    return errorResponse(HTTP_STATUS.BAD_REQUEST, "Invalid JSON body");
   }
 
   // Build clientRawRequest for logging (if not provided)
   if (!clientRawRequest) {
+    const url = new URL(request.url);
     clientRawRequest = {
-      endpoint: requestPathname,
+      endpoint: url.pathname,
       body,
-      headers: Object.fromEntries(request.headers.entries()),
+      headers: Object.fromEntries(request.headers.entries())
     };
   }
   // Claude Code marks a 1M-context request as `<model>[1m]`; the marker matches
@@ -187,6 +57,9 @@ export async function handleChat(request, clientRawRequest = null) {
   // The capability travels in the anthropic-beta header, forwarded as-is.
   const { model: modelStr, contextMarker } = stripModelContextMarker(body.model);
   if (contextMarker) body.model = modelStr;
+
+  const session = resolveSessionIdentity({ headers: clientRawRequest?.headers, body });
+  const sessionId = session?.sessionId || null;
 
   // Request summary is emitted as the unified "▶" line in chatCore (has fmt/thinking/account)
 
@@ -205,18 +78,18 @@ export async function handleChat(request, clientRawRequest = null) {
   if (settings.requireApiKey) {
     if (!apiKey) {
       log.warn("AUTH", "Missing API key (requireApiKey=true)");
-      return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Missing API key", null, clientFormat);
+      return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Missing API key");
     }
     const valid = await isValidApiKey(apiKey);
     if (!valid) {
       log.warn("AUTH", "Invalid API key (requireApiKey=true)");
-      return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Invalid API key", null, clientFormat);
+      return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Invalid API key");
     }
   }
 
   if (!modelStr) {
     log.warn("CHAT", "Missing model");
-    return errorResponse(HTTP_STATUS.BAD_REQUEST, "Missing model", null, clientFormat);
+    return errorResponse(HTTP_STATUS.BAD_REQUEST, "Missing model");
   }
 
   // Per-key access control: a restricted key may call only its listed combos and
@@ -240,11 +113,7 @@ export async function handleChat(request, clientRawRequest = null) {
     const comboStrategies = settings.comboStrategies || {};
     const comboSpecificStrategy = comboStrategies[modelStr]?.fallbackStrategy;
     const comboStrategy = comboSpecificStrategy || settings.comboStrategy || "fallback";
-    const augmentedModels = await filterAdapterModels(
-      keyAccess,
-      augmentModelsWithCapacityAdapter(comboModels, requiredCapabilities, settings),
-      comboModels,
-    );
+    const augmentedModels = await filterAdapterModels(keyAccess, augmentModelsWithCapacityAdapter(comboModels, requiredCapabilities, settings), comboModels);
     const adapterAdded = augmentedModels.filter((m) => !comboModels.includes(m));
 
     if (comboStrategy === "fusion") {
@@ -268,73 +137,60 @@ export async function handleChat(request, clientRawRequest = null) {
     }
 
     const comboStickyLimit = settings.comboStickyRoundRobinLimit;
-    log.info(
-      "CHAT",
-      `Combo "${modelStr}" with ${augmentedModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`,
-    );
+    const comboCfg = comboStrategies[modelStr] || {};
+    log.info("CHAT", `Combo "${modelStr}" with ${augmentedModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`);
     return handleComboChat({
       body,
       models: augmentedModels,
       handleSingleModel: withCapacityAdapterStripping(
         (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey),
-        adapterAdded,
+        adapterAdded
       ),
       log,
       comboName: modelStr,
       comboStrategy,
       comboStickyLimit,
+      sessionId,
+      smartPolicy: comboCfg.smartPolicy || "smart",
+      sessionSticky: comboCfg.sessionSticky !== false,
+      confidenceThreshold: typeof comboCfg.confidenceThreshold === "number" ? comboCfg.confidenceThreshold : 0.8,
+      resolveSmartChoice: comboStrategy === "smart"
+        ? (b, m) => resolveSmartChoice({
+            body: b,
+            models: m,
+            routerModel: comboCfg.routerModel,
+            log,
+          })
+        : null,
     });
   }
 
   // Single model request — may still switch to a capacity-adapter model if the
   // target lacks a capability the request needs (e.g. no vision, request has an image).
-  const soloAugmented = await filterAdapterModels(
-    keyAccess,
-    augmentModelsWithCapacityAdapter([modelStr], requiredCapabilities, settings),
-    [modelStr],
-  );
+  const soloAugmented = await filterAdapterModels(keyAccess, augmentModelsWithCapacityAdapter([modelStr], requiredCapabilities, settings), [modelStr]);
   if (soloAugmented.length > 1) {
     const adapterAdded = soloAugmented.filter((m) => m !== modelStr);
-    log.info(
-      "CHAT",
-      `Capacity adapter for [${[...requiredCapabilities].join(",")}] on "${modelStr}" → trying ${soloAugmented.join(", ")}`,
-    );
+    log.info("CHAT", `Capacity adapter for [${[...requiredCapabilities].join(",")}] on "${modelStr}" → trying ${soloAugmented.join(", ")}`);
     return handleComboChat({
       body,
       models: soloAugmented,
       handleSingleModel: withCapacityAdapterStripping(
         (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey),
-        adapterAdded,
+        adapterAdded
       ),
       log,
       comboName: modelStr,
-      comboStrategy: getActiveAdapterStrategy(requiredCapabilities, settings),
+      comboStrategy: getActiveAdapterStrategy(requiredCapabilities, settings)
     });
   }
 
-  return handleSingleModelChat(
-    body,
-    modelStr,
-    clientRawRequest,
-    request,
-    apiKey,
-    contextMarker ? `${modelStr.slice(modelStr.indexOf("/") + 1)}[${contextMarker}]` : null,
-  );
+  return handleSingleModelChat(body, modelStr, clientRawRequest, request, apiKey, contextMarker ? `${modelStr.slice(modelStr.indexOf("/") + 1)}[${contextMarker}]` : null);
 }
 
 /**
  * Handle single model chat request
  */
-async function handleSingleModelChat(
-  body,
-  modelStr,
-  clientRawRequest = null,
-  request = null,
-  apiKey = null,
-  requestedModel = null,
-) {
-  // Error envelope this client's endpoint expects (Anthropic vs OpenAI).
-  const clientFormat = isClaudeEndpoint(clientRawRequest?.endpoint) ? FORMATS.CLAUDE : null;
+async function handleSingleModelChat(body, modelStr, clientRawRequest = null, request = null, apiKey = null, requestedModel = null) {
   const modelInfo = await getModelInfo(modelStr);
 
   // If provider is null, this might be a combo name - check and handle
@@ -350,18 +206,11 @@ async function handleSingleModelChat(
       // Nested combo (a combo member that is itself a combo): the access decision
       // was made on the outer target; only drop adapter models the key may not call.
       const keyAccess = await getKeyAccessContext(request);
-      const augmentedModels = await filterAdapterModels(
-        keyAccess,
-        augmentModelsWithCapacityAdapter(comboModels, requiredCapabilities, chatSettings),
-        comboModels,
-      );
+      const augmentedModels = await filterAdapterModels(keyAccess, augmentModelsWithCapacityAdapter(comboModels, requiredCapabilities, chatSettings), comboModels);
       const adapterAdded = augmentedModels.filter((m) => !comboModels.includes(m));
 
       if (comboStrategy === "fusion") {
-        log.info(
-          "CHAT",
-          `Combo "${modelStr}" with ${comboModels.length} models (strategy: fusion)`,
-        );
+        log.info("CHAT", `Combo "${modelStr}" with ${comboModels.length} models (strategy: fusion)`);
         return handleFusionChat({
           body,
           models: comboModels,
@@ -381,25 +230,37 @@ async function handleSingleModelChat(
       }
 
       const comboStickyLimit = chatSettings.comboStickyRoundRobinLimit;
-      log.info(
-        "CHAT",
-        `Combo "${modelStr}" with ${augmentedModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`,
-      );
+      const comboCfg = comboStrategies[modelStr] || {};
+      const nestedSession = resolveSessionIdentity({ headers: clientRawRequest?.headers, body });
+      const nestedSessionId = nestedSession?.sessionId || null;
+      log.info("CHAT", `Combo "${modelStr}" with ${augmentedModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`);
       return handleComboChat({
         body,
         models: augmentedModels,
         handleSingleModel: withCapacityAdapterStripping(
           (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey),
-          adapterAdded,
+          adapterAdded
         ),
         log,
         comboName: modelStr,
         comboStrategy,
         comboStickyLimit,
+        sessionId: nestedSessionId,
+        smartPolicy: comboCfg.smartPolicy || "smart",
+        sessionSticky: comboCfg.sessionSticky !== false,
+        confidenceThreshold: typeof comboCfg.confidenceThreshold === "number" ? comboCfg.confidenceThreshold : 0.8,
+        resolveSmartChoice: comboStrategy === "smart"
+          ? (b, m) => resolveSmartChoice({
+              body: b,
+              models: m,
+              routerModel: comboCfg.routerModel,
+              log,
+            })
+          : null,
       });
     }
     log.warn("CHAT", "Invalid model format", { model: modelStr });
-    return errorResponse(HTTP_STATUS.BAD_REQUEST, "Invalid model format", null, clientFormat);
+    return errorResponse(HTTP_STATUS.BAD_REQUEST, "Invalid model format");
   }
 
   const { provider, model } = modelInfo;
@@ -411,17 +272,12 @@ async function handleSingleModelChat(
 
   // Try with available accounts (fallback on errors)
   const excludeConnectionIds = new Set();
-  // Proxy pools already tried in THIS request (no-auth rotation strategies).
-  const excludePoolIds = new Set();
   let lastError = null;
   let lastStatus = null;
   let lastHeaders = null;
 
   while (true) {
-    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model, {
-      requestedModel: requestedModel || model,
-      excludePoolIds,
-    });
+    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model, { requestedModel: requestedModel || model });
 
     // All accounts unavailable
     if (!credentials || credentials.allRateLimited) {
@@ -429,50 +285,26 @@ async function handleSingleModelChat(
         const errorMsg = lastError || credentials.lastError || "Unavailable";
         const status = HTTP_STATUS.SERVICE_UNAVAILABLE;
         log.warn("CHAT", `[${provider}/${model}] ${errorMsg} (${credentials.retryAfterHuman})`);
-        return unavailableResponse(
-          status,
-          `[${provider}/${model}] ${errorMsg}`,
-          credentials.retryAfter,
-          credentials.retryAfterHuman,
-          lastHeaders,
-          clientFormat,
-        );
+        return unavailableResponse(status, `[${provider}/${model}] ${errorMsg}`, credentials.retryAfter, credentials.retryAfterHuman, lastHeaders);
       }
       if (excludeConnectionIds.size === 0) {
         log.warn("AUTH", `No active credentials for provider: ${provider}`);
-        return errorResponse(
-          HTTP_STATUS.NOT_FOUND,
-          `No active credentials for provider: ${provider}`,
-          null,
-          clientFormat,
-        );
+        return errorResponse(HTTP_STATUS.NOT_FOUND, `No active credentials for provider: ${provider}`);
       }
       log.warn("CHAT", "No more accounts available", { provider });
-      return errorResponse(
-        lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE,
-        lastError || "All accounts unavailable",
-        lastHeaders,
-        clientFormat,
-      );
+      return errorResponse(lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE, lastError || "All accounts unavailable", lastHeaders);
     }
 
     // Account selection shown in the unified "▶" line (acc:...)
     const refreshedCredentials = await checkAndRefreshToken(provider, credentials);
 
     // Ensure real project ID is available for providers that need it (P0 fix: cold miss)
-    if (
-      (provider === "antigravity" || provider === "gemini-cli") &&
-      !refreshedCredentials.projectId
-    ) {
-      const pid = await getProjectIdForConnection(
-        credentials.connectionId,
-        refreshedCredentials.accessToken,
-        provider,
-      );
+    if ((provider === "antigravity" || provider === "gemini-cli") && !refreshedCredentials.projectId) {
+      const pid = await getProjectIdForConnection(credentials.connectionId, refreshedCredentials.accessToken, provider);
       if (pid) {
         refreshedCredentials.projectId = pid;
         // Persist to DB in background so subsequent requests have it immediately
-        updateProviderCredentials(credentials.connectionId, { projectId: pid }).catch(() => {});
+        updateProviderCredentials(credentials.connectionId, { projectId: pid }).catch(() => { });
       }
     }
 
@@ -498,6 +330,8 @@ async function handleSingleModelChat(
       cavemanLevel: chatSettings.cavemanLevel || "full",
       ponytailEnabled: !!chatSettings.ponytailEnabled,
       ponytailLevel: chatSettings.ponytailLevel || "full",
+      customPromptEnabled: !!chatSettings.customPromptEnabled,
+      customPrompt: chatSettings.customPrompt || "",
       pxpipeEnabled: !!chatSettings.pxpipeEnabled,
       pxpipeMinChars: chatSettings.pxpipeMinChars,
       pxpipeTimeoutMs: chatSettings.pxpipeTimeoutMs,
@@ -507,50 +341,20 @@ async function handleSingleModelChat(
       providerThinking,
       // Per-provider user overrides (custom headers / connect timeout) from settings
       providerOverrides: (chatSettings.providerOverrides || {})[provider] || null,
-      // Decision model used to answer Claude Code auto-mode safeguard reviews
-      safeguardsClassifierModel: chatSettings.safeguardsClassifierModel || null,
-      // Claude Code web search: which search provider runs the bridged lookup,
-      // and whether the feature is on at all (unset = auto-detect).
-      webSearchEnabled: chatSettings.webSearchEnabled,
-      webSearchProvider: chatSettings.webSearchProvider || null,
-      // Credentials for the search provider are resolved from the provider
-      // store at call time — never the chat lane's credentials, since the
-      // search provider is a different account.
-      //
-      // getProviderCredentials' third positional arg is `model`, not a lock
-      // key, so the namespaced lock key travels in `options` and is ignored
-      // there. Passing the lock key positionally would filter credentials by a
-      // model named "websearch:<id>" and match nothing.
-      searchCredentialResolver: (searchProviderId, excludeIds) =>
-        getProviderCredentials(searchProviderId, excludeIds, null, {
-          lockKey: `websearch:${searchProviderId}`,
-        }),
-      // Providers holding live credentials, so auto-selection has candidates to
-      // choose from when no search provider is pinned in settings.
-      searchProviderResolver: listProvidersWithCredentials,
-      // Run a bridged search through the app's own /v1/search handler, so a
-      // Claude Code WebSearch sees exactly what a user's curl sees — including
-      // combo expansion (e.g. "search-combo-1") and combo fallback, which live
-      // only in that handler.
-      searchEndpointRunner: runSearchViaSearchEndpoint,
       // Detect source format by endpoint + body
-      sourceFormatOverride: request?.url
-        ? detectFormatByEndpoint(new URL(request.url).pathname, body)
-        : null,
-      // Error envelope the client's endpoint expects (Anthropic vs OpenAI)
-      clientFormat,
+      sourceFormatOverride: request?.url ? detectFormatByEndpoint(new URL(request.url).pathname, body) : null,
       onCredentialsRefreshed: async (newCreds) => {
         await updateProviderCredentials(credentials.connectionId, {
           ...newCreds,
           existingProviderSpecificData: credentials.providerSpecificData,
-          testStatus: "active",
+          testStatus: "active"
         });
       },
       onRequestSuccess: async () => {
         await clearAccountError(credentials.connectionId, credentials, model);
         // "Consecutive" strikes: a success clears the breaker for this pair.
         clearAntigravityStrikes(credentials.connectionId, model);
-      },
+      }
     });
 
     if (result.success) return result.response;
@@ -560,44 +364,21 @@ async function handleSingleModelChat(
     let resetsAtMs = result.resetsAtMs;
     if (provider === "antigravity" && (result.status === 409 || result.status === 429)) {
       quotaResetMs = await handleAntigravityQuotaError(
-        credentials.connectionId,
-        result.status,
-        model,
-        refreshedCredentials.accessToken,
-        credentials.providerSpecificData,
+        credentials.connectionId, result.status, model,
+        refreshedCredentials.accessToken, credentials.providerSpecificData
       );
       if (quotaResetMs) resetsAtMs = quotaResetMs;
     }
 
     // Exhausted Antigravity model is blocked only in RAM cache until upstream resetAt.
     // Do not persist a modelLock_* for this path.
-    const shouldFallback =
-      provider === "antigravity" && quotaResetMs
-        ? true
-        : (
-            await markAccountUnavailable(
-              credentials.connectionId,
-              result.status,
-              result.error,
-              provider,
-              model,
-              resetsAtMs,
-              {
-                excludePoolIds,
-                proxyPoolId: credentials.providerSpecificData?.connectionProxyPoolId || null,
-              },
-            )
-          ).shouldFallback;
+    const shouldFallback = provider === "antigravity" && quotaResetMs
+      ? true
+      : (await markAccountUnavailable(credentials.connectionId, result.status, result.error, provider, model, resetsAtMs)).shouldFallback;
 
     if (shouldFallback) {
-      log.warn(
-        "FALLBACK",
-        `⇄ ACC:${credentials.connectionName} UNAVAILABLE (${result.status}) → NEXT ACCOUNT`,
-      );
+      log.warn("FALLBACK", `⇄ ACC:${credentials.connectionName} UNAVAILABLE (${result.status}) → NEXT ACCOUNT`);
       excludeConnectionIds.add(credentials.connectionId);
-      // Never hand this request the proxy that just failed again (no-auth rotation).
-      const failedPoolId = credentials.providerSpecificData?.connectionProxyPoolId;
-      if (failedPoolId) excludePoolIds.add(failedPoolId);
       lastError = result.error;
       lastStatus = result.status;
       lastHeaders = upstreamResponseHeaders(result.response?.headers);

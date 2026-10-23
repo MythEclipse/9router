@@ -146,16 +146,23 @@ export const MODEL_CAPABILITIES = {
   "glm-5.3-flash":     { vision: true, videoInput: true, pdf: true, reasoning: true, thinkingFormat: "zai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 131072 },
   "glm-4.6v":          { vision: true, videoInput: true, reasoning: true, thinkingFormat: "zai", contextWindow: 128000, maxOutput: 32768 },
   "glm-4.5v":          { vision: true, videoInput: true, reasoning: true, thinkingFormat: "zai", contextWindow: 64000, maxOutput: 16384 },
-  // GLM-5.2 has 1M context — pattern *glm-5* only gives 200k, so override here.
-  // thinkingEffortSupported must be repeated: resolveCapabilities returns from
-  // this exact entry before it ever reaches the *glm-5.2* pattern that sets it,
-  // so without it GLM-5.2 silently lost reasoning_effort. #4409
+  // GLM-5.2 has 1M context and maxOutput 131072. An exact entry shadows the *glm-5.2*
+  // pattern completely, so it must repeat that pattern's thinkingEffortSupported or
+  // reasoning_effort is dropped for GLM-5.2 (supported from 5.2 onward).
   "glm-5.2":           { reasoning: true, thinkingFormat: "zai", thinkingEffortSupported: true, thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 131072 },
   // OpenCode serves the same weights under this free id from its OWN inference
   // service, which validates the body strictly: the zai `thinking` object the
   // *glm-5.3* pattern emits is answered
   //   400 [unknown_parameter] invalid request body: json: unknown field "thinking"
   // while reasoning_effort is accepted (none/minimal/low/medium/high/xhigh/max → 200).
+  // Probed live 2026-10-18 on both lanes exposing the id: /inference/v1 (provider
+  // "opencode") and /zen/v1 (provider "opencode-zen"). Mirrors the
+  // PROVIDER_CAPABILITIES["opencode-go"] override for the paid glm-5.3-flash id;
+  // the zai shape stays correct for z.ai's own lines (glm / glm-cn). codebuddy-cn
+  // is unaffected — it already resolves glm-5.3-flash to the openai shape.
+  // Known gap, shared with the paid sibling: an intent that carries no level
+  // (Claude adaptive thinking, reasoning_effort "auto") still emits literal
+  // "auto" from the generic openai branch, which this service rejects.
   "glm-5.3-flash-free": { vision: true, videoInput: true, pdf: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 128000 },
 
   // DeepSeek's first V4 model with image input; text limits match V4-Flash.
@@ -204,10 +211,6 @@ export const MODEL_CAPABILITIES = {
   "longcat-2.0":             { reasoning: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 131072 },
   "longcat-2.0-free":        { reasoning: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 131072 },
   "longcat-2.5-preview-free":{ vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 131072 },
-  // Go's other two unlimited free models (https://opencode.ai/docs/go/). Step 5
-  // takes image+video input, Cat Jam Free is text-only — taken from models.dev.
-  "step-5-preview-free":     { vision: true, videoInput: true, reasoning: true, thinkingFormat: "step", contextWindow: 1000000, maxOutput: 65536 },
-  "cat-jam-free":            { reasoning: true, thinkingFormat: "openai", contextWindow: 262144, maxOutput: 131072 },
   "north-mini-code-free":    { reasoning: true, thinkingFormat: "openai", contextWindow: 256000, maxOutput: 64000 },
   "ring-2.6-1t-free":        { reasoning: true, thinkingFormat: "openai", contextWindow: 262000, maxOutput: 66000 },
   "x-preview-f-free":        { vision: true, videoInput: true, reasoning: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 131072 },
@@ -281,6 +284,9 @@ export const PROVIDER_CAPABILITIES = {
   "codex": {
     "gpt-6-astra":               { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 },
     "gpt-6-sol":                 { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 },
+    // Without its own entry gpt-6.1-sol fell through to *gpt-6* (1.05M), overstating
+    // the Codex window like any unlisted sibling would.
+    "gpt-6.1-sol":               { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 },
     "gpt-6-luna":                { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 },
     "gpt-6-astra[1m]":           CODEX_EXTENDED_CAPS,
     "gpt-6-sol[1m]":             CODEX_EXTENDED_CAPS,
@@ -474,7 +480,7 @@ export const PATTERN_CAPABILITIES = [
   // ── Gemini (all 2.0+ multimodal + google_search grounding, 1M ctx) ─
   { pattern: "*gemini*image*",  caps: { vision: true, imageOutput: true, contextWindow: 1048576 } },
   // Gemini 4 (Argon): no "minimal" tier (400) and no thinkingBudget — LOW/MEDIUM/HIGH only, cannot disable.
-  { pattern: "*gemini-4*",      caps: { vision: true, audioInput: true, videoInput: true, pdf: true, reasoning: true, search: true, thinkingFormat: "gemini-level", thinkingCanDisable: false, contextWindow: 1048576, maxOutput: 65536 } },
+  { pattern: "*gemini-4*",      caps: { vision: true, audioInput: true, videoInput: true, reasoning: true, search: true, thinkingFormat: "gemini-level", thinkingCanDisable: false, contextWindow: 1048576, maxOutput: 65536 } },
   { pattern: "*gemini-3.8*",    caps: { vision: true, audioInput: true, videoInput: true, reasoning: true, search: true, thinkingFormat: "gemini-level", thinkingCanDisable: false, contextWindow: 1048576, maxOutput: 65536 } },
   { pattern: "*gemini-3.7*",    caps: { vision: true, audioInput: true, videoInput: true, reasoning: true, search: true, thinkingFormat: "gemini-level", thinkingCanDisable: false, contextWindow: 1048576, maxOutput: 65536 } },
   { pattern: "*gemini-3*pro*",  caps: { vision: true, audioInput: true, videoInput: true, reasoning: true, search: true, thinkingFormat: "gemini-level", thinkingCanDisable: false, contextWindow: 1048576, maxOutput: 65535 } },
@@ -521,6 +527,9 @@ export const PATTERN_CAPABILITIES = [
   // ── Grok (vision + Live Search) ──────────────────────────────────
   { pattern: "*grok*image*",    caps: { imageOutput: true } },
   { pattern: "*grok-code*",     caps: { reasoning: true, thinkingFormat: "openai", contextWindow: 256000 } },
+  // Grok 4.7: 500k context, same envelope as 4.6. Without its own row it fell to the
+  // `*grok-4*` catch-all (256k), and stripHistoryForContext() trims at 80% of that.
+  { pattern: "*grok-4.7*",      caps: { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 500000, maxOutput: 500000 } },
   // Grok 4.6: 500k context, no text output limit (docs.x.ai/developers/grok-4-6)
   { pattern: "*grok-4.6*",      caps: { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 500000, maxOutput: 500000 } },
   // Grok 4.5 (Grok CLI / Grok Build): 500k context per cli-chat-proxy /v1/models
@@ -624,13 +633,7 @@ export const PATTERN_CAPABILITIES = [
   // ── Others ───────────────────────────────────────────────────────
   { pattern: "*hunyuan*",       caps: { reasoning: true, thinkingFormat: "hunyuan", contextWindow: 262144, maxOutput: 262144 } },
   { pattern: "hy3*",            caps: { reasoning: true, thinkingFormat: "hunyuan", contextWindow: 262144, maxOutput: 262144 } },
-  // Step-5 ships with a 1M window (models.dev: opencode-go/step-5-preview-free
-  // = 1,000,000 context / 65,536 output). This pin was written when StepFun's
-  // line was 128k and never updated — same staleness as the GLM pins (#4544).
-  // Hand-added custom routes (customModels kv rows) carry no exact entry, so
-  // this pattern is what every Step-5 id resolves to. maxOutput left
-  // conservative at the default; models.dev says 65,536 vs the 64k default.
-  { pattern: "*step-*",         caps: { reasoning: true, thinkingFormat: "step", contextWindow: 1000000 } },
+  { pattern: "*step-*",         caps: { reasoning: true, thinkingFormat: "step", contextWindow: 128000 } },
   { pattern: "*nemotron*",      caps: { reasoning: true, contextWindow: 128000 } },
   { pattern: "*ling-*",         caps: { reasoning: true, contextWindow: 128000 } },
 ];
@@ -642,7 +645,7 @@ export const PATTERN_CAPABILITIES = [
  * Union:        vision, pdf, audioInput, videoInput, imageOutput, audioOutput, search
  * Intersection: tools
  * Primary:      reasoning fields from the first (primary) model
- * Conservative: contextWindow = min; maxOutput = min
+ * Conservative: contextWindow = min; maxOutput = max
  *
  * @param {string[]} comboModels
  * @param {Object|null} [comboLookup] optional map of combo name → models array for nested resolution
@@ -685,51 +688,8 @@ export function aggregateComboCapabilities(comboModels, comboLookup = null, reso
     thinkingCanDisable: first.thinkingCanDisable,
     thinkingRange:      first.thinkingRange,
     contextWindow: Math.min(...allCaps.map((c) => c.contextWindow)),
-    maxOutput:     Math.min(...allCaps.map((c) => c.maxOutput)),
+    maxOutput:     Math.max(...allCaps.map((c) => c.maxOutput)),
   };
-}
-
-/**
- * Resolve the context window a combo publishes for itself.
- *
- * `aggregateComboCapabilities` uses min, which is the honest answer for a panel:
- * every seat sees the whole request. A fallback chain is not a panel — a request
- * too large for a seat moves to the next one, so the window the chain can actually
- * serve is its *largest* seat's. Rather than guess, the combo says which it means:
- *
- *   min    (default) — smallest seat window; what every seat can serve
- *   max              — largest seat window; what the chain can serve via rollover
- *   custom           — an explicit number (e.g. one seat's window, or a safety margin
- *                      below the largest so a client compacts before the last wall)
- *
- * @param {number[]} seatWindows context window per seat, nested combos already resolved
- * @param {"min"|"max"|"custom"} [mode]
- * @param {number|null} [custom]
- * @returns {number|undefined}
- */
-export function comboContextWindow(seatWindows, mode = "min", custom = null) {
-  const windows = (Array.isArray(seatWindows) ? seatWindows : [])
-    .filter((v) => Number.isFinite(v) && v > 0);
-  if (mode === "custom") {
-    const n = Number(custom);
-    if (Number.isFinite(n) && n > 0) return n;
-  }
-  if (!windows.length) return undefined;
-  return mode === "max" ? Math.max(...windows) : Math.min(...windows);
-}
-
-/**
- * Read the per-combo context-window setting out of settings.comboStrategies[name].
- * Anything unrecognised falls back to "min", i.e. the pre-existing behaviour.
- *
- * @param {object|null|undefined} comboStrategy
- * @returns {{mode: "min"|"max"|"custom", custom: number|null}}
- */
-export function comboWindowSetting(comboStrategy) {
-  const raw = comboStrategy?.contextWindowMode;
-  const mode = raw === "max" || raw === "custom" ? raw : "min";
-  const n = Number(comboStrategy?.contextWindow);
-  return { mode, custom: Number.isFinite(n) && n > 0 ? Math.floor(n) : null };
 }
 
 /**
@@ -831,32 +791,7 @@ function isCommandCodeTextOnly(model) {
   }
   return false;
 }
-// Memo for the table/pattern resolution below. /v1/models resolves every
-// catalog entry per request, and each resolution walks ~106 glob patterns —
-// about 98 ms for the full catalog. Results are pure functions of the static
-// tables plus the catalog overlay, so they are cached until that overlay
-// changes.
-//
-// The entry lives on globalThis for the same reason catalogSource does: this
-// module is bundled into several route chunks, and a memo installed in one copy
-// must be visible (and invalidatable) from the others. Validity is tied to the
-// catalog source's identity, so setCatalogSource() from any copy invalidates
-// every copy; catalogOverride.invalidateCatalog() nulls it directly after the
-// catalog file is re-read, because the source object itself does not change
-// then. Values are stored once and handed back as fresh shallow copies so a
-// caller mutating its result cannot poison the cache.
-const CAPS_MEMO_MAX = 20000;
-
-function capsMemo() {
-  const source = getCatalogSource();
-  const memo = globalThis.__9rCapsMemo;
-  if (memo && memo.source === source) return memo;
-  const fresh = { source, entries: new Map() };
-  globalThis.__9rCapsMemo = fresh;
-  return fresh;
-}
-
-function resolveCapabilities(provider, model) {
+export function getCapabilitiesForModel(provider, model) {
   if (!model) return { ...DEFAULT_CAPABILITIES };
 
   // Canonical exact lookup strips vendor prefix: "anthropic/claude-opus-4.7" -> "claude-opus-4.7".
@@ -900,28 +835,6 @@ function resolveCapabilities(provider, model) {
 
   // 4. Floor
   return refine(null, provider, model);
-}
-
-/**
- * Resolve a model's capabilities: provider override -> exact id -> glob
- * pattern -> safe floor, refined by the synced catalog and the name
- * heuristic. Pure, so the answer is memoized per (provider, model) until the
- * catalog changes; a fresh shallow copy is returned on every call.
- *
- * @param {string|null} provider - Provider id in the local id space
- * @param {string} model - Model id (vendor prefix stripped for exact lookup)
- * @returns {object} capabilities merged over DEFAULT_CAPABILITIES
- */
-export function getCapabilitiesForModel(provider, model) {
-  const memo = capsMemo();
-  const key = `${provider || ""}\u0000${model}`;
-  const cached = memo.entries.get(key);
-  if (cached) return { ...cached };
-
-  const resolved = resolveCapabilities(provider, model);
-  if (memo.entries.size >= CAPS_MEMO_MAX) memo.entries.clear();
-  memo.entries.set(key, resolved);
-  return { ...resolved };
 }
 
 // Gemini 4 (Argon) drops sampling params and requires functionResponse-last merged user turns.

@@ -153,12 +153,16 @@ export default function QuotaTable({
           const isUnlimited = quota.unlimited === true;
           const isCreditBalance = quota.isCreditBalance === true;
           const colors = isCreditBalance
+<<<<<<< HEAD
             ? {
                 text: "text-blue-600 dark:text-blue-400",
                 bg: "bg-blue-500",
                 bgLight: "bg-blue-500/10",
                 emoji: "💰",
               }
+=======
+            ? { text: "text-blue-600 dark:text-blue-400", bg: "bg-blue-500", bgLight: "bg-blue-500/10", emoji: "💰" }
+>>>>>>> upstream/master
             : getColorClasses(quota.colorPercentage ?? quota.remaining);
           // Qoder flags open-ended plans with `neverExpires` (its API reports a
           // year-9999 sentinel). Return "-"/"Never expires" rather than an empty
@@ -171,10 +175,17 @@ export default function QuotaTable({
           const resetDisplay = quota.emptyMessage
             ? quota.emptyMessage
             : quota.neverExpires
+<<<<<<< HEAD
               ? "Never expires"
               : seeDetails
                 ? "See details"
                 : formatResetTimeDisplay(quota.resetAt);
+=======
+            ? "Never expires"
+            : seeDetails
+              ? "See details"
+              : formatResetTimeDisplay(quota.resetAt);
+>>>>>>> upstream/master
           const resetSecondaryText = seeDetails && quota.detailUrl ? quota.detailUrl : resetDisplay;
           // recurring defaults true: a missing flag means the quota
           // refreshes at resetAt. Bonus/one-shot packs set recurring:false

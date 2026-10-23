@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { aggregateComboCapabilities, getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js";
 
 // A combo's limits are the conservative aggregate of its members: ctx = min,
-// maxOutput = min. Resolving those members needs the synced model catalog, which
+// maxOutput = max. Resolving those members needs the synced model catalog, which
 // is server-only (it reads a file), so the browser bundle falls back to the
 // generic patterns. The dashboard computed its badges there and under-reported:
 // /v1/models and pi-settings (both server-side) said 1M while the badge said 200k.
@@ -17,16 +17,18 @@ describe("aggregateComboCapabilities: resolveCaps override", () => {
 
   it("falls back to the pattern default without a resolver", () => {
     const caps = aggregateComboCapabilities(models);
-    // Local tables own the answer when no resolver is supplied. glm-5.3 has an
-    // exact entry at 1M (the stale 200k *glm-5* pattern no longer applies), so
-    // the combo resolves to 1M — matching what /v1/models reports server-side.
+    // glm-5.3 has no exact glm-cn entry, so the *glm-5.3* pattern applies: 1M since
+    // 0f7f6e72 (#4544, "GLM-5.2/5.3 context is 1M, not the stale 200k pin").
     expect(caps.contextWindow).toBe(1_000_000);
   });
 
   it("uses the fed limits when a resolver supplies them", () => {
-    const resolver = (fullId) => (fullId === "glm-cn/glm-5.3" ? GLM53_FED : null);
+    // Feed a value the local tables don't have, so the assertion proves the override.
+    const fed = { ...GLM53_FED, contextWindow: 640_000 };
+    const resolver = (fullId) => (fullId === "glm-cn/glm-5.3" ? fed : null);
     const caps = aggregateComboCapabilities(models, null, resolver);
-    expect(caps.contextWindow).toBe(1_000_000);
+    expect(aggregateComboCapabilities(models).contextWindow).not.toBe(640_000);
+    expect(caps.contextWindow).toBe(640_000);
   });
 
   it("keeps the fields the override does not carry", () => {
@@ -45,7 +47,7 @@ describe("aggregateComboCapabilities: resolveCaps override", () => {
     // Feeding a *smaller* value for one member must pull the aggregate down.
     const smaller = aggregateComboCapabilities(models, null, (id) => (id === "glm-cn/glm-5.3" ? { ...GLM53_FED, contextWindow: 64_000 } : null));
     expect(smaller.contextWindow).toBe(64_000);
-    expect(caps.maxOutput).toBe(131_072); // min across members, from the fed GLM limits
+    expect(caps.maxOutput).toBe(384_000); // max across members, from deepseek
   });
 
   it("passes the resolver into nested combos", () => {

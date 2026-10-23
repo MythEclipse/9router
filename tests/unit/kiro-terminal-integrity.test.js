@@ -112,13 +112,6 @@ async function text(stream) {
   }
 }
 
-// 401 is a KIRO_ENDPOINT_FALLBACK_STATUSES member, so BaseExecutor walks every
-// base URL before handing a response back. Queue this as a default (not a
-// one-shot) so the fallback loop never runs out of responses.
-function unauthorized() {
-  return new Response("unauthorized", { status: 401, statusText: "Unauthorized" });
-}
-
 async function execute(executor = new KiroExecutor(), overrides = {}) {
   return executor.execute({
     model: "kr/claude-opus-4.8",
@@ -711,13 +704,16 @@ describe("Kiro terminal integrity recovery", () => {
     expect(body).not.toContain("must stay private");
   });
 
+  // A 401/403 falls through to the next Kiro surface (16cb40fd / 35b950be), so every
+  // retry surface must fail for the error to be surfaced; one mocked 401 left the
+  // remaining surfaces with an undefined response and the test timed out.
   it("surfaces retry HTTP failures as SSE after heartbeat commits headers", async () => {
-    // 401 falls through every base URL, so the retry needs more than one
-    // response queued; mockImplementationOnce would run dry and leave
-    // base.js dereferencing an undefined response.
     fetchMock
       .mockResolvedValueOnce(response([]))
-      .mockImplementation(unauthorized);
+      .mockImplementation(async () => new Response("unauthorized", {
+        status: 401,
+        statusText: "Unauthorized"
+      }));
 
     const result = await execute();
     const body = await result.response.text();
@@ -728,13 +724,12 @@ describe("Kiro terminal integrity recovery", () => {
   });
 
   it("bounds the retry HTTP error body", async () => {
-    const bigBody = () => new Response(`error-start-${"x".repeat(10_000)}-error-tail`, {
-      status: 401,
-      statusText: "Unauthorized",
-    });
     fetchMock
       .mockResolvedValueOnce(response([]))
-      .mockImplementation(bigBody);
+      .mockImplementation(async () => new Response(`error-start-${"x".repeat(10_000)}-error-tail`, {
+        status: 401,
+        statusText: "Unauthorized"
+      }));
 
     const body = await (await execute()).response.text();
 

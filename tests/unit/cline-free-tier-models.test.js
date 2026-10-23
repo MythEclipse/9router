@@ -109,13 +109,10 @@ describe("cline-free namespace pricing", () => {
 
   it("still bills the paid twin at its published rate", async () => {
     const { getPricingForModel } = await import("../../open-sse/providers/pricing.js");
-    // Paid twins are billed normally; only the cline-free/* namespace is zero.
-    // Use a model the cline registry actually lists (the catalog was refreshed
-    // in 122f23ee and no longer carries meta/muse-spark or deepseek).
     expect(getPricingForModel("cline", "deepseek/deepseek-v4.1-flash").input).toBe(0.14);
-    expect(getPricingForModel("cline", "anthropic/claude-sonnet-4.6")).not.toBeNull();
-    // A namespaced id that cline does not serve has no published rate.
-    expect(getPricingForModel("cline", "meta/nonexistent-model-xyz")).toBeNull();
+    // Muse's published contributor rate (added with the Muse provider in 28809807);
+    // only the cline-free/* twin is zero-priced.
+    expect(getPricingForModel("cline", "meta/muse-spark-1.3-contributor").input).toBe(0.1);
   });
 
   it("zero price survives cost calculation over a large usage", async () => {

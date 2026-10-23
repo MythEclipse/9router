@@ -1,53 +1,36 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-// cursorModels.js talks to agent.api5.cursor.sh over raw HTTP/2 (6994cd1f) —
-// node fetch/undici cannot speak h2 — so the seam to mock is node:http2, not
-// global fetch. Mocked at module scope so it applies before the import below.
-const h2Requests = [];
-// Status/body the mocked session will answer every request with. Set per test
-// BEFORE the call: resolveCursorModels awaits before it opens the session, so
-// the mock cannot wait for the caller to reply.
-let h2Reply = { status: 200, body: new Uint8Array() };
-
-vi.mock("http2", () => ({
-  default: {
-    connect: () => ({
-      close: () => {},
-      on: () => {},
-      request: (hdrs) => {
-        h2Requests.push(hdrs);
-        const handlers = {};
-        const req = {
-          on(ev, fn) { handlers[ev] = fn; return req; },
-          end() {
-            // Replay the reply in wire order, on a later microtask so the
-            // caller has already attached its handlers.
-            queueMicrotask(() => {
-              handlers.response?.({ ":status": h2Reply.status });
-              handlers.data?.(Buffer.from(h2Reply.body));
-              handlers.end?.();
-            });
-            return req;
-          },
-          write() { return req; },
-          setEncoding() { return req; },
-        };
-        return req;
-      },
-    }),
-  },
-}));
-
 import {
   clearCursorModelCache,
   parseCursorUsableModels,
   resolveCursorModels,
 } from "../../open-sse/services/cursorModels.js";
 
-/** Set what the next mocked h2 session answers with. */
-function replyWith(status, body) {
-  h2Reply = { status, body };
-}
+// GetUsableModels goes over node:http2 (agent.api5.cursor.sh is HTTP/2-only; fetch
+// cannot speak h2, see 6994cd1f). These tests used to mock global.fetch, which the
+// code never calls: the success case could not pass and the 403 case passed because
+// a real connection failed. Fake the http2 client instead.
+const h2 = vi.hoisted(() => ({ status: 200, body: new Uint8Array(), calls: [] }));
+vi.mock("http2", async () => {
+  const { EventEmitter } = await import("node:events");
+  const connect = (origin) => {
+    const client = new EventEmitter();
+    client.close = () => {};
+    client.request = (headers) => {
+      const req = new EventEmitter();
+      req.end = (body) => {
+        h2.calls.push({ origin, headers, body });
+        queueMicrotask(() => {
+          req.emit("response", { ":status": h2.status });
+          if (h2.body.length) req.emit("data", Buffer.from(h2.body));
+          req.emit("end");
+        });
+      };
+      return req;
+    };
+    return client;
+  };
+  return { default: { connect }, connect };
+});
 
 function varint(value) {
   const bytes = [];
@@ -85,10 +68,10 @@ function model(id, name) {
 describe("Cursor live model catalog", () => {
   beforeEach(() => {
     clearCursorModelCache();
+    h2.calls.length = 0;
   });
 
   afterEach(() => {
-    h2Requests.length = 0;
     clearCursorModelCache();
   });
 
@@ -106,7 +89,8 @@ describe("Cursor live model catalog", () => {
   });
 
   it("fetches the account-specific catalog and caches it", async () => {
-    replyWith(200, concat(model("claude-4.6-opus", "Claude 4.6 Opus")));
+    h2.status = 200;
+    h2.body = concat(model("claude-4.6-opus", "Claude 4.6 Opus"));
     const credentials = {
       accessToken: "cursor-token",
       providerSpecificData: { machineId: "machine-id" },
@@ -115,29 +99,28 @@ describe("Cursor live model catalog", () => {
     await expect(resolveCursorModels(credentials)).resolves.toEqual({
       models: [{ id: "claude-4.6-opus", name: "Claude 4.6 Opus" }],
     });
-
-    // Second call must be served from cache: no new request, no new network I/O.
     await expect(resolveCursorModels(credentials)).resolves.toEqual({
       models: [{ id: "claude-4.6-opus", name: "Claude 4.6 Opus" }],
     });
 
-    expect(h2Requests).toHaveLength(1);
-    expect(h2Requests[0]).toEqual(expect.objectContaining({
+    expect(h2.calls).toHaveLength(1);
+    expect(h2.calls[0].origin).toBe("https://agent.api5.cursor.sh");
+    expect(h2.calls[0].headers).toEqual(expect.objectContaining({
       ":method": "POST",
       ":path": "/agent.v1.AgentService/GetUsableModels",
-      ":authority": "agent.api5.cursor.sh",
-      ":scheme": "https",
       "content-type": "application/proto",
       accept: "application/proto",
     }));
   });
 
   it("fails open when the Cursor catalog request fails", async () => {
-    replyWith(403, "no");
+    h2.status = 403;
+    h2.body = new TextEncoder().encode("no");
 
     await expect(resolveCursorModels({
       accessToken: "cursor-token",
       providerSpecificData: { machineId: "machine-id" },
     })).resolves.toBeNull();
+    expect(h2.calls).toHaveLength(1);
   });
 });
