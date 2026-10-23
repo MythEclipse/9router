@@ -3,9 +3,7 @@ import { PROVIDERS } from "../config/providers.js";
 import { commandCodeToOpenAIResponse } from "../translator/response/commandcode-to-openai.js";
 import { SSE_DONE } from "../utils/sseConstants.js";
 import { commandCodeThreadId, isCommandCodeThreadId } from "../utils/commandCodeSession.js";
-import { injectReasoningContent } from "../utils/reasoningContentInjector.js";
 import {
-  storeCommandCodeReasoning,
   appendCommandCodeReasoning,
   getCommandCodeReasoning,
   clearCommandCodeReasoningStore,
@@ -59,13 +57,14 @@ export class CommandCodeExecutor extends BaseExecutor {
         : m;
     });
 
-    const injected = injectReasoningContent({
-      provider: "commandcode",
-      model,
-      body: { messages: echoed },
-    });
-    if (paramsMessages) body.params.messages = injected.messages;
-    else body.messages = injected.messages;
+    // injectReasoningContent would stamp a placeholder (" ") on every
+    // assistant message lacking reasoning_content — that clobbers the real
+    // reasoning we echoed above for messages where the store has nothing,
+    // and upstream rejects the placeholder outright ("send back the real
+    // reasoning_content"). transformRequest already echoes real reasoning
+    // where available, so skip the placeholder injection entirely here.
+    if (paramsMessages) body.params.messages = echoed;
+    else body.messages = echoed;
     return body;
   }
 
