@@ -3,6 +3,7 @@ import { PROVIDERS } from "../config/providers.js";
 import { commandCodeToOpenAIResponse } from "../translator/response/commandcode-to-openai.js";
 import { SSE_DONE } from "../utils/sseConstants.js";
 import { commandCodeThreadId, isCommandCodeThreadId } from "../utils/commandCodeSession.js";
+import { injectReasoningContent } from "../utils/reasoningContentInjector.js";
 
 /**
  * CommandCodeExecutor — talks to https://api.commandcode.ai/alpha/generate
@@ -24,7 +25,12 @@ export class CommandCodeExecutor extends BaseExecutor {
 
   transformRequest(model, body, stream, credentials) {
     body.stream = true;
-    return body;
+    // CommandCode thinking models (reflection/beam etc.) require reasoning_content
+    // on every earlier assistant message in a multi-turn history (400
+    // "Missing required parameter: 'messages[N].reasoning_content'"). The DefaultExecutor
+    // injectReasoningContent gates on the provider registry's reasoningInject rule,
+    // so wire it explicitly for the CommandCode lane until the registry entry carries it.
+    return injectReasoningContent({ provider: "commandcode", model, body });
   }
 
   buildHeaders(credentials, stream = true, _url = null, _model = null, body = null) {

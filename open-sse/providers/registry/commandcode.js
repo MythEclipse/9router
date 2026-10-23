@@ -22,6 +22,15 @@ export default {
     baseUrl: "https://api.commandcode.ai/alpha/generate",
     format: "commandcode",
     forceStream: true,
+    // CommandCode thinking models (e.g. reflection/beam:free) reject multi-turn
+    // history whose assistant messages carry no reasoning_content (400
+    // "Missing required parameter: 'messages[N].reasoning_content'"). Clients in
+    // OpenAI format don't send it, and the response pipeline strips it before it
+    // reaches the client, so the echo can never come from the client. Inject a
+    // placeholder instead — same contract as the opencode zen free lane.
+    reasoningInject: {
+      scope: "all",
+    },
     headers: {
       "x-command-code-version": "0.25.7",
       "x-cli-environment": "cli",

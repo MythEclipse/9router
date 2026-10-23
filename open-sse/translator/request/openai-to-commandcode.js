@@ -130,7 +130,8 @@ function convertMessages(messages = []) {
 
     if (role === ROLE.ASSISTANT) {
       const blocks = [];
-      const rc = m.reasoning_content || m.thought || m.reasoning;
+      const rawRc = m.reasoning_content || m.thought || m.reasoning;
+      const rc = (typeof rawRc === "string") ? rawRc : (rawRc == null ? "" : String(rawRc));
       if (rc || (Array.isArray(m.tool_calls) && m.tool_calls.length > 0)) {
         blocks.push({ type: "reasoning", text: rc || " " });
       }
@@ -150,7 +151,7 @@ function convertMessages(messages = []) {
       out.push({
         role: ROLE.ASSISTANT,
         content: blocks.length ? blocks : [{ type: OPENAI_BLOCK.TEXT, text: "" }],
-        reasoning_content: rc || " ",
+        reasoning_content: (rc && rc.trim()) ? rc : " ",
       });
       continue;
     }
