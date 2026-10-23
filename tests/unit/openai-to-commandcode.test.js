@@ -113,6 +113,30 @@ describe("openaiToCommandCodeRequest — tool role / tool-result (AI SDK)", () =
   });
 });
 
+describe("openaiToCommandCodeRequest — reasoning pass-back", () => {
+  it("includes reasoning_content on every assistant message", () => {
+    const out = openaiToCommandCodeRequest(MODEL, {
+      messages: [
+        { role: "user", content: "first" },
+        { role: "assistant", content: "answer" },
+        { role: "user", content: "continue" },
+        { role: "assistant", content: null, tool_calls: [
+          { id: "call_1", type: "function", function: { name: "read", arguments: "{}" } },
+        ] },
+      ],
+    }, true);
+    const assistants = out.params.messages.filter((message) => message.role === "assistant");
+    expect(assistants.map((message) => message.reasoning_content)).toEqual([" ", " "]);
+  });
+
+  it("preserves supplied reasoning_content", () => {
+    const out = openaiToCommandCodeRequest(MODEL, {
+      messages: [{ role: "assistant", content: "answer", reasoning_content: "prior reasoning" }],
+    }, true);
+    expect(out.params.messages[0].reasoning_content).toBe("prior reasoning");
+  });
+});
+
 describe("openaiToCommandCodeRequest — assistant tool_calls / tool-call", () => {
   it("converts assistant.tool_calls[] into content blocks of type tool-call", () => {
     const out = openaiToCommandCodeRequest(MODEL, {

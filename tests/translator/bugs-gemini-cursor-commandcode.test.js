@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import "./registerAll.js";
 import { translateRequest } from "../../open-sse/translator/index.js";
 import { FORMATS } from "../../open-sse/translator/formats.js";
+import { openaiToCommandCodeRequest } from "../../open-sse/translator/request/openai-to-commandcode.js";
 
 const O2G = (body) => translateRequest(FORMATS.OPENAI, FORMATS.GEMINI, "m", body, true, null, "gemini");
 const O2C = (body) => translateRequest(FORMATS.OPENAI, FORMATS.CURSOR, "m", body, true, null, "cursor");
@@ -60,6 +61,23 @@ describe("OpenAI → CommandCode", () => {
     const asst = out.params.messages.find((m) => m.role === "assistant");
     const call = asst.content.find((b) => b.type === "tool-call");
     expect(Object.keys(call.input).length, "arguments silently dropped to {}").toBeGreaterThan(0);
+  });
+
+  it("preserves Claude thinking through the CommandCode request pivot", () => {
+    const claudeBody = {
+      messages: [
+        { role: "user", content: [{ type: "text", text: "first" }] },
+        { role: "assistant", content: [
+          { type: "thinking", thinking: "prior reasoning" },
+          { type: "text", text: "prior answer" },
+        ] },
+        { role: "user", content: [{ type: "text", text: "continue" }] },
+      ],
+    };
+    const openaiBody = translateRequest(FORMATS.CLAUDE, FORMATS.OPENAI, "m", claudeBody, true);
+    const out = openaiToCommandCodeRequest("commandcode/reflection/beam:free", openaiBody, true);
+    const assistant = out.params.messages.find((message) => message.role === "assistant");
+    expect(assistant.content.find((block) => block.type === "reasoning").text).toBe("prior reasoning");
   });
 
   it("image content is preserved as native CommandCode image blocks", () => {

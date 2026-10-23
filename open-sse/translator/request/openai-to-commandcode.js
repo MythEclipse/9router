@@ -147,7 +147,11 @@ function convertMessages(messages = []) {
           });
         }
       }
-      out.push({ role: ROLE.ASSISTANT, content: blocks.length ? blocks : [{ type: OPENAI_BLOCK.TEXT, text: "" }] });
+      out.push({
+        role: ROLE.ASSISTANT,
+        content: blocks.length ? blocks : [{ type: OPENAI_BLOCK.TEXT, text: "" }],
+        reasoning_content: rc || " ",
+      });
       continue;
     }
 
