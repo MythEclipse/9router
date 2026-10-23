@@ -382,10 +382,11 @@ describe("F: the terminal metadataEvent's real tokenUsage wins over the percenta
     expect(usage.total_tokens).toBe(4000);
   });
 
-  it("still estimates from the percentage when the stream carried no tokenUsage", async () => {
-    // The percentage estimator stays as the fallback for routes that report
-    // nothing but context usage; the point is that it must be marked estimated
-    // and must not run when real counts exist.
+  it("still estimates from actual content when the stream carried no tokenUsage", async () => {
+    // The content-based fallback stays for routes that report nothing but
+    // context usage; the point is that it must be marked estimated and must not
+    // run when real counts exist. 400 bytes of content → ~100 tokens each side,
+    // NOT contextUsagePercentage * 1,000,000 / 100.
     const usage = usageFrom(await run([
       frame("assistantResponseEvent", { content: "x".repeat(400) }),
       frame("metadataEvent", { stopReason: "END_TURN" }),
@@ -393,6 +394,9 @@ describe("F: the terminal metadataEvent's real tokenUsage wins over the percenta
     ]));
     expect(usage).toBeDefined();
     expect(usage.estimated).toBe(true);
+    expect(usage.prompt_tokens).toBe(100);
+    expect(usage.completion_tokens).toBe(100);
+    expect(usage.total_tokens).toBe(200);
   });
 
   it("does not let a later estimate overwrite counts the provider sent", async () => {

@@ -650,7 +650,6 @@ export class KiroExecutor extends BaseExecutor {
     const responseId = `chatcmpl-${Date.now()}`;
     const created = Math.floor(Date.now() / 1000);
     const capabilityModel = resolveKiroModel(model).upstream;
-    const contextWindow = getCapabilitiesForModel("kiro", capabilityModel).contextWindow || 200000;
     const eventCounts = {};
     const state = {
       buffer: new Uint8Array(0),
@@ -1130,16 +1129,18 @@ export class KiroExecutor extends BaseExecutor {
       }
 
       // Last-resort estimate. Kiro reports context usage as a PERCENTAGE of the
-      // model's advertised window, not a token count, so this fabricates tokens
-      // from `contextUsagePercentage * contextWindow / 100` — orders of magnitude
-      // too large whenever the conversation is smaller than the window. Run it
-      // only when the stream carried no native usage at all, and mark the result
-      // `estimated` so mergeUsage() never lets it outrank a real count.
+      // model's advertised window, not a token count. Never turn that percentage
+      // into tokens via `contextUsagePercentage * contextWindow / 100` — on a
+      // 1M-context model a short conversation would be logged as ~500k input
+      // tokens for a few thousand real ones. When the stream carried no native
+      // usage, estimate from the bytes we actually saw instead of the window.
       if (!state.hasNativeUsage && state.hasContextUsage && !state.usage?.total_tokens) {
-        const completion = state.totalContentLength
-          ? Math.floor(state.totalContentLength / 4)
-          : 0;
-        const prompt = Math.floor(state.contextUsagePercentage * contextWindow / 100);
+        const content = state.totalContentLength || 0;
+        const completion = content ? Math.floor(content / 4) : 0;
+        // Prompt is unknown without native metering; use the same content-derived
+        // figure so the estimate stays proportional to what actually happened,
+        // not to the model's advertised window.
+        const prompt = completion;
         state.usage = {
           ...(state.usage || {}),
           prompt_tokens: prompt,
