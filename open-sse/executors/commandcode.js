@@ -4,6 +4,12 @@ import { commandCodeToOpenAIResponse } from "../translator/response/commandcode-
 import { SSE_DONE } from "../utils/sseConstants.js";
 import { commandCodeThreadId, isCommandCodeThreadId } from "../utils/commandCodeSession.js";
 import { injectReasoningContent } from "../utils/reasoningContentInjector.js";
+import {
+  storeCommandCodeReasoning,
+  appendCommandCodeReasoning,
+  getCommandCodeReasoning,
+  clearCommandCodeReasoningStore,
+} from "../utils/commandcodeReasoningStore.js";
 
 /**
  * CommandCodeExecutor — talks to https://api.commandcode.ai/alpha/generate
@@ -35,10 +41,28 @@ export class CommandCodeExecutor extends BaseExecutor {
     const source = paramsMessages || body?.messages;
     if (!Array.isArray(source)) return body;
 
+    const sessionId = body.threadId && isCommandCodeThreadId(body.threadId) ? body.threadId : null;
+
+    // Echo back CommandCode's reasoning per assistant turn (ordinal among
+    // assistant messages), so upstream sees the reasoning it returned instead
+    // of a placeholder it rejects.
+    let assistantOrdinal = 0;
+    const echoed = source.map((m) => {
+      if (m.role !== "assistant") return m;
+      let reasoning = m.reasoning_content;
+      if ((!reasoning || reasoning.trim() === "") && sessionId) {
+        reasoning = getCommandCodeReasoning(sessionId, assistantOrdinal);
+      }
+      assistantOrdinal++;
+      return reasoning && reasoning.trim()
+        ? { ...m, reasoning_content: reasoning }
+        : m;
+    });
+
     const injected = injectReasoningContent({
       provider: "commandcode",
       model,
-      body: { messages: source },
+      body: { messages: echoed },
     });
     if (paramsMessages) body.params.messages = injected.messages;
     else body.messages = injected.messages;
@@ -67,12 +91,19 @@ export class CommandCodeExecutor extends BaseExecutor {
   }
 
   async execute(opts) {
+    const sessionId = opts.body && isCommandCodeThreadId(opts.body.threadId)
+      ? opts.body.threadId
+      : commandCodeThreadId(opts.body);
     const maxRetries = 2;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       const result = await super.execute(opts);
       if (!result?.response?.ok || !result.response.body) return result;
 
-      const wrappedResponse = await inspectAndWrapCommandCodeResponse(result.response, opts.model);
+      const wrappedResponse = await inspectAndWrapCommandCodeResponse(
+        result.response,
+        opts.model,
+        sessionId,
+      );
       if (!wrappedResponse.ok && attempt < maxRetries) {
         const isRetryableStatus = wrappedResponse.status === 502 || wrappedResponse.status === 503 || wrappedResponse.status === 504;
         if (isRetryableStatus) {
@@ -164,12 +195,14 @@ export function parseCommandCodeError(event) {
   return { statusCode, message, type };
 }
 
-export async function inspectAndWrapCommandCodeResponse(originalResponse, model) {
+export async function inspectAndWrapCommandCodeResponse(originalResponse, model, sessionId = null) {
   const reader = originalResponse.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   const rawChunks = [];
   let detectedError = null;
+  // Accumulate this assistant turn's full reasoning text across deltas.
+  let turnReasoning = "";
 
   try {
     while (true) {
@@ -218,14 +251,27 @@ export async function inspectAndWrapCommandCodeResponse(originalResponse, model)
           break;
         }
 
+        if (sessionId && event.type === "reasoning-delta") {
+          const text = event.text || "";
+          if (text) turnReasoning += text;
+        }
+
+        // reasoning-delta is content, not a terminal event for inspection;
+        // keep reading until the first non-reasoning terminal event so we
+        // capture the full turn's reasoning before echoing it back.
         if (
           event?.type === "text-delta" ||
-          event?.type === "reasoning-delta" ||
           event?.type === "tool-input-start" ||
           event?.type === "tool-call" ||
           event?.type === "finish" ||
           event?.type === "finish-step"
         ) {
+          // End of this assistant turn: store accumulated reasoning as the
+          // next assistant ordinal for this session.
+          if (sessionId && turnReasoning) {
+            appendCommandCodeReasoning(sessionId, turnReasoning);
+            turnReasoning = "";
+          }
           stopLoop = true;
           break;
         }
@@ -256,7 +302,7 @@ export async function inspectAndWrapCommandCodeResponse(originalResponse, model)
           "Content-Type": "application/json",
           "Access-Control-Allow-Origin": "*",
         },
-      }
+      },
     );
   }
 
