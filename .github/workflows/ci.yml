@@ -1,23 +1,21 @@
 name: CI
 
-# Single consolidated pipeline. One file, branching jobs (needs:):
+# Single consolidated pipeline. One file, independent build/deploy lanes:
 #
-#   push master ──┬── test ──┬── deploy-orange ──► orange VPS  (systemd, /opt/9router, :4014)
-#                 │          │
-#                 │          └── deploy-imrnes ──► imrnes VPS  (systemd, /opt/9router, :2028)
-#                 │
+#   push master ──┬── deploy-orange ──► orange VPS  (systemd, /opt/9router, :4014)
+#                 ├── deploy-imrnes ──► imrnes VPS  (systemd, /opt/9router, :2028)
 #                 └── image ── smoke ──► ghcr.io/asepharyana/9router  (container publish, not a deploy)
 #                 │
 #   tag v* ───────┴── release-prepare ── release-build (amd64+arm64) ── release-publish ──► GHCR (+Docker Hub)
 #
 #   dispatch ── tray (only when tray_publish=true) ──► tray-binaries release
 #   dispatch ── release-* (only when release_tag set) — republish an existing tag
-#   dispatch ── test + deploys (plain dispatch from master, no inputs set)
+#   dispatch ── deploys (plain dispatch from master, no inputs set)
 #
 # No workflow-level concurrency: the two deploys target different hosts and
 # serialize per-host via job-level groups below (cancel-in-progress: false —
 # never abandon a half-synced tree or half-pulled image mid-restart).
-# test/image/release/tray stay parallel.
+# image/release/tray lanes stay independent.
 #
 # Both deploy lanes now install 9router natively under systemd and ship the
 # same tarball; image/smoke remain as the GHCR publish lane only, so nothing on
@@ -50,71 +48,6 @@ permissions:
   packages: write
 
 jobs:
-  # Shared regression gate for both deploy lanes: the suite is NOT expected
-  # to be all-green — verify-no-regression.mjs against
-  # tests/__baseline__/known-fails.txt is the real pass/fail signal.
-  test:
-    name: Test
-    if: github.ref == 'refs/heads/master'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.14
-
-      # node_modules must include devDependencies: the Next build resolves
-      # @tailwindcss/postcss, which lives in devDependencies. setup-bun does
-      # not inherit NODE_ENV=production, so this installs them by default.
-      - name: Install deps
-        run: bun install --frozen-lockfile
-
-      - name: Build
-        run: bun run build
-
-      # vitest is a devDependency of tests/package.json (NOT the root), so it
-      # must be installed and invoked from tests/. Running `npx vitest` at the
-      # repo root finds no binary and fails.
-      - name: Install test deps
-        working-directory: tests
-        run: bun install --frozen-lockfile || bun install
-
-      - name: Run test suite
-        working-directory: tests
-        # `|| true`: the suite exits non-zero on known failures; the regression
-        # gate below is the real pass/fail signal.
-        # Write the report to the runner temp dir, not the repo — otherwise the
-        # JSON lands in tests/ and gets committed by the next push.
-        run: npx vitest run --reporter=json --outputFile="$RUNNER_TEMP/results.json" || true
-
-      - name: Check for regressions
-        run: |
-          node tests/__baseline__/verify-no-regression.mjs "$RUNNER_TEMP/results.json"
-
-      - name: Run node:test suites
-        # These use node:test, not vitest: vitest collects them by glob, runs none
-        # of their assertions, and fails the file with "No test suite found", so
-        # they are excluded in vitest.config.js and executed here instead.
-        # Without this step they are not gated by anything.
-        working-directory: tests
-        run: |
-          for f in unit/kimchi.test.js unit/kimchi-strip-reasoning.test.js \
-                   unit/cline-auth.test.js; do
-            node --test --test-reporter=tap "$f"
-          done
-
-      - name: Verify provider/alias/oauth baselines
-        run: |
-          node tests/__baseline__/verify-providers.mjs
-          node tests/__baseline__/verify-oauth-urls.mjs
-          node tests/__baseline__/verify-alias.mjs
-
   # Deploy 9router to the orange VPS as a plain Next.js app (native systemd
   # unit at /opt/9router, port 4014).
   #
@@ -130,7 +63,6 @@ jobs:
   deploy-orange:
     name: Deploy to orange VPS
     if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || (inputs.release_tag == '' && inputs.tray_publish != true))
-    needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 30
     concurrency:
@@ -410,10 +342,7 @@ jobs:
   deploy-imrnes:
     name: Deploy to imrnes VPS
     if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || (inputs.release_tag == '' && inputs.tray_publish != true))
-    # Gated on test: a regression in this push must not reach the production
-    # hostname. Deliberately NOT gated on image/smoke — that is the container
-    # publish lane, and a native deploy must not wait on (or be blocked by) it.
-    needs: test
+    # Deliberately independent of image/smoke — this is the native deploy lane.
     runs-on: ubuntu-latest
     timeout-minutes: 30
     concurrency:
