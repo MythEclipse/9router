@@ -66,6 +66,20 @@ export const DEFAULT_CAPABILITIES = {
   maxOutput: 64000,
 };
 
+export function comboWindowSetting(strategy = {}) {
+  const requestedMode = strategy?.contextWindowMode;
+  const mode = ["min", "max", "custom"].includes(requestedMode) ? requestedMode : "min";
+  const custom = Number(strategy?.contextWindow);
+  return { mode, custom: Number.isFinite(custom) && custom > 0 ? custom : null };
+}
+
+export function comboContextWindow(windows, mode = "min", custom = null) {
+  const valid = (windows || []).filter((window) => Number.isFinite(window) && window > 0);
+  if (Number.isFinite(custom) && custom > 0) return custom;
+  if (!valid.length) return undefined;
+  return mode === "max" ? Math.max(...valid) : Math.min(...valid);
+}
+
 // User-added model metadata can carry dashboard service kinds instead of the
 // runtime capability names used here. Map those typed model kinds into input /
 // output capabilities so custom vision models are not treated as text-only.

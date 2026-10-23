@@ -9,15 +9,19 @@
 // absent or malformed, Claude Code silently falls back to its local stub, which
 // is the "Did 0 searches" / empty-placeholder behaviour.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const handleSearch = vi.fn();
 const listProvidersWithCredentials = vi.fn();
+const getProviderConnections = vi.fn();
+const handleSearch = vi.fn();
 const getSettings = vi.fn();
 
 vi.mock("@/sse/handlers/search.js", () => ({ handleSearch: (...a) => handleSearch(...a) }));
 vi.mock("@/sse/handlers/chat.js", () => ({
   listProvidersWithCredentials: (...a) => listProvidersWithCredentials(...a),
+}));
+vi.mock("@/lib/db/repos/connectionsRepo.js", () => ({
+  getProviderConnections: (...a) => getProviderConnections(...a),
 }));
 vi.mock("@/lib/localDb", () => ({ getSettings: (...a) => getSettings(...a) }));
 vi.mock("open-sse/handlers/webSearchCredentials.js", () => ({

@@ -1,3 +1,4 @@
+import { describe, expect, it } from "vitest";
 import { comboContextWindow, comboWindowSetting } from "../../open-sse/providers/capabilities.js";
 
 // A fallback chain does not serve the request with every seat, so the window it can
