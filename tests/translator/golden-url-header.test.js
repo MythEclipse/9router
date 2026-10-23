@@ -48,7 +48,7 @@ function sanitize(headers) {
     if (VOLATILE_HEADERS.has(k.toLowerCase())) { out[k] = "<VOLATILE>"; continue; }
     out[k] = typeof v === "string"
       ? v.replace(/Bearer .+/, "Bearer <TOK>")
-          .replace(/«redacted:sk-…»|tok-test-ACCESS/g, "<CRED>")
+          .replace(/sk-test-APIKEY|«redacted:sk-…»|tok-test-ACCESS/g, "<CRED>")
           .replace(/kimi-\d{10,}/g, "kimi-<TS>")
           // X-Mavis-Session-Id is a fresh randomUUID() per request (default.js),
           // so the snapshot would differ on every run — and across hosts. Pin it
