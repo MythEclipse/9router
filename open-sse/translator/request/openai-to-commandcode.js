@@ -130,10 +130,22 @@ function convertMessages(messages = []) {
 
     if (role === ROLE.ASSISTANT) {
       const blocks = [];
-      const rawRc = m.reasoning_content || m.thought || m.reasoning;
-      const rc = (typeof rawRc === "string") ? rawRc : (rawRc == null ? "" : String(rawRc));
-      if (rc || (Array.isArray(m.tool_calls) && m.tool_calls.length > 0)) {
-        blocks.push({ type: "reasoning", text: rc || " " });
+      // CommandCode requires reasoning_content on every earlier assistant
+      // message in multi-turn history ("send back the 'reasoning_content'
+      // returned with that message"). Clients in Claude format carry reasoning
+      // inside content `thinking` blocks rather than a top-level field, so
+      // extract the real reasoning text here instead of falling back to a
+      // placeholder (which upstream rejects).
+      let rc = m.reasoning_content ?? m.thought ?? m.reasoning;
+      if ((rc == null || rc === "") && Array.isArray(m.content)) {
+        const thinkingBlock = m.content.find(
+          (b) => b && b.type === "thinking" && typeof b.thinking === "string"
+        );
+        if (thinkingBlock) rc = thinkingBlock.thinking;
+      }
+      const rcStr = typeof rc === "string" ? rc : rc == null ? "" : String(rc);
+      if (rcStr || (Array.isArray(m.tool_calls) && m.tool_calls.length > 0)) {
+        blocks.push({ type: "reasoning", text: rcStr || " " });
       }
       const text = flattenText(m.content);
       if (text) blocks.push({ type: OPENAI_BLOCK.TEXT, text });
@@ -151,7 +163,7 @@ function convertMessages(messages = []) {
       out.push({
         role: ROLE.ASSISTANT,
         content: blocks.length ? blocks : [{ type: OPENAI_BLOCK.TEXT, text: "" }],
-        reasoning_content: (rc && rc.trim()) ? rc : " ",
+        reasoning_content: rcStr.trim() ? rcStr : " ",
       });
       continue;
     }
