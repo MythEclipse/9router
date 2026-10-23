@@ -27,10 +27,22 @@ export class CommandCodeExecutor extends BaseExecutor {
     body.stream = true;
     // CommandCode thinking models (reflection/beam etc.) require reasoning_content
     // on every earlier assistant message in a multi-turn history (400
-    // "Missing required parameter: 'messages[N].reasoning_content'"). The DefaultExecutor
-    // injectReasoningContent gates on the provider registry's reasoningInject rule,
-    // so wire it explicitly for the CommandCode lane until the registry entry carries it.
-    return injectReasoningContent({ provider: "commandcode", model, body });
+    // "Missing required parameter: 'messages[N].reasoning_content'").
+    // The translator emits the CommandCode body as params.messages, while
+    // injectReasoningContent writes to top-level body.messages — operate on
+    // whichever container actually carries the message array.
+    const paramsMessages = Array.isArray(body?.params?.messages) ? body.params.messages : null;
+    const source = paramsMessages || body?.messages;
+    if (!Array.isArray(source)) return body;
+
+    const injected = injectReasoningContent({
+      provider: "commandcode",
+      model,
+      body: { messages: source },
+    });
+    if (paramsMessages) body.params.messages = injected.messages;
+    else body.messages = injected.messages;
+    return body;
   }
 
   buildHeaders(credentials, stream = true, _url = null, _model = null, body = null) {
