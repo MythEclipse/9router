@@ -164,6 +164,16 @@ log "installed next@${next_version} into $RELEASE_DIR"
 # Debug: verify next resolves from the release's own node_modules, not from
 # a shared tree. If this points at /opt/9router/deps, something is wrong.
 (cd "$RELEASE_DIR" && node -e "console.log('next resolves to:', require.resolve('next'))") || true
+# Debug: test that the auth guard module loads (better-sqlite3 native binding etc.)
+(cd "$RELEASE_DIR" && node -e "
+try {
+  require('better-sqlite3');
+  console.log('better-sqlite3 loads OK');
+} catch (e) {
+  console.error('better-sqlite3 load FAILED:', e.message);
+  process.exit(1);
+}
+") || true
 
 # ── 3. install the unit ────────────────────────────────────────────────────
 # Installed from the payload so the running unit always matches the deployed
