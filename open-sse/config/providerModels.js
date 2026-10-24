@@ -92,7 +92,7 @@ export function getModelMeta(aliasOrId, modelId) {
   return findModel(PROVIDER_MODELS[aliasOrId], modelId, aliasOrId) || null;
 }
 
-export function getModelUpstreamId(aliasOrId, modelId) {
+export function getModelUpstreamId(aliasOrId, modelId, clientBody = null) {
   // Split off thinking suffix "(level)" so lookup hits the base id; re-append it to
   // the result so downstream applyThinking still sees the suffix (body.model is stripped separately).
   const sufMatch = typeof modelId === "string" ? modelId.match(/\([^()]+\)\s*$/) : null;
@@ -100,7 +100,7 @@ export function getModelUpstreamId(aliasOrId, modelId) {
   const baseId = suffix ? modelId.slice(0, sufMatch.index).trim() : modelId;
   const models = PROVIDER_MODELS[aliasOrId];
 
-  // Resolve requested thinking level from suffix or client request body
+  // Resolve requested thinking level from suffix or client request body.
   const rawSuffix = suffix ? suffix.slice(1, -1).trim().toLowerCase() : "";
   let tier = rawSuffix === "xhigh" || rawSuffix === "max" ? "high" : rawSuffix === "minimal" ? "low" : rawSuffix;
   if (!tier && clientBody && typeof clientBody === "object") {

@@ -56,6 +56,18 @@ export function copyStandaloneAssets({ projectRoot = process.cwd(), distDir = pr
     console.log(`[standalone-assets] Copied ${dir}/ to ${dirDestination}`);
   }
 
+  // dashboardGuard.js is copied as source and its `open-sse/*` specifiers are
+  // not understood by Node's resolver (they are aliases from jsconfig.json).
+  // Keep the source tree beside src/ so those runtime imports resolve in the
+  // standalone server, just as they do from the project root.
+  const openSseSource = resolve(projectRoot, "open-sse");
+  const openSseDestination = resolve(standaloneDir, "open-sse");
+  if (existsSync(openSseSource)) {
+    rmSync(openSseDestination, { recursive: true, force: true });
+    cpSync(openSseSource, openSseDestination, { recursive: true });
+    console.log(`[standalone-assets] Copied open-sse/ to ${openSseDestination}`);
+  }
+
   // The auth guard is one of those absolutely-loaded modules, and it imports
   // `next/server`. Output-file tracing never sees that import - it is not in the
   // webpack graph, it is a runtime import from a file copied after the build - so

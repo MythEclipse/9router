@@ -374,6 +374,11 @@ export async function compressWithHeadroom(body, { enabled, url, model, format, 
   try {
     if (diagnostics) diagnostics.before = captureSizeSnapshot(body);
 
+    if (format === "openai-responses" && hasUnsafeResponsesInputForCompression(body)) {
+      setDiagnostic(diagnostics, "skipped: openai-responses tool/reasoning input is not safe to compress");
+      return null;
+    }
+
     const toolOutputs = collectToolOutputText(body, format);
     if (toolOutputs) {
       if (!toolOutputs.messages.length) {

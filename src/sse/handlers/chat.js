@@ -125,6 +125,9 @@ export async function handleChat(request, clientRawRequest = null) {
     }
   }
 
+  const accessDenied = await enforceKeyAccess(keyAccess, modelStr);
+  if (accessDenied) return accessDenied;
+
   // Bypass naming/warmup requests before combo rotation to avoid wasting rotation slots
   const userAgent = request?.headers?.get("user-agent") || "";
   const bypassResponse = handleBypassRequest(body, modelStr, userAgent, !!settings.ccFilterNaming);
@@ -155,8 +158,15 @@ export async function handleChat(request, clientRawRequest = null) {
   if (comboModels) {
     // Check for combo-specific strategy first, fallback to global
     const comboStrategies = settings.comboStrategies || {};
-    const comboSpecificStrategy = comboStrategies[comboEntryName]?.fallbackStrategy;
+    const comboCfg = comboStrategies[comboEntryName] || {};
+    const comboSpecificStrategy = comboCfg.fallbackStrategy;
     const comboStrategy = comboSpecificStrategy || settings.comboStrategy || "fallback";
+    const { sessionId } = resolveSessionIdentity({
+      headers: request.headers,
+      body,
+      connectionId: apiKey || "",
+      scope: "chat",
+    });
     const augmentedModels = await filterAdapterModels(keyAccess, augmentModelsWithCapacityAdapter(comboModels, requiredCapabilities, settings), comboModels);
     const adapterAdded = augmentedModels.filter((m) => !comboModels.includes(m));
 
@@ -266,8 +276,15 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       const comboSpecificStrategy = comboStrategies[comboEntryName]?.fallbackStrategy;
       const comboStrategy = comboSpecificStrategy || chatSettings.comboStrategy || "fallback";
       const requiredCapabilities = detectRequiredCapabilities(body);
-      // Nested combo (a combo member that is itself a combo): the access decision
-      // was made on the outer target; only drop adapter models the key may not call.
+      const comboCfg = comboStrategies[comboEntryName] || {};
+      const keyAccess = await getKeyAccessContext(request);
+      const { sessionId: nestedSessionId } = resolveSessionIdentity({
+        headers: request.headers,
+        body,
+        connectionId: apiKey || "",
+        scope: modelInfo.provider || "chat",
+      });
+      // Nested combo access remains constrained by this request's API key.
       const augmentedModels = await filterAdapterModels(keyAccess, augmentModelsWithCapacityAdapter(comboModels, requiredCapabilities, chatSettings), comboModels);
       const adapterAdded = augmentedModels.filter((m) => !comboModels.includes(m));
 

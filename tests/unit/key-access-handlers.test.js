@@ -26,9 +26,28 @@ vi.mock("@/lib/localDb", () => ({
 }));
 vi.mock("@/lib/disabledModelsDb", () => ({ getDisabledModels: async () => ({}) }));
 vi.mock("@/lib/db/repos/combosRepo.js", () => ({ getCombos: async () => fx.combos }));
-vi.mock("@/lib/db/repos/apiKeysRepo.js", () => ({ getApiKeyByKey: async (k) => fx.keys[k] || null }));
+vi.mock("@/lib/db/repos/apiKeysRepo.js", () => ({
+  getApiKeyByKey: async (k) => fx.keys[k] || null,
+  getAllowedModelsOfKey: async (k) => fx.keys[k]?.access?.restricted ? fx.keys[k].access.allow : null,
+  matchesAllowedModels: (patterns, model) => !patterns || patterns.some((pattern) => pattern.toLowerCase() === model.toLowerCase()),
+}));
 vi.mock("@/lib/usageDb.js", () => ({ saveRequestUsage: vi.fn() }));
 vi.mock("@/sse/services/auth.js", () => ({
+  apiKeyGateFailure: (valid, requireApiKey = true) => {
+    if (valid === true) return null;
+    if (valid === "KEY_DISABLED") return { status: 403, message: "API key is disabled" };
+    if (!requireApiKey) return null;
+    const failures = {
+      KEY_EXPIRED: { status: 403, message: "API key has expired" },
+      MODEL_NOT_ALLOWED: { status: 403, message: "This model is not allowed for the API key" },
+      QUOTA_EXCEEDED: { status: 429, message: "API key token limit exceeded" },
+      REQUEST_LIMIT_EXCEEDED: { status: 429, message: "API key request limit exceeded" },
+      COST_LIMIT_EXCEEDED: { status: 429, message: "API key daily cost limit exceeded" },
+      RPM_EXCEEDED: { status: 429, message: "API key rate limit exceeded (RPM limit reached)" },
+      TPM_EXCEEDED: { status: 429, message: "API key rate limit exceeded (TPM limit reached)" },
+    };
+    return failures[valid] || { status: 401, message: "Invalid API key" };
+  },
   getProviderCredentials: mocks.getProviderCredentials,
   markAccountUnavailable: vi.fn(async () => ({ shouldFallback: false })),
   clearAccountError: vi.fn(),
@@ -208,7 +227,12 @@ describe("video: a body without a readable model is denied for restricted keys",
 });
 
 describe("/v1/models routes filter by key", () => {
-  const list = async (k) => (await (await modelsRoute.GET(new Request("http://localhost/v1/models", { headers: auth(k) }))).json()).data.map((m) => m.id);
+  const list = async (k) => {
+    const response = await modelsRoute.GET(new Request("http://localhost/v1/models", { headers: auth(k) }));
+    const payload = await response.json();
+    if (!response.ok) throw new Error(`models GET ${response.status}: ${JSON.stringify(payload)}`);
+    return payload.data.map((m) => m.id);
+  }
 
   it("unrestricted sees the full catalog; restricted keys see only their entries", async () => {
     const all = await list("sk-open");
@@ -219,14 +243,14 @@ describe("/v1/models routes filter by key", () => {
     expect(await list("sk-mix")).toEqual(["Main", someModel]);
     expect(await list("sk-combo")).toEqual(["Main"]);
     expect(await list("sk-empty")).toEqual([]);
-    expect(await list(null)).toEqual(all); // no key: unchanged (middleware governs remote access)
+    await expect(list(null)).rejects.toThrow("models GET 401");
   });
   it("/v1/models/{kind} and single-model lookup are filtered too", async () => {
     const kind = async (k, path) => modelsKindRoute.GET(new Request(`http://localhost/v1/models/${path.join("/")}`, { headers: auth(k) }), { params: Promise.resolve({ model: path }) });
     const emb = await (await kind("sk-open", ["embedding"])).json();
     expect(emb.data.length).toBeGreaterThan(0);
     expect((await (await kind("sk-empty", ["embedding"])).json()).data).toEqual([]);
-    const all = (await (await modelsRoute.GET(new Request("http://localhost/v1/models"))).json()).data;
+    const all = (await (await modelsRoute.GET(new Request("http://localhost/v1/models", { headers: auth("sk-open") }))).json()).data;
     const one = all.find((m) => m.owned_by !== "combo").id;
     expect((await kind("sk-open", one.split("/"))).status).toBe(200);
     expect((await kind("sk-empty", one.split("/"))).status).toBe(404);
