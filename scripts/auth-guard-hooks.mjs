@@ -34,6 +34,11 @@ export async function resolve(specifier, context, next) {
     const r = tryResolve(SRC + specifier.slice(2));
     if (r) return { url: pathToFileURL(r).href, shortCircuit: true };
   }
+  if (specifier === "open-sse" || specifier.startsWith("open-sse/")) {
+    const suffix = specifier === "open-sse" ? "" : specifier.slice("open-sse/".length);
+    const r = tryResolve(path.join(ROOT, "open-sse", suffix));
+    if (r) return { url: pathToFileURL(r).href, shortCircuit: true };
+  }
   if (specifier === "next/server") {
     return { url: pathToFileURL(ROOT + "node_modules/next/server.js").href, shortCircuit: true };
   }

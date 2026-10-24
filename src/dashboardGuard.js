@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getSettings, validateApiKey } from "@/lib/localDb";
+import { getSettings } from "@/lib/db/repos/settingsRepo.js";
+import { validateApiKey } from "@/lib/db/repos/apiKeysRepo.js";
 import { getConsistentMachineId } from "@/shared/utils/machineId";
 import { verifyDashboardAuthToken, getDashboardAuthSession } from "@/lib/auth/dashboardSession";
 import { normalizePermissions, requiredPermissionsForApiPath, canOpenPage, firstAllowedPage } from "@/lib/auth/permissionPaths";

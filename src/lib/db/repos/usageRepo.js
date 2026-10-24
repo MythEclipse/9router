@@ -1,6 +1,6 @@
 import { EventEmitter } from "events";
 import { createHash } from "crypto";
-import { getAdapter, getAdapterSync } from "../driver.js";
+import { getAdapter } from "../driver.js";
 import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
 import { getMeta, setMeta } from "../helpers/metaStore.js";
 
