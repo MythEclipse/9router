@@ -166,13 +166,13 @@ log "installed next@${next_version} into $RELEASE_DIR"
 (cd "$RELEASE_DIR" && node -e "console.log('next resolves to:', require.resolve('next'))") || true
 # Debug: test that the auth guard module loads (better-sqlite3 native binding etc.)
 (cd "$RELEASE_DIR" && node -e "
-try {
-  require('better-sqlite3');
-  console.log('better-sqlite3 loads OK');
-} catch (e) {
-  console.error('better-sqlite3 load FAILED:', e.message);
+require('node:module').register('file://$PWD/scripts/auth-guard-hooks.mjs');
+import('./src/dashboardGuard.js').then(() => {
+  console.log('guard module loads OK');
+}).catch((e) => {
+  console.error('guard module load FAILED:', e.message);
   process.exit(1);
-}
+});
 ") || true
 
 # ── 3. install the unit ────────────────────────────────────────────────────
