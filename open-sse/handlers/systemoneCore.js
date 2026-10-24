@@ -24,7 +24,7 @@ export function buildSystemoneUrl(override, cfg) {
 }
 
 /**
- * Core System One (Jev) handler — native decision payload pass-through.
+ * Core System One (Jev) handler - native decision payload pass-through.
  * URL/headers come from the registry's systemoneConfig; body and JSON response
  * are forwarded untouched (decision models have no chat translation layer).
  *
@@ -39,7 +39,7 @@ export async function handleSystemoneCore({
 }) {
   const { provider, model } = modelInfo;
   const cfg = PROVIDER_MEDIA[provider]?.systemoneConfig;
-  let targetUrl = buildSystemoneUrl(credentials?.providerSpecificData?.baseUrl, cfg);
+  let targetUrl = credentials?.providerSpecificData?.baseUrl || cfg?.baseUrl;
   if (!targetUrl) {
     return createErrorResult(
       HTTP_STATUS.BAD_REQUEST,

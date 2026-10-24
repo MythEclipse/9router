@@ -74,12 +74,7 @@ const normalize = (value) => {
 
 /**
  * Extract tokens via better-sqlite3 (bundled dependency).
- * This is the preferred strategy — no external CLI required.
- *
- * better-sqlite3 is an optionalDependency: its native binding may be absent or
- * unbuildable, so the import must stay dynamic and guarded (same pattern as
- * cli-tools/omp-settings). A bare `require()` is not available in the Next ESM
- * bundle and silently failed the whole strategy before.
+ * This is the preferred strategy - no external CLI required.
  */
 async function extractTokensViaBetterSqlite(dbPath) {
   const mod = await import("better-sqlite3");
@@ -222,7 +217,7 @@ export async function GET() {
       }
     }
 
-    // Strategy 1: better-sqlite3 (bundled — no external tools required)
+    // Strategy 1: better-sqlite3 (bundled - no external tools required)
     try {
       const tokens = await extractTokensViaBetterSqlite(dbPath);
       if (tokens.accessToken && tokens.machineId) {
@@ -233,7 +228,7 @@ export async function GET() {
         });
       }
     } catch {
-      // Native bindings unavailable — try CLI fallback
+      // Native bindings unavailable - try CLI fallback
     }
 
     // Strategy 2: sqlite3 CLI

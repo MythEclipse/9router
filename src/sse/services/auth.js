@@ -18,6 +18,8 @@ import {
 import { MAX_RATE_LIMIT_COOLDOWN_MS } from "open-sse/config/errorConfig.js";
 import { resolveProviderId, FREE_PROVIDERS } from "@/shared/constants/providers.js";
 import { getAntigravityQuotaCache, getAntigravityModelQuota } from "./antigravityQuota.js";
+
+export { apiKeyGateFailure, shouldLogAuthFailure } from "./keyGate.js";
 import * as log from "../utils/logger.js";
 
 // Mutex to prevent race conditions during account selection — PER PROVIDER.
@@ -98,8 +100,10 @@ export async function getProviderCredentials(
         : new Set();
   const preferredConnectionId = options?.preferredConnectionId || null;
   const requestedModel = options?.requestedModel || model;
-  // Acquire the lock for THIS provider only (see acquireSelectionMutex).
-  const mutex = acquireSelectionMutex(resolveProviderId(provider));
+  // Acquire mutex to prevent race conditions
+  const currentMutex = selectionMutex;
+  let resolveMutex;
+  selectionMutex = new Promise(resolve => { resolveMutex = resolve; });
 
   try {
     await mutex.wait;
@@ -113,24 +117,32 @@ export async function getProviderCredentials(
       const override = (settings.providerStrategies || {})[providerId] || {};
       const strategy = override.rotateStrategy || "none";
       let pickedId = override.proxyPoolId || null;
+      const allPools = (strategy !== "none" || pickedId) ? await getProxyPools({ isActive: true }) : [];
+      const selectedPool = pickedId ? allPools.find(p => p.id === pickedId) : null;
+      const hasDynamicSid = /-sid-\d+/i.test(selectedPool?.proxyUrl || "");
+
       if (strategy !== "none") {
-        const allPools = await getProxyPools({ isActive: true });
-        const poolIds = allPools.filter((p) => p.proxyUrl).map((p) => p.id);
-        // excludePoolIds = pools this request already tried after a limit/error,
-        // so "smart" can never hand back the pool that just failed.
-        pickedId = pickProxyPoolId(poolIds, strategy, providerId, {
-          excludePoolIds: options.excludePoolIds,
-        });
+        const poolIds = allPools
+          .filter(p => p.proxyUrl)
+          .map(p => p.id)
+          .filter(id => !excludeSet.has(`proxy:${id}`) && !excludeSet.has(id));
+        if (poolIds.length === 0) {
+          log.warn("AUTH", `${provider} | all proxy pools exhausted (${excludeSet.size} excluded)`);
+          return null;
+        }
+        pickedId = pickProxyPoolId(poolIds, strategy, providerId);
+      } else if (pickedId && !hasDynamicSid && (excludeSet.has(`proxy:${pickedId}`) || excludeSet.has(pickedId))) {
+        log.warn("AUTH", `${provider} | configured proxy pool ${pickedId} excluded`);
+        return null;
       }
       const resolvedProxy = await resolveConnectionProxyConfig({ proxyPoolId: pickedId || "" });
+      const sidMatch = (resolvedProxy.connectionProxyUrl || "").match(/-sid-(\d+)/i);
+      const connectionId = pickedId ? (sidMatch ? `proxy:${pickedId}:${sidMatch[1]}` : `proxy:${pickedId}`) : "noauth";
+      const connectionName = pickedId ? (resolvedProxy.proxyPool?.name || `Proxy (${pickedId.slice(0, 8)})`) : "Public";
       return {
-        id: "noauth",
-        // Every handler reports failures with markAccountUnavailable(credentials.connectionId).
-        // Without this field that call hits its `!connectionId` guard and the no-auth
-        // branch below never runs, so a 429 on a public provider was handed to the
-        // client instead of rotating the proxy and retrying.
-        connectionId: "noauth",
-        connectionName: "Public",
+        id: connectionId,
+        connectionId,
+        connectionName,
         isActive: true,
         accessToken: "public",
         providerSpecificData: {
@@ -164,44 +176,14 @@ export async function getProviderCredentials(
       if (excludeSet.has(c.id)) return false;
       if (isModelLockActive(c, model)) return false;
       const enabled = c.providerSpecificData?.enabledModels;
-      if (
-        providerId === "codex" &&
-        Array.isArray(enabled) &&
-        enabled.length &&
-        requestedModel &&
-        !enabled.includes(requestedModel)
-      )
-        return false;
+      if (providerId === "codex" && Array.isArray(enabled) && enabled.length && requestedModel && !enabled.includes(requestedModel)) return false;
       // Antigravity: skip if live quota exhausted for this model
       if (isAntigravity && model && antigravityQuotaCache) {
         const connQuotas = antigravityQuotaCache.get(c.id);
         const quota = getAntigravityModelQuota(connQuotas, model) || connQuotas?.[model];
-        if (
-          quota &&
-          quota.remainingPercentage <= 0 &&
-          quota.resetAt &&
-          new Date(quota.resetAt).getTime() > Date.now()
-        ) {
+        if (quota && quota.remainingPercentage <= 0 && quota.resetAt && new Date(quota.resetAt).getTime() > Date.now()) {
           const account = c.id?.slice(0, 8) || "unknown";
-          log.info(
-            "AG_QUOTA",
-            `${account} | CACHE_BLOCK ${model} — skip upstream until ${quota.resetAt}`,
-          );
-          return false;
-        }
-      }
-      // Smart sticky: skip accounts that are still cooling down from a recent
-      // rate limit even if the raw cooldown field has expired — they get a
-      // grace window proportional to how often they've been limited.
-      const rlAt = c.lastRateLimitAt;
-      const rlCount = c.rateLimitCount || 0;
-      if (rlAt && rlCount > 0) {
-        const graceMs = Math.min(rlCount * 10_000, 5 * 60_000); // 10s per strike, cap 5m
-        if (Date.now() - new Date(rlAt).getTime() < graceMs) {
-          log.debug(
-            "SMART_ROTATE",
-            `${provider} | ${c.id?.slice(0, 8)} | smart-cooldown (strikes=${rlCount}, grace=${Math.round(graceMs / 1000)}s)`,
-          );
+          log.info("AG_QUOTA", `${account} | CACHE_BLOCK ${model} - skip upstream until ${quota.resetAt}`);
           return false;
         }
       }
@@ -355,74 +337,7 @@ export async function getProviderCredentials(
 }
 
 /**
- * No-auth providers (OpenCode Free, …) have no account to lock: the limit hits
- * the PROXY's IP. Under a rotation strategy this cools the failing pool down and
- * returns shouldFallback so the caller retries on another proxy; with strategy
- * "none", a single pool, or a caller that does not track exclusions, the upstream
- * error is handed straight back — no rotation and no retry loop.
- *
- * @param {number} status
- * @param {string} errorText
- * @param {string|null} provider
- * @param {number|null} resetsAtMs - Upstream-supplied exact reset time
- * @param {{ excludePoolIds?: Set<string>, proxyPoolId?: string|null }} options
- * @returns {Promise<{ shouldFallback: boolean, cooldownMs: number, proxyPoolId?: string }>}
- */
-async function markNoAuthProxyUnavailable(status, errorText, provider, resetsAtMs, options) {
-  const excludePoolIds = options.excludePoolIds;
-  const currentPoolId = options.proxyPoolId;
-  if (!(excludePoolIds instanceof Set) || !currentPoolId)
-    return { shouldFallback: false, cooldownMs: 0 };
-
-  const providerId = resolveProviderId(provider);
-  const settings = await getSettings();
-  const strategy = (settings.providerStrategies || {})[providerId]?.rotateStrategy || "none";
-  if (strategy === "none") return { shouldFallback: false, cooldownMs: 0 };
-
-  // Same classifier the account path uses: 429/403/402 + quota wording, 5xx and
-  // network failures fall through as retryable; request-scoped 4xx (400/404/422)
-  // do not — those say nothing about the IP, so the proxy must NOT rotate.
-  const shouldRotate =
-    resetsAtMs && resetsAtMs > Date.now() ? true : shouldRotateProxy(status, errorText);
-
-  // Even if no proxy pool rotation is configured or available, when OpenCode hits a
-  // rate limit or quota block (429/403), invalidate the cached stable session so subsequent
-  // requests do not keep reusing the exhausted session ID. Scope it to the pool that
-  // hit the limit so other pools still in rotation retain their fresh sessions.
-  if (shouldRotate && (providerId === "opencode" || providerId === "opencode-zen")) {
-    try {
-      const { clearOpencodeSessionByPool } = await import("open-sse/executors/opencode.js");
-      clearOpencodeSessionByPool(currentPoolId);
-    } catch {
-      // Non-blocking
-    }
-  }
-
-  if (!shouldRotate) return { shouldFallback: false, cooldownMs: 0 };
-
-  const cooldownMs =
-    resetsAtMs && resetsAtMs > Date.now()
-      ? Math.min(resetsAtMs - Date.now(), MAX_RATE_LIMIT_COOLDOWN_MS)
-      : 30 * 1000;
-
-  // Rotate only when another pool is actually available — otherwise return the
-  // error instead of looping over the same dead pool.
-  const allPools = await getProxyPools({ isActive: true });
-  const poolIds = allPools.filter((p) => p.proxyUrl).map((p) => p.id);
-  const remaining = poolIds.filter((id) => !excludePoolIds.has(id) && id !== currentPoolId);
-  if (remaining.length === 0) return { shouldFallback: false, cooldownMs: 0 };
-
-  markProxyUnhealthy(providerId, currentPoolId, cooldownMs);
-  log.warn(
-    "PROXY",
-    `${providerId} | pool ${String(currentPoolId).slice(0, 8)} hit a limit [${status}] → switch (${remaining.length} pool(s) left)`,
-  );
-
-  return { shouldFallback: true, cooldownMs, proxyPoolId: currentPoolId };
-}
-
-/**
- * Mark account+model as unavailable — locks modelLock_${model} in DB.
+ * Mark account+model as unavailable - locks modelLock_${model} in DB.
  * All errors (429, 401, 5xx, etc.) lock per model, not per account.
  * @param {string} connectionId
  * @param {number} status - HTTP status code from upstream
@@ -432,18 +347,12 @@ async function markNoAuthProxyUnavailable(status, errorText, provider, resetsAtM
  * @param {{ excludePoolIds?: Set<string>, proxyPoolId?: string|null }} [options] - No-auth proxy rotation
  * @returns {{ shouldFallback: boolean, cooldownMs: number }}
  */
-export async function markAccountUnavailable(
-  connectionId,
-  status,
-  errorText,
-  provider = null,
-  model = null,
-  resetsAtMs = null,
-  options = {},
-) {
-  if (!connectionId) return { shouldFallback: false, cooldownMs: 0 };
-  if (connectionId === "noauth")
-    return await markNoAuthProxyUnavailable(status, errorText, provider, resetsAtMs, options);
+export async function markAccountUnavailable(connectionId, status, errorText, provider = null, model = null, resetsAtMs = null) {
+  if (!connectionId || connectionId === "noauth") return { shouldFallback: false, cooldownMs: 0 };
+  if (connectionId.startsWith("proxy:")) {
+    const { shouldFallback, cooldownMs } = checkFallbackError(status, errorText, 0, provider);
+    return { shouldFallback, cooldownMs };
+  }
   const connections = await getProviderConnections({ provider });
   const conn = connections.find((c) => c.id === connectionId);
   const backoffLevel = conn?.backoffLevel || 0;
@@ -459,7 +368,7 @@ export async function markAccountUnavailable(
   const githubResetAtMs = githubMonthlyResetMs(status, errorText, provider);
 
   // Provider-specific precise cooldown (e.g. codex usage_limit_reached resets_at) overrides backoff
-  let shouldFallback, cooldownMs, newBackoffLevel;
+  let shouldFallback, cooldownMs, shouldLock, newBackoffLevel;
   if (githubResetAtMs) {
     shouldFallback = true;
     cooldownMs = githubResetAtMs - Date.now();
@@ -473,13 +382,10 @@ export async function markAccountUnavailable(
         : Math.min(resetsAtMs - Date.now(), MAX_RATE_LIMIT_COOLDOWN_MS);
     newBackoffLevel = 0;
   } else {
-    ({ shouldFallback, cooldownMs, newBackoffLevel } = checkFallbackError(
-      status,
-      errorText,
-      backoffLevel,
-      resolveProviderId(provider),
-    ));
+    ({ shouldFallback, cooldownMs, shouldLock, newBackoffLevel } = checkFallbackError(status, errorText, backoffLevel, resolveProviderId(provider)));
   }
+  // A rejected request is the caller's mistake, so no account gets cooled down.
+  if (shouldLock === false) return { shouldFallback: false, cooldownMs: 0 };
   if (!shouldFallback) return { shouldFallback: false, cooldownMs: 0 };
 
   const reason = typeof errorText === "string" ? errorText.slice(0, 200) : "Provider error";
@@ -586,7 +492,8 @@ export function extractApiKey(request) {
 /**
  * Validate API key (optional - for local use can skip)
  */
-export async function isValidApiKey(apiKey) {
+export async function isValidApiKey(apiKey, requestedModel = null, clientIp = null) {
   if (!apiKey) return false;
-  return await validateApiKey(apiKey);
+  return await validateApiKey(apiKey, requestedModel);
 }
+

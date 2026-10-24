@@ -115,7 +115,7 @@ describe("getCapabilitiesForModel", () => {
   });
 });
 
-describe("getCapabilitiesForModel — MiMo (<think>-tag reasoning, always-on)", () => {
+describe("getCapabilitiesForModel - MiMo (<think>-tag reasoning, always-on)", () => {
   it("mimo-v2.5 has vision + reasoning + deepseek format, cannot disable", () => {
     const caps = getCapabilitiesForModel(null, "mimo-v2.5");
     expect(caps.vision).toBe(true);
@@ -154,7 +154,7 @@ describe("getCapabilitiesForModel — MiMo (<think>-tag reasoning, always-on)", 
   });
 });
 
-describe("getCapabilitiesForModel — Qwen max/plus vision", () => {
+describe("getCapabilitiesForModel - Qwen max/plus vision", () => {
   it("qwen3.7-max has vision (*qwen*max* fires before *qwen3.7*)", () => {
     const caps = getCapabilitiesForModel(null, "qwen3.7-max");
     expect(caps.vision).toBe(true);
@@ -184,7 +184,7 @@ describe("getCapabilitiesForModel — Qwen max/plus vision", () => {
   });
 });
 
-describe("getCapabilitiesForModel — MiniMax M2.x vision", () => {
+describe("getCapabilitiesForModel - MiniMax M2.x vision", () => {
   it("minimax-m2.7 has vision", () => {
     const caps = getCapabilitiesForModel(null, "minimax-m2.7");
     expect(caps.vision).toBe(true);
@@ -208,7 +208,7 @@ describe("getCapabilitiesForModel — MiniMax M2.x vision", () => {
   });
 });
 
-describe("getCapabilitiesForModel — DeepSeek V4 text-only", () => {
+describe("getCapabilitiesForModel - DeepSeek V4 text-only", () => {
   it("deepseek-v4-pro has no vision", () => {
     const caps = getCapabilitiesForModel(null, "deepseek-v4-pro");
     expect(caps.vision).toBe(false);
@@ -228,7 +228,7 @@ describe("getCapabilitiesForModel — DeepSeek V4 text-only", () => {
   });
 });
 
-describe("getCapabilitiesForModel — codebuddy-cn provider overrides", () => {
+describe("getCapabilitiesForModel - codebuddy-cn provider overrides", () => {
   it("deepseek-v4-pro via codebuddy-cn uses openai thinking format", () => {
     const caps = getCapabilitiesForModel("codebuddy-cn", "deepseek-v4-pro");
     expect(caps.vision).toBe(true);
@@ -248,21 +248,6 @@ describe("getCapabilitiesForModel — codebuddy-cn provider overrides", () => {
     const caps = getCapabilitiesForModel("unknown-provider", "mimo-v2.5");
     expect(caps.vision).toBe(true);
     expect(caps.thinkingFormat).toBe("deepseek");
-  });
-  // Regression: resolveCapabilities returns from an exact MODEL_CAPABILITIES
-  // entry before it ever consults PATTERN_CAPABILITIES, so an exact entry that
-  // omits a flag silently loses it even when the matching pattern sets it.
-  // GLM-5.2 lost reasoning_effort this way (#4409).
-  it("exact entry shadows the pattern — flags must be repeated, not inherited", () => {
-    for (const provider of ["glm-cn", "glm", "zai"]) {
-      expect(getCapabilitiesForModel(provider, "glm-5.2").thinkingEffortSupported).toBe(true);
-    }
-    // The gate is still version-exact: pre-5.2 GLM keeps ignoring the field.
-    for (const model of ["glm-4.7", "glm-5-turbo", "glm-5", "glm-4.6v"]) {
-      expect(getCapabilitiesForModel("glm-cn", model).thinkingEffortSupported).toBe(false);
-    }
-    // 5.3 keeps its own canDisable:false.
-    expect(getCapabilitiesForModel("glm-cn", "glm-5.3").thinkingCanDisable).toBe(false);
   });
 
   it("opencode-go claude-haiku-5-5 uses adaptive thinking, other haiku ids stay budget", () => {

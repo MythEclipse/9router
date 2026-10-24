@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from "react";
 import PropTypes from "prop-types";
-import { Button, Badge, Input, Modal, Select } from "@/shared/components";
+import ProviderLogoField from "@/shared/components/ProviderLogoField";
+import { Button, Badge, Input, Modal, Select, Toggle } from "@/shared/components";
+
 
 export default function EditCompatibleNodeModal({ isOpen, node, onSave, onClose, isAnthropic }) {
   const [formData, setFormData] = useState({
@@ -10,6 +12,10 @@ export default function EditCompatibleNodeModal({ isOpen, node, onSave, onClose,
     prefix: "",
     apiType: "chat",
     baseUrl: "https://api.openai.com/v1",
+    logo: "",
+    quotaEnabled: false,
+    quotaPath: "/credits",
+
   });
   const [saving, setSaving] = useState(false);
   const [checkKey, setCheckKey] = useState("");
@@ -24,6 +30,10 @@ export default function EditCompatibleNodeModal({ isOpen, node, onSave, onClose,
         prefix: node.prefix || "",
         apiType: node.apiType || "chat",
         baseUrl: node.baseUrl || (isAnthropic ? "https://api.anthropic.com/v1" : "https://api.openai.com/v1"),
+        logo: node.logo || "",
+        quotaEnabled: node.quotaEnabled === true,
+        quotaPath: node.quotaPath || "/credits",
+
       });
     }
   }, [node, isAnthropic]);
@@ -41,6 +51,10 @@ export default function EditCompatibleNodeModal({ isOpen, node, onSave, onClose,
         name: formData.name,
         prefix: formData.prefix,
         baseUrl: formData.baseUrl,
+        logo: formData.logo,
+        quotaEnabled: formData.quotaEnabled,
+        quotaPath: formData.quotaPath,
+
       };
       if (!isAnthropic) {
         payload.apiType = formData.apiType;
@@ -78,19 +92,23 @@ export default function EditCompatibleNodeModal({ isOpen, node, onSave, onClose,
   return (
     <Modal isOpen={isOpen} title={`Edit ${isAnthropic ? "Anthropic" : "OpenAI"} Compatible`} onClose={onClose}>
       <div className="flex flex-col gap-4">
+        <ProviderLogoField
+          logo={formData.logo}
+          onChange={(next) => setFormData((prev) => ({ ...prev, logo: next }))}
+        />
         <Input
           label="Name"
           value={formData.name}
           onChange={(e) => setFormData({ ...formData, name: e.target.value })}
           placeholder={`${isAnthropic ? "Anthropic" : "OpenAI"} Compatible (Prod)`}
-          hint="Required. A friendly label for this node."
+          hint="A friendly label for this node"
         />
         <Input
           label="Prefix"
           value={formData.prefix}
           onChange={(e) => setFormData({ ...formData, prefix: e.target.value })}
           placeholder={isAnthropic ? "ac-prod" : "oc-prod"}
-          hint="Required. Used as the provider prefix for model IDs."
+          hint="The provider prefix used in model IDs"
         />
         {!isAnthropic && (
           <Select
@@ -107,6 +125,21 @@ export default function EditCompatibleNodeModal({ isOpen, node, onSave, onClose,
           placeholder={isAnthropic ? "https://api.anthropic.com/v1" : "https://api.openai.com/v1"}
           hint={`Use the base URL (ending in /v1) for your ${isAnthropic ? "Anthropic" : "OpenAI"}-compatible API.`}
         />
+        <Toggle
+          checked={formData.quotaEnabled}
+          onChange={(value) => setFormData({ ...formData, quotaEnabled: value })}
+          label="Quota check"
+          description="Read remaining credits from the standard /credits endpoint."
+        />
+        {formData.quotaEnabled && (
+          <Input
+            label="Quota path"
+            value={formData.quotaPath}
+            onChange={(e) => setFormData({ ...formData, quotaPath: e.target.value })}
+            placeholder="/credits"
+            hint='GET {Base URL}{Quota path} with Authorization: Bearer <API key>; response {"credits": 123.45}. Optional total/used drive the usage bar.'
+          />
+        )}
         <div className="flex gap-2">
           <Input
             label="API Key (for Check)"

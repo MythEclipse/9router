@@ -32,7 +32,23 @@ async function peekComboResponse(result, log) {
 
 // Hard capabilities = input modalities; missing one drops request data (e.g. image
 // stripped). Must be prioritized. Soft (e.g. search) only degrades a feature.
-const HARD_CAPS = new Set(["vision", "pdf", "audioInput", "videoInput"]);
+const HARD_CAPS = new Set(["vision", "pdf", "audioInput", "videoInput", "tools"]);
+
+// Deep-copy the request body so translator in-place mutations (tool_use/tool_result
+// reshaping, role rewriting) don't leak across combo fallback iterations or parallel
+// panel calls. Covers: OpenAI/Claude `messages`, Gemini `contents`, Responses `input`.
+function deepCopyBody(body) {
+  if (!body || typeof body !== "object") return body;
+  const copyItem = (m) => ({ ...m, content: Array.isArray(m.content) ? m.content.map(b => ({ ...b })) : m.content });
+  const copyContentsItem = (m) => ({ ...m, parts: Array.isArray(m.parts) ? m.parts.map(b => ({ ...b })) : m.parts });
+  const copyInputItem = (m) => ({ ...m, content: Array.isArray(m.content) ? m.content.map(b => ({ ...b })) : m.content });
+  return {
+    ...body,
+    ...(Array.isArray(body.messages) ? { messages: body.messages.map(copyItem) } : {}),
+    ...(Array.isArray(body.contents) ? { contents: body.contents.map(copyContentsItem) } : {}),
+    ...(Array.isArray(body.input)    ? { input:    body.input.map(copyInputItem)    } : {}),
+  };
+}
 
 // Prefixes used when flattening tool turns into plain prose for panel models.
 const TOOL_CALL_PREFIX = "[Called tools: ";
@@ -113,7 +129,7 @@ const comboRotationState = new Map();
 // Trailing run of items after the last assistant/model turn = the current user
 // turn. It may span several messages (e.g. text + image split across blocks),
 // so we return all of them. History media (older turns) must not pin the combo
-// to a vision model — those get stripped + placeholdered downstream instead.
+// to a vision model - those get stripped + placeholdered downstream instead.
 function trailingUserItems(arr) {
   if (!Array.isArray(arr) || arr.length === 0) return [];
   const isAssistant = (r) => r === "assistant" || r === "model";
@@ -203,6 +219,12 @@ export function detectRequiredCapabilities(body) {
 
   // search: temporarily disabled in auto-switch (feature not wired yet).
 
+  // tools: when body.tools is a non-empty array or body.tool_choice is present,
+  // the request needs a tool-capable model (providers without tools would ignore
+  // the tool definitions / tool_choice).
+  if (Array.isArray(body.tools) && body.tools.length > 0) required.add("tools");
+  else if (body.tool_choice != null) required.add("tools");
+
   return required;
 }
 
@@ -229,7 +251,11 @@ function rotateModelsFromIndex(models, currentIndex) {
  * @returns {string[]} Rotated models array
  */
 export function getRotatedModels(models, comboName, strategy, stickyLimit = 1) {
-  if (!models || models.length <= 1 || strategy !== "round-robin") {
+  if (!models || models.length <= 1) {
+    return models;
+  }
+
+  if (strategy !== "round-robin") {
     return models;
   }
 
@@ -473,85 +499,33 @@ export async function handleComboChat({
     log.info("COMBO", `Trying model ${i + 1}/${rotatedModels.length}: ${modelStr}`);
 
     try {
-      const result = await handleSingleModel(body, modelStr);
+      const result = await handleSingleModel(
+        deepCopyBody(body),
+        modelStr
+      );
       
-      // Success (2xx). A 2xx is necessary but NOT sufficient: Gemini aborts (e.g.
-      // MALFORMED_FUNCTION_CALL) still return 200 and stream empty content, which would
-      // otherwise be delivered as a successful empty answer with no failover.
-      // Peek the stream for real content before committing to this candidate.
+      // Success (2xx) - return response unless empty/zero-content on a non-final seat
       if (result.ok) {
-        let peeked = null;
-        try {
-          peeked = await peekComboResponse(result, log);
-        } catch (peekErr) {
-          // peekStreamForContent is written not to throw; if reconstruction/Response
-          // construction ever does, result.body is already locked by getReader() and can no
-          // longer be streamed. Returning `result` would hand the client a locked, unreadable
-          // body. Degrade to a clean, valid (empty) SSE stream instead.
-          log.warn("COMBO", `empty-peek error on ${modelStr}, returning empty SSE: ${peekErr?.message || peekErr}`);
-          return new Response("data: [DONE]\n\n", {
-            status: 200,
-            headers: { "Content-Type": "text/event-stream" },
-          });
-        }
-
-        if (!peeked) {
-          // Non-streaming (or non-SSE) response — not this peek's job. The zero-content
-          // JSON check still applies on a non-final seat.
-          const isLastModel = i === rotatedModels.length - 1;
-          if (!isLastModel) {
-            const contentType = result.headers?.get?.("content-type") || "";
-            if (contentType.includes("application/json")) {
-              try {
-                const peekBody = await result.clone().json();
-                if (isZeroContentResponse(peekBody)) {
-                  log.warn("COMBO", `Model ${modelStr} returned HTTP 200 with zero usable content, falling back to next model`);
-                  if (comboStrategy === "smart" && sessionId && modelStr === activeStickyModel) {
-                    clearStickyComboSession(comboName, sessionId);
-                  }
-                  lastError = "Zero usable content";
-                  lastStatus = 200;
-                  continue;
-                }
-              } catch {
-                // Ignore JSON parse errors
+        const isLastModel = i === rotatedModels.length - 1;
+        if (!isLastModel) {
+          const contentType = result.headers?.get?.("content-type") || "";
+          if (contentType.includes("application/json")) {
+            try {
+              const peekBody = await result.clone().json();
+              if (isZeroContentResponse(peekBody)) {
+                log.warn("COMBO", `Model ${modelStr} returned HTTP 200 with zero usable content, falling back to next model`);
+                lastError = "Zero usable content";
+                lastStatus = 200;
+                continue;
               }
+            } catch {
+              // Ignore JSON parse errors
             }
           }
-
-          log.info("COMBO", `Model ${modelStr} succeeded`);
-          return result;
         }
 
-        if (peeked.outcome === "content") {
-          log.info("COMBO", `Model ${modelStr} succeeded${peeked.timedOut ? " (peek deadline; committed)" : ""}`);
-          return peeked.response;
-        }
-
-        // Empty generation. Fall through to the next candidate unless this is a legitimately
-        // empty class (content filter) or the last candidate — in which case return the
-        // (empty) response as-is, preserving prior behaviour rather than manufacturing a 5xx.
-        const reasonLabel = peeked.finishReason || "no-content";
-        const isLast = i === rotatedModels.length - 1;
-        if (isNoRetryFinish(peeked.finishReason) || isLast) {
-          log.warn("COMBO", `Model ${modelStr} returned empty (${reasonLabel}) — ${isNoRetryFinish(peeked.finishReason) ? "no-retry class" : "last candidate"}, returning as-is`);
-          return peeked.response;
-        }
-
-        log.warn("COMBO", `Model ${modelStr} returned empty (${reasonLabel}) — falling through to next candidate`);
-        if (comboStrategy === "smart" && sessionId && modelStr === activeStickyModel) {
-          clearStickyComboSession(comboName, sessionId);
-        }
-        // Drain/close the discarded stream in the background so its usage logging still runs.
-        peeked.response.body?.cancel?.().catch(() => {});
-        lastError = `empty generation (${reasonLabel})`;
-        if (!lastStatus) lastStatus = 502;
-        continue;
-      }
-
-      // If the model that failed was the session-sticky model, clear it so next turns re-evaluate
-      if (comboStrategy === "smart" && sessionId && modelStr === activeStickyModel) {
-        clearStickyComboSession(comboName, sessionId);
+        log.info("COMBO", `Model ${modelStr} succeeded`);
+        return result;
       }
 
       // Extract error info from response
@@ -634,7 +608,7 @@ export async function handleComboChat({
   }
 
   // All models failed
-  // Use 503 (Service Unavailable) rather than 406 (Not Acceptable) — 406 implies
+  // Use 503 (Service Unavailable) rather than 406 (Not Acceptable) - 406 implies
   // the request itself is invalid, but here the providers are simply unavailable
   // or have no active credentials. 503 is more accurate and retryable by clients.
   const allDisabled = lastError && lastError.toLowerCase().includes("no credentials");
@@ -714,7 +688,7 @@ function appendUserTurn(body, text) {
 
 /**
  * Build the judge directive. Per OpenRouter's Fusion design, the judge does NOT
- * merge — it analyzes (consensus / contradictions / partial coverage / unique
+ * merge - it analyzes (consensus / contradictions / partial coverage / unique
  * insights / blind spots) then writes one answer grounded in that analysis.
  * ~3/4 of fusion's quality lift comes from this synthesis step.
  *
@@ -731,7 +705,7 @@ function buildJudgePrompt(answers) {
     "",
     "Do NOT mention that multiple models were used, and do NOT refer to the sources. Produce ONE authoritative final answer addressed directly to the user.",
     "",
-    "First, internally analyze the panel along these dimensions: consensus (points most sources agree on — treat as higher-confidence), contradictions (where they disagree — resolve with your own judgment), partial coverage, unique insights only one source surfaced, and blind spots every source missed. Then write the best possible final answer grounded in that analysis — more complete and correct than any single response, with no filler.",
+    "First, internally analyze the panel along these dimensions: consensus (points most sources agree on - treat as higher-confidence), contradictions (where they disagree - resolve with your own judgment), partial coverage, unique insights only one source surfaced, and blind spots every source missed. Then write the best possible final answer grounded in that analysis - more complete and correct than any single response, with no filler.",
     "",
     "=== PANEL RESPONSES ===",
     panel,
@@ -826,9 +800,9 @@ export async function handleFusionChat({ body, models, handleSingleModel, log, c
     );
   }
 
-  // A single-model fusion has nothing to fuse — just answer directly.
+  // A single-model fusion has nothing to fuse - just answer directly.
   if (panel.length === 1) {
-    return handleSingleModel(body, panel[0]);
+    return handleSingleModel(deepCopyBody(body), panel[0]);
   }
 
   const cfg = { ...FUSION_DEFAULTS, ...(tuning || {}) };
@@ -841,7 +815,7 @@ export async function handleFusionChat({ body, models, handleSingleModel, log, c
   // Fusion runs panel models non-streaming; drop stream_options too, or providers
   // like DeepSeek reject it with "stream_options should be set along with stream = true".
   // See issue #3024.
-  const panelBody = { ...rest, stream: false };
+  const panelBody = deepCopyBody({ ...rest, stream: false });
 
   // Flatten tool turns to prose so panel models keep context without emitting tool_calls.
   if (Array.isArray(panelBody.messages)) {
@@ -851,7 +825,9 @@ export async function handleFusionChat({ body, models, handleSingleModel, log, c
   }
 
   const t0 = Date.now();
-  const calls = panel.map((m) => withTimeout(handleSingleModel(panelBody, m, true), cfg.panelHardTimeoutMs));
+  // Copy the body per panel so translators in one parallel call cannot
+  // mutate the objects used by the other panels.
+  const calls = panel.map((m) => withTimeout(handleSingleModel(deepCopyBody(panelBody), m, true), cfg.panelHardTimeoutMs));
   const settled = await collectPanel(calls, { ...cfg, minPanel });
   log.info("FUSION", `fan-out collected in ${Date.now() - t0}ms`);
 
@@ -887,14 +863,14 @@ export async function handleFusionChat({ body, models, handleSingleModel, log, c
     );
   }
   if (answers.length === 1) {
-    log.info("FUSION", `Only ${answers[0].model} succeeded — answering directly (no fusion)`);
-    return handleSingleModel(body, answers[0].model);
+    log.info("FUSION", `Only ${answers[0].model} succeeded - answering directly (no fusion)`);
+    return handleSingleModel(deepCopyBody(body), answers[0].model);
   }
 
   // 4. Judge analyzes + writes one final answer (streams to client if requested).
   const judgeBody = appendUserTurn(body, buildJudgePrompt(answers));
   log.info("FUSION", `Judging ${answers.length} answers with ${judge}`);
-  return handleSingleModel(judgeBody, judge);
+  return handleSingleModel(deepCopyBody(judgeBody), judge);
 }
 
 export {

@@ -1,4 +1,4 @@
-// Debug logging utility — only active in dev mode (NODE_ENV !== "production")
+// Debug logging utility - only active in dev mode (NODE_ENV !== "production")
 // Outputs are tagged with [DBG:tag] for easy grep/filter
 import { formatClockTime } from "./timeFormat.js";
 

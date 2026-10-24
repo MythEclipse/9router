@@ -6,6 +6,11 @@ import { getConsistentMachineId } from "@/shared/utils/machineId";
 
 const CLI_TOKEN_SALT = "9r-cli-auth";
 
+// Probe budgets live next to this file (not behind a @/ alias) so unit tests
+// can import them without the alias resolver.
+import { WEB_COOKIE_PROVIDERS, probeTimeoutMs } from "./probeBudget.js";
+export { WEB_COOKIE_PROVIDERS, probeTimeoutMs };
+
 function createSilentWavFile() {
   const sampleRate = 16000;
   const channels = 1;
@@ -64,7 +69,7 @@ export async function pingModelByKind(model, kind, baseUrl = `http://127.0.0.1:$
       method: "POST",
       headers,
       body: JSON.stringify({ model, input: "test" }),
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(probeTimeoutMs(model)),
     });
     const latencyMs = Date.now() - start;
     const rawText = await res.text().catch(() => "");
@@ -87,7 +92,7 @@ export async function pingModelByKind(model, kind, baseUrl = `http://127.0.0.1:$
       method: "POST",
       headers,
       body: JSON.stringify({ model, prompt: "test" }),
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(probeTimeoutMs(model)),
     });
     const latencyMs = Date.now() - start;
     const rawText = await res.text().catch(() => "");
@@ -116,7 +121,7 @@ export async function pingModelByKind(model, kind, baseUrl = `http://127.0.0.1:$
       method: "POST",
       headers: Object.fromEntries(Object.entries(headers).filter(([key]) => key.toLowerCase() !== "content-type")),
       body: form,
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(probeTimeoutMs(model)),
     });
     const latencyMs = Date.now() - start;
     const rawText = await res.text().catch(() => "");
@@ -146,7 +151,7 @@ export async function pingModelByKind(model, kind, baseUrl = `http://127.0.0.1:$
           probe: { type: "noul", instructions: "Is the customer reporting a billing problem?" },
         },
       }),
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(probeTimeoutMs(model)),
     });
     const latencyMs = Date.now() - start;
     const rawText = await res.text().catch(() => "");
@@ -178,7 +183,7 @@ export async function pingModelByKind(model, kind, baseUrl = `http://127.0.0.1:$
       stream: false,
       messages: [{ role: "user", content: "hi" }],
     }),
-    signal: AbortSignal.timeout(15000),
+    signal: AbortSignal.timeout(probeTimeoutMs(model)),
   });
   const latencyMs = Date.now() - start;
 

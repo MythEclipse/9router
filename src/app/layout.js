@@ -1,6 +1,5 @@
 import { Inter } from "next/font/google";
 import { GoogleAnalytics } from "@next/third-parties/google";
-import "material-symbols/outlined.css";
 import "./globals.css";
 import { ThemeProvider } from "@/shared/components/ThemeProvider";
 import "@/lib/network/initOutboundProxy"; // Auto-initialize outbound proxy env
@@ -37,12 +36,17 @@ export default function RootLayout({ children }) {
             zustand-persist "theme" key and the `dark` class applyTheme() sets. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var s=localStorage.getItem('theme');var t=s?(JSON.parse(s).state||{}).theme:'system';t=t||'system';var m=window.matchMedia('(prefers-color-scheme: dark)').matches;if(t==='dark'||(t==='system'&&m)){document.documentElement.classList.add('dark')}}catch(e){}})();`,
+            __html: `try{var s=JSON.parse(localStorage.getItem('theme')||'null');var t=s&&s.state&&s.state.theme;document.documentElement.classList.add('dark');if(t!=='dark')document.documentElement.classList.add('glass')}catch(e){document.documentElement.classList.add('dark')}`,
           }}
         />
         <script
           dangerouslySetInnerHTML={{
-            __html: `var d=document,r=d.documentElement,f=function(){r.classList.add('fonts-loaded')};if(d.fonts&&d.fonts.load){d.fonts.load('24px "Material Symbols Outlined"').then(f).catch(f);setTimeout(f,3000)}else{f()}`,
+            /* Reveal icon glyphs once the icon font is usable. document.fonts.ready
+               settles when font loading is idle, which is later and more reliable
+               than a single load() callback (that one can resolve before the woff2
+               is decoded). setTimeout is the backstop: icons must never stay at
+               opacity 0 just because the font request was slow or failed. */
+            __html: `var d=document,r=d.documentElement;r.classList.add('fonts-loading');var f=function(){r.classList.add('fonts-loaded');r.classList.remove('fonts-loading')};if(d.fonts&&d.fonts.ready){d.fonts.ready.then(f).catch(f);setTimeout(f,1500)}else{f()}`,
           }}
         />
       </head>

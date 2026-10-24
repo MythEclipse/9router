@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import PropTypes from "prop-types";
-import { Button } from "@/shared/components";
+import { Button, ModelTierBadge } from "@/shared/components";
 import { getProviderCustomModelRows } from "@/shared/utils/providerCustomModels";
 
 function PassthroughModelRow({ modelId, fullModel, copied, onCopy, onDeleteAlias, onTest, testStatus, isTesting }) {
@@ -28,7 +28,10 @@ function PassthroughModelRow({ modelId, fullModel, copied, onCopy, onDeleteAlias
       </span>
 
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{modelId}</p>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <p className="text-sm font-medium truncate">{modelId}</p>
+          <ModelTierBadge model={modelId} />
+        </div>
 
         <div className="flex items-center gap-1 mt-1">
         <code className="text-xs text-text-muted font-mono bg-sidebar px-1.5 py-0.5 rounded">{fullModel}</code>
@@ -121,7 +124,7 @@ export default function PassthroughModelsSection({ providerAlias, modelAliases, 
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-text-muted">
-        OpenRouter supports any model. Add models and create aliases for quick access.
+        OpenRouter supports any model, so add models and create aliases for quick access.
       </p>
 
       {/* Add new model */}

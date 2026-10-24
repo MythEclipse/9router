@@ -52,7 +52,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
   const openedRef = useRef(false);
   // Proxy-flow session ledger: which provider's proxy THIS modal session
   // started, and whether its stop was already sent. Every stop-proxy call is
-  // gated on this — parent re-renders can never spam it, and a close stops
+  // gated on this - parent re-renders can never spam it, and a close stops
   // the owned proxy exactly once.
   const flowRef = useRef({ proxyStarted: false, proxyProvider: null, stopSent: false });
   // Parent callbacks are stored in refs so effect/callback identities stay
@@ -66,19 +66,15 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
   const { copied, copy } = useCopyToClipboard();
 
   // State for client-only values to avoid hydration mismatch
-  const [isLocalhost, setIsLocalhost] = useState(false);
-  const [placeholderUrl, setPlaceholderUrl] = useState("/callback?code=...");
+  const [isLocalhost] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  });
+  const [placeholderUrl] = useState(() => {
+    if (typeof window === "undefined") return "/callback?code=...";
+    return `${window.location.origin}/callback?code=...`;
+  });
   const callbackProcessedRef = useRef(false);
-
-  // Detect if running on localhost (client-side only)
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      setIsLocalhost(
-        window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-      );
-      setPlaceholderUrl(`${window.location.origin}/callback?code=...`);
-    }
-  }, []);
 
   // Define all useCallback hooks BEFORE the useEffects that reference them
 
@@ -272,7 +268,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
     try {
       setError(null);
 
-      // Trae/Windsurf: proxy OAuth (browser mode) — handled by dedicated flow.
+      // Trae/Windsurf: proxy OAuth (browser mode) - handled by dedicated flow.
       // Paste-token mode is handled by handleManualSubmit (no /authorize call).
       if (PROXY_OAUTH_PROVIDERS.has(provider) && authMode === "browser") {
         await startProxyFlow(provider);
@@ -320,7 +316,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         if (verifyUrl) window.open(verifyUrl, "_blank", "noopener,noreferrer");
 
         // Pass extraData for Kiro (contains _clientId, _clientSecret) and
-        // Qoder (contains _qoderMachineId / _qoderNonce — needed so mapTokens
+        // Qoder (contains _qoderMachineId / _qoderNonce - needed so mapTokens
         // can persist the machine id alongside the token).
         const extraData = provider === "kiro"
           ? {
@@ -366,8 +362,11 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         redirectUri = "http://localhost:1455/auth/callback";
       } else if (provider === "xai") {
         redirectUri = "http://127.0.0.1:56121/callback";
+ } else if (provider === "antigravity" || provider === "gemini-cli") {
+ // Google Client ID is registered only with localhost redirect_uri
+ redirectUri = `http://localhost:${appPort}/callback`;
       } else {
-        redirectUri = `http://localhost:${appPort}/callback`;
+        redirectUri = `${window.location.origin}/callback`;
       }
 
       // Build authorize URL first to get codeVerifier/state for codex server-side mode
@@ -456,12 +455,12 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         if (!popupRef.current) {
           setStep("input");
         }
-      } else if (!isLocalhost || provider === "codex" || provider === "xai") {
-        // Non-localhost or proxy failed: manual input mode
+      } else if (!isLocalhost && (provider === "antigravity" || provider === "gemini-cli")) {
+        // Remote host with Google OAuth (Antigravity/Gemini): show manual copy-paste instructions
         setStep("input");
         window.open(data.authUrl, "_blank");
       } else {
-        // Localhost (non-Codex/xAI): Open popup and wait for message
+        // Localhost (or standard providers): Open popup and wait for message
         setStep("waiting");
         popupRef.current = window.open(data.authUrl, "oauth_popup", "width=600,height=700");
         if (!popupRef.current) {
@@ -483,7 +482,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
     startOAuthFlowRef.current = startOAuthFlow;
   });
 
-  // Reset state and start OAuth when modal opens — exactly once per open.
+  // Reset state and start OAuth when modal opens - exactly once per open.
   // Guarded by openedRef so StrictMode/effect re-runs never open extra tabs.
   useEffect(() => {
     if (!isOpen || !provider) return;
@@ -699,7 +698,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         return;
       }
 
-      // Detect raw JWT access token (starts with eyJ) — skip URL parsing
+      // Detect raw JWT access token (starts with eyJ) - skip URL parsing
       if (input.startsWith("eyJ") && input.includes(".")) {
         await exchangeTokens(input, null);
         return;
@@ -744,7 +743,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
 
   // Clear session on modal close + cleanup proxy (idempotent: the owned
   // proxy is stopped at most once across effect-close, button-close, and
-  // Escape/backdrop-close — all funnel through here or the close effect).
+  // Escape/backdrop-close - all funnel through here or the close effect).
   const handleClose = useCallback(() => {
     stopOwnedProxy();
     onCloseRef.current();
@@ -797,7 +796,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
                 {step === "input" && (
                   <div className="space-y-3">
                     <p className="text-sm text-text-muted">
-                      Popup was blocked. After authorizing in the browser, paste the full callback URL here:
+                      The popup was blocked, so authorize in your browser and paste the full callback URL here:
                     </p>
                     <Input
                       value={callbackUrl}

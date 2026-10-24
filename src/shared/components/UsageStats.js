@@ -13,6 +13,9 @@ function isLLMProvider(id) {
 import Badge from "./Badge";
 import Card from "./Card";
 import OverviewCards from "@/app/(dashboard)/dashboard/usage/components/OverviewCards";
+import { ActivityHeatmap, bucketTimestampsByDowHour } from "@/app/(dashboard)/dashboard/usage/components/UsageChartsBits";
+import KeyQuotaCard from "@/app/(dashboard)/dashboard/usage/components/KeyQuotaCard";
+import AvailableModelsCard from "@/app/(dashboard)/dashboard/usage/components/AvailableModelsCard";
 import UsageTable, { fmt, fmtTime } from "@/app/(dashboard)/dashboard/usage/components/UsageTable";
 import dynamic from "next/dynamic";
 // Lazy-load: keeps @xyflow/react and recharts out of the initial bundle
@@ -53,51 +56,69 @@ function TimeAgo({ timestamp }) {
   return <>{timeAgo(timestamp)}</>;
 }
 
+function TopologyUnavailableNote() {
+  return (
+    <div className="rounded-lg border border-border-subtle bg-surface/40 px-3 py-2.5">
+      <span className="text-[11px] text-text-muted/70">
+        The provider map is not available for this key. The usage numbers and the request list are.
+      </span>
+    </div>
+  );
+}
+
 function RecentRequests({ requests = [] }) {
   return (
-    <Card className="flex min-w-0 flex-col overflow-hidden" padding="sm" style={{ height: 480 }}>
+    <Card className="flex min-w-0 flex-col overflow-hidden" padding="none" style={{ height: 480 }}>
       {/* Header */}
-      <div className="px-1 py-2 border-b border-border shrink-0">
-        <span className="text-xs font-semibold text-text-muted uppercase tracking-wide">
-          Recent Requests
-        </span>
+      <div className="px-4 py-3 border-b border-border shrink-0 flex items-center justify-between">
+        <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">Recent Requests</span>
+        <span className="text-[11px] text-text-muted font-mono">{requests.length} logged</span>
       </div>
 
       {!requests.length ? (
-        <div className="flex-1 flex items-center justify-center text-text-muted text-sm">
-          No requests yet.
+        <div className="flex-1 flex flex-col items-center justify-center gap-2 px-4 text-center">
+          <span className="text-text-muted text-sm">No requests yet.</span>
+          <a href="/dashboard/endpoint" className="text-xs text-primary hover:underline">
+            Create an API key or send a request to get started
+          </a>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto">
-          <table className="w-full min-w-[300px] border-collapse text-xs">
-            <thead className="sticky top-0 bg-bg z-10">
-              <tr className="border-b border-border">
-                <th className="py-1.5 text-left font-semibold text-text-muted w-2"></th>
-                <th className="py-1.5 text-left font-semibold text-text-muted">Model</th>
-                <th className="py-1.5 text-right font-semibold text-text-muted whitespace-nowrap">
-                  In / Out
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+          <table className="w-full border-collapse text-xs">
+            <thead className="sticky top-0 bg-surface border-b border-border z-10">
+              <tr>
+                <th className="py-2.5 pl-3 pr-1 text-center font-semibold text-text-muted w-6" title="Status">
+                  <span className="material-symbols-outlined text-[12px] leading-none select-none text-text-muted/60">fiber_manual_record</span>
                 </th>
-                <th className="py-1.5 text-right font-semibold text-text-muted">When</th>
+                <th className="py-2.5 px-2 text-left font-semibold text-text-muted">Model</th>
+                <th className="py-2.5 px-2 text-right font-semibold text-text-muted whitespace-nowrap">Tokens (In / Out)</th>
+                <th className="py-2.5 pl-2 pr-3 text-right font-semibold text-text-muted w-20">Time</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border/50">
+            <tbody className="divide-y divide-border/40">
               {requests.map((r, i) => {
                 const ok = !r.status || r.status === "ok" || r.status === "success";
+                const cleanModel = (r.model || "unknown").replace(/^\/+/, "");
                 return (
-                  <tr key={i} className="hover:bg-bg-subtle transition-colors">
-                    <td className="py-1.5">
-                      <span
-                        className={`block w-1.5 h-1.5 rounded-full ${ok ? "bg-success" : "bg-error"}`}
-                      />
+                  <tr key={i} className="hover:bg-sidebar/40 transition-colors">
+                    <td className="py-2.5 pl-3 pr-1 text-center align-middle">
+                      <span className={`inline-block size-2 rounded-full ${ok ? "bg-emerald-500" : "bg-rose-500"}`} />
                     </td>
-                    <td className="py-1.5 font-mono truncate max-w-[120px]" title={r.model}>
-                      {r.model}
+                    <td className="py-2.5 px-2 font-mono text-xs text-text-main align-middle min-w-0" title={cleanModel}>
+                      <div className="truncate max-w-[130px] sm:max-w-[220px]">{cleanModel}</div>
                     </td>
-                    <td className="py-1.5 text-right whitespace-nowrap">
-                      <span className="text-primary">{fmt(r.promptTokens)}↑</span>{" "}
-                      <span className="text-success">{fmt(r.completionTokens)}↓</span>
+                    <td className="py-2.5 px-2 text-right whitespace-nowrap align-middle">
+                      <div className="inline-flex items-center gap-1 font-mono text-xs">
+                        <span className="text-primary font-medium">{fmt(r.promptTokens)}↑</span>
+                        <span className="text-emerald-500 font-medium">{fmt(r.completionTokens)}↓</span>
+                        {r.cachedTokens > 0 && (
+                          <span className="text-[10px] text-cyan-600 dark:text-cyan-400 bg-cyan-500/10 px-1 py-0.5 rounded leading-none" title={`${fmt(r.cachedTokens)} cached tokens`}>
+                            ↻{fmt(r.cachedTokens)}
+                          </span>
+                        )}
+                      </div>
                     </td>
-                    <td className="py-1.5 text-right text-text-muted whitespace-nowrap">
+                    <td className="py-2.5 pl-2 pr-3 text-right text-text-muted whitespace-nowrap align-middle text-[11px] font-mono">
                       <TimeAgo timestamp={r.timestamp} />
                     </td>
                   </tr>
@@ -150,20 +171,11 @@ function sortData(dataMap, pendingMap = {}, sortBy, sortOrder) {
 
 function getGroupKey(item, keyField) {
   switch (keyField) {
-    case "rawModel":
-      return item.rawModel || "Unknown Model";
-    case "accountName":
-      return (
-        item.accountName || `Account ${item.connectionId?.slice(0, 8)}...` || "Unknown Account"
-      );
-    case "keyName":
-      return item.apiKeyMasked
-        ? `${item.keyName} (${item.apiKeyMasked})`
-        : item.keyName || "Unknown Key";
-    case "endpoint":
-      return item.endpoint || "Unknown Endpoint";
-    default:
-      return item[keyField] || "Unknown";
+    case "rawModel": return item.rawModel || "Unknown Model";
+    case "accountName": return item.accountName || `Account ${item.connectionId?.slice(0, 8)}...` || "Unknown Account";
+    case "keyName": return item.apiKeyMasked ? `${item.keyName} (${item.apiKeyMasked})` : item.keyName || "Unknown Key";
+    case "endpoint": return item.endpoint || "Unknown Endpoint";
+    default: return item[keyField] || "Unknown";
   }
 }
 
@@ -202,6 +214,9 @@ function groupDataByKey(data, keyField) {
     s.cachedCost += item.cachedCost || 0;
     s.outputCost += item.outputCost || 0;
     s.pending += item.pending || 0;
+    if (item.resolvedModel && !s.resolvedModel) s.resolvedModel = item.resolvedModel;
+    if (item.provider && !s.provider) s.provider = item.provider;
+    if (item.rawModel && !s.rawModel) s.rawModel = item.rawModel;
     if (item.lastUsed && (!s.lastUsed || new Date(item.lastUsed) > new Date(s.lastUsed))) {
       s.lastUsed = item.lastUsed;
     }
@@ -272,8 +287,17 @@ export default function UsageStats({
   const sortOrder = searchParams.get("sortOrder") || "desc";
 
   const [stats, setStats] = useState(null);
+  // Overview sparklines + activity heatmap. Trending on its own fetch so a
+  // failure here degrades to plain cards instead of blocking the page.
+  const [sparks, setSparks] = useState(null);
   const [loading, setLoading] = useState(true);
   const [fetching, setFetching] = useState(false);
+  // null until /api/auth/status answers, then true for an API-key session. Both
+  // this and the stats fetch are in flight together, and the charts only render
+  // once `loading` is false, so waiting for it costs no visible flash.
+  const [isApiKeyUser, setIsApiKeyUser] = useState(null);
+  // The signing-in key's own token allowance, for the same session.
+  const [keyQuota, setKeyQuota] = useState(null);
   const [tableView, setTableView] = useState("model");
   const [viewMode, setViewMode] = useState("costs");
   const [providers, setProviders] = useState([]);
@@ -283,40 +307,81 @@ export default function UsageStats({
   const period = periodProp ?? periodLocal;
   const setPeriod = setPeriodProp ?? setPeriodLocal;
 
-  // Fetch connected providers once, deduplicate by provider type
-  // Always include noAuth free providers (e.g. opencode) regardless of connections
+  // Which kind of session is looking at this. A key-authenticated session gets the
+  // provider map swapped for a note and its own quota shown; a failed lookup falls
+  // back to the password view so an admin is never left without the page they expect.
   useEffect(() => {
+    let cancelled = false;
+    fetch("/api/auth/status")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!cancelled) setIsApiKeyUser(d?.role === "apikey"); })
+      .catch(() => { if (!cancelled) setIsApiKeyUser(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Fetch the provider list for the topology once: active connections,
+  // deduplicated by provider type, plus free noAuth providers only when they
+  // have recorded traffic of their own.
+  useEffect(() => {
+    // Providers feed the topology and nothing else. An API-key session never
+    // renders it, so the two requests are not worth making.
+    if (isApiKeyUser !== false) return;
     Promise.all([
-      fetch("/api/providers").then((r) => (r.ok ? r.json() : null)),
-      fetch("/api/provider-nodes").then((r) => (r.ok ? r.json() : null)),
+      fetch("/api/providers").then((r) => r.ok ? r.json() : null),
+      fetch("/api/provider-nodes").then((r) => r.ok ? r.json() : null),
+      // period=all so the set of "providers in use" is lifetime-stable and
+      // does not change with the period selector.
+      fetch("/api/usage/stats?period=all").then((r) => r.ok ? r.json() : null),
     ])
-      .then(([d, nodesData]) => {
+      .then(([d, nodesData, allStats]) => {
+        const usedProviders = new Set(Object.keys(allStats?.byProvider || {}));
         // Build node name lookup for custom providers
         const nodeNameMap = {};
-        for (const node of nodesData?.nodes || []) {
+        const nodeLogoMap = {};
+        for (const node of (nodesData?.nodes || [])) {
           nodeNameMap[node.id] = node.name;
+          nodeLogoMap[node.id] = node.logo;
         }
         const seen = new Set();
-        const unique = (d?.connections || [])
-          .filter((c) => {
-            if (c.isActive === false) return false;
-            if (!isLLMProvider(c.provider)) return false;
-            if (AI_PROVIDERS[c.provider]?.hidden) return false;
-            if (seen.has(c.provider)) return false;
-            seen.add(c.provider);
-            return true;
-          })
-          .map((c) => ({
-            ...c,
-            nodeName: nodeNameMap[c.provider] || null,
-          }));
+        const unique = (d?.connections || []).filter((c) => {
+          if (c.isActive === false) return false;
+          if (!isLLMProvider(c.provider)) return false;
+          if (seen.has(c.provider)) return false;
+          seen.add(c.provider);
+          return true;
+        }).map((c) => ({
+          ...c,
+          nodeName: nodeNameMap[c.provider] || null,
+          nodeLogo: nodeLogoMap[c.provider] || null,
+        }));
+        // Only show providers that are connected or have real recorded
+        // traffic. Listing every free noAuth provider by default made unused
+        // ones (Devin CLI, …) read as live nodes in the map.
         const noAuthProviders = Object.values(FREE_PROVIDERS)
-          .filter((p) => p.noAuth && !p.hidden && !seen.has(p.id) && isLLMProvider(p.id))
+          .filter((p) => p.noAuth && !seen.has(p.id) && isLLMProvider(p.id) && usedProviders.has(p.id))
           .map((p) => ({ provider: p.id, name: p.name }));
         setProviders([...unique, ...noAuthProviders]);
       })
       .catch(() => {});
-  }, []);
+  }, [isApiKeyUser]);
+
+  // The key's own quota. /api/usage/api-keys narrows to the session's key, so
+  // this returns at most that one row and nothing about any other key.
+  useEffect(() => {
+    if (isApiKeyUser !== true) return undefined;
+    let cancelled = false;
+    const load = () => {
+      fetch("/api/usage/api-keys", { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (!cancelled) setKeyQuota(d?.keys?.[0] || null); })
+        .catch(() => { if (!cancelled) setKeyQuota(null); });
+    };
+    load();
+    // This page does not poll its own numbers either, and 30s is often enough
+    // for someone watching a limit while they work.
+    const timer = setInterval(load, 30000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [isApiKeyUser]);
 
   // Fetch filtered stats via REST when period changes
   useEffect(() => {
@@ -343,16 +408,38 @@ export default function UsageStats({
       });
   }, [period]);
 
-  // SSE connection - real-time updates for activeRequests + recentRequests only
+  // Sparkline series + heatmap source. Separate fetch on purpose: when it
+  // fails the overview still renders, just without the trend lines.
   useEffect(() => {
-    const es = new EventSource("/api/usage/stream");
+    fetch(`/api/usage/sparks?period=${period}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (data) setSparks(data); })
+      .catch(() => {});
+  }, [period]);
+
+  const heat = useMemo(
+    () => (sparks?.heatTimestamps?.length ? bucketTimestampsByDowHour(sparks.heatTimestamps) : null),
+    [sparks],
+  );
+
+  // SSE connection - real-time updates synced to selected period
+  const esRef = useRef(null);
+  const [chartUpdateKey, setChartUpdateKey] = useState(0);
+
+  useEffect(() => {
+    if (esRef.current) esRef.current.close();
+
+    const es = new EventSource(`/api/usage/stream?period=${period}`);
+    esRef.current = es;
 
     es.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data);
-        // Always merge only real-time fields, never overwrite full stats from REST
         setStats((prev) => {
-          if (!prev) return prev;
+          if (!prev) return data;
+          if (data._type === "full") {
+            return { ...data };
+          }
           return {
             ...prev,
             activeRequests: data.activeRequests,
@@ -361,6 +448,9 @@ export default function UsageStats({
             pending: data.pending,
           };
         });
+        if (data._type === "full") {
+          setChartUpdateKey((k) => k + 1);
+        }
         if (hasLoadedStats.current) setLoading(false);
       } catch (err) {
         console.error("[SSE CLIENT] parse error:", err);
@@ -370,7 +460,7 @@ export default function UsageStats({
     es.onerror = () => setLoading(false);
 
     return () => es.close();
-  }, []);
+  }, [period]);
 
   const toggleSort = useCallback(
     (tableType, field) => {
@@ -402,7 +492,7 @@ export default function UsageStats({
           emptyMessage: "No usage recorded yet.",
           renderSummaryCells: (group) => (
             <>
-              <td className="px-6 py-3 text-text-muted">—</td>
+              <td className="px-6 py-3 text-text-muted">-</td>
               <td className="px-6 py-3 text-right">{fmt(group.summary.requests)}</td>
               <td className="px-6 py-3 text-right text-text-muted whitespace-nowrap">
                 {fmtTime(group.summary.lastUsed)}
@@ -411,16 +501,11 @@ export default function UsageStats({
           ),
           renderDetailCells: (item) => (
             <>
-              <td
-                className={`px-6 py-3 font-medium transition-colors ${item.pending > 0 ? "text-primary" : ""}`}
-              >
+              <td className={`px-6 py-3 font-medium transition-colors ${item.pending > 0 ? "text-primary" : ""}`}>
                 {item.rawModel}
+                {item.resolvedModel && item.resolvedModel !== item.rawModel && <div className="truncate text-xs text-text-muted" title={item.resolvedModel}>→ {item.resolvedModel}</div>}
               </td>
-              <td className="px-6 py-3">
-                <Badge variant={item.pending > 0 ? "primary" : "neutral"} size="sm">
-                  {item.provider}
-                </Badge>
-              </td>
+              <td className="px-6 py-3"><Badge variant={item.pending > 0 ? "primary" : "neutral"} size="sm">{item.provider}</Badge></td>
               <td className="px-6 py-3 text-right">{fmt(item.requests)}</td>
               <td className="px-6 py-3 text-right text-text-muted whitespace-nowrap">
                 {fmtTime(item.lastUsed)}
@@ -452,8 +537,8 @@ export default function UsageStats({
           emptyMessage: "No account-specific usage recorded yet.",
           renderSummaryCells: (group) => (
             <>
-              <td className="px-6 py-3 text-text-muted">—</td>
-              <td className="px-6 py-3 text-text-muted">—</td>
+              <td className="px-6 py-3 text-text-muted">-</td>
+              <td className="px-6 py-3 text-text-muted">-</td>
               <td className="px-6 py-3 text-right">{fmt(group.summary.requests)}</td>
               <td className="px-6 py-3 text-right text-text-muted whitespace-nowrap">
                 {fmtTime(group.summary.lastUsed)}
@@ -462,21 +547,12 @@ export default function UsageStats({
           ),
           renderDetailCells: (item) => (
             <>
-              <td
-                className={`px-6 py-3 font-medium transition-colors ${item.pending > 0 ? "text-primary" : ""}`}
-              >
-                {item.accountName || `Account ${item.connectionId?.slice(0, 8)}...`}
-              </td>
-              <td
-                className={`px-6 py-3 font-medium transition-colors ${item.pending > 0 ? "text-primary" : ""}`}
-              >
+              <td className={`px-6 py-3 font-medium transition-colors ${item.pending > 0 ? "text-primary" : ""}`}>{item.accountName || `Account ${item.connectionId?.slice(0, 8)}...`}</td>
+              <td className={`px-6 py-3 font-medium transition-colors ${item.pending > 0 ? "text-primary" : ""}`}>
                 {item.rawModel}
+                {item.resolvedModel && item.resolvedModel !== item.rawModel && <div className="truncate text-xs text-text-muted" title={item.resolvedModel}>→ {item.resolvedModel}</div>}
               </td>
-              <td className="px-6 py-3">
-                <Badge variant={item.pending > 0 ? "primary" : "neutral"} size="sm">
-                  {item.provider}
-                </Badge>
-              </td>
+              <td className="px-6 py-3"><Badge variant={item.pending > 0 ? "primary" : "neutral"} size="sm">{item.provider}</Badge></td>
               <td className="px-6 py-3 text-right">{fmt(item.requests)}</td>
               <td className="px-6 py-3 text-right text-text-muted whitespace-nowrap">
                 {fmtTime(item.lastUsed)}
@@ -493,8 +569,8 @@ export default function UsageStats({
           emptyMessage: "No API key usage recorded yet.",
           renderSummaryCells: (group) => (
             <>
-              <td className="px-6 py-3 text-text-muted">—</td>
-              <td className="px-6 py-3 text-text-muted">—</td>
+              <td className="px-6 py-3 text-text-muted">-</td>
+              <td className="px-6 py-3 text-text-muted">-</td>
               <td className="px-6 py-3 text-right">{fmt(group.summary.requests)}</td>
               <td className="px-6 py-3 text-right text-text-muted whitespace-nowrap">
                 {fmtTime(group.summary.lastUsed)}
@@ -503,15 +579,12 @@ export default function UsageStats({
           ),
           renderDetailCells: (item) => (
             <>
-              <td className="px-6 py-3 font-medium font-mono text-xs">
-                {item.apiKeyMasked || item.keyName}
-              </td>
-              <td className="px-6 py-3">{item.rawModel}</td>
+              <td className="px-6 py-3 font-medium font-mono text-xs">{item.apiKeyMasked || item.keyName}</td>
               <td className="px-6 py-3">
-                <Badge variant="neutral" size="sm">
-                  {item.provider}
-                </Badge>
+                {item.rawModel}
+                {item.resolvedModel && item.resolvedModel !== item.rawModel && <div className="truncate text-xs text-text-muted" title={item.resolvedModel}>→ {item.resolvedModel}</div>}
               </td>
+              <td className="px-6 py-3"><Badge variant="neutral" size="sm">{item.provider}</Badge></td>
               <td className="px-6 py-3 text-right">{fmt(item.requests)}</td>
               <td className="px-6 py-3 text-right text-text-muted whitespace-nowrap">
                 {fmtTime(item.lastUsed)}
@@ -532,8 +605,8 @@ export default function UsageStats({
           emptyMessage: "No endpoint usage recorded yet.",
           renderSummaryCells: (group) => (
             <>
-              <td className="px-6 py-3 text-text-muted">—</td>
-              <td className="px-6 py-3 text-text-muted">—</td>
+              <td className="px-6 py-3 text-text-muted">-</td>
+              <td className="px-6 py-3 text-text-muted">-</td>
               <td className="px-6 py-3 text-right">{fmt(group.summary.requests)}</td>
               <td className="px-6 py-3 text-right text-text-muted whitespace-nowrap">
                 {fmtTime(group.summary.lastUsed)}
@@ -543,12 +616,11 @@ export default function UsageStats({
           renderDetailCells: (item) => (
             <>
               <td className="px-6 py-3 font-medium font-mono text-sm">{item.endpoint}</td>
-              <td className="px-6 py-3">{item.rawModel}</td>
               <td className="px-6 py-3">
-                <Badge variant="neutral" size="sm">
-                  {item.provider}
-                </Badge>
+                {item.rawModel}
+                {item.resolvedModel && item.resolvedModel !== item.rawModel && <div className="truncate text-xs text-text-muted" title={item.resolvedModel}>→ {item.resolvedModel}</div>}
               </td>
+              <td className="px-6 py-3"><Badge variant="neutral" size="sm">{item.provider}</Badge></td>
               <td className="px-6 py-3 text-right">{fmt(item.requests)}</td>
               <td className="px-6 py-3 text-right text-text-muted whitespace-nowrap">
                 {fmtTime(item.lastUsed)}
@@ -594,36 +666,79 @@ export default function UsageStats({
         </div>
       )}
 
+      {/* The signing-in key's own allowance, for an API-key session. */}
+      {!loading && isApiKeyUser && keyQuota && <KeyQuotaCard quota={keyQuota} />}
+
+      {/* Models this key may call. Key sessions only: admins keep the page
+          exactly as it was, with no card rendered for them. */}
+      {!loading && isApiKeyUser && <AvailableModelsCard visible={isApiKeyUser === true} />}
+
       {/* Overview cards */}
-      {loading ? spinner : <OverviewCards stats={stats} />}
+      {loading ? spinner : <OverviewCards stats={stats} trends={sparks} />}
 
-      {/* Provider topology + Recent Requests */}
-      {loading ? (
-        spinner
-      ) : (
-        <div className="grid min-w-0 grid-cols-1 items-stretch gap-2 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
-          <ProviderTopology
-            providers={providers}
-            activeRequests={stats.activeRequests || []}
-            lastProvider={stats.recentRequests?.[0]?.provider || ""}
-            errorProvider={stats.errorProvider || ""}
-          />
+      {/* Provider map + Recent Requests. The map shows every provider wired into
+          9Router, which is infrastructure rather than one key's usage, so an
+          API-key session gets a quiet note in its place. The note drops the
+          two-column grid too: RecentRequests is pinned to a fixed height, and
+          a three-line note beside it would leave most of the row empty. */}
+      {loading || isApiKeyUser === null ? spinner : isApiKeyUser ? (
+        <>
+          <TopologyUnavailableNote />
           <RecentRequests requests={stats.recentRequests || []} />
+        </>
+      ) : (
+        <div className="grid min-w-0 grid-cols-1 items-stretch gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
+          <div className="order-2 lg:order-1 min-w-0">
+            <ProviderTopology
+              providers={providers}
+              activeRequests={stats.activeRequests || []}
+              lastProvider={stats.recentRequests?.[0]?.provider || ""}
+              errorProvider={stats.errorProvider || ""}
+            />
+          </div>
+          <div className="order-1 lg:order-2 min-w-0">
+            <RecentRequests requests={stats.recentRequests || []} />
+          </div>
         </div>
       )}
 
-      {/* Token / Cost chart - sync period */}
-      {loading ? spinner : <UsageChart period={period} />}
+      {/* Charts. Both chart endpoints are scoped to the session's allowed models,
+          so a key-authenticated session sees its own numbers, not the global view. */}
+      {loading ? spinner : (
+        <>
+          <UsageChart period={period} updateKey={chartUpdateKey} />
 
-      {/* Provider and model breakdown charts */}
-      {!loading && (stats.byProvider || stats.byModel) && (
-        <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-2">
-          <ProviderBarChart byProvider={stats.byProvider} />
-          <TopModelsChart byModel={stats.byModel} />
-        </div>
+          {heat && heat.total > 0 && (
+            <Card className="flex min-w-0 flex-col gap-3" padding="sm">
+              <span className="text-xs font-semibold text-text-muted uppercase tracking-wide">Activity heatmap</span>
+              <ActivityHeatmap grid={heat.grid} max={heat.max} />
+              <span className="text-[11px] text-text-muted">
+                Requests by weekday and hour in your local time · last {sparks.heatTimestamps.length} session requests
+              </span>
+            </Card>
+          )}
+
+          {/* By Provider + Top Models. Both charts group the shared catalog by
+              provider and by model. A key session is one customer's slice of
+              that catalog, so the two read as if the key had traffic everywhere
+              and had used nothing at all - which is exactly what an empty
+              "No provider usage yet" looked like. The usage chart and heatmap
+              above stay: those are this key's own requests over time. */}
+          {!isApiKeyUser && (stats.byProvider || stats.byModel) && (
+            <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-2">
+              <ProviderBarChart byProvider={stats.byProvider} />
+              <TopModelsChart byModel={stats.byModel} />
+            </div>
+          )}
+        </>
       )}
 
-      {/* Table with dropdown selector */}
+      {/* Breakdown table (by model / account / key / endpoint). All four views
+          group the shared catalog, so for a key session they read the same way
+          the charts did: an empty "No usage recorded yet" where the key
+          expected its own numbers. Hidden for key sessions; their history is
+          already above in the usage chart, heatmap and recent requests. */}
+      {!isApiKeyUser && (
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <select
@@ -672,6 +787,7 @@ export default function UsageStats({
               />
             )}
       </div>
+      )}
     </div>
   );
 }

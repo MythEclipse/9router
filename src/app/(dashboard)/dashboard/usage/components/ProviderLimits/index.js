@@ -64,10 +64,8 @@ const AUTO_PING_SETTINGS_KEYS = {
 };
 
 const AUTO_PING_TOOLTIPS = {
-  claude:
-    "When your 5h quota runs out, auto-sends a request the moment it resets so a new window starts right away.",
-  codex:
-    "Auto-starts the next 5h Codex window after reset by sending a tiny request. Consumes a small amount of quota.",
+  claude: "When your 5h quota runs out, auto-sends a request the moment it resets so a new window starts right away.",
+  codex: "Auto-starts the next 5h Codex window after reset by sending a tiny request. Consumes a small amount of quota.",
 };
 
 function kiroMethodLabel(conn) {
@@ -137,8 +135,8 @@ function claudeGrantStatus(grant) {
   return grant.useRequiresLimit ? "at limit only" : "unavailable";
 }
 
-function providerLabel(providerId) {
-  return AI_PROVIDERS[providerId]?.name || providerId;
+function providerLabel(providerId, connection) {
+  return connection?.providerSpecificData?.nodeName || AI_PROVIDERS[providerId]?.name || providerId;
 }
 
 function formatCreditDate(value) {
@@ -193,28 +191,23 @@ export default function ProviderLimits() {
   // Initialize providerFilter from URL ?provider= param so the page
   // can be bookmarked / deep-linked to a specific provider (#4217).
   const [providerFilter, _setProviderFilter] = useState(
-    () => searchParams?.get("provider") || "all",
+    () => searchParams?.get("provider") || "all"
   );
   // Wrapper: keeps URL in sync with the selected provider so the view can be
   // bookmarked. Replaces the URL without adding to browser history.
-  const setProviderFilter = useCallback(
-    (value) => {
-      _setProviderFilter(value);
-      try {
-        const params = new URLSearchParams(searchParams?.toString() || "");
-        if (value === "all") {
-          params.delete("provider");
-        } else {
-          params.set("provider", value);
-        }
-        const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
-        router.replace(newUrl, { scroll: false });
-      } catch {
-        /* non-fatal: URL sync is best-effort */
+  const setProviderFilter = useCallback((value) => {
+    _setProviderFilter(value);
+    try {
+      const params = new URLSearchParams(searchParams?.toString() || "");
+      if (value === "all") {
+        params.delete("provider");
+      } else {
+        params.set("provider", value);
       }
-    },
-    [pathname, router, searchParams],
-  );
+      const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
+      router.replace(newUrl, { scroll: false });
+    } catch { /* non-fatal: URL sync is best-effort */ }
+  }, [pathname, router, searchParams]);
   const [providerOptions, setProviderOptions] = useState([]);
   const [accountFilter, setAccountFilter] = useState("all");
   const [quotaSortMode, setQuotaSortMode] = useState("default");
@@ -627,40 +620,37 @@ export default function ProviderLimits() {
       .catch(() => {});
   }, []);
 
-  const handleSaveAutoPing = useCallback(
-    async (connectionId, provider, { reactive, schedule }) => {
-      const settingsKey = AUTO_PING_SETTINGS_KEYS[provider];
-      if (!settingsKey) return;
+  const handleSaveAutoPing = useCallback(async (connectionId, provider, { reactive, schedule }) => {
+    const settingsKey = AUTO_PING_SETTINGS_KEYS[provider];
+    if (!settingsKey) return;
 
-      const previous = autoPingConfigs;
-      const prevCfg = autoPingConfigs[provider] || {};
-      const nextProviderCfg = {
-        ...prevCfg,
-        connections: { ...(prevCfg.connections || {}), [connectionId]: reactive },
-        schedules: { ...(prevCfg.schedules || {}), [connectionId]: schedule },
+    const previous = autoPingConfigs;
+    const prevCfg = autoPingConfigs[provider] || {};
+    const nextProviderCfg = {
+      ...prevCfg,
+      connections: { ...(prevCfg.connections || {}), [connectionId]: reactive },
+      schedules: { ...(prevCfg.schedules || {}), [connectionId]: schedule },
+    };
+    const nextConfigs = { ...autoPingConfigs, [provider]: nextProviderCfg };
+    setAutoPingConfigs(nextConfigs);
+
+    try {
+      const r = await fetch("/api/settings", { cache: "no-store" });
+      const s = r.ok ? await r.json() : {};
+      const fullCfg = {
+        ...(s[settingsKey] || {}),
+        connections: nextProviderCfg.connections,
+        schedules: nextProviderCfg.schedules,
       };
-      const nextConfigs = { ...autoPingConfigs, [provider]: nextProviderCfg };
-      setAutoPingConfigs(nextConfigs);
-
-      try {
-        const r = await fetch("/api/settings", { cache: "no-store" });
-        const s = r.ok ? await r.json() : {};
-        const fullCfg = {
-          ...(s[settingsKey] || {}),
-          connections: nextProviderCfg.connections,
-          schedules: nextProviderCfg.schedules,
-        };
-        await fetch("/api/settings", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ [settingsKey]: fullCfg }),
-        });
-      } catch {
-        setAutoPingConfigs(previous);
-      }
-    },
-    [autoPingConfigs],
-  );
+      await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [settingsKey]: fullCfg }),
+      });
+    } catch {
+      setAutoPingConfigs(previous);
+    }
+  }, [autoPingConfigs]);
 
   const updateQuotaVisibility = useCallback(async (nextVisibility, previousVisibility) => {
     setQuotaVisibility(nextVisibility);
@@ -977,7 +967,9 @@ export default function ProviderLimits() {
                           className="size-6 rounded-md object-contain"
                           fallbackText={provider.slice(0, 2).toUpperCase()}
                         />
-                        <span className="font-medium">{providerLabel(provider)}</span>
+                        <span className="font-medium min-w-0 truncate" title={provider}>
+                          {providerLabel(provider)}
+                        </span>
                         {providerFilter === provider && (
                           <span className="material-symbols-outlined ml-auto text-[20px]">
                             check
@@ -1098,8 +1090,7 @@ export default function ProviderLimits() {
       {/* Provider cards: 2 columns, compact */}
       {expiringFirst && (
         <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-          Expiring-first currently reorders accounts inside the current page. Cross-page ordering
-          still follows backend pagination.
+          Expiring-first reorders accounts within the current page only, while cross-page ordering still follows backend pagination.
         </div>
       )}
 
@@ -1141,7 +1132,7 @@ export default function ProviderLimits() {
                     </div>
                     <div className="min-w-0">
                       <h3 className="text-sm font-semibold text-text-primary truncate">
-                        {providerLabel(conn.provider)}
+                        {providerLabel(conn.provider, conn)}
                       </h3>
                       {getConnectionLabel(conn) ? (
                         <p className="text-xs text-text-muted truncate">
@@ -1262,41 +1253,38 @@ export default function ProviderLimits() {
                         </Tooltip>
                       </>
                     )}
-                    {AUTO_PING_SETTINGS_KEYS[conn.provider] &&
-                      conn.authType === "oauth" &&
-                      (() => {
-                        const cfg = autoPingConfigs[conn.provider] || {};
-                        const isReactive = cfg.connections?.[conn.id] === true;
-                        const schedule = cfg.schedules?.[conn.id];
-                        const isSchedule = schedule?.enabled === true;
-                        const isActive = isReactive || isSchedule;
+                    {AUTO_PING_SETTINGS_KEYS[conn.provider] && conn.authType === "oauth" && (() => {
+                      const cfg = autoPingConfigs[conn.provider] || {};
+                      const isReactive = cfg.connections?.[conn.id] === true;
+                      const schedule = cfg.schedules?.[conn.id];
+                      const isSchedule = schedule?.enabled === true;
+                      const isActive = isReactive || isSchedule;
 
-                        const activeModes = [];
-                        if (isReactive) activeModes.push("On reset");
-                        if (isSchedule) {
-                          const summary = getScheduleSlotLabels(schedule).join(" / ");
-                          activeModes.push(`Scheduled (${summary || "active"})`);
-                        }
-                        const tooltipText =
-                          activeModes.length > 0
-                            ? `Auto-ping active: ${activeModes.join(" + ")}. Click to configure.`
-                            : conn.provider === "codex"
-                              ? "Auto-starts the next 5h Codex window after reset or on schedule. Click to configure."
-                              : "Auto-starts a new window on quota reset or fixed schedule. Click to configure.";
+                      const activeModes = [];
+                      if (isReactive) activeModes.push("On reset");
+                      if (isSchedule) {
+                        const summary = getScheduleSlotLabels(schedule).join(" / ");
+                        activeModes.push(`Scheduled (${summary || "active"})`);
+                      }
+                      const tooltipText = activeModes.length > 0
+                        ? `Auto-ping active: ${activeModes.join(" + ")}. Click to configure.`
+                        : conn.provider === "codex"
+                          ? "Auto-starts the next 5h Codex window after reset or on schedule. Click to configure."
+                          : "Auto-starts a new window on quota reset or fixed schedule. Click to configure.";
 
-                        return (
-                          <Tooltip text={tooltipText}>
-                            <button
-                              type="button"
-                              onClick={() => setScheduleConnection(conn)}
-                              aria-label="Configure auto-ping"
-                              className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-black/5 dark:hover:bg-white/5 ${isActive ? "text-primary" : "text-text-muted"}`}
-                            >
-                              <span className="material-symbols-outlined text-[18px]">bolt</span>
-                            </button>
-                          </Tooltip>
-                        );
-                      })()}
+                      return (
+                        <Tooltip text={tooltipText}>
+                          <button
+                            type="button"
+                            onClick={() => setScheduleConnection(conn)}
+                            aria-label="Configure auto-ping"
+                            className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-black/5 dark:hover:bg-white/5 ${isActive ? "text-primary" : "text-text-muted"}`}
+                          >
+                            <span className="material-symbols-outlined text-[18px]">bolt</span>
+                          </button>
+                        </Tooltip>
+                      );
+                    })()}
                     <Tooltip text="Refresh quota">
                       <button
                         type="button"
@@ -1552,8 +1540,8 @@ export default function ProviderLimits() {
       />
 
       {resetCreditsState && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-black/15 bg-white shadow-2xl ring-1 ring-black/10 dark:border-white/15 dark:bg-neutral-950 dark:ring-white/10">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim px-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl ring-1 ring-border">
             <div className="flex items-start justify-between gap-3 border-b border-black/10 bg-black/[0.03] px-4 py-3 dark:border-white/10 dark:bg-white/[0.04]">
               <div className="min-w-0">
                 <h3 className="text-base font-semibold text-text-primary">
@@ -1578,7 +1566,7 @@ export default function ProviderLimits() {
               </button>
             </div>
 
-            <div className="max-h-[70vh] overflow-auto bg-white p-4 dark:bg-neutral-950">
+            <div className="max-h-[70vh] overflow-auto bg-surface p-4">
               {resetCreditsState.loading ? (
                 <div className="flex items-center justify-center gap-2 py-10 text-sm text-text-muted">
                   <span className="material-symbols-outlined animate-spin text-[20px]">
@@ -1716,18 +1704,12 @@ export default function ProviderLimits() {
           isOpen={!!scheduleConnection}
           onClose={() => setScheduleConnection(null)}
           connection={scheduleConnection}
-          reactive={
-            autoPingConfigs[scheduleConnection.provider]?.connections?.[scheduleConnection.id] ===
-            true
-          }
-          schedule={
-            autoPingConfigs[scheduleConnection.provider]?.schedules?.[scheduleConnection.id] || null
-          }
-          onSave={(result) =>
-            handleSaveAutoPing(scheduleConnection.id, scheduleConnection.provider, result)
-          }
+          reactive={autoPingConfigs[scheduleConnection.provider]?.connections?.[scheduleConnection.id] === true}
+          schedule={autoPingConfigs[scheduleConnection.provider]?.schedules?.[scheduleConnection.id] || null}
+          onSave={(result) => handleSaveAutoPing(scheduleConnection.id, scheduleConnection.provider, result)}
         />
       )}
     </div>
   );
 }
+

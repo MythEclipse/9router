@@ -2,6 +2,12 @@
 
 import { cn } from "@/shared/utils/cn";
 
+// Loading surfaces that stay inside their own container: a spinner, a full-page block, a
+// skeleton. Long-running work does NOT live here - it reports through the task store into the
+// notification bell (`taskStore` -> `NotifToast`). The floating banner and its wrappers
+// (the floating banner and its inline wrappers) are gone: a fixed overlay
+// rendered nothing, and the inline variant covered the very form it sat in.
+
 // Spinner loading
 export function Spinner({ size = "md", className }) {
   const sizes = {

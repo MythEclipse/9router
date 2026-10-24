@@ -2,11 +2,10 @@ import { NextResponse } from "next/server";
 import { getSettings, updateSettings } from "@/lib/localDb";
 import { PROVIDERS } from "open-sse/config/providers.js";
 import { resolveProviderAlias } from "open-sse/services/model.js";
-import { CACHE_MAX_MARKERS } from "open-sse/translator/formats/claudeCache.js";
 
 export const dynamic = "force-dynamic";
 
-// Validation at the trust boundary — the UI also validates, but this is the gate.
+// Validation at the trust boundary - the UI also validates, but this is the gate.
 const MAX_HEADERS = 20;
 const MAX_HEADER_VALUE_LENGTH = 8192;
 // RFC 7230 token subset: letters, digits, hyphen (no spaces, no unicode)
@@ -24,25 +23,10 @@ const BLOCKED_HEADERS = new Set([
 
 /**
  * Validate + normalize an override payload. Returns { override } or { error }.
- * An override with no keys is normalized to null (= delete).
+ * An override with no headers is normalized to null (= delete).
  */
-function normalizeOverride({ headers, cacheSupported, maxMarkers, newContextReason }) {
+function normalizeOverride({ headers }) {
   const out = {};
-
-  if (cacheSupported !== undefined && cacheSupported !== null) {
-    if (typeof cacheSupported !== "boolean") return { error: "cacheSupported must be a boolean" };
-    out.cacheSupported = cacheSupported;
-  }
-  if (maxMarkers !== undefined && maxMarkers !== null) {
-    if (!Number.isInteger(maxMarkers) || maxMarkers < 0 || maxMarkers > CACHE_MAX_MARKERS) {
-      return { error: `maxMarkers must be an integer between 0 and ${CACHE_MAX_MARKERS}` };
-    }
-    out.maxMarkers = maxMarkers;
-  }
-  if (newContextReason !== undefined && newContextReason !== null) {
-    if (typeof newContextReason !== "boolean") return { error: "newContextReason must be a boolean" };
-    out.newContextReason = newContextReason;
-  }
 
   if (headers !== undefined && headers !== null) {
     if (typeof headers !== "object" || Array.isArray(headers)) {
@@ -79,30 +63,20 @@ async function readOverrides() {
   return settings.providerOverrides || {};
 }
 
-/** Cache budget portion of an override, shaped for the UI (absent = proxy default). */
-function cacheShape(override) {
-  return {
-    ...(override?.cacheSupported !== undefined ? { supported: override.cacheSupported } : {}),
-    ...(override?.maxMarkers !== undefined ? { maxMarkers: override.maxMarkers } : {}),
-    ...(override?.newContextReason !== undefined ? { newContextReason: override.newContextReason } : {}),
-  };
-}
-
 /**
- * GET /api/providers/[id]/overrides — user override for this provider
+ * GET /api/providers/[id]/overrides - user override for this provider
  */
 export async function GET(request, { params }) {
   try {
     const { id } = await params;
-    // URL may use an alias (gcli, cc…) — key everything by canonical registry id
+    // URL may use an alias (gcli, cc…) - key everything by canonical registry id
     const canonical = resolveProviderAlias(id);
     const override = (await readOverrides())[canonical] || {};
-    // Built-in headers come straight from the registry transport — single source of
+    // Built-in headers come straight from the registry transport - single source of
     // truth, so the UI pre-fills exactly what this provider sends upstream.
     return NextResponse.json({
       headers: override.headers || {},
       builtinHeaders: PROVIDERS[canonical]?.headers || {},
-      cache: cacheShape(override),
     });
   } catch (error) {
     console.log("Error getting provider overrides:", error);
@@ -111,7 +85,7 @@ export async function GET(request, { params }) {
 }
 
 /**
- * PUT /api/providers/[id]/overrides — body: { headers: {name: value} }
+ * PUT /api/providers/[id]/overrides - body: { headers: {name: value} }
  * Empty payload clears the override.
  */
 export async function PUT(request, { params }) {
@@ -128,7 +102,7 @@ export async function PUT(request, { params }) {
     if (override) next[canonical] = override;
     else delete next[canonical];
     await updateSettings({ providerOverrides: next });
-    return NextResponse.json({ headers: override?.headers || {}, cache: cacheShape(override) });
+    return NextResponse.json({ headers: override?.headers || {} });
   } catch (error) {
     console.log("Error saving provider overrides:", error);
     return NextResponse.json({ error: "Failed to save overrides" }, { status: 500 });

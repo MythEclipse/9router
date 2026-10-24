@@ -28,7 +28,7 @@ export function extractUsageFromResponse(responseBody) {
   // Claude format
   // Note: OpenAI Responses usage ({input_tokens, input_tokens_details:{cached_tokens}})
   // also matches this branch. Its prompt is cache-INCLUSIVE and its cache rides in
-  // input_tokens_details, so emit it as cached_tokens — the convention
+  // input_tokens_details, so emit it as cached_tokens - the convention
   // canonicalizeUsage() passes through without folding. Reading it here keeps
   // cache accounting correct for /v1/responses and codex traffic.
   if (responseBody.usage?.input_tokens !== undefined) {
@@ -83,7 +83,7 @@ export function extractUsageFromResponse(responseBody) {
 export function buildRequestDetail(base, overrides = {}) {
   return {
     provider: base.provider || "unknown",
-    model: base.model || "unknown",
+    model: base.requestedModel || base.model || "unknown",
     connectionId: base.connectionId || undefined,
     timestamp: new Date().toISOString(),
     latency: base.latency || { ttft: 0, total: 0 },
@@ -92,7 +92,8 @@ export function buildRequestDetail(base, overrides = {}) {
     providerRequest: base.providerRequest || null,
     providerResponse: base.providerResponse || null,
     response: base.response || {},
-    pxpipe: base.pxpipe || undefined,
+    resolvedModel: base.requestedModel && base.requestedModel !== base.model ? base.model : undefined,
+ pxpipe: base.pxpipe || undefined,
     status: base.status || "success",
     ...overrides
   };
@@ -119,13 +120,24 @@ export function formatDoneLine({ usage, latency }) {
   return `DONE ${latency?.total ?? 0}ms${ttftStr} · ${inStr} · OUT ${outTok}${estimatedStr}`;
 }
 
-export function saveUsageStats({ provider, model, tokens, connectionId, apiKey, endpoint, label = "USAGE", silent = false, requestId }) {
+// Statuses that mean the request answered normally; anything else is a failure.
+const OK_USAGE_STATUSES = new Set(["ok", "success", "200"]);
+
+function isFailedStatus(status) {
+  return Boolean(status) && !OK_USAGE_STATUSES.has(String(status).trim().toLowerCase());
+}
+
+export function saveUsageStats({ provider, model, tokens, connectionId, apiKey, endpoint, label = "USAGE", silent = false, requestedModel, status = null }) {
   if (!tokens || typeof tokens !== "object") return;
 
   const inTokens = tokens.input_tokens ?? tokens.prompt_tokens ?? 0;
   const outTokens = tokens.output_tokens ?? tokens.completion_tokens ?? 0;
 
-  if (inTokens === 0 && outTokens === 0) return;
+  // A failed request prices nothing, but it still happened: keep the row so the
+  // Usage error stats count failures instead of only ever seeing successes.
+  const failed = isFailedStatus(status);
+  
+  if (inTokens === 0 && outTokens === 0 && !failed) return;
 
   if (!silent) {
     const time = formatClockTime();
@@ -143,11 +155,28 @@ export function saveUsageStats({ provider, model, tokens, connectionId, apiKey, 
   saveRequestUsage({
     provider: provider || "unknown",
     model: model || "unknown",
+ requestedModel,
     tokens: normalized,
     timestamp: new Date().toISOString(),
     connectionId: connectionId || undefined,
     apiKey: apiKey || undefined,
     endpoint: endpoint || null,
-    requestId,
+    status: failed ? String(status).trim() : undefined,
   }).catch(() => {});
 }
+
+/** Records a failed request (no tokens) under its HTTP status for the error stats. */
+export function saveFailedUsage({ provider, model, requestedModel, connectionId, apiKey, endpoint, statusCode }) {
+  saveUsageStats({
+    provider,
+    model,
+    requestedModel,
+    connectionId,
+    apiKey,
+    endpoint,
+    tokens: { prompt_tokens: 0, completion_tokens: 0 },
+    status: statusCode || 500,
+    silent: true,
+  });
+}
+

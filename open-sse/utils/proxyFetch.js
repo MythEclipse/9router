@@ -97,7 +97,7 @@ async function tryGotScrapingFetch(url, options) {
 }
 */
 
-// DNS cache — use Map to avoid prototype pollution via malformed hostnames
+// DNS cache - use Map to avoid prototype pollution via malformed hostnames
 const DNS_CACHE = new Map();
 const TLS_CERT_ERRORS = new Set([
   "SELF_SIGNED_CERT_IN_CHAIN",
@@ -355,7 +355,7 @@ function bufferedResponse(text, original) {
  * the first attempt cannot be resent, and strictProxy keeps its contract of
  * never leaving over another path — both return the rejection as-is.
  */
-async function replayFreeTierRejectionDirect(url, options, proxied) {
+async function replayFreeTierRejectionDirect(url, options, proxied, proxyUrl) {
   if (proxied.status !== 403) return proxied;
   let text;
   try {
@@ -367,9 +367,13 @@ async function replayFreeTierRejectionDirect(url, options, proxied) {
   if (options?.body && typeof options.body.getReader === "function" && options.body.locked) {
     return bufferedResponse(text, proxied);
   }
+  if (proxyUrl) {
+    console.warn(`[ProxyFetch] Proxy egress rejected by OpenCode free-tier gate (403 FreeTierError); direct replay skipped to protect main IP: ${targetHost(url)}`);
+    return bufferedResponse(text, proxied);
+  }
   console.warn(`[ProxyFetch] Proxy egress rejected by the OpenCode free-tier gate (403 FreeTierError); replaying direct: ${targetHost(url)}`);
   try {
-    return await fetchWithTlsFallback(url, options, null);
+    return await originalFetch(url, options);
   } catch (directError) {
     // The direct replay failed outright — surface the original rejection.
     console.warn(`[ProxyFetch] Direct replay failed: ${directError.message}`);
@@ -417,7 +421,7 @@ export async function proxyAwareFetch(url, options = {}, proxyOptions = null) {
   // MITM DNS bypass: for known MITM-intercepted hosts, resolve real IP to avoid DNS spoof
   if (shouldBypassMitmDns(targetUrl)) {
     if (proxyUrl) {
-      // Proxy resolves DNS externally (not affected by /etc/hosts) — use proxy directly
+      // Proxy resolves DNS externally (not affected by /etc/hosts) - use proxy directly
       try {
         return await fetchWithTlsFallback(url, options, proxyUrl);
       } catch (proxyError) {
@@ -427,7 +431,7 @@ export async function proxyAwareFetch(url, options = {}, proxyOptions = null) {
         console.warn(`[ProxyFetch] Proxy failed, falling back to direct bypass: ${proxyError.message}`);
       }
     }
-    // No proxy — manually resolve real IP to bypass DNS spoof
+    // No proxy - manually resolve real IP to bypass DNS spoof
     try {
       const parsedUrl = new URL(targetUrl);
       const realIP = await resolveRealIP(parsedUrl.hostname);
@@ -439,39 +443,22 @@ export async function proxyAwareFetch(url, options = {}, proxyOptions = null) {
 
   if (proxyUrl) {
     try {
-      const proxied = await fetchWithTlsFallback(url, options, proxyUrl);
-      // strictProxy never leaves the configured path — pass the rejection through.
-      if (proxyOptions?.strictProxy === true) return proxied;
-      return await replayFreeTierRejectionDirect(url, options, proxied);
-    } catch (proxyError) {
-      // If strictProxy is enabled, fail hard instead of falling back to direct
-      if (proxyOptions?.strictProxy === true) {
-        throw new Error(`[ProxyFetch] Proxy required but failed (strictProxy=true): ${proxyError.message}`);
+      const dispatcher = await getDispatcher(proxyUrl);
+      const res = await originalFetch(url, { ...options, dispatcher });
+      if (res.status === 407) {
+        throw new Error("HTTP 407 Proxy Authentication Required (credentials invalid or plan expired)");
       }
-      console.warn(`[ProxyFetch] Proxy failed, falling back to direct: ${proxyError.message}`);
-      return fetchWithTlsFallback(url, options, null);
+      // strictProxy never leaves the configured path — pass the rejection through.
+      if (proxyOptions?.strictProxy === true) return res;
+      return await replayFreeTierRejectionDirect(url, options, res, proxyUrl);
+    } catch (proxyError) {
+      // If a proxy was configured, never fall back to direct egress which leaks
+      // the host's main IP.
+      throw new Error(`[ProxyFetch] Proxy required but failed (${proxyError.message}); direct fallback blocked to protect main IP.`);
     }
   }
 
-  // Strict mode means "never leave over the direct IP". Reaching here with a
-  // proxy configured but unresolved is exactly that case — an inactive or
-  // empty pool, or every proxy removed — so refuse instead of silently
-  // exposing the real address (#4333). The catch blocks above only cover a
-  // proxy that was actually tried.
-  //
-  // Gate on a proxy being *intended*: callers like the Qoder executor set
-  // strictProxy to mean "do not replay this request directly if the proxy
-  // fails" (a replayed COSY signature returns 403), not "a proxy is required".
-  // With nothing configured they must keep working.
-  const proxyIntended = proxyOptions?.proxyPoolId
-    || proxyOptions?.enabled === true
-    || proxyOptions?.connectionProxyEnabled === true
-    || !!normalizeString(proxyOptions?.url ?? proxyOptions?.connectionProxyUrl);
-  if (proxyOptions?.strictProxy === true && proxyIntended) {
-    throw new Error("[ProxyFetch] Proxy required but none resolved (strictProxy=true)");
-  }
-
-  // got-scraping disabled — use native fetch directly
+  // got-scraping disabled - use native fetch directly
   // (Re-enable per-host by wrapping with tryGotScrapingFetch when needed)
   return fetchWithTlsFallback(url, options, null);
 }
@@ -483,7 +470,7 @@ async function patchedFetch(url, options = {}) {
   return proxyAwareFetch(url, options, null);
 }
 
-// Idempotency guard — only patch once to avoid wrapping multiple times
+// Idempotency guard - only patch once to avoid wrapping multiple times
 if (globalThis.fetch !== patchedFetch) {
   globalThis.fetch = patchedFetch;
 }

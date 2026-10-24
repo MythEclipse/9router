@@ -41,6 +41,22 @@ export const TRANSIENT_COOLDOWN_MS = 30 * 1000;
 // Hard cap for provider-reported rate limit cooldown (e.g. codex resets_at can be 5-6h)
 export const MAX_RATE_LIMIT_COOLDOWN_MS = 30 * 60 * 1000;
 
+/**
+ * Fallback-loop budgets: how long the account loop in chat.js may keep
+ * rotating before it hands the last error back. The session-rotation fix for
+ * spent free-tier quota (upstream #5107) re-enters the proxy loop per 429, so
+ * an exhausted evening walks hundreds of proxies that all answer the same
+ * 429. The probe that triggered the loop carries its own AbortSignal
+ * (120s for opencode in probeBudget.js), but the loop holds no reference to
+ * it — without its own deadline it answers into a void long after the caller
+ * gave up, reading as "The operation was aborted due to timeout" with no
+ * usable error. Keep the loop inside the caller's budget instead.
+ */
+export const OPENCODE_FALLBACK_BUDGET_MS = 100 * 1000;
+
+/** Other providers never rotate sessions, so the generic loop stays short. */
+export const GENERIC_FALLBACK_BUDGET_MS = 25 * 1000;
+
 // Cooldown durations (ms)
 const COOLDOWN = {
   long: 2 * 60 * 1000,
@@ -50,18 +66,16 @@ const COOLDOWN = {
 /**
  * Unified error classification rules.
  * Checked top-to-bottom: text rules first (by order), then status rules.
- * Each rule: { text?, status?, cooldownMs?, backoff? }
+ * Each rule: { text?, status?, cooldownMs?, backoff?, lock? }
  *   - text: substring match (case-insensitive) on error message
  *   - status: HTTP status code match
  *   - cooldownMs: fixed cooldown duration
  *   - backoff: true = use exponential backoff (rate limit)
+ * - lock: false = never cool down or lock the account (caller-side bad request)
  */
 export const ERROR_RULES = [
   // --- Text-based rules (checked first, order = priority) ---
   { provider: "codex", text: "model is not supported when using codex with a chatgpt account", cooldownMs: MAX_RATE_LIMIT_COOLDOWN_MS },
-  // Intl gateway blocks affect the account/IP, so let the connection back off.
-  { provider: "codebuddy-intl", text: "request illegal", backoff: true },
-  { provider: "codebuddy-intl", text: "conversation id missing", backoff: true },
   { text: "no credentials",           cooldownMs: COOLDOWN.long },
   { text: "request not allowed",      cooldownMs: COOLDOWN.short },
   { text: "improperly formed request", cooldownMs: COOLDOWN.long },
@@ -73,12 +87,29 @@ export const ERROR_RULES = [
   { text: "capacity",                 backoff: true },
   { text: "overloaded",               backoff: true },
 
+  // Upstream shape mismatch (wrong content-type, unreadable stream): the transport
+  // is quirky, the credential is not. Locking here puts a working account behind a
+  // cooldown while the client retries blindly, so keep the chain rotating but never
+  // penalise the account.
+  { text: "invalid sse response", lock: false },
+  { text: "invalid json response", lock: false },
+  { text: "returned non-sse", lock: false },
+  { text: "failed to convert streaming response", lock: false },
+
   // --- Status-based rules (fallback when text doesn't match) ---
   { status: 401, cooldownMs: COOLDOWN.long },
   { status: 402, cooldownMs: COOLDOWN.long },
   { status: 403, cooldownMs: COOLDOWN.long },
   { status: 404, cooldownMs: COOLDOWN.long },
   { status: 429, backoff: true },
+
+  // --- Client mistakes, checked last so any signal above still wins ---
+  // A rejected request says nothing about account health: locking here hides a
+  // working credential behind a cooldown and makes the client retry blindly.
+  // `lock: false` keeps the combo chain rotating while skipping account penalty.
+  { status: 400, lock: false },
+  { status: 406, lock: false },
+  { status: 422, lock: false },
 ];
 
 // Backward compat: COOLDOWN_MS object (used by index.js re-export)

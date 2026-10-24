@@ -3,6 +3,7 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { existsSync } from "fs";
 import { cleanupProviderConnections, getSettings, updateSettings, getApiKeys } from "@/lib/localDb";
+import { getAutoBackupConfig } from "@/lib/db/repos/autoBackupRepo.js";
 import {
   enableTunnel, enableTailscale,
   isTunnelManuallyDisabled, isTunnelReconnecting, isTailscaleReconnecting,
@@ -70,7 +71,7 @@ export async function initializeApp() {
       safeRestartTunnel("unexpected-exit").catch(() => {});
     });
 
-    // Defer the heavy work — nothing here blocks incoming requests.
+    // Defer the heavy work - nothing here blocks incoming requests.
     setTimeout(() => {
       runHeavyStartup().catch((e) => console.error("[InitApp] deferred startup failed:", e.message));
     }, STARTUP_DEFER_MS);
@@ -111,6 +112,12 @@ async function runHeavyStartup() {
     import("@/shared/services/quotaAutoPing")
       .then(({ startQuotaAutoPing }) => startQuotaAutoPing())
       .catch((e) => console.log("[AutoPing] scheduler start failed:", e.message));
+  }
+
+  if (await getAutoBackupConfig().then((c) => c.enabled).catch(() => false)) {
+    import("@/shared/services/telegramBackup")
+      .then(({ configureTelegramBackup }) => configureTelegramBackup())
+      .catch((e) => console.log("[AutoBackup] scheduler start failed:", e.message));
   }
 
   // Proactive OAuth token refresh (e.g. grok-cli ~6h TTL). Module is idempotent
@@ -187,7 +194,7 @@ async function safeRestartTunnel(reason) {
   }
   if (!await checkInternet()) return;
 
-  console.log(`[Tunnel] safeRestart (${reason}) — tunnel unreachable${force ? " [force]" : ""}`);
+  console.log(`[Tunnel] safeRestart (${reason}) - tunnel unreachable${force ? " [force]" : ""}`);
   try {
     await enableTunnel();
     svc.lastRestartAt = Date.now();
@@ -207,7 +214,7 @@ async function safeRestartTailscale(reason) {
   if (svc.spawnInProgress) return;
 
   // Tailscale daemon is OS-level with built-in reconnect; trust it when running (even on netchange).
-  // Startup uses strict probe — cached state is cold after process/dev reload.
+  // Startup uses strict probe - cached state is cold after process/dev reload.
   const running = reason === "startup" ? await isTailscaleRunningStrict() : isTailscaleRunning();
   if (running) return;
 
@@ -230,7 +237,7 @@ async function safeRestartTailscale(reason) {
   }
   if (!await checkInternet()) return;
 
-  console.log(`[Tailscale] safeRestart (${reason}) — daemon not running${force ? " [force]" : ""}`);
+  console.log(`[Tailscale] safeRestart (${reason}) - daemon not running${force ? " [force]" : ""}`);
   try {
     await enableTailscale();
     svc.lastRestartAt = Date.now();
@@ -292,7 +299,7 @@ function startNetworkMonitor() {
       const wasSleep = elapsed > NETWORK_CHECK_INTERVAL_MS * 6;
       if (networkChanged) g.lastNetworkFingerprint = currentFingerprint;
 
-      // Real reachability check (TCP 1.1.1.1:443) — not just interface presence
+      // Real reachability check (TCP 1.1.1.1:443) - not just interface presence
       const online = await checkInternet();
       const wasOffline = g.lastOnline === false;
       g.lastOnline = online;

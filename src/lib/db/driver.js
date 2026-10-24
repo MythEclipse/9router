@@ -6,7 +6,7 @@ if (!global._dbAdapter) global._dbAdapter = { instance: null, initPromise: null,
 const state = global._dbAdapter;
 
 async function tryBunSqlite() {
-  // Bun runtime only — built-in, no install needed
+  // Bun runtime only - built-in, no install needed
   if (!process.versions.bun) return null;
   try {
     const { createBunSqliteAdapter } = await import("./adapters/bunSqliteAdapter.js");
@@ -18,7 +18,7 @@ async function tryBunSqlite() {
 }
 
 async function tryBetterSqlite() {
-  // Skip on Bun — better-sqlite3 native bindings unsupported
+  // Skip on Bun - better-sqlite3 native bindings unsupported
   if (process.versions.bun) return null;
   // Skip on Node >= 24: the native addon SIGSEGVs on load there, which is a
   // process-level crash the try/catch below cannot recover from. node:sqlite covers it.
@@ -34,7 +34,7 @@ async function tryBetterSqlite() {
 }
 
 async function tryNodeSqlite() {
-  // Built-in since Node 22.5.0 — no install needed. Skip under Bun (no node:sqlite).
+  // Built-in since Node 22.5.0 - no install needed. Skip under Bun (no node:sqlite).
   if (process.versions.bun) return null;
   const [maj, min] = process.versions.node.split(".").map(Number);
   if (maj < 22 || (maj === 22 && min < 5)) return null;
@@ -117,7 +117,10 @@ export async function getAdapter() {
   return state.initPromise;
 }
 
-export function getAdapterSync() {
-  if (!state.instance) throw new Error("[DB] adapter not initialized — await getAdapter() first");
-  return state.instance;
+export async function closeDb() {
+  if (state.instance) {
+    if (state.instance.close) state.instance.close();
+    state.instance = null;
+    state.initPromise = null;
+  }
 }

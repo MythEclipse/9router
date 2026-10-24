@@ -1,6 +1,6 @@
 import {
-  extractApiKey, isValidApiKey,
-  getProviderCredentials, markAccountUnavailable, clearAccountError,
+  extractApiKey, isValidApiKey, apiKeyGateFailure,
+  getProviderCredentials, markAccountUnavailable,
 } from "../services/auth.js";
 import { getSettings, getCustomModels } from "@/lib/localDb";
 import { getModelInfo } from "../services/model.js";
@@ -23,7 +23,7 @@ const CREDENTIALED_PROVIDERS = new Set(
 // Custom-model transport marker: models registered through
 // /api/models/custom may pin a specialized STT transport (e.g.
 // "gemini-live"). The engine dispatches on the marker itself, so the app
-// layer only resolves it — same getModelInfo-style provider+model pairing,
+// layer only resolves it - same getModelInfo-style provider+model pairing,
 // restricted to type "stt" records.
 async function resolveCustomModelTransport(provider, model) {
   try {
@@ -49,11 +49,15 @@ export async function handleStt(request) {
   log.request("POST", `/v1/audio/transcriptions | ${modelStr}`);
 
   const settings = await getSettings();
-  if (settings.requireApiKey) {
-    const apiKey = extractApiKey(request);
-    if (!apiKey) return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Missing API key");
-    const valid = await isValidApiKey(apiKey);
-    if (!valid) return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Invalid API key");
+  const apiKey = extractApiKey(request);
+  if (settings.requireApiKey && !apiKey) {
+    return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Missing API key");
+  }
+  if (apiKey) {
+    const failure = apiKeyGateFailure(await isValidApiKey(apiKey), settings.requireApiKey);
+    if (failure) {
+      return errorResponse(failure.status, failure.message);
+    }
   }
 
   if (!modelStr) return errorResponse(HTTP_STATUS.BAD_REQUEST, "Missing model");
@@ -80,7 +84,7 @@ export async function handleStt(request) {
     return errorResponse(result.status || HTTP_STATUS.BAD_GATEWAY, result.error || "STT failed");
   }
 
-  // Credentialed — fallback loop
+  // Credentialed - fallback loop
   const excludeConnectionIds = new Set();
   let lastError = null;
   let lastStatus = null;

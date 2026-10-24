@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from "react";
 import PropTypes from "prop-types";
-import { Badge, Button, Input, Modal, Select } from "@/shared/components";
+import ProviderLogoField from "@/shared/components/ProviderLogoField";
+import { Badge, Button, Input, Modal, Select, Toggle } from "@/shared/components";
+
 
 const VARIANT_CONFIG = {
   openai: {
@@ -27,6 +29,17 @@ const VARIANT_CONFIG = {
     errorLabel: "Anthropic Compatible",
     hasApiType: false,
   },
+  moonshot: {
+    title: "Add MoonshotAI Compatible",
+    type: "openai-compatible",
+    defaultBaseUrl: "https://api.moonshot.ai/v1",
+    namePlaceholder: "MoonshotAI Compatible (Prod)",
+    prefixPlaceholder: "mk-prod",
+    baseUrlHint: "Use the base URL (ending in /v1) for your MoonshotAI (Kimi) OpenAI-compatible API. Docs: platform.kimi.ai",
+    modelIdPlaceholder: "e.g. kimi-k2.6, moonshot-v1-8k",
+    errorLabel: "MoonshotAI Compatible",
+    hasApiType: true,
+  },
 };
 
 const API_TYPE_OPTIONS = [
@@ -41,6 +54,10 @@ function AddCompatibleModal({ variant, isOpen, onClose, onCreated }) {
     prefix: "",
     ...(config.hasApiType ? { apiType: "chat" } : {}),
     baseUrl: config.defaultBaseUrl,
+    logo: "",
+    quotaEnabled: false,
+    quotaPath: "/credits",
+
   });
 
   const [formData, setFormData] = useState(initialFormData);
@@ -74,6 +91,11 @@ function AddCompatibleModal({ variant, isOpen, onClose, onCreated }) {
           ...(config.hasApiType ? { apiType: formData.apiType } : {}),
           baseUrl: formData.baseUrl,
           type: config.type,
+          brand: variant || undefined,
+          logo: formData.logo,
+          quotaEnabled: formData.quotaEnabled,
+          quotaPath: formData.quotaPath,
+
         }),
       });
       const data = await res.json();
@@ -136,19 +158,23 @@ function AddCompatibleModal({ variant, isOpen, onClose, onCreated }) {
   return (
     <Modal isOpen={isOpen} title={config.title} onClose={onClose}>
       <div className="flex flex-col gap-4">
+        <ProviderLogoField
+          logo={formData.logo}
+          onChange={(next) => setFormData({ ...formData, logo: next })}
+        />
         <Input
           label="Name"
           value={formData.name}
           onChange={(e) => setFormData({ ...formData, name: e.target.value })}
           placeholder={config.namePlaceholder}
-          hint="Required. A friendly label for this node."
+          hint="A friendly label for this node"
         />
         <Input
           label="Prefix"
           value={formData.prefix}
           onChange={(e) => setFormData({ ...formData, prefix: e.target.value })}
           placeholder={config.prefixPlaceholder}
-          hint="Required. Used as the provider prefix for model IDs."
+          hint="The provider prefix used in model IDs"
         />
         {config.hasApiType && (
           <Select
@@ -165,6 +191,21 @@ function AddCompatibleModal({ variant, isOpen, onClose, onCreated }) {
           placeholder={config.defaultBaseUrl}
           hint={config.baseUrlHint}
         />
+        <Toggle
+          checked={formData.quotaEnabled}
+          onChange={(value) => setFormData({ ...formData, quotaEnabled: value })}
+          label="Quota check"
+          description="Read remaining credits from the standard /credits endpoint."
+        />
+        {formData.quotaEnabled && (
+          <Input
+            label="Quota path"
+            value={formData.quotaPath}
+            onChange={(e) => setFormData({ ...formData, quotaPath: e.target.value })}
+            placeholder="/credits"
+            hint='GET {Base URL}{Quota path} with Authorization: Bearer <API key>; response {"credits": 123.45}. Optional total/used drive the usage bar.'
+          />
+        )}
         <Input
           label="API Key (for Check)"
           type="password"
@@ -212,7 +253,7 @@ function AddCompatibleModal({ variant, isOpen, onClose, onCreated }) {
 }
 
 AddCompatibleModal.propTypes = {
-  variant: PropTypes.oneOf(["openai", "anthropic"]).isRequired,
+  variant: PropTypes.oneOf(["openai", "anthropic", "moonshot"]).isRequired,
   isOpen: PropTypes.bool.isRequired,
   onClose: PropTypes.func.isRequired,
   onCreated: PropTypes.func.isRequired,

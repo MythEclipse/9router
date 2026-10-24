@@ -3,6 +3,7 @@ import {
   markAccountUnavailable,
   clearAccountError,
   extractApiKey,
+  apiKeyGateFailure,
   isValidApiKey,
 } from "../services/auth.js";
 import { getSettings } from "@/lib/localDb";
@@ -60,10 +61,14 @@ export async function handleImageGeneration(request) {
 
   const apiKey = extractApiKey(request);
   const settings = await getSettings();
-  if (settings.requireApiKey) {
-    if (!apiKey) return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Missing API key");
-    const valid = await isValidApiKey(apiKey);
-    if (!valid) return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Invalid API key");
+  if (settings.requireApiKey && !apiKey) {
+    return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Missing API key");
+  }
+  if (apiKey) {
+    const failure = apiKeyGateFailure(await isValidApiKey(apiKey), settings.requireApiKey);
+    if (failure) {
+      return errorResponse(failure.status, failure.message);
+    }
   }
 
   if (!modelStr) return errorResponse(HTTP_STATUS.BAD_REQUEST, "Missing model");
@@ -100,7 +105,7 @@ async function handleSingleModelImage(body, modelStr, { wantsStream, binaryOutpu
 
   const { provider, model } = modelInfo;
 
-  // noAuth providers — no credential needed
+  // noAuth providers - no credential needed
   if (NO_AUTH_PROVIDERS.has(provider)) {
     const result = await handleImageGenerationCore({
       body,
@@ -112,7 +117,7 @@ async function handleSingleModelImage(body, modelStr, { wantsStream, binaryOutpu
     return errorResponse(result.status || HTTP_STATUS.BAD_GATEWAY, result.error || "Image generation failed");
   }
 
-  // Credentialed providers — fallback loop
+  // Credentialed providers - fallback loop
   const excludeConnectionIds = new Set();
   let lastError = null;
   let lastStatus = null;

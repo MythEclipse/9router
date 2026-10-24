@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Card, Button, Toggle, Input } from "@/shared/components";
+import { Card, Button, Toggle, Input, Select, DownloadBackupModal } from "@/shared/components";
 import Modal, { ConfirmModal } from "@/shared/components/Modal";
 import LanguageSwitcher from "@/shared/components/LanguageSwitcher";
-import { useTheme } from "@/shared/hooks/useTheme";
+import SettingsHistory from "@/shared/components/SettingsHistory";
 import { cn } from "@/shared/utils/cn";
+import { useSessionStore } from "@/store/sessionStore";
+import { useTaskStore } from "@/store/taskStore";
 import { APP_CONFIG } from "@/shared/constants/config";
 import { LOCALE_COOKIE, normalizeLocale } from "@/i18n/config";
 import { LOCALE_FLAGS } from "@/shared/constants/locales";
@@ -19,11 +21,64 @@ function getLocaleFromCookie() {
   return normalizeLocale(value);
 }
 
+function formatCountdown(ms) {
+  const total = Math.floor(Math.max(0, Number.isFinite(ms) ? ms : 0) / 1000);
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor((total % 86400) / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  const pad = (n) => String(n).padStart(2, "0");
+  const clock = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+  return days > 0 ? `${days}d ${clock}` : clock;
+}
+
+// Live countdown to the next automatic backup. The ticking state stays inside
+// this component so a passing second never re-renders the whole page, and the
+// parent is asked for a fresh schedule once the shown deadline passes.
+function BackupCountdown({ target, onExpire, showDate = false }) {
+  const [remaining, setRemaining] = useState(() => (target ? target - Date.now() : 0));
+  const onExpireRef = useRef(onExpire);
+  const firedRef = useRef(false);
+
+  useEffect(() => {
+    onExpireRef.current = onExpire;
+  }, [onExpire]);
+
+  useEffect(() => {
+    if (!target) return undefined;
+    firedRef.current = false;
+    setRemaining(target - Date.now());
+    const id = setInterval(() => {
+      const left = target - Date.now();
+      setRemaining(left);
+      if (left <= 0 && !firedRef.current) {
+        firedRef.current = true;
+        onExpireRef.current?.();
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [target]);
+
+  if (!target) return null;
+  return (
+    <p className="text-xs text-text-muted">
+      {`Next backup in ${formatCountdown(remaining)}`}
+      {showDate && ` \u2022 at ${new Date(target).toLocaleString()}`}
+    </p>
+  );
+}
+
+// Background import-job endpoint built by agent B. POST starts a job from the
+// same JSON body as the direct import and answers { jobId }; GET
+// <endpoint>/<jobId> answers { status, progress, section, error }. A 404/405
+// means the endpoint does not exist yet and the caller falls back to POST /api/settings/database.
+const IMPORT_JOB_ENDPOINT = "/api/settings/database/jobs";
+
 export default function ProfilePage() {
-  const { theme, setTheme, isDark } = useTheme();
   const [locale, setLocale] = useState(() => getLocaleFromCookie());
   const [langOpen, setLangOpen] = useState(false);
   const [shutdownOpen, setShutdownOpen] = useState(false);
+  const sessionRole = useSessionStore((state) => state.role);
   const [isShuttingDown, setIsShuttingDown] = useState(false);
   const [settings, setSettings] = useState({ fallbackStrategy: "fill-first" });
   const [loading, setLoading] = useState(true);
@@ -33,7 +88,17 @@ export default function ProfilePage() {
   const [dbLoading, setDbLoading] = useState(false);
   const [dbStatus, setDbStatus] = useState({ type: "", message: "" });
   const [dbAuth, setDbAuth] = useState({ open: false, mode: "", password: "" });
+  const [showDownloadBackupModal, setShowDownloadBackupModal] = useState(false);
   const pendingImportRef = useRef(null);
+  const [tgModalOpen, setTgModalOpen] = useState(false);
+  const [tgForm, setTgForm] = useState({ enabled: false, channel: "telegram", interval: "24", customHours: "", tgBotToken: "", tgChatId: "", ghToken: "", ghRepo: "" });
+  const [tgHasTgToken, setTgHasTgToken] = useState(false);
+  const [tgHasGhToken, setTgHasGhToken] = useState(false);
+  const [tgLoading, setTgLoading] = useState(false);
+  const [tgStatus, setTgStatus] = useState({ type: "", message: "" });
+  const [tgLastBackup, setTgLastBackup] = useState(null);
+  const [tgNextRunAt, setTgNextRunAt] = useState(null);
+  const tgSavedRef = useRef({ enabled: false, channel: "telegram", intervalHours: 24 });
   const [oidcForm, setOidcForm] = useState({
     authMode: "password",
     oidcIssuerUrl: "",
@@ -72,6 +137,52 @@ export default function ProfilePage() {
   const certFileRef = useRef(null);
 
   const importFileRef = useRef(null);
+  // Progress state for backup export/import and test runs. `busy` holds
+  // { title, message, section, progress }. It has no overlay of its own: the
+  // task store below is the only surface it reaches, so the run is announced in
+  // the notification bell instead of taking over the page with a fixed scrim
+  // anchored bottom-right.
+  const [busy, setBusy] = useState(null);
+  const profileTaskRef = useRef(null);
+
+  // Report the backup run into the bell task store (no page overlay).
+  useEffect(() => {
+    if (busy) {
+      const taskId = "profile-backup-task";
+      profileTaskRef.current = taskId;
+      const pct = typeof busy.progress === "number" && Number.isFinite(busy.progress)
+        ? Math.min(100, Math.max(0, Math.round(busy.progress <= 1 ? busy.progress * 100 : busy.progress)))
+        : 0;
+      const taskData = {
+        id: taskId,
+        title: busy.title || "Backup Operation",
+        message: busy.message || "Working",
+        progress: pct,
+        href: "/dashboard/profile",
+      };
+      const existing = useTaskStore.getState().tasks.find((t) => t.id === taskId);
+      if (!existing || existing.state === "done") {
+        useTaskStore.getState().start(taskData);
+      } else {
+        useTaskStore.getState().update(taskId, {
+          title: taskData.title,
+          message: taskData.message,
+          progress: taskData.progress,
+        });
+      }
+    } else if (profileTaskRef.current) {
+      useTaskStore.getState().finish(profileTaskRef.current);
+      profileTaskRef.current = null;
+    }
+  }, [busy]);
+
+  useEffect(() => {
+    return () => {
+      if (profileTaskRef.current) {
+        useTaskStore.getState().finish(profileTaskRef.current);
+      }
+    };
+  }, []);
   const [proxyForm, setProxyForm] = useState({
     outboundProxyEnabled: false,
     outboundProxyUrl: "",
@@ -81,10 +192,9 @@ export default function ProfilePage() {
   const [proxyLoading, setProxyLoading] = useState(false);
   const [proxyTestLoading, setProxyTestLoading] = useState(false);
 
-  const [isRemoteHost, setIsRemoteHost] = useState(false);
   useEffect(() => {
-    if (typeof window !== "undefined")
-      setIsRemoteHost(!["localhost", "127.0.0.1", "::1"].includes(window.location.hostname));
+  loadAutoBackup();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -676,15 +786,112 @@ export default function ProfilePage() {
       setSettings(data);
     } catch (err) {
       console.error("Failed to reload settings:", err);
-    }
+  }
   };
 
-  const handleExportDatabase = async (password) => {
+
+  const loadAutoBackup = async () => {
+  try {
+  const res = await fetch("/api/settings/auto-backup");
+  if (!res.ok) return;
+  const { config, status, nextRunAt } = await res.json();
+  tgSavedRef.current = config;
+  setTgHasTgToken(config.hasTgToken);
+  setTgHasGhToken(config.hasGhToken);
+  setTgLastBackup(status || null);
+  setTgNextRunAt(nextRunAt ?? null);
+  const interval = [24, 168, 720].includes(config.intervalHours) ? String(config.intervalHours) : "custom";
+  setTgForm((prev) => ({
+  ...prev,
+  enabled: config.enabled,
+  channel: config.channel,
+  interval,
+  customHours: interval === "custom" ? String(config.intervalHours) : "",
+  tgChatId: config.tgChatId || "",
+  ghRepo: config.ghRepo || "",
+  }));
+  } catch (err) {
+  console.error("Failed to load auto-backup config:", err);
+  }
+  };
+
+  const saveAutoBackup = async () => {
+  setTgLoading(true);
+  setTgStatus({ type: "", message: "" });
+  setBusy({ title: "Saving backup configuration", message: "Saving automatic backup settings" });
+  try {
+  const payload = {
+  enabled: tgForm.enabled,
+  channel: tgForm.channel,
+  intervalHours: Number(tgForm.interval === "custom" ? tgForm.customHours : tgForm.interval),
+  tgChatId: tgForm.tgChatId.trim(),
+  ghRepo: tgForm.ghRepo.trim(),
+  };
+  if (tgForm.tgBotToken.trim()) payload.tgBotToken = tgForm.tgBotToken.trim();
+  if (tgForm.ghToken.trim()) payload.ghToken = tgForm.ghToken.trim();
+  const res = await fetch("/api/settings/auto-backup", {
+  method: "PATCH",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+  setTgStatus({ type: "error", message: data.error || "Failed to save configuration" });
+  return;
+  }
+  tgSavedRef.current = data.config;
+  setTgHasTgToken(data.config.hasTgToken);
+  setTgHasGhToken(data.config.hasGhToken);
+  setTgForm((prev) => ({ ...prev, tgBotToken: "", ghToken: "" }));
+  setTgStatus({ type: "success", message: data.config.enabled ? "Configuration saved, backups run automatically" : "Configuration saved" });
+  await loadAutoBackup();
+  } catch {
+  setTgStatus({ type: "error", message: "An error occurred while saving the configuration" });
+  } finally {
+  setTgLoading(false);
+  setBusy(null);
+  }
+  };
+
+  const updateTgForm = (patch) => {
+  setTgForm((prev) => ({ ...prev, ...patch }));
+  };
+
+  const runTestBackup = async (password) => {
+  setTgLoading(true);
+  setTgStatus({ type: "", message: "" });
+  setBusy({ title: "Sending test backup", message: "Uploading backup to the configured channel" });
+  try {
+  const res = await fetch("/api/settings/auto-backup", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ action: "test", password }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.ok && data.ok) {
+  setTgStatus({ type: "success", message: "Test backup sent via " + data.channel });
+  await loadAutoBackup();
+  } else {
+  setTgStatus({ type: "error", message: data.error || "Failed to send test backup" });
+  }
+  } catch {
+  setTgStatus({ type: "error", message: "An error occurred while sending the test backup" });
+  } finally {
+  setTgLoading(false);
+  setBusy(null);
+  }
+  };
+
+  const handleExportDatabase = async (password, selectedSections = []) => {
     setDbLoading(true);
     setDbStatus({ type: "", message: "" });
+    setBusy({ title: "Preparing backup", message: "Exporting database" });
     try {
-      const res = await fetch("/api/settings/database", {
-        headers: { "x-9r-password": password },
+      const sectionsQuery = selectedSections && selectedSections.length > 0
+        ? `?sections=${selectedSections.join(",")}`
+        : "";
+      const res = await fetch(`/api/settings/database${sectionsQuery}`, {
+        headers: { "x-9r-password": password || "" },
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -705,10 +912,12 @@ export default function ProfilePage() {
       URL.revokeObjectURL(url);
 
       setDbStatus({ type: "success", message: "Database backup downloaded" });
+      setShowDownloadBackupModal(false);
     } catch (err) {
       setDbStatus({ type: "error", message: err.message || "Failed to export database" });
     } finally {
       setDbLoading(false);
+      setBusy(null);
     }
   };
 
@@ -721,23 +930,112 @@ export default function ProfilePage() {
     setDbAuth({ open: true, mode: "import", password: "" });
   };
 
+  // Poll a background import job started by agent B. Resolves when the job
+  // reports done/failed, rejects on timeout or job failure. Non-blocking: the
+  // page stays interactive while polling, progress is mirrored to the overlay.
+  //
+  // Auth is the poll token issued at job creation, not the password: the import
+  // replaces the settings row that stores the password hash, so re-checking the
+  // password on every poll starts failing part-way through a restore that is
+  // actually succeeding. The password stays as a fallback for servers that
+  // predate the token.
+  const pollImportJob = async (jobId, password, pollToken) => {
+    const startedAt = Date.now();
+    const timeoutMs = 5 * 60 * 1000;
+    const pollHeaders = pollToken
+      ? { "x-9r-poll-token": pollToken }
+      : { "x-9r-password": password || "" };
+    for (;;) {
+      await new Promise((resolve) => setTimeout(resolve, 750));
+      const res = await fetch(`${IMPORT_JOB_ENDPOINT}/${encodeURIComponent(jobId)}`, {
+        headers: pollHeaders,
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to check import status");
+      }
+      const data = await res.json().catch(() => ({}));
+      const status = String(data.status || "").toLowerCase();
+      if (typeof data.progress !== "undefined" || data.section || data.message) {
+        setBusy({
+          title: "Importing database",
+          message: data.message || "Import running in the background",
+          section: data.section || "",
+          progress: data.progress,
+        });
+      }
+      if (status === "done" || status === "completed" || status === "success") return;
+      if (status === "failed" || status === "error") {
+        throw new Error(data.error || "Failed to import database");
+      }
+      if (Date.now() - startedAt > timeoutMs) {
+        throw new Error("Import is taking too long, please check the result and try again");
+      }
+    }
+  };
+
+  // Direct (synchronous) import, used as the fallback when the background
+  // job endpoint from agent B is not available yet.
+  const runDirectImport = async (body) => {
+    const res = await fetch("/api/settings/database", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || "Failed to import database");
+    }
+  };
+
   const runImportDatabase = async (password) => {
     const file = pendingImportRef.current;
     if (!file) return;
     setDbLoading(true);
+    setDbStatus({ type: "", message: "" });
+    setBusy({ title: "Importing database", message: "Reading backup file" });
     try {
       const raw = await file.text();
       const payload = JSON.parse(raw);
+      const body = { ...payload, password };
 
-      const res = await fetch("/api/settings/database", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...payload, password }),
-      });
-
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to import database");
+      // Prefer the background job flow (agent B); fall back to the direct
+      // POST when the job endpoint answers 404/405 (not built yet).
+      let usedJob = false;
+      try {
+        const jobRes = await fetch(IMPORT_JOB_ENDPOINT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (jobRes.status === 404 || jobRes.status === 405) {
+          await runDirectImport(body);
+        } else {
+          const jobData = await jobRes.json().catch(() => ({}));
+          if (!jobRes.ok) {
+            throw new Error(jobData.error || "Failed to import database");
+          }
+          if (jobData && jobData.jobId) {
+            usedJob = true;
+            setBusy({
+              title: "Importing database",
+              message: "Import running in the background",
+              section: jobData.section || "",
+              progress: jobData.progress,
+            });
+            await pollImportJob(jobData.jobId, password, jobData.pollToken);
+          } else {
+            await runDirectImport(body);
+          }
+        }
+      } catch (err) {
+        // Network-level failure of the job endpoint (not a job failure) also
+        // falls back to the direct import instead of failing the restore.
+        if (!usedJob && (err instanceof TypeError)) {
+          await runDirectImport(body);
+        } else {
+          throw err;
+        }
       }
 
       await reloadSettings();
@@ -747,6 +1045,7 @@ export default function ProfilePage() {
     } finally {
       pendingImportRef.current = null;
       setDbLoading(false);
+      setBusy(null);
     }
   };
 
@@ -756,6 +1055,7 @@ export default function ProfilePage() {
     setDbAuth({ open: false, mode: "", password: "" });
     if (mode === "export") await handleExportDatabase(password);
     else if (mode === "import") await runImportDatabase(password);
+  else if (mode === "tgtest") await runTestBackup(password);
   };
 
   const observabilityEnabled = settings.enableObservability === true;
@@ -787,96 +1087,65 @@ export default function ProfilePage() {
       <div className="flex flex-col gap-6">
         {/* Local Mode Info */}
         <Card>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-            <div className="flex items-center gap-3 sm:gap-4">
-              <div className="size-10 sm:size-12 rounded-lg bg-green-500/10 text-green-500 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-xl sm:text-2xl">computer</span>
-              </div>
-              <div>
-                <h2 className="text-lg sm:text-xl font-semibold">Local Mode</h2>
-                <p className="text-sm text-text-muted">Running on your machine</p>
-              </div>
-            </div>
-            <div className="inline-flex p-1 rounded-lg bg-black/5 dark:bg-white/5 w-full sm:w-auto">
-              {["light", "dark", "system"].map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => setTheme(option)}
-                  className={cn(
-                    "flex items-center justify-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-md font-medium transition-all flex-1 sm:flex-initial",
-                    theme === option
-                      ? "bg-white dark:bg-white/10 text-text-main shadow-sm"
-                      : "text-text-muted hover:text-text-main"
-                  )}
-                >
-                  <span className="material-symbols-outlined text-[18px]">
-                    {option === "light" ? "light_mode" : option === "dark" ? "dark_mode" : "contrast"}
-                  </span>
-                  <span className="capitalize text-xs sm:text-sm">{option}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="flex flex-col gap-3 pt-4 border-t border-border">
+          <div className="flex flex-col gap-3">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 rounded-lg bg-bg border border-border gap-2">
               <div>
                 <p className="font-medium text-sm sm:text-base">Database Location</p>
                 <p className="text-xs sm:text-sm text-text-muted font-mono break-all">~/.9router/db/data.sqlite</p>
               </div>
             </div>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Button
-                variant="secondary"
-                icon="download"
-                onClick={() => setDbAuth({ open: true, mode: "export", password: "" })}
-                loading={dbLoading}
-                className="w-full sm:w-auto"
-              >
-                Download Backup
-              </Button>
-              <Button
-                variant="outline"
-                icon="upload"
-                onClick={() => importFileRef.current?.click()}
-                disabled={dbLoading}
-                className="w-full sm:w-auto"
-              >
-                Import Backup
-              </Button>
-              <input
-                ref={importFileRef}
-                type="file"
-                accept="application/json,.json"
-                className="hidden"
-                onChange={handleImportDatabase}
-              />
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 w-full sm:w-auto">
+                {tgForm.enabled && (
+                  <div className="flex flex-col gap-0.5">
+                    <BackupCountdown target={tgNextRunAt} onExpire={loadAutoBackup} />
+                  </div>
+                )}
+                <Button
+                  variant="secondary"
+                  icon="cloud_sync"
+                  onClick={() => { setTgModalOpen(true); loadAutoBackup(); }}
+                  className="w-full sm:w-auto"
+                >
+                  Automatic Backup
+                </Button>
+              </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Button
+                    variant="secondary"
+                    icon="download"
+                    onClick={() => setShowDownloadBackupModal(true)}
+                    loading={dbLoading}
+                    className="w-full sm:w-auto"
+                  >
+                    Download Backup
+                  </Button>
+                  <Button
+                    variant="outline"
+                    icon="upload"
+                    onClick={() => importFileRef.current?.click()}
+                    disabled={dbLoading}
+                    className="w-full sm:w-auto"
+                  >
+                    Import Backup
+                  </Button>
+                  <input
+                    ref={importFileRef}
+                    type="file"
+                    accept="application/json,.json"
+                    className="hidden"
+                    onChange={handleImportDatabase}
+                  />
+                </div>
+                {dbStatus.message && (
+                  <p className={`text-sm ${dbStatus.type === "error" ? "text-red-500" : "text-green-600 dark:text-green-400"}`}>
+                    {dbStatus.message}
+                  </p>
+                )}
             </div>
-            {dbStatus.message && (
-              <p className={`text-sm ${dbStatus.type === "error" ? "text-red-500" : "text-green-600 dark:text-green-400"}`}>
-                {dbStatus.message}
-              </p>
-            )}
-          </div>
+            </div>
         </Card>
 
-        {/* Language */}
-        <Card>
-          <div className="flex items-center gap-3 mb-4">
-            <div className="size-10 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0">
-              <span className="material-symbols-outlined text-[20px]">language</span>
-            </div>
-            <h3 className="text-base sm:text-lg font-semibold">Language</h3>
-          </div>
-          <button
-            onClick={() => setLangOpen(true)}
-            className="flex items-center justify-between w-full p-3 rounded-lg bg-bg border border-border hover:border-primary/50 transition-colors"
-            data-i18n-skip="true"
-          >
-            <span className="text-sm text-text-muted">Display language</span>
-            <span className="text-2xl">{LOCALE_FLAGS[locale] || "🌐"}</span>
-          </button>
-        </Card>
 
         {/* Security */}
         <Card>
@@ -891,7 +1160,7 @@ export default function ProfilePage() {
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm sm:text-base">Require login</p>
                 <p className="text-xs sm:text-sm text-text-muted">
-                  When ON, dashboard requires password. When OFF, access without login.
+                  Require a password for the dashboard when ON, or allow access without login when OFF.
                 </p>
               </div>
               <Toggle
@@ -914,13 +1183,6 @@ export default function ProfilePage() {
                     />
                   </div>
                 )}
-                {/* {!settings.hasPassword && (
-                  <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                    <p className="text-sm text-blue-600 dark:text-blue-400">
-                      Setting password for the first time. Leave current password empty or use default: <code className="bg-blue-500/20 px-1 rounded">123456</code>
-                    </p>
-                  </div>
-                )} */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="flex flex-col gap-2">
                     <label className="text-xs sm:text-sm font-medium">New Password</label>
@@ -1656,17 +1918,28 @@ export default function ProfilePage() {
           </div>
         </Card>
 
-        {/* Account actions */}
+        {/* Settings history: who changed what, with revert. */}
+        <SettingsHistory
+          onReverted={() => {
+            // Settings may have been replaced wholesale; re-read the form.
+            if (typeof window !== "undefined") window.location.reload();
+          }}
+        />
+
+        {/* Account actions. Shutdown is administrator-only: a key session can
+            open this page by URL, so the button follows the role, not the route. */}
         <div className="flex flex-col sm:flex-row gap-2">
-          <Button
-            variant="outline"
-            fullWidth
-            icon="power_settings_new"
-            onClick={() => setShutdownOpen(true)}
-            className="text-red-500 border-red-200 hover:bg-red-50 hover:border-red-300"
-          >
-            Shutdown
-          </Button>
+          {sessionRole !== "apikey" && (
+            <Button
+              variant="outline"
+              fullWidth
+              icon="power_settings_new"
+              onClick={() => setShutdownOpen(true)}
+              className="text-danger border-danger/30 hover:bg-danger/10 hover:border-danger/40"
+            >
+              Shutdown
+            </Button>
+          )}
           <Button
             variant="outline"
             fullWidth
@@ -1676,22 +1949,8 @@ export default function ProfilePage() {
             Logout
           </Button>
         </div>
-
-        {/* App Info */}
-        <div className="text-center text-xs sm:text-sm text-text-muted py-4">
-          <p>{APP_CONFIG.name} v{APP_CONFIG.version}{APP_CONFIG.gitSha ? ` (${APP_CONFIG.gitSha})` : ""}</p>
-          <p className="mt-1">{isRemoteHost ? "Remote Mode" : "Local Mode - All data stored on your machine"}</p>
-        </div>
       </div>
 
-      <LanguageSwitcher
-        hideTrigger
-        isOpen={langOpen}
-        onClose={(next) => {
-          setLangOpen(false);
-          setLocale(next);
-        }}
-      />
       <ConfirmModal
         isOpen={shutdownOpen}
         onClose={() => setShutdownOpen(false)}
@@ -1703,6 +1962,136 @@ export default function ProfilePage() {
         variant="danger"
         loading={isShuttingDown}
       />
+
+      {/* Automatic Backup modal */}
+      <Modal
+        isOpen={tgModalOpen}
+        onClose={() => setTgModalOpen(false)}
+        title="Automatic Backup"
+        size="md"
+        footer={
+        <>
+        <Button variant="ghost" onClick={() => setTgModalOpen(false)} disabled={tgLoading}>
+        Close
+        </Button>
+        <Button variant="primary" onClick={saveAutoBackup} loading={tgLoading}>
+        Save Configuration
+        </Button>
+        </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+        <div className="flex items-start sm:items-center justify-between gap-4">
+        <div className="flex-1 min-w-0">
+        <p className="font-medium text-sm sm:text-base">Send backups automatically</p>
+        <p className="text-xs sm:text-sm text-text-muted">
+        The backup file is identical to Download Backup and can be restored with Import Backup.
+        </p>
+        </div>
+        <Toggle
+        checked={tgForm.enabled}
+        onChange={(next) => updateTgForm({ enabled: next })}
+        />
+        </div>
+        <Select
+        label="Backup via"
+        value={tgForm.channel}
+        onChange={(e) => updateTgForm({ channel: e.target.value })}
+        options={[{ value: "telegram", label: "Telegram bot" }, { value: "github", label: "GitHub repository" }]}
+        />
+        {tgForm.channel === "telegram" && (
+        <div className="flex flex-col gap-3">
+        <Input
+        label="Bot Token"
+        type="password"
+        value={tgForm.tgBotToken}
+        onChange={(e) => updateTgForm({ tgBotToken: e.target.value })}
+        placeholder={tgHasTgToken ? "Saved. Leave empty to keep" : "123456789:AA..."}
+        />
+        <Input
+        label="Owner Chat ID"
+        value={tgForm.tgChatId}
+      placeholder="Numeric owner chat id, e.g. 123456789"
+      inputMode="numeric"
+      onChange={(e) => updateTgForm({ tgChatId: e.target.value.replace(/\D+/g, "") })}
+        />
+        </div>
+        )}
+        {tgForm.channel === "github" && (
+        <div className="flex flex-col gap-3">
+        <Input
+        label="GitHub Token"
+        type="password"
+        value={tgForm.ghToken}
+        onChange={(e) => updateTgForm({ ghToken: e.target.value })}
+        placeholder={tgHasGhToken ? "Saved. Leave empty to keep" : "ghp_..."}
+        hint="Needs repo write access. Backups are committed to 9router-backups/ in the repository below."
+        />
+        <Input
+        label="Repository (owner/repo)"
+        value={tgForm.ghRepo}
+        onChange={(e) => updateTgForm({ ghRepo: e.target.value })}
+        placeholder="e.g. serenhope/9router-backups"
+        />
+        </div>
+        )}
+        <div className="flex flex-col sm:flex-row gap-3">
+        <Select
+        label="Interval"
+        value={tgForm.interval}
+        onChange={(e) => updateTgForm({ interval: e.target.value })}
+        options={[{ value: "24", label: "Every 24 hours" }, { value: "168", label: "Every 7 days" }, { value: "720", label: "Every 30 days" }, { value: "custom", label: "Custom" }]}
+        className="flex-1"
+        />
+        {tgForm.interval === "custom" && (
+        <Input
+        label="Every (hours)"
+        type="number"
+        min={1}
+        value={tgForm.customHours}
+        onChange={(e) => updateTgForm({ customHours: e.target.value })}
+        placeholder="Hours"
+        className="w-full sm:w-40"
+        />
+        )}
+        </div>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-4 border-t border-border/50">
+        <Button
+        variant="secondary"
+        icon="send"
+        onClick={() => setDbAuth({ open: true, mode: "tgtest", password: "" })}
+        loading={tgLoading}
+        disabled={!tgHasTgToken && !tgHasGhToken}
+        className="w-full sm:w-auto"
+        >
+        Send Test Backup
+        </Button>
+        <div className="flex flex-col gap-1">
+          {tgForm.enabled && (
+            <BackupCountdown target={tgNextRunAt} onExpire={loadAutoBackup} showDate />
+          )}
+          {tgLastBackup && (
+          <p className="text-xs text-text-muted">
+          {`Last backup: ${new Date(tgLastBackup.lastSentAt || Date.now()).toLocaleString()} (${tgLastBackup.lastStatus === "ok" ? tgLastBackup.lastChannel : "failed"})`}
+          </p>
+          )}
+        </div>
+        </div>
+        {tgStatus.message && (
+        <p className={`text-sm ${tgStatus.type === "error" ? "text-red-500" : "text-green-600 dark:text-green-400"}`}>
+        {tgStatus.message}
+        </p>
+        )}
+        </div>
+      </Modal>
+
+      <DownloadBackupModal
+        isOpen={showDownloadBackupModal}
+        onClose={() => setShowDownloadBackupModal(false)}
+        onDownload={(password, sections) => handleExportDatabase(password, sections)}
+        loading={dbLoading}
+      />
+
 
       <Modal
         isOpen={dbAuth.open}
@@ -1721,7 +2110,7 @@ export default function ProfilePage() {
         }
       >
         <p className="text-text-muted mb-3 text-sm">
-          Enter your current password to {dbAuth.mode === "export" ? "export" : "import"} the database.
+          Enter your current password to {dbAuth.mode === "export" ? "export" : dbAuth.mode === "import" ? "import" : "send the database backup now"}.
         </p>
         <Input
           type="password"

@@ -85,7 +85,7 @@ export default function NoAuthProxyCard({ providerId }) {
         </div>
         <div className="flex-1">
           <p className="text-sm font-medium">No authentication required</p>
-          <p className="text-xs text-text-muted">This provider is ready to use. Optionally route requests through a proxy pool to bypass IP-based limits.</p>
+          <p className="text-xs text-text-muted">Ready to use as-is, or route it through a proxy pool to bypass IP-based limits.</p>
         </div>
         {savedFlash && <Badge variant="success" size="sm">Saved</Badge>}
       </div>
@@ -99,7 +99,7 @@ export default function NoAuthProxyCard({ providerId }) {
           { value: NONE_PROXY_POOL_VALUE, label: "None (direct)" },
           ...proxyPools.map((pool) => ({ value: pool.id, label: pool.name })),
         ]}
-        hint={isRotation ? "Pool selector is ignored when rotation is active — all active pools are used." : undefined}
+        hint={isRotation ? "Rotation is on, so it uses every active pool. The pool selector is ignored." : undefined}
       />
 
       <div className="flex flex-col gap-2 mt-4">

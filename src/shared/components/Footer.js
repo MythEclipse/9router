@@ -43,13 +43,13 @@ export default function Footer() {
               </span>
             </div>
             <p className="text-text-muted mb-6 max-w-sm font-light">
-              The unified interface for modern AI infrastructure. Secure, observable, and scalable.
+              A secure, observable, and scalable interface for your AI infrastructure.
             </p>
             {/* Social links */}
             <div className="flex gap-4">
               <a
                 href="#"
-                className="text-gray-400 hover:text-primary transition-colors"
+                className="text-text-muted hover:text-primary transition-colors"
                 aria-label="Twitter"
               >
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -58,7 +58,7 @@ export default function Footer() {
               </a>
               <a
                 href="#"
-                className="text-gray-400 hover:text-primary transition-colors"
+                className="text-text-muted hover:text-primary transition-colors"
                 aria-label="GitHub"
               >
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">

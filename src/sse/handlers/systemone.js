@@ -4,8 +4,10 @@ import {
   clearAccountError,
   extractApiKey,
   isValidApiKey,
+  shouldLogAuthFailure,
 } from "../services/auth.js";
 import { getSettings } from "@/lib/localDb";
+import { getClientIp } from "@/lib/auth/loginLimiter";
 import { getModelInfo } from "../services/model.js";
 import { getKeyAccessContext, enforceKeyAccessResolved } from "../services/keyAccess.js";
 import { handleSystemoneCore } from "open-sse/handlers/systemoneCore.js";
@@ -47,12 +49,16 @@ export async function handleSystemone(request) {
   const settings = await getSettings();
   if (settings.requireApiKey) {
     if (!apiKey) {
-      log.warn("AUTH", "Missing API key (requireApiKey=true)");
+      if (shouldLogAuthFailure("systemone", getClientIp(request), null)) {
+        log.warn("AUTH", "Missing API key (requireApiKey=true)");
+      }
       return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Missing API key");
     }
     const valid = await isValidApiKey(apiKey);
     if (!valid) {
-      log.warn("AUTH", "Invalid API key (requireApiKey=true)");
+      if (shouldLogAuthFailure("systemone", getClientIp(request), apiKey.slice(0, 8))) {
+        log.warn("AUTH", "Invalid API key (requireApiKey=true)");
+      }
       return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Invalid API key");
     }
   }

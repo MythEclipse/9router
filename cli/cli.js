@@ -85,9 +85,7 @@ if (args[0] === "xai" && args[1] === "video") {
 // `9router show` prints what they're currently set to — no local server, no
 // runtime deps. Usable via `npx 9router …`.
 if (args[0] === "connect" || args[0] === "show") {
-  const { run } = require(
-    args[0] === "show" ? "./src/cli/commands/show" : "./src/cli/commands/connect",
-  );
+  const { run } = require(args[0] === "show" ? "./src/cli/commands/show" : "./src/cli/commands/connect");
   run(args.slice(1))
     .then((code) => process.exit(code))
     .catch((err) => {

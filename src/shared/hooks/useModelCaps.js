@@ -15,9 +15,24 @@ function buildMaps(models) {
     if (!m.caps) continue;
     if (m.fullModel) byFull[m.fullModel] = m.caps;
     if (m.routedModel) byFull[m.routedModel] = m.caps;
-    if (m.model) byId[m.model] = m.caps;
+    // Combo entries share their bare name across the picker; keep them out of
+    // byId so they never shadow a real model with the same id.
+    if (m.model && !m.isCombo) byId[m.model] = m.caps;
+    // Studio entries answer for their bare callName from either key shape.
+    if (m.isStudio && m.model) byFull[m.model] = m.caps;
   }
   return { byFull, byId };
+}
+
+// Combo mutations happen on pages that may mount no picker at all, so this
+// both drops the shared map (next mount refetches) and reuses the existing
+// customModelChanged listener to refresh whatever consumer IS mounted right
+// now - the combos page resolves member caps through one.
+export function invalidateModelCaps() {
+  cache = null;
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("customModelChanged"));
+  }
 }
 
 function loadModelCaps() {
@@ -74,7 +89,7 @@ export function useModelCaps() {
     } else {
       loadModelCaps().then(sync);
     }
-    // Custom models change at runtime — drop the shared cache and refetch
+    // Custom models change at runtime - drop the shared cache and refetch
     const invalidate = () => {
       cache = null;
       loadModelCaps().then(sync);
@@ -91,5 +106,13 @@ export function useModelCaps() {
     [byFull, byId],
   );
 
-  return { getCaps };
+  // Combo pills ask only for what the server shipped. An empty combo has no
+  // entry, and the heuristic's 200k default is a fabricated window - better to
+  // render no number at all.
+  const getComboCaps = useCallback(
+    (key) => (key ? byFull[key] || null : null),
+    [byFull],
+  );
+
+  return { getCaps, getComboCaps };
 }

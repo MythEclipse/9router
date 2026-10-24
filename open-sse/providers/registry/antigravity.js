@@ -26,7 +26,7 @@ export default {
     },
     retry: {
       "429": {
-        attempts: 3,
+        attempts: 6,
       },
       "500": {
         attempts: 3,
@@ -46,8 +46,6 @@ export default {
   },
   models: [
     { id: "gemini-4-argon-high", name: "Gemini 4 Argon (High)", upstreamModelId: "gemini-4-argon-high(high)" },
-    { id: "gemini-4-argon-medium", name: "Gemini 4 Argon (Medium)", upstreamModelId: "gemini-4-argon-medium(medium)" },
-    { id: "gemini-4-argon-low", name: "Gemini 4 Argon (Low)", upstreamModelId: "gemini-4-argon-low(low)" },
     { id: "gemini-3.8-flash-high", name: "Gemini 3.8 Flash (High)", upstreamModelId: "gemini-3.8-flash-high(high)" },
     { id: "gemini-3.8-flash-medium", name: "Gemini 3.8 Flash (Medium)", upstreamModelId: "gemini-3.8-flash-medium(medium)" },
     { id: "gemini-3.8-flash-low", name: "Gemini 3.8 Flash (Low)", upstreamModelId: "gemini-3.8-flash-low(low)" },
@@ -96,7 +94,7 @@ export default {
   searchViaChat: {
     defaultModel: "gemini-2.5-flash",
     endpoint: `${ANTIGRAVITY_IDE_BASE_URL}/v1internal:generateContent`,
-    freeTier: "Free — Google Search grounding through an Antigravity OAuth account.",
+    freeTier: "Free - Google Search grounding through an Antigravity OAuth account.",
   },
   features: {
     usage: true,

@@ -9,11 +9,22 @@
 //    `minItems: "1"` or `default: "1"` for an integer schema) are rejected by
 //    Codex's schema validator even though some clients emit them that way.
 //
-// Scope guardrail: this is NOT a global schema sanitizer. The normalization runs
-// only on the Codex dispatch path so other providers keep the caller's schema
-// untouched.
+// is a perfectly valid ECMAScript `u`-mode regex, but Codex answers
+//
+//   400 Invalid schema for function 'Artifact': '^\p{Cc}...' is not a 'regex'
+//   param: tools[0].parameters
+//
+// The request is deterministically malformed for this provider, so every
+// account fails identically and the combo pays a full failover before landing
+// somewhere that accepts it (#3922).
+//
+// Scope guardrail (#3667): this is NOT a global schema sanitizer. Providers
+// that do support `\p{...}` keep the constraint untouched - the strip runs only
+// on the Codex dispatch path, and only on `pattern` strings that actually
+// contain a property escape. Everything else in the schema (including valid
+// patterns) passes through byte-identical.
 
-// `\p{...}` / `\P{...}` with an odd number of preceding backslashes — an even
+// `\p{...}` / `\P{...}` with an odd number of preceding backslashes - an even
 // count means the backslash itself is escaped, so `\\p{Cc}` is a literal "p".
 const UNICODE_PROPERTY_ESCAPE = /(^|[^\\])(\\\\)*\\[pP]\{/;
 

@@ -6,11 +6,15 @@ import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 import { getCurrentLocale, onLocaleChange } from "@/i18n/runtime";
 import {
   WENYAN_LOCALES,
+  PRUNING_PRESETS,
   CAVEMAN_LEVELS,
   PONYTAIL_LEVELS,
 } from "../endpoint/endpointConstants";
 
 export default function TokenSaverClient() {
+  const [contextPruningEnabled, setContextPruningEnabled] = useState(false);
+  const [maxMessagesLimit, setMaxMessagesLimit] = useState(20);
+  const [semanticCacheEnabled, setSemanticCacheEnabled] = useState(false);
   const [rtkEnabled, setRtkEnabledState] = useState(true);
   const [headroomEnabled, setHeadroomEnabled] = useState(false);
   const [headroomUrl, setHeadroomUrl] = useState("http://localhost:8787");
@@ -42,6 +46,10 @@ export default function TokenSaverClient() {
   const [restartingProxy, setRestartingProxy] = useState(false);
   const logPollRef = useRef(null);
   const [cavemanEnabled, setCavemanEnabled] = useState(false);
+  const [contextPruningLevel, setContextPruningLevel] = useState("full");
+  const [semanticCacheTtlHours, setSemanticCacheTtlHours] = useState(3);
+  const [semanticCacheMaxEntries, setSemanticCacheMaxEntries] = useState(1000);
+  const [cacheStats, setCacheStats] = useState(null);
   const [cavemanLevel, setCavemanLevel] = useState("full");
   const [ponytailEnabled, setPonytailEnabled] = useState(false);
   const [ponytailLevel, setPonytailLevel] = useState("full");
@@ -105,6 +113,44 @@ export default function TokenSaverClient() {
     } catch (error) {
       console.log("Error updating rtkEnabled:", error);
     }
+  };
+
+  const handleContextPruningEnabled = (value) => {
+    setContextPruningEnabled(value);
+    patchSetting({ contextPruningEnabled: value });
+  };
+
+  const applyPruningPreset = (preset) => {
+    setContextPruningLevel(preset.id);
+    setMaxMessagesLimit(preset.maxMessages);
+    patchSetting({ contextPruningLevel: preset.id, maxMessagesLimit: preset.maxMessages });
+  };
+
+  const handleCacheTtlChange = (value) => {
+    const val = Number(value) || 3;
+    setSemanticCacheTtlHours(val);
+    patchSetting({ semanticCacheTtlHours: val });
+  };
+
+  const handleCacheMaxEntriesChange = (value) => {
+    const val = Number(value) || 1000;
+    setSemanticCacheMaxEntries(val);
+    patchSetting({ semanticCacheMaxEntries: val });
+  };
+
+  const loadCacheStats = async () => {
+    try {
+      const res = await fetch("/api/token-saver/cache-stats", { cache: "no-store" });
+      if (res.ok) setCacheStats(await res.json());
+    } catch {
+      setCacheStats(null);
+    }
+  };
+
+  const handleSemanticCacheEnabled = (value) => {
+    setSemanticCacheEnabled(value);
+    patchSetting({ semanticCacheEnabled: value });
+    if (value) loadCacheStats();
   };
 
   const handleCavemanEnabled = (value) => {
@@ -432,6 +478,13 @@ export default function TokenSaverClient() {
         if (res.ok) {
           const data = await res.json();
           setRtkEnabledState(data.rtkEnabled !== false);
+          setContextPruningEnabled(!!data.contextPruningEnabled);
+          setMaxMessagesLimit(data.maxMessagesLimit || 20);
+          setSemanticCacheEnabled(!!data.semanticCacheEnabled);
+          setContextPruningLevel(data.contextPruningLevel || "full");
+          setSemanticCacheTtlHours(data.semanticCacheTtlHours ?? 3);
+          if (data.semanticCacheEnabled) loadCacheStats();
+          setSemanticCacheMaxEntries(data.semanticCacheMaxEntries ?? 1000);
           setHeadroomEnabled(!!data.headroomEnabled);
           setHeadroomUrl(data.headroomUrl || "http://localhost:8787");
           if (typeof data.headroomTimeoutMs === "number") setHeadroomTimeoutMs(data.headroomTimeoutMs);
@@ -519,6 +572,7 @@ export default function TokenSaverClient() {
             onChange={() => handleRtkEnabled(!rtkEnabled)}
           />
         </div>
+
         <div className="flex items-center justify-between py-4 gap-4 flex-wrap">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-3 flex-wrap">
@@ -653,7 +707,7 @@ export default function TokenSaverClient() {
             </p>
           </div>
         )}
-        <div className="flex items-center justify-between pt-4 border-t border-border gap-4 flex-wrap">
+        <div className="flex items-start justify-between pt-4 border-t border-border gap-4 flex-wrap">
           <div className="min-w-0 flex-1">
             <p className="font-medium">
               Compress LLM output{" "}
@@ -669,11 +723,9 @@ export default function TokenSaverClient() {
             <p className="text-sm text-text-muted">
               Terse-style system prompt → ~65% fewer output tokens (up to 87%)
             </p>
-          </div>
-          <div className="flex items-center gap-3 shrink-0">
             {cavemanEnabled && (
-              <div className="flex flex-col items-end gap-1">
-                <div className="flex items-center gap-1.5">
+              <div className="mt-2 space-y-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   {visibleCavemanLevels.map((lvl) => (
                     <button
                       key={lvl.id}
@@ -697,13 +749,15 @@ export default function TokenSaverClient() {
                 </p>
               </div>
             )}
+          </div>
+          <div className="shrink-0 pt-0.5">
             <Toggle
               checked={cavemanEnabled}
               onChange={() => handleCavemanEnabled(!cavemanEnabled)}
             />
           </div>
         </div>
-        <div className="flex items-center justify-between pt-4 mt-4 border-t border-border gap-4 flex-wrap">
+        <div className="flex items-start justify-between pt-4 mt-4 border-t border-border gap-4 flex-wrap">
           <div className="min-w-0 flex-1">
             <p className="font-medium">
               Lazy senior dev{" "}
@@ -720,11 +774,9 @@ export default function TokenSaverClient() {
               Bias the model toward minimal code: YAGNI, reuse stdlib,
               deletion over addition
             </p>
-          </div>
-          <div className="flex items-center gap-3 shrink-0">
             {ponytailEnabled && (
-              <div className="flex flex-col items-end gap-1">
-                <div className="flex items-center gap-1.5">
+              <div className="mt-2 space-y-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   {PONYTAIL_LEVELS.map((lvl) => (
                     <button
                       key={lvl.id}
@@ -748,44 +800,129 @@ export default function TokenSaverClient() {
                 </p>
               </div>
             )}
+          </div>
+          <div className="shrink-0 pt-0.5">
             <Toggle
               checked={ponytailEnabled}
               onChange={() => handlePonytailEnabled(!ponytailEnabled)}
             />
           </div>
         </div>
-        <div className="flex items-center justify-between pt-4 mt-4 border-t border-border gap-4 flex-wrap">
+        {/* Trim chat history */}
+        <div className="flex items-start justify-between py-4 border-b border-border gap-4 flex-wrap">
           <div className="min-w-0 flex-1">
-            <p className="font-medium">Custom system prompt</p>
+            <p className="font-medium">
+              Trim chat history
+            </p>
             <p className="text-sm text-text-muted">
-              Appends your own instruction to every request, independently of
-              the savers above
+              Keep the system prompt + last N messages; 30-50% fewer input tokens in long sessions
             </p>
+            {contextPruningEnabled && (
+              <div className="mt-2 space-y-1.5">
+                <div className="flex items-center gap-1.5">
+                  {PRUNING_PRESETS.map((lvl) => (
+                    <button
+                      key={lvl.id}
+                      onClick={() => applyPruningPreset(lvl)}
+                      className={`px-3 py-1.5 rounded text-xs font-medium border transition-colors ${
+                        contextPruningLevel === lvl.id
+                          ? "bg-primary text-white border-primary"
+                          : "bg-transparent border-border text-text-muted hover:bg-surface-2"
+                      }`}
+                      title={lvl.desc}
+                    >
+                      {lvl.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-primary">
+                  {PRUNING_PRESETS.find((lvl) => lvl.id === contextPruningLevel)?.desc ||
+                    `Custom budget: keep the last ${maxMessagesLimit} messages`}
+                </p>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-text-muted">Max recent messages to keep:</span>
+                  <input
+                    type="number"
+                    min="4"
+                    max="100"
+                    value={maxMessagesLimit}
+                    onChange={(e) => {
+                      const val = Number(e.target.value) || 20;
+                      setMaxMessagesLimit(val);
+                      // A hand-tuned budget is no longer a preset value, so
+                      // clear the level and stop the picker from overriding it.
+                      setContextPruningLevel("custom");
+                      patchSetting({ maxMessagesLimit: val, contextPruningLevel: "custom" });
+                    }}
+                    className="w-16 px-2 py-1 text-xs rounded border border-border bg-surface text-text-main font-mono"
+                  />
+                  <span className="text-xs text-text-muted">
+                    {contextPruningLevel === "custom"
+                      ? "custom (preset off)"
+                      : PRUNING_PRESETS.find((lvl) => lvl.maxMessages === maxMessagesLimit)
+                        ? "matches preset"
+                        : "custom"}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
-          <Toggle
-            checked={customPromptEnabled}
-            onChange={() => handleCustomPromptEnabled(!customPromptEnabled)}
-          />
-        </div>
-        {customPromptEnabled && (
-          <div className="pt-3">
-            <textarea
-              id="custom-prompt"
-              aria-label="Custom system prompt"
-              value={customPrompt}
-              onChange={(e) => setCustomPrompt(e.target.value)}
-              onBlur={handleCustomPromptBlur}
-              rows={4}
-              placeholder="e.g. Prefer editing existing files over creating new ones."
-              className="w-full rounded border border-border bg-transparent p-2 text-xs"
+          <div className="shrink-0 pt-0.5">
+            <Toggle
+              checked={contextPruningEnabled}
+              onChange={() => handleContextPruningEnabled(!contextPruningEnabled)}
             />
-            <p className="text-xs text-text-muted mt-1">
-              Applied to every provider and model. Sent as-is to upstream; an
-              empty prompt injects nothing.
-            </p>
           </div>
-        )}
-        {/* PXPIPE hidden from UI — experimental, not exposed to users yet */}
+        </div>
+
+        {/* Cache repeat prompts */}
+        <div className="flex items-start justify-between py-4 border-b border-border gap-4 flex-wrap">
+          <div className="min-w-0 flex-1">
+            <p className="font-medium">
+              Cache repeat prompts
+            </p>
+            <p className="text-sm text-text-muted">
+              Same prompt answers instantly (~10ms) at 0 upstream tokens.
+            </p>
+            {semanticCacheEnabled && (
+              <div className="mt-2 space-y-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <label className="text-xs text-text-muted">TTL (h)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="720"
+                    value={semanticCacheTtlHours}
+                    onChange={(e) => handleCacheTtlChange(e.target.value)}
+                    className="w-14 px-2 py-1 text-xs rounded border border-border bg-surface text-text-main font-mono"
+                  />
+                  <label className="text-xs text-text-muted">Max entries</label>
+                  <input
+                    type="number"
+                    min="10"
+                    max="10000"
+                    value={semanticCacheMaxEntries}
+                    onChange={(e) => handleCacheMaxEntriesChange(e.target.value)}
+                    className="w-20 px-2 py-1 text-xs rounded border border-border bg-surface text-text-main font-mono"
+                  />
+                </div>
+                {cacheStats && (
+                  <p className="text-xs text-primary">
+                    {cacheStats.hits} hits / {cacheStats.misses} misses ·{" "}
+                    {cacheStats.entries} cached
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="shrink-0 pt-0.5">
+            <Toggle
+              checked={semanticCacheEnabled}
+              onChange={() => handleSemanticCacheEnabled(!semanticCacheEnabled)}
+            />
+          </div>
+        </div>
+        {/* PXPIPE hidden from UI - experimental, not exposed to users yet */}
         {false && (
         <div className="flex items-center justify-between pt-4 mt-4 border-t border-border gap-4 flex-wrap">
           <div className="min-w-0 flex-1">
@@ -881,7 +1018,7 @@ export default function TokenSaverClient() {
               className="font-mono text-sm"
             />
             <p className="text-xs text-text-muted">
-              Request timeout in milliseconds. Defaults to 3000 ms.
+              Request timeout in milliseconds (defaults to 3000 ms)
             </p>
           </div>
           {headroomManaged ? (
@@ -895,7 +1032,7 @@ export default function TokenSaverClient() {
             </Button>
           ) : headroomRunning ? (
             <p className="text-sm text-success">
-              Headroom proxy is reachable. You can enable the token saver.
+              The Headroom proxy is reachable, so you can enable the token saver.
             </p>
           ) : headroomCanStart ? (
             <Button
@@ -911,8 +1048,7 @@ export default function TokenSaverClient() {
             </p>
           ) : !headroomStatus.python ? (
             <p className="text-sm text-warning">
-              Python ≥ 3.10 required for local managed mode. Install Python
-              first, or use an external proxy URL.
+              Install Python ≥ 3.10 first, or point to an external proxy URL.
             </p>
           ) : (
             <div className="flex flex-col gap-1">
@@ -961,8 +1097,7 @@ export default function TokenSaverClient() {
       >
         <div className="flex flex-col gap-4">
           <p className="text-sm text-text-muted">
-            Compress prompts using multimodal encoding. Runs in-process — no
-            extra server or environment variables required.
+            Compresses prompts in-process with multimodal encoding, so no extra server or environment variables are needed.
           </p>
           <div className="flex items-center justify-between text-sm">
             <span>Status</span>
@@ -1000,8 +1135,7 @@ export default function TokenSaverClient() {
                 {pxpipeActionLoading || pxpipeStatus.installing ? "Installing…" : "Install"}
               </Button>
               <p className="text-xs text-text-muted">
-                Installs the npm package <code className="font-mono">pxpipe-proxy</code> into
-                the 9Router data directory. May take a few minutes.
+                Installs the <code className="font-mono">pxpipe-proxy</code> package into your data directory and may take a few minutes.
               </p>
             </div>
           ) : (
@@ -1078,3 +1212,4 @@ export default function TokenSaverClient() {
     </div>
   );
 }
+

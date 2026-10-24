@@ -357,8 +357,6 @@ describe("handleImageGenerationCore", () => {
         headers: expect.objectContaining({
           authorization: "Bearer codex-token",
           "chatgpt-account-id": "account-123",
-          // Assert the CURRENT version, read from the same source the executor
-          // uses, rather than a hardcoded copy that goes stale on every bump.
           version: CODEX_CLI_VERSION,
         }),
       })
@@ -411,7 +409,7 @@ describe("handleImageGenerationCore", () => {
     expect(result.success).toBe(true);
     const fetchCall = global.fetch.mock.calls[0];
     const requestBody = JSON.parse(fetchCall[1].body);
-    expect(requestBody.model).toBe("gpt-5.6-terra");
+    expect(requestBody.model).toBe("gpt-5.6-sol");
     expect(requestBody.tools).toEqual([
       { type: "image_generation", output_format: "png", size: "1024x1024", action: "generate", model: "gpt-image-2.5" },
     ]);

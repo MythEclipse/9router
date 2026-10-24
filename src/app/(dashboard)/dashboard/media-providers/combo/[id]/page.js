@@ -202,7 +202,7 @@ export default function ComboDetailPage() {
         setTestResult({ audioUrl: URL.createObjectURL(blob), latencyMs });
         return;
       }
-      // JSON — could be image (data[0].b64_json/url) or generic
+      // JSON - could be image (data[0].b64_json/url) or generic
       const data = await res.json();
       const first = data?.data?.[0];
       const imageUrl = first?.b64_json
@@ -255,7 +255,7 @@ export default function ComboDetailPage() {
             <code className="text-lg font-semibold font-mono">{combo.name}</code>
           </div>
         </div>
-        <Button variant="outline" icon="delete" onClick={handleDelete} className="text-red-500 border-red-200 hover:bg-red-50">
+        <Button variant="outline" icon="delete" onClick={handleDelete} className="text-danger border-danger/30 hover:bg-danger/10">
           Delete
         </Button>
       </div>

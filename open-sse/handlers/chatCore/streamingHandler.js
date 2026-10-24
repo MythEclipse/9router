@@ -10,9 +10,9 @@ import { buildErrorBody } from "../../utils/error.js";
 import { buildRequestDetail, extractRequestConfig, saveUsageStats, formatDoneLine } from "./requestDetail.js";
 import { saveRequestDetail } from "@/lib/usageDb.js";
 import { SSE_HEADERS_CORS as SSE_HEADERS } from "../../utils/sseConstants.js";
+import { calledModelName } from "../../utils/modelAlias.js";
 import { upstreamResponseHeaders } from "../../utils/upstreamHeaders.js";
-import { injectSafeguardsIntoStream } from "../safeguardsStream.js";
-import { injectWebSearchIntoStream } from "../webSearchStream.js";
+import { applyUsageMultipliers } from "../../utils/usageTracking.js";
 
 // Codex returns Responses API SSE → which client format to translate INTO, by request sourceFormat.
 // Gemini-family all map to ANTIGRAVITY decoder; unknown sources fall back to OPENAI.
@@ -27,7 +27,7 @@ const CODEX_SOURCE_TO_TARGET = {
 /**
  * Determine which SSE transform stream to use based on provider/format.
  */
-function buildTransformStream({ provider, sourceFormat, targetFormat, userAgent, reqLogger, toolNameMap, customToolNames, model, connectionId, body, onStreamComplete, apiKey, credentials }) {
+function buildTransformStream({ provider, sourceFormat, targetFormat, userAgent, reqLogger, toolNameMap, customToolNames, model, connectionId, body, onStreamComplete, apiKey, credentials, aliasModel }) {
   const isDroidCLI = userAgent?.toLowerCase().includes("droid") || userAgent?.toLowerCase().includes("codex-cli");
   // Responses-API providers (e.g. codex) emit Responses SSE → translate into client format
   const isResponsesProvider = PROVIDERS[provider]?.format === FORMATS.OPENAI_RESPONSES;
@@ -35,23 +35,20 @@ function buildTransformStream({ provider, sourceFormat, targetFormat, userAgent,
 
   if (needsCodexTranslation) {
     const codexTarget = CODEX_SOURCE_TO_TARGET[sourceFormat] || FORMATS.OPENAI;
-    return createSSETransformStreamWithLogger(FORMATS.OPENAI_RESPONSES, codexTarget, provider, reqLogger, toolNameMap, model, connectionId, body, onStreamComplete, apiKey, customToolNames, credentials);
+    return createSSETransformStreamWithLogger(FORMATS.OPENAI_RESPONSES, codexTarget, provider, reqLogger, toolNameMap, model, connectionId, body, onStreamComplete, apiKey, customToolNames, credentials, aliasModel);
   }
 
   if (needsTranslation(targetFormat, sourceFormat)) {
-    return createSSETransformStreamWithLogger(targetFormat, sourceFormat, provider, reqLogger, toolNameMap, model, connectionId, body, onStreamComplete, apiKey, customToolNames, credentials);
+    return createSSETransformStreamWithLogger(targetFormat, sourceFormat, provider, reqLogger, toolNameMap, model, connectionId, body, onStreamComplete, apiKey, customToolNames, credentials, aliasModel);
   }
 
-  // The passthrough path has no format translation, so the fingerprint's tool
-  // rename map (read -> read_client) has to be handed over explicitly —
-  // otherwise the client receives a call to a tool it never declared (#4986).
-  return createPassthroughStreamWithLogger(provider, reqLogger, model, connectionId, body, onStreamComplete, apiKey, toolNameMap);
+  return createPassthroughStreamWithLogger(provider, reqLogger, model, connectionId, body, onStreamComplete, apiKey, aliasModel);
 }
 
 /**
- * Handle streaming response — pipe provider SSE through transform stream to client.
+ * Handle streaming response - pipe provider SSE through transform stream to client.
  */
-export async function handleStreamingResponse({ providerResponse, provider, model, sourceFormat, targetFormat, userAgent, body, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, clientRawRequest, onRequestSuccess, reqLogger, toolNameMap, customToolNames, streamController, onStreamComplete, streamDetailId, pxpipe, reqTag, log, credentials, clientFormat = null, safeguardsPlan = null, webSearchPlan = null, runSearch = null }) {
+export async function handleStreamingResponse({ providerResponse, provider, model, sourceFormat, targetFormat, userAgent, body, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, clientRawRequest, onRequestSuccess, reqLogger, toolNameMap, customToolNames, streamController, onStreamComplete, streamDetailId, pxpipe, reqTag, log, credentials, requestedModel }) {
   if (onRequestSuccess) {
     Promise.resolve()
       .then(onRequestSuccess)
@@ -87,7 +84,9 @@ export async function handleStreamingResponse({ providerResponse, provider, mode
     };
   }
 
-  const transformStream = buildTransformStream({ provider, sourceFormat, targetFormat, userAgent, reqLogger, toolNameMap, customToolNames, model, connectionId, body, onStreamComplete, apiKey, credentials });
+  // The name the client called is the only one it is allowed to see.
+  const aliasModel = calledModelName(requestedModel, model);
+  const transformStream = buildTransformStream({ provider, sourceFormat, targetFormat, userAgent, reqLogger, toolNameMap, customToolNames, model, connectionId, body, onStreamComplete, apiKey, credentials, aliasModel });
 
   // Terminal bytes when the stream aborts after HTTP 200 was already sent, so the
   // client sees a real error instead of a silently truncated stream.
@@ -118,7 +117,7 @@ export async function handleStreamingResponse({ providerResponse, provider, mode
     : reviewStream;
 
   saveRequestDetail(buildRequestDetail({
-    provider, model, connectionId,
+    provider, model, connectionId, requestedModel,
     latency: { ttft: 0, total: Date.now() - requestStartTime },
     tokens: { prompt_tokens: 0, completion_tokens: 0 },
     request: extractRequestConfig(body, stream),
@@ -145,24 +144,14 @@ export async function handleStreamingResponse({ providerResponse, provider, mode
  * calls only, or when the upstream returned an empty completion. Each case needs a
  * different follow-up, so the stored row names the case and carries the counts.
  */
-function describeEmptyContent({ thinking, outputTokens }) {
-  const parts = [];
-  if (thinking) parts.push(`${thinking.length} chars of reasoning`);
-  if (outputTokens) parts.push(`${outputTokens} output tokens`);
-  const detail = parts.length ? ` (${parts.join(", ")})` : "";
-  if (thinking) {
-    return `[No assistant text — the turn produced reasoning only${detail}. Expand the thinking panel to read it.]`;
-  }
-  if (outputTokens) {
-    return `[No assistant text delta — upstream billed ${outputTokens} output tokens with no text content${detail}.]`;
-  }
-  return "[No assistant text — the upstream stream ended without any content or usage.]";
-}
-
-export function buildOnStreamComplete({ provider, model, connectionId, apiKey, requestStartTime, requestId, body, stream, finalBody, translatedBody, clientRawRequest, pxpipe, reqTag, log }) {
+export function buildOnStreamComplete({ provider, model, connectionId, apiKey, requestedModel, requestStartTime, body, stream, finalBody, translatedBody, clientRawRequest, pxpipe, reqTag, log, modelMultipliers = null, isAntiProbe = false }) {
   const streamDetailId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 
   const onStreamComplete = (contentObj, usage, ttftAt) => {
+    let finalUsage = usage;
+    if (modelMultipliers && finalUsage) {
+      finalUsage = applyUsageMultipliers(finalUsage, modelMultipliers);
+    }
     const latency = {
       ttft: ttftAt ? ttftAt - requestStartTime : Date.now() - requestStartTime,
       total: Date.now() - requestStartTime
@@ -178,9 +167,9 @@ export function buildOnStreamComplete({ provider, model, connectionId, apiKey, r
     const safeThinking = contentObj?.thinking || null;
 
     saveRequestDetail(buildRequestDetail({
-      provider, model, connectionId,
+      provider, model, connectionId, requestedModel,
       latency,
-      tokens: usage || { prompt_tokens: 0, completion_tokens: 0 },
+      tokens: finalUsage || { prompt_tokens: 0, completion_tokens: 0 },
       request: extractRequestConfig(body, stream),
       providerRequest: finalBody || translatedBody || null,
       providerResponse: safeContent,
@@ -192,8 +181,8 @@ export function buildOnStreamComplete({ provider, model, connectionId, apiKey, r
     });
 
     // Persist stream usage to DB (no console line; the "📊 done" line below is authoritative)
-    saveUsageStats({ provider, model, tokens: usage, connectionId, apiKey, endpoint: clientRawRequest?.endpoint, label: "STREAM USAGE", silent: true, requestId });
-    if (log?.line) log.line(reqTag, "📊", formatDoneLine({ usage, latency }));
+    saveUsageStats({ provider, model, tokens: finalUsage, connectionId, apiKey, requestedModel, endpoint: clientRawRequest?.endpoint, label: "STREAM USAGE", silent: true });
+    if (log?.line) log.line(reqTag, "📊", formatDoneLine({ usage: finalUsage, latency }));
   };
 
   return { onStreamComplete, streamDetailId };

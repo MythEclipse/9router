@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getRequestDetails } from "@/lib/usageDb";
-import { getSettings } from "@/lib/localDb";
-import { isAuthenticated } from "@/dashboardGuard";
+import { getSessionContext } from "@/lib/auth/dashboardPermissions";
+import { parseAllowedModels } from "@/lib/db/repos/allowedModels.js";
 
 /**
  * GET /api/usage/request-details
@@ -33,6 +33,10 @@ function withheldMarker(field, revealed) {
 
 export async function GET(request) {
   try {
+    // An API-key session may only see requests for the models its key allows, so
+    // the listing is narrowed before any user-supplied filter is applied.
+    const ctx = await getSessionContext();
+    const allowedModelPatterns = parseAllowedModels(ctx.allowedModels || "*");
     const { searchParams } = new URL(request.url);
 
     const pageRaw = parseInt(searchParams.get("page"));
@@ -57,6 +61,7 @@ export async function GET(request) {
     const filter = {
       page,
       pageSize,
+      allowedModelPatterns,
     };
 
     if (provider) filter.provider = provider;

@@ -1,4 +1,5 @@
 import { getAdapter } from "../driver.js";
+import { CUSTOM_PLUGIN_KEYS } from "@/shared/constants/pluginKeys";
 import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
 
 const DEFAULT_MITM_ROUTER_BASE = "http://localhost:20128";
@@ -26,8 +27,21 @@ const DEFAULT_SETTINGS = {
     audioInput: { enabled: true, roundRobin: false, models: [] },
     videoInput: { enabled: false, roundRobin: false, models: [] },
   },
+  // Keys come from CUSTOM_PLUGIN_KEYS so a new plugin cannot be missing here;
+  // this literal had five entries while six plugins existed.
+  customPlugins: Object.fromEntries(
+    CUSTOM_PLUGIN_KEYS.map((key) => [key, { enabled: false, models: [] }])
+  ),
   requireLogin: true,
+  // Custom-model editor: warn about name/owned_by that claim a vendor the
+  // target model does not match. Persisted so every administrator sees the
+  // same editor rather than each browser deciding for itself.
+  antiProbeMetadata: true,
   requireApiKey: true,
+  // Site-wide theme (glass | dark). An administrator picks it once here instead
+  // of every browser choosing its own: the value is rendered into the document
+  // for all visitors, so the whole site matches what the admin selected.
+  theme: "glass",
   tunnelDashboardAccess: true,
   authMode: "password",
   ssoType: "oidc",
@@ -71,6 +85,9 @@ const DEFAULT_SETTINGS = {
   headroomCompressUserMessages: false,
   headroomTimeoutMs: 3000,
   cavemanEnabled: false,
+  contextPruningLevel: "full",
+  semanticCacheTtlHours: 3,
+  semanticCacheMaxEntries: 1000,
   cavemanLevel: "full",
   ponytailEnabled: false,
   ponytailLevel: "full",
@@ -81,17 +98,9 @@ const DEFAULT_SETTINGS = {
   pxpipeAutoInstall: true,
   pxpipeMinChars: 25000,
   pxpipeTimeoutMs: 15000,
+  hideError: false,
   // Per-provider user header overrides applied at dispatch: { [providerId]: { headers: {..} } }
   providerOverrides: {},
-  // Decision model (provider/model) that answers Claude Code auto-mode safeguard
-  // reviews. Empty = pick the cheapest configured System One lane.
-  safeguardsClassifierModel: "",
-  // Claude Code web search. Unset/null = auto: activate when the request
-  // declares a web_search tool. Set false to force the off switch even when the
-  // client asks for search. webSearchProvider pins which provider runs a bridged
-  // lookup; empty = auto-select from the providers holding live credentials.
-  webSearchEnabled: null,
-  webSearchProvider: "",
 };
 
 async function readRaw() {

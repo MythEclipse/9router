@@ -109,10 +109,9 @@ export function parseSearchQuery(rawQuery) {
  * @returns {boolean}
  */
 export function matchesSearch(target, queryOrParsed) {
-  const parsed =
-    typeof queryOrParsed === "string" || !queryOrParsed
-      ? parseSearchQuery(queryOrParsed)
-      : queryOrParsed;
+  const parsed = typeof queryOrParsed === "string" || !queryOrParsed
+    ? parseSearchQuery(queryOrParsed)
+    : queryOrParsed;
 
   if (parsed.isEmpty) {
     return true;
@@ -125,9 +124,13 @@ export function matchesSearch(target, queryOrParsed) {
   } else if (Array.isArray(target)) {
     candidates = target.filter((t) => typeof t === "string");
   } else if (target && typeof target === "object") {
-    candidates = [target.name, target.id, target.value, target.alias, target.provider].filter(
-      (t) => typeof t === "string",
-    );
+    candidates = [
+      target.name,
+      target.id,
+      target.value,
+      target.alias,
+      target.provider,
+    ].filter((t) => typeof t === "string");
   }
 
   if (candidates.length === 0) {
@@ -136,8 +139,6 @@ export function matchesSearch(target, queryOrParsed) {
 
   // Handle Regex
   if (parsed.isRegex && parsed.regex) {
-    // Each target is an independent search, including for global/sticky regexes.
-    parsed.regex.lastIndex = 0;
     const fullText = candidates.join(" ");
     const hasNegativeAssertion = /\(\?!|\(\?<!/.test(parsed.raw);
     if (hasNegativeAssertion) {

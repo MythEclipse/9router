@@ -3,6 +3,7 @@ import {
   clearAccountError,
   getProviderCredentials,
   isValidApiKey,
+  apiKeyGateFailure,
   markAccountUnavailable,
 } from "@/sse/services/auth.js";
 import { getSettings } from "@/lib/localDb";
@@ -40,8 +41,8 @@ export async function OPTIONS() {
 }
 
 /**
- * POST /v1beta/models/{model}:generateContent        — non-streaming
- * POST /v1beta/models/{model}:streamGenerateContent  — streaming (SSE)
+ * POST /v1beta/models/{model}:generateContent        - non-streaming
+ * POST /v1beta/models/{model}:streamGenerateContent  - streaming (SSE)
  *
  * Streaming intent is determined by the URL action suffix (canonical Gemini API
  * convention), NOT by a body field. generationConfig.stream is not a real
@@ -109,7 +110,7 @@ export async function POST(request, { params }) {
     if (stream) {
       // Transform OpenAI SSE => Gemini SSE on the fly.
       // The @google/genai SDK always uses :streamGenerateContent?alt=sse and
-      // expects Gemini SSE chunks (no [DONE] sentinel — stream just closes).
+      // expects Gemini SSE chunks (no [DONE] sentinel - stream just closes).
       return transformOpenAISSEToGeminiSSE(response, model);
     } else {
       // Convert OpenAI JSON response => Gemini GenerateContentResponse
@@ -180,18 +181,16 @@ function buildGeminiNativeUrl(requestUrl, model, action) {
 
 async function validateGeminiNativeClientKey(request) {
   const settings = await getSettings();
-  if (!settings.requireApiKey) return null;
-
   const apiKey = extractGeminiClientApiKey(request);
   if (!apiKey) {
-    return Response.json({ error: { message: "Missing API key" } }, { status: 401 });
+    return settings.requireApiKey
+      ? Response.json({ error: { message: "Missing API key" } }, { status: 401 })
+      : null;
   }
-
-  const valid = await isValidApiKey(apiKey);
-  if (!valid) {
-    return Response.json({ error: { message: "Invalid API key" } }, { status: 401 });
+  const failure = apiKeyGateFailure(await isValidApiKey(apiKey), settings.requireApiKey);
+  if (failure) {
+    return Response.json({ error: { message: failure.message } }, { status: failure.status });
   }
-
   return null;
 }
 
@@ -428,7 +427,7 @@ const FINISH_REASON_MAP = {
  * Gemini SSE format (what @google/genai SDK expects):
  *   data: {"candidates":[{"content":{"role":"model","parts":[{"text":"Hi"}]},"index":0}]}
  *   data: {"candidates":[{"content":{"role":"model","parts":[{"text":""}]},"finishReason":"STOP","index":0}],"usageMetadata":{...}}
- *   (stream closes — no [DONE])
+ *   (stream closes - no [DONE])
  */
 function transformOpenAISSEToGeminiSSE(upstreamResponse, model) {
   if (!upstreamResponse.ok || !upstreamResponse.body) {

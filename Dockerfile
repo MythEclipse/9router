@@ -1,5 +1,4 @@
-# syntax=docker/dockerfile:1.7
-ARG NODE_IMAGE=node:22.23.4-alpine
+ARG NODE_IMAGE=node:22-alpine
 ARG ALPINE_MIRROR=dl-cdn.alpinelinux.org
 ARG NPM_REGISTRY=https://registry.npmjs.org/
 ARG APP_VERSION=unknown
@@ -16,12 +15,21 @@ RUN if [ "$ALPINE_MIRROR" != "dl-cdn.alpinelinux.org" ]; then \
 
 FROM base AS builder
 ARG NPM_REGISTRY
+# Railway (and any CI building without .git) injects the trigger commit as an
+# env var instead. Accept it as a build arg so next.config.mjs can stamp
+# APP_REVISION even though .dockerignore excludes .git: without this the
+# release-notes banner never fires on such deploys because the running app
+# cannot tell which revision it was built from.
+ARG RAILWAY_GIT_COMMIT_SHA
 
 RUN apk add --no-cache python3 make g++ linux-headers
 
 COPY package.json ./
-RUN --mount=type=cache,target=/root/.npm \
-    npm install \
+# No cache mount here on purpose. Railway's builder requires the id to be
+# prefixed with a key it generates per service, and the documented form is
+# rejected as well, so the mount only breaks the build there. The layer above
+# already caches the install, because package.json is copied on its own.
+RUN npm install \
       --registry="${NPM_REGISTRY}" \
       --fetch-retries=5 \
       --fetch-retry-factor=2 \
@@ -31,7 +39,7 @@ RUN --mount=type=cache,target=/root/.npm \
 
 COPY . ./
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
+RUN APP_REVISION="${APP_REVISION:-$RAILWAY_GIT_COMMIT_SHA}" npm run build
 
 FROM ${NODE_IMAGE} AS runner
 ARG ALPINE_MIRROR
@@ -58,6 +66,22 @@ COPY --from=builder /app/custom-server.js ./custom-server.js
 COPY --from=builder /app/open-sse ./open-sse
 # Next file tracing can omit sibling files; MITM runs server.js as a separate process.
 COPY --from=builder /app/src/mitm ./src/mitm
+# The auth guard runs outside the bundle: custom-server.js imports src/ and
+# scripts/ by path, and the loader in scripts/auth-guard-hooks.mjs maps the "@/"
+# alias back onto ./src. File tracing only follows static imports, so none of it
+# reached the image: getGuardModule() resolved nothing, and before fail-closed
+# handling every request was served with no authorization at all - a fresh deploy
+# opened straight onto the dashboard with no login form.
+COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/src ./src
+# The guard imports that src/ tree directly, so Node resolves those bare
+# specifiers against ./node_modules instead of through webpack. jose (JWT
+# sign/verify), uuid and bcryptjs are reached by dashboardSession and the repos
+# but were never bundled, so their absence made the guard import throw - which
+# fail-closed then turned into a 503 on every page.
+COPY --from=builder /app/node_modules/jose ./node_modules/jose
+COPY --from=builder /app/node_modules/uuid ./node_modules/uuid
+COPY --from=builder /app/node_modules/bcryptjs ./node_modules/bcryptjs
 # Standalone node_modules may omit deps only required by the MITM child process.
 COPY --from=builder /app/node_modules/node-forge ./node_modules/node-forge
 # Ensure `next` is available at runtime in case tracing did not include it.

@@ -39,9 +39,6 @@ const STRIP_RULES = [
   // against /zen/go/v1/chat/completions with one key: 12/12 structured calls 400,
   // 4/4 identical calls without the field 200.
   { provider: "opencode-go", match: /^deepseek/i, drop: ["response_format"] },
-  // Current OpenAI models (gpt-5.x / gpt-6.x) reject `max_tokens` with HTTP 400
-  // ("Use 'max_completion_tokens' instead"). Clients send `max_tokens`, so rename it.
-  { provider: "openai", renameParams: { max_tokens: "max_completion_tokens" } },
 ];
 
 // Test a rule's match (regex or predicate) against the model id.
@@ -71,7 +68,7 @@ export function stripUnsupportedParams(provider, model, body) {
     for (const key of rule.drop || []) {
       if (body[key] !== undefined) delete body[key];
     }
-    // Per-message field drop (assistant turns only — that is where clients replay reasoning).
+    // Per-message field drop (assistant turns only - that is where clients replay reasoning).
     if (Array.isArray(rule.dropMessageFields) && Array.isArray(body.messages)) {
       for (const msg of body.messages) {
         if (!msg || msg.role !== "assistant") continue;

@@ -36,7 +36,7 @@ afterAll(() => {
   else process.env.DATA_DIR = originalDataDir;
 });
 
-describe("request details — tab crash-risk cases", () => {
+describe("request details - tab crash-risk cases", () => {
   it("corrupt data column → parseJson fallback {}, no throw", async () => {
     // Inject a row with invalid JSON directly, bypassing save path
     adapter.run(
@@ -106,7 +106,7 @@ describe("request details — tab crash-risk cases", () => {
     );
     const got = await db.getRequestDetailById("sparse-1");
     expect(got.tokens).toBeUndefined();
-    // Drawer reads tokens?.prompt_tokens — optional chaining tolerates undefined
+    // Drawer reads tokens?.prompt_tokens - optional chaining tolerates undefined
     expect(got.tokens?.prompt_tokens || 0).toBe(0);
   });
 });
@@ -125,7 +125,7 @@ function getInputTokens(tokens) {
   return prompt < cache ? cache : prompt;
 }
 
-describe("backupDbLite — excludes requestDetails, keeps critical data", () => {
+describe("backupDbLite - excludes requestDetails, keeps critical data", () => {
   it("backup file omits requestDetails rows but keeps other tables", async () => {
     const { backupDbLite } = await import("@/lib/db/backup.js");
     await saveDetail({ id: "bk-1", provider: "openai", model: "m", status: "ok", tokens: {}, request: {}, response: {} });
@@ -138,7 +138,7 @@ describe("backupDbLite — excludes requestDetails, keeps critical data", () => 
     const Database = (await import("better-sqlite3")).default;
     const bak = new Database(dest);
     try {
-      // requestDetails is fully excluded — table must not exist in the backup
+      // requestDetails is fully excluded - table must not exist in the backup
       const rdTable = bak.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='requestDetails'").get();
       expect(rdTable).toBeUndefined();
       // Critical data preserved
@@ -151,7 +151,7 @@ describe("backupDbLite — excludes requestDetails, keeps critical data", () => 
   });
 });
 
-describe("getDistinctProviders — providers route (no full-row parse)", () => {
+describe("getDistinctProviders - providers route (no full-row parse)", () => {
   it("returns unique provider list without parsing data blobs", async () => {
     await saveDetail({ id: "dp-1", provider: "openai", model: "m", status: "ok", tokens: {}, request: {}, response: {} });
     await saveDetail({ id: "dp-2", provider: "anthropic", model: "m", status: "ok", tokens: {}, request: {}, response: {} });
@@ -173,7 +173,7 @@ describe("getDistinctProviders — providers route (no full-row parse)", () => {
   });
 });
 
-describe("token helpers — render-time crash safety", () => {
+describe("token helpers - render-time crash safety", () => {
   it("undefined/null tokens → 0, no throw", () => {
     expect(getInputTokens(undefined)).toBe(0);
     expect(getInputTokens(null)).toBe(0);
@@ -205,7 +205,7 @@ describe("token helpers — render-time crash safety", () => {
   });
 });
 
-describe("API route contract — validation boundary", () => {
+describe("API route contract - validation boundary", () => {
   let GET;
   beforeAll(async () => {
     ({ GET } = await import("@/app/api/usage/request-details/route.js"));

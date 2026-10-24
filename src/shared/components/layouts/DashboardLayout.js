@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import { useNotificationStore } from "@/store/notificationStore";
 import Sidebar from "../Sidebar";
 import Header from "../Header";
+import WelcomeModal from "../WelcomeModal";
+import UpdateBanner from "../UpdateBanner";
 
 function getToastStyle(type) {
   if (type === "success") {
@@ -63,10 +65,10 @@ export default function DashboardLayout({ children }) {
           return (
             <div
               key={n.id}
-              className={`rounded-lg border px-3 py-2 shadow-lg backdrop-blur-sm ${style.wrapper}`}
+              className={`slide-in-right rounded-[12px] border px-3.5 py-2.5 shadow-[var(--shadow-elev)] backdrop-blur-md ${style.wrapper}`}
             >
               <div className="flex items-start gap-2">
-                <span className="material-symbols-outlined text-[18px] leading-5">{style.icon}</span>
+                <span className="material-symbols-outlined text-[18px] leading-5 shrink-0 mt-0.5">{style.icon}</span>
                 <div className="min-w-0 flex-1">
                   {n.title ? <p className="text-xs font-semibold mb-0.5">{n.title}</p> : null}
                   <p className="text-xs whitespace-pre-wrap break-words">{n.message}</p>
@@ -86,10 +88,12 @@ export default function DashboardLayout({ children }) {
           );
         })}
       </div>
+      <WelcomeModal />
+
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/20 lg:hidden"
+          className="fixed inset-0 z-40 bg-scrim/40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -114,7 +118,13 @@ export default function DashboardLayout({ children }) {
         <div className="landing-grid absolute inset-0 pointer-events-none -z-10" aria-hidden="true" />
         <Header key={pathname} onMenuClick={() => setSidebarOpen(true)} />
         <div className={`flex-1 overflow-y-auto custom-scrollbar ${pathname === "/dashboard/basic-chat" ? "" : "p-6 lg:p-10"} ${pathname === "/dashboard/basic-chat" ? "flex flex-col overflow-hidden" : ""}`}>
-          <div className={`${pathname === "/dashboard/basic-chat" ? "flex-1 w-full h-full flex flex-col" : "max-w-7xl mx-auto"}`}>{children}</div>
+          <div className={`${pathname === "/dashboard/basic-chat" ? "flex-1 w-full h-full flex flex-col" : "max-w-7xl mx-auto"}`}>
+            {/* Banner lives inside the scroll container: it scrolls with the page
+                and inherits this page's padding, instead of floating above it.
+                Hidden in fullscreen chat, where a full-width block breaks flow. */}
+            {pathname === "/dashboard/basic-chat" ? null : <UpdateBanner />}
+            {children}
+          </div>
         </div>
       </main>
     </div>

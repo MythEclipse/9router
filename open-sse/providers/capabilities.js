@@ -100,13 +100,6 @@ export function capabilitiesFromServiceKind(kind) {
  * otherwise mis-match. Only declare deltas vs DEFAULT.
  */
 export const MODEL_CAPABILITIES = {
-  "sensenova-6.8-flash-lite": {
-    vision: true,
-    reasoning: true,
-    thinkingFormat: "openai",
-    contextWindow: 1000000,
-    maxOutput: 131072,
-  },
   // Claude Fable 5.1, Opus 5.5/5, 4.6/4.7/4.8, and Kiro Sonnet 5 have 1M context + adaptive thinking (override generic claude pattern)
   "claude-fable-5-1": { vision: true, pdf: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 128000 },
   // Claude Opus 5.5 — experimental preview on Kiro (rateMultiplier: 2.0, 1M context) (#4410)
@@ -160,10 +153,8 @@ export const MODEL_CAPABILITIES = {
   "glm-5.3-flash":     { vision: true, videoInput: true, pdf: true, reasoning: true, thinkingFormat: "zai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 131072 },
   "glm-4.6v":          { vision: true, videoInput: true, reasoning: true, thinkingFormat: "zai", contextWindow: 128000, maxOutput: 32768 },
   "glm-4.5v":          { vision: true, videoInput: true, reasoning: true, thinkingFormat: "zai", contextWindow: 64000, maxOutput: 16384 },
-  // GLM-5.2 has 1M context and maxOutput 131072. An exact entry shadows the *glm-5.2*
-  // pattern completely, so it must repeat that pattern's thinkingEffortSupported or
-  // reasoning_effort is dropped for GLM-5.2 (supported from 5.2 onward).
-  "glm-5.2":           { reasoning: true, thinkingFormat: "zai", thinkingEffortSupported: true, thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 131072 },
+  // GLM-5.2 has 1M context — pattern *glm-5* only gives 200k, so override here
+  "glm-5.2":           { reasoning: true, thinkingFormat: "zai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 131072 },
   // OpenCode serves the same weights under this free id from its OWN inference
   // service, which validates the body strictly: the zai `thinking` object the
   // *glm-5.3* pattern emits is answered
@@ -271,22 +262,6 @@ export const PROVIDER_CAPABILITIES = {
     // catalog overlay, so maxOutput must be stated here too).
     "claude-haiku-5-5": { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
   },
-  // OpenCode Free (oc) — the free lane's MiMo route is OpenRouter-backed and takes
-  // the plain OpenAI reasoning_effort enum verbatim (live probe on
-  // oc/mimo-v2.6-flash-free: none|minimal|low|medium|high|xhigh|max all 200, any
-  // other value 400 "Invalid option"; "none" really drops thinking — empty
-  // reasoning_content and reasoning_tokens 0). The global *mimo*v2.6* pattern
-  // describes Xiaomi's own API (DeepSeek-shaped `thinking` object, always on),
-  // which this lane ignores: `thinking.type:disabled` still streamed reasoning.
-  // Limits repeat the family pattern deliberately: the synced catalog carries no
-  // `opencode` limit delta for this id, so 1M/131k is what the lane already
-  // published before this override — but the override short-circuits the catalog
-  // overlay, so models.dev's free-lane listing (200000/32000) has to be applied
-  // here if a probe ever pins the lane's real window (a 200k `max_tokens` is
-  // accepted, so the 32k figure is not enforced at request validation).
-  "opencode": {
-    "mimo-v2.6-flash-free": { vision: true, audioInput: true, videoInput: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: true, contextWindow: 1048576, maxOutput: 131072 },
-  },
   "commandcode": {
     // The generic commandcode fallback (1M/384k for every unlisted model) happened
     // to give haiku-5-5 the right context by accident. Pin it to the catalog values:
@@ -298,9 +273,6 @@ export const PROVIDER_CAPABILITIES = {
   "codex": {
     "gpt-6-astra":               { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 },
     "gpt-6-sol":                 { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 },
-    // Without its own entry gpt-6.1-sol fell through to *gpt-6* (1.05M), overstating
-    // the Codex window like any unlisted sibling would.
-    "gpt-6.1-sol":               { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 },
     "gpt-6-luna":                { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 },
     "gpt-6-astra[1m]":           CODEX_EXTENDED_CAPS,
     "gpt-6-sol[1m]":             CODEX_EXTENDED_CAPS,
@@ -419,37 +391,6 @@ export const PROVIDER_CAPABILITIES = {
     "poolside/laguna-xs-2.1:free":      { tools: true, reasoning: true, thinkingFormat: "nous", contextWindow: 262144, maxOutput: 32768 },
     "stealth/missingno":                { tools: true, reasoning: true, thinkingFormat: "nous", contextWindow: 262144, maxOutput: 131072 },
   },
-};
-
-// Qoder model capability table. The model ids are opaque (`dmodel`, `kmodel`,
-// `qmodel_38max`), so the name heuristics in PATTERN_CAPABILITIES match none of
-// them — without this table every Qoder model is reported text-only and an
-// image sent by a client is replaced by a placeholder before it ever reaches
-// the model. Context/output limits mirror what /algo/api/v2/model/list reports.
-PROVIDER_CAPABILITIES["qoder"] = {
-  // Tier aliases resolve to a variable target upstream; keep them text-only and
-  // on the default window rather than guessing.
-  "auto":         { contextWindow: 200000, maxOutput: 32768 },
-  "efficient":    { contextWindow: 200000, maxOutput: 32768 },
-  "lite":         { contextWindow: 200000, maxOutput: 32768 },
-  // Concrete ids read images back, so they are vision-capable.
-  "ultimate":     { vision: true, reasoning: true, contextWindow: 200000, maxOutput: 65536 },
-  "performance":  { vision: true, contextWindow: 200000, maxOutput: 65536 },
-  "qmodel_38max": { vision: true, reasoning: true, contextWindow: 200000, maxOutput: 65536 },
-  "qmodel_latest":{ vision: true, contextWindow: 200000, maxOutput: 65536 },
-  "qmodel":       { vision: true, contextWindow: 200000, maxOutput: 65536 },
-  "qfmodel":      { vision: true, reasoning: true, contextWindow: 200000, maxOutput: 65536 },
-  "kmodel_latest":{ vision: true, contextWindow: 200000, maxOutput: 65536 },
-  "kmodel":       { vision: true, contextWindow: 200000, maxOutput: 65536 },
-  "gmodel":       { vision: true, reasoning: true, contextWindow: 200000, maxOutput: 65536 },
-  "gfmodel":      { vision: true, reasoning: true, contextWindow: 200000, maxOutput: 65536 },
-  "dmodel":       { vision: true, reasoning: true, contextWindow: 200000, maxOutput: 65536 },
-  "dfmodel":      { vision: true, reasoning: true, contextWindow: 200000, maxOutput: 65536 },
-  "mmodel":       { vision: true, contextWindow: 200000, maxOutput: 65536 },
-  // Frontier reasoning pair; absent from many per-account catalogs, so they are
-  // routed through a static model_config (see shared/qoder/constants.js).
-  "smodel":       { vision: true, reasoning: true, contextWindow: 180000, maxOutput: 65536 },
-  "cmodel":       { vision: true, reasoning: true, contextWindow: 180000, maxOutput: 65536 },
 };
 
 // Qoder CN serves the identical model catalog from the CN gateway, so it shares
@@ -659,7 +600,11 @@ export const PATTERN_CAPABILITIES = [
  * Union:        vision, pdf, audioInput, videoInput, imageOutput, audioOutput, search
  * Intersection: tools
  * Primary:      reasoning fields from the first (primary) model
- * Conservative: contextWindow = min; maxOutput = min
+ * Window:       contextWindow and maxOutput both follow the largest member, because a
+ *               combo fails over instead of splitting one conversation across models.
+ *               Reporting the smallest window would make a client compact a 1M model
+ *               down to 256k for no reason. A combo may set its own window, which then
+ *               wins over the auto-detected one.
  *
  * @param {string[]} comboModels
  * @param {Object|null} [comboLookup] optional map of combo name → models array for nested resolution
@@ -668,26 +613,34 @@ export const PATTERN_CAPABILITIES = [
  *   limits it supplies and silently falls back to the generic patterns below. Callers that
  *   have the server's answer (/api/models, via useModelCaps) pass it here; it is merged over
  *   the local tables, so fields it does not carry (tools, pdf, audio/video, thinking*) survive.
+ *   Anything that is not a function is ignored: this slot used to hold the recursion depth,
+ *   and a stale call site passing a number there took the whole models list down with
+ *   "e is not a function" the moment a user had a combo.
  * @param {number} [_depth] internal recursion depth guard
+ * @param {number} [contextOverride] explicit contextWindow set on the combo, 0 = auto
  * @returns {object|null} full capabilities object, or null for empty input
  */
-export function aggregateComboCapabilities(comboModels, comboLookup = null, resolveCaps = null, _depth = 0) {
+export function aggregateComboCapabilities(comboModels, comboLookup = null, resolveCaps = null, _depth = 0, contextOverride = 0) {
   if (!comboModels?.length || _depth > 6) return null;
+  const resolve = typeof resolveCaps === "function" ? resolveCaps : null;
   const allCaps = comboModels.map((fullId) => {
     // Nested combo: bare name (no slash) that exists in the lookup — recurse
     if (!fullId.includes("/") && comboLookup?.[fullId]) {
-      return aggregateComboCapabilities(comboLookup[fullId], comboLookup, resolveCaps, _depth + 1)
-          ?? resolveCaps?.(fullId)
+      return aggregateComboCapabilities(comboLookup[fullId], comboLookup, resolve, _depth + 1, contextOverride)
+          ?? resolve?.(fullId)
           ?? getCapabilitiesForModel(null, fullId);
     }
     const slash = fullId.indexOf("/");
     const provider = slash === -1 ? null : fullId.slice(0, slash);
     const model = slash === -1 ? fullId : fullId.slice(slash + 1);
     const local = getCapabilitiesForModel(provider, model);
-    const override = resolveCaps?.(fullId);
+    const override = resolve?.(fullId);
     return override ? { ...local, ...override } : local;
   });
   const first = allCaps[0];
+  const windows = allCaps.map((c) => c.contextWindow).filter(Number.isFinite);
+  const outputs = allCaps.map((c) => c.maxOutput).filter(Number.isFinite);
+  const override = Number(contextOverride);
   return {
     vision:      allCaps.some((c) => c.vision),
     pdf:         allCaps.some((c) => c.pdf),
@@ -701,8 +654,10 @@ export function aggregateComboCapabilities(comboModels, comboLookup = null, reso
     thinkingFormat:     first.thinkingFormat,
     thinkingCanDisable: first.thinkingCanDisable,
     thinkingRange:      first.thinkingRange,
-    contextWindow: Math.min(...allCaps.map((c) => c.contextWindow)),
-    maxOutput:     Math.min(...allCaps.map((c) => c.maxOutput)),
+    contextWindow: Number.isFinite(override) && override > 0
+      ? override
+      : (windows.length ? Math.max(...windows) : DEFAULT_CAPABILITIES.contextWindow),
+    maxOutput: outputs.length ? Math.max(...outputs) : DEFAULT_CAPABILITIES.maxOutput,
   };
 }
 

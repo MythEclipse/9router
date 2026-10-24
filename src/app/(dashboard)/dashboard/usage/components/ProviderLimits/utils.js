@@ -809,6 +809,22 @@ export function parseQuotaData(provider, data) {
         }
         break;
 
+      case "cursor":
+        // Plan spend is USD (cents from GetCurrentPeriodUsage). Forward
+        // remainingPercentage only — do not pass absolute remaining (UI treats it as %).
+        if (data.quotas) {
+          Object.entries(data.quotas).forEach(([name, quota]) => {
+            normalizedQuotas.push({
+              name,
+              used: quota.used || 0,
+              total: quota.total || 0,
+              resetAt: quota.resetAt || null,
+              remainingPercentage: quota.remainingPercentage,
+            });
+          });
+        }
+        break;
+
       case "groq":
         // Requests/Tokens rate-limit windows from response headers — absolute
         // used/total (calculatePercentage derives the bar), like Codex/Kiro.
@@ -883,18 +899,19 @@ export function parseQuotaData(provider, data) {
         break;
 
       default:
-        // Generic fallback for unknown providers
+        // Generic fallback for unknown providers, including compatible nodes
+        // that opt in to the standard /credits endpoint.
         if (data.quotas) {
           Object.entries(data.quotas).forEach(([name, quota]) => {
             normalizedQuotas.push({
-              name: quota.name || name,
+              name,
               used: quota.used || 0,
               total: quota.total || 0,
-              percentage: quota.percentage,
-              colorPercentage: quota.colorPercentage,
-              percentageIsUsed: quota.percentageIsUsed === true,
+              remainingPercentage: quota.remainingPercentage,
               resetAt: quota.resetAt || null,
-              emptyMessage: quota.emptyMessage || null,
+              unlimited: quota.unlimited,
+              isCreditBalance: quota.isCreditBalance,
+              currency: quota.currency,
             });
           });
         }

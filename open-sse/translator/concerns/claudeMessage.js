@@ -37,17 +37,6 @@ export function openAICompletionToClaudeMessage(responseBody) {
   if (content.length === 0) content.push({ type: CLAUDE_BLOCK.TEXT, text: "" });
 
   const usage = responseBody.usage || {};
-  // Usage follows Anthropic's contract (same maths as
-  // translator/response/openai-to-claude.js): `input_tokens` EXCLUDES the cache
-  // tokens, which are reported alongside as cache_read/cache_creation — OpenAI's
-  // `prompt_tokens` includes them, so it must be subtracted or the client
-  // double-counts.
-  const promptTokens = usage.prompt_tokens || usage.input_tokens || 0;
-  const cacheRead = usage.prompt_tokens_details?.cached_tokens ?? usage.cache_read_input_tokens;
-  const cacheCreate = usage.prompt_tokens_details?.cache_creation_tokens ?? usage.cache_creation_input_tokens;
-  const cacheReadTokens = typeof cacheRead === "number" && cacheRead > 0 ? cacheRead : 0;
-  const cacheCreateTokens = typeof cacheCreate === "number" && cacheCreate > 0 ? cacheCreate : 0;
-
   return {
     id: String(responseBody.id || `msg_${Date.now()}`).replace(/^chatcmpl-/, ""),
     type: RESPONSES_ITEM.MESSAGE,
@@ -57,11 +46,8 @@ export function openAICompletionToClaudeMessage(responseBody) {
     stop_reason: fromOpenAIFinish(choice.finish_reason, FORMATS.CLAUDE),
     stop_sequence: null,
     usage: {
-      input_tokens: Math.max(0, promptTokens - cacheReadTokens - cacheCreateTokens),
+      input_tokens: usage.prompt_tokens || usage.input_tokens || 0,
       output_tokens: usage.completion_tokens || usage.output_tokens || 0,
-      // Anthropic clients account cache spend off these.
-      ...(cacheReadTokens > 0 ? { cache_read_input_tokens: cacheReadTokens } : {}),
-      ...(cacheCreateTokens > 0 ? { cache_creation_input_tokens: cacheCreateTokens } : {}),
     },
   };
 }

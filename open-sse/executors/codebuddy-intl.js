@@ -1,4 +1,4 @@
-import crypto, { createHash, randomUUID } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { DefaultExecutor } from "./default.js";
 import { resolveContinuationId, resolveSessionIdentity } from "../utils/sessionManager.js";
 
@@ -22,6 +22,28 @@ function copyClientHeader(headers, rawHeaders, name) {
   if (!source || typeof rawHeaders[source] !== "string" || !rawHeaders[source].trim()) return null;
   headers[source] = rawHeaders[source].trim();
   return headers[source];
+}
+
+/**
+ * RFC 9562 UUIDv7: 48-bit millisecond timestamp first, then random bits.
+ *
+ * The desktop client's request / message ids are this shape (dashed UUID whose
+ * version nibble is 7); dropping the dashes yields the 32-hex form the gateway
+ * actually puts in the request headers.
+ */
+function uuid7() {
+  const buf = randomBytes(16);
+  const ms = Date.now();
+  buf[0] = (ms / 2 ** 40) & 0xff;
+  buf[1] = (ms / 2 ** 32) & 0xff;
+  buf[2] = (ms / 2 ** 24) & 0xff;
+  buf[3] = (ms / 2 ** 16) & 0xff;
+  buf[4] = (ms / 2 ** 8) & 0xff;
+  buf[5] = ms & 0xff;
+  buf[6] = (buf[6] & 0x0f) | 0x70; // version 7
+  buf[8] = (buf[8] & 0x3f) | 0x80; // RFC variant
+  const hex = buf.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }
 
 /**
@@ -57,44 +79,45 @@ export class CodeBuddyIntlExecutor extends DefaultExecutor {
     super("codebuddy-intl");
   }
 
-  // Upstream "channel verification" (HTTP 400 code 11128 "conversation id
-  // missing", 9router #4892): the intl gateway now rejects any request that
-  // does not carry the X-Conversation-* header family the official IDE sends
-  // on every turn — a conversation id derived stably from the session key,
-  // plus fresh UUIDs for the request and the message. Verified A/B against
-  // the live upstream: same credentials and body, headers absent -> 11128,
-  // headers present -> 200 SSE. codebuddy-cn (copilot.tencent.com) is not
-  // gated yet, so only the intl executor grows these headers.
+  /**
+   * The gateway's channel check reads the request's conversation header family.
+   * A chat request that carries none of it is rejected with HTTP 400 /
+   * code 11-128 (`conversation id missing`, displayTips「这次调用没通过渠道
+   * 校验，可能不是官方客户端发出的」). The desktop client sends all four:
+   *
+   *   X-Conversation-ID          dashed UUID
+   *   X-Conversation-Request-ID  32 hex  (same value as X-Root-Request-ID)
+   *   X-Root-Request-ID          32 hex
+   *   X-Conversation-Message-ID  32 hex  (same value as X-Request-ID)
+   *   X-Request-ID               32 hex
+   *
+   * plus the W3C/B3 trace family, which the client derives from the same
+   * traceparent. Upstream keeps no history under the conversation id — a fresh
+   * id per call is accepted (verified against the 5.8.4 capture), so no
+   * cross-request session state is needed here.
+   */
   buildHeaders(credentials, stream = true, url, model, body = null) {
     const headers = super.buildHeaders(credentials, stream, url, model, body);
-    const rawHeaders = credentials?.rawHeaders || {};
-    const suppliedConversationId = copyClientHeader(headers, rawHeaders, "X-Conversation-ID");
-    copyClientHeader(headers, rawHeaders, "X-Conversation-Request-ID");
-    copyClientHeader(headers, rawHeaders, "X-Conversation-Message-ID");
 
-    if (!suppliedConversationId) {
-      const sessionHeaders = typeof rawHeaders.entries === "function"
-        ? Object.fromEntries(rawHeaders.entries())
-        : Object.fromEntries(Object.entries(rawHeaders).map(([key, value]) => [key.toLowerCase(), value]));
-      // Only explicit client identity can join turns; account or text is not a conversation.
-      const identity = credentials?._codebuddySessionIdentity || resolveSessionIdentity({
-        headers: sessionHeaders,
-        body: body ? { ...body, messages: undefined, input: undefined } : null,
-        scope: "codebuddy-intl",
-      });
-      headers["X-Conversation-ID"] = resolveContinuationId({
-        sessionId: identity.sessionId,
-        connectionId: credentials?.connectionId,
-        scope: "codebuddy-intl",
-        ephemeral: identity.ephemeral,
-      });
-    }
-    if (!findHeaderKey(headers, "X-Conversation-Request-ID")) {
-      headers["X-Conversation-Request-ID"] = crypto.randomUUID();
-    }
-    if (!findHeaderKey(headers, "X-Conversation-Message-ID")) {
-      headers["X-Conversation-Message-ID"] = crypto.randomUUID();
-    }
+    const convId = uuid7();
+    const convReqId = uuid7().replace(/-/g, "");
+    const msgId = uuid7().replace(/-/g, "");
+    const trace = uuid7().replace(/-/g, "");
+    const span = randomBytes(8).toString("hex");
+
+    headers["X-Conversation-ID"] = convId;
+    headers["X-Conversation-Request-ID"] = convReqId;
+    headers["X-Root-Request-ID"] = convReqId;
+    headers["X-Conversation-Message-ID"] = msgId;
+    headers["X-Request-ID"] = msgId;
+
+    headers["X-Trace-ID"] = trace;
+    headers["traceparent"] = `00-${trace}-${span}-01`;
+    headers["b3"] = `${trace}-${span}-1`;
+    headers["X-B3-TraceId"] = trace;
+    headers["X-B3-SpanId"] = span;
+    headers["X-B3-Sampled"] = "1";
+
     return headers;
   }
 

@@ -17,8 +17,6 @@ const RESPONSES_CAPABLE = ["deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v4.
 // Served from /messages only — /chat/completions answers ModelProtocolUnsupported,
 // so every other client wire has to translate through the declared claude target.
 const CLAUDE_ONLY = ["claude-haiku-5-5"];
-// Served from /models only — requires Google Generative AI wire protocol.
-const GEMINI_ONLY = ["gemini-4-argon-contributor"];
 
 // Mirror of chatCore's per-model transport guard: use the sourceFormat-matched
 // transport only when the model declares support for that sourceFormat.
@@ -44,10 +42,6 @@ describe("OpenCode Go model catalog", () => {
       "grok-4.7", "grok-4.6", "grok-4.5", "gpt-5.6-luna", "gpt-6-luna",
       "muse-spark-1.2-contributor", "muse-spark-1.3-contributor",
       "claude-haiku-5-5",
-      "gemini-4-argon-contributor",
-      "longcat-2.5-preview-free",
-      "step-5-preview",
-      "beam-free",
     ]);
   });
 });
@@ -118,13 +112,6 @@ describe("OpenCode Go per-model supportedFormats", () => {
       expect(getModelTargetFormat("opencode-go", m)).toBe("claude");
     }
   });
-
-  it("declares [gemini] only for /models-only models (gemini-4-argon-contributor)", () => {
-    for (const m of GEMINI_ONLY) {
-      expect(getModelSupportedFormats("opencode-go", m)).toEqual(["gemini"]);
-      expect(getModelTargetFormat("opencode-go", m)).toBe("gemini");
-    }
-  });
 });
 
 describe("OpenCode Go multi-endpoint transports", () => {
@@ -169,15 +156,6 @@ describe("OpenCode Go per-model transport guard (chatCore logic)", () => {
   it("pins /messages-only models to /messages for the claude wire", () => {
     for (const m of CLAUDE_ONLY) {
       expect(pickTransport("opencode-go", "claude", "opencode-go", m)?.baseUrl).toBe("https://opencode.ai/zen/go/v1/messages");
-    }
-  });
-
-  it("pins /models-only models to /models for the gemini wire", () => {
-    for (const m of GEMINI_ONLY) {
-      expect(pickTransport("opencode-go", "gemini", "opencode-go", m)?.baseUrl).toBe("https://opencode.ai/inference/go/v1/models");
-      expect(pickTransport("opencode-go", "openai", "opencode-go", m)).toBeNull();
-      expect(pickTransport("opencode-go", "claude", "opencode-go", m)).toBeNull();
-      expect(pickTransport("opencode-go", "openai-responses", "opencode-go", m)).toBeNull();
     }
   });
 

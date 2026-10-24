@@ -42,28 +42,23 @@ function anthropicErrorType(statusCode) {
  * API envelope `{ type: "error", error: { type, message } }`.
  * @param {number} statusCode - HTTP status code
  * @param {string} message - Error message
- * @param {string} [clientFormat] - FORMATS.CLAUDE → Anthropic envelope, else OpenAI
- * @returns {object} Error response body
+ * @param {boolean} [hideError] - Whether to hide the real error message
+ * @returns {object} Error response object
  */
-export function buildErrorBody(statusCode, message, clientFormat = null) {
+export function buildErrorBody(statusCode, message, hideError = false) {
   const errorInfo = ERROR_TYPES[statusCode] || 
     (statusCode >= 500 
       ? { type: "server_error", code: "internal_server_error" }
       : { type: "invalid_request_error", code: "" });
 
-  if (clientFormat === FORMATS.CLAUDE) {
-    return {
-      type: "error",
-      error: {
-        type: anthropicErrorType(statusCode),
-        message: message || ANTHROPIC_ERROR_MESSAGES[statusCode] || DEFAULT_ERROR_MESSAGES[statusCode] || "An error occurred",
-      },
-    };
-  }
+  const rawMessage = message || DEFAULT_ERROR_MESSAGES[statusCode] || "An error occurred";
+  const finalMessage = hideError
+    ? "There is an error but this error is hidden, try checking your error log."
+    : rawMessage;
 
   return {
     error: {
-      message: message || DEFAULT_ERROR_MESSAGES[statusCode] || "An error occurred",
+      message: finalMessage,
       type: errorInfo.type,
       code: errorInfo.code
     }
@@ -74,12 +69,12 @@ export function buildErrorBody(statusCode, message, clientFormat = null) {
  * Create error Response object (for non-streaming)
  * @param {number} statusCode - HTTP status code
  * @param {string} message - Error message
- * @param {object} [extraHeaders] - Extra headers
- * @param {string} [clientFormat] - FORMATS.CLAUDE → Anthropic error envelope, else OpenAI
+ * @param {object} [extraHeaders] - Optional headers
+ * @param {boolean} [hideError] - Whether to hide error message
  * @returns {Response} HTTP Response object
  */
-export function errorResponse(statusCode, message, extraHeaders = null, clientFormat = null) {
-  return new Response(JSON.stringify(buildErrorBody(statusCode, message, clientFormat)), {
+export function errorResponse(statusCode, message, extraHeaders = null, hideError = false) {
+  return new Response(JSON.stringify(buildErrorBody(statusCode, message, hideError)), {
     status: statusCode,
     headers: {
       "Content-Type": "application/json",
@@ -96,10 +91,10 @@ export function errorResponse(statusCode, message, extraHeaders = null, clientFo
  * @param {WritableStreamDefaultWriter} writer - Stream writer
  * @param {number} statusCode - HTTP status code
  * @param {string} message - Error message
- * @param {string} [clientFormat] - FORMATS.CLAUDE → Anthropic envelope, else OpenAI
+ * @param {boolean} [hideError] - Whether to hide error message
  */
-export async function writeStreamError(writer, statusCode, message, clientFormat = null) {
-  const errorBody = buildErrorBody(statusCode, message, clientFormat);
+export async function writeStreamError(writer, statusCode, message, hideError = false) {
+  const errorBody = buildErrorBody(statusCode, message, hideError);
   const encoder = new TextEncoder();
   const frame = clientFormat === FORMATS.CLAUDE
     ? `event: error\ndata: ${JSON.stringify(errorBody)}\n\n`
@@ -153,13 +148,13 @@ export async function parseUpstreamError(response, executor = null) {
  * @param {number} [resetsAtMs] - Optional precise cooldown expiry (ms epoch) for provider-specific quota errors
  * @returns {{ success: false, status: number, error: string, response: Response, resetsAtMs?: number }}
  */
-export function createErrorResult(statusCode, message, resetsAtMs, extraHeaders = null, clientFormat = null) {
+export function createErrorResult(statusCode, message, resetsAtMs, extraHeaders = null, hideError = false) {
   return {
     success: false,
     status: statusCode,
     error: message,
     resetsAtMs,
-    response: errorResponse(statusCode, message, extraHeaders, clientFormat)
+    response: errorResponse(statusCode, message, extraHeaders, hideError)
   };
 }
 

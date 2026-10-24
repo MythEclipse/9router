@@ -1,10 +1,10 @@
-// Pricing rates for AI models — all rates in $/1M tokens
+// Pricing rates for AI models - all rates in $/1M tokens
 //
 // Fallback order (first match wins):
-//   1. PROVIDER_PRICING[provider][model]  — provider-specific override
-//   2. FREE_MODEL_NAMESPACES               — upstream bills these at $0
-//   3. MODEL_PRICING[model]               — canonical model price (provider-agnostic)
-//   4. PATTERN_PRICING                    — glob pattern match (e.g. "codex-*")
+//   1. PROVIDER_PRICING[provider][model]  - provider-specific override
+//   2. FREE_MODEL_NAMESPACES               - upstream bills these at $0
+//   3. MODEL_PRICING[model]               - canonical model price (provider-agnostic)
+//   4. PATTERN_PRICING                    - glob pattern match (e.g. "codex-*")
 
 /**
  * Namespaces upstream meters at $0. A free model must never inherit a paid
@@ -26,11 +26,14 @@ export function isFreeModel(model) {
 }
 
 /**
- * Canonical model pricing — provider-agnostic.
+ * Canonical model pricing - provider-agnostic.
  * Cover all known models; deduplicated across providers.
  */
 export const MODEL_PRICING = {
   // === Anthropic / Claude ===
+  "claude-opus-5.5":              { input: 5.00,  output: 25.00, cached: 0.50,  reasoning: 25.00,  cache_creation: 6.25  },
+  "claude-opus-5.5-thinking":     { input: 5.00,  output: 25.00, cached: 0.50,  reasoning: 25.00,  cache_creation: 6.25  },
+  "claude-opus-5.5-agentic":      { input: 5.00,  output: 25.00, cached: 0.50,  reasoning: 25.00,  cache_creation: 6.25  },
   "claude-opus-4-6":              { input: 5.00,  output: 25.00, cached: 0.50,  reasoning: 25.00,  cache_creation: 6.25  },
   "claude-opus-4-5-20251101":     { input: 5.00,  output: 25.00, cached: 0.50,  reasoning: 25.00,  cache_creation: 6.25  },
   "claude-sonnet-4-6":            { input: 3.00,  output: 15.00, cached: 0.30,  reasoning: 15.00,  cache_creation: 3.75  },
@@ -197,11 +200,11 @@ export const MODEL_PRICING = {
  * Keyed by provider alias (cc, cx, gc, gh, ...) or provider id (openai, anthropic, ...).
  */
 export const PROVIDER_PRICING = {
-  // GitHub Copilot (gh) — explicit override, matches canonical gpt-5.3-codex rate
+  // GitHub Copilot (gh) - explicit override, matches canonical gpt-5.3-codex rate
   gh: {
     "gpt-5.3-codex": { input: 1.75, output: 14.00, cached: 0.175, reasoning: 14.00, cache_creation: 1.75 },
   },
-  // TokenRouter — exact rates from https://api.tokenrouter.com/api/pricing ($1/1M tokens).
+  // TokenRouter - exact rates from https://api.tokenrouter.com/api/pricing ($1/1M tokens).
   // Ratio→USD: input = model_ratio×2, output = model_ratio×completion_ratio×2.
   // These override the canonical MODEL_PRICING/PATTERN_PRICING, whose rates often
   // differ from TokenRouter's reseller pricing.
@@ -321,9 +324,9 @@ export const PROVIDER_PRICING = {
 };
 
 /**
- * Pattern-based pricing fallback — matched when no exact model entry found.
+ * Pattern-based pricing fallback - matched when no exact model entry found.
  * Patterns use simple glob: "*" matches any substring.
- * First match wins — order matters.
+ * First match wins - order matters.
  */
 export const PATTERN_PRICING = [
   // --- Codex variants ---
@@ -456,12 +459,26 @@ export function getPricingForModel(provider, model) {
     }
   }
 
-  return null;
+  // 4. Free-tier / community models - priced at zero so they're distinguishable from unknown
+  if (/(^|[-_/])(free|contributor|community|opencode|zen|preview-?free)([-_]|$)/i.test(model)) {
+    return { input: 0, output: 0, cached: 0, reasoning: 0, cache_creation: 0 };
+  }
+
+  // 5. Default fallback for any unlisted model so Est. Cost is never always $0.00.
+  //    Users can override any of these rates in the Pricing settings page.
+  return { ...DEFAULT_PRICING };
 }
 
 /**
+ * Default pricing for unlisted models ($/1M tokens).
+ * A conservative mid-range rate so Est. Cost shows a meaningful number
+ * for models that have no explicit pricing entry in the table above.
+ */
+const DEFAULT_PRICING = { input: 0.50, output: 2.00, cached: 0.25, reasoning: 2.00, cache_creation: 0.50 };
+
+/**
  * Get all provider pricing (for UI / API).
- * Returns PROVIDER_PRICING — consumers should fall back to MODEL_PRICING for unlisted models.
+ * Returns PROVIDER_PRICING - consumers should fall back to MODEL_PRICING for unlisted models.
  */
 export function getDefaultPricing() {
   return PROVIDER_PRICING;

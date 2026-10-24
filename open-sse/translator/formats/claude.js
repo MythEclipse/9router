@@ -318,7 +318,7 @@ export function ensureTrailingUserTurn(messages, originalLastRole) {
   return [...messages, { role: ROLE.USER, content: [{ type: CLAUDE_BLOCK.TEXT, text: TRAILING_USER_PLACEHOLDER }] }];
 }
 
-// Put a 1h breakpoint on the last cache-eligible block of a message.
+// Put a 5m breakpoint on the last cache-eligible block of a message.
 // thinking/redacted_thinking blocks do not accept cache_control.
 function markLastCacheableBlock(msg) {
   if (!Array.isArray(msg?.content)) return false;
@@ -335,7 +335,7 @@ function markLastCacheableBlock(msg) {
 // In an agent's tool loop, a request ends with the results of the last
 // assistant turn's tool calls -- after that turn's breakpoint. They go at the
 // full input price, and the next request (which appends to them) writes them
-// into the cache. When the 4-marker budget has room, a 1h breakpoint on that
+// into the cache. When the 4-marker budget has room, a 5m breakpoint on that
 // final user turn caches them now, and the next request reads them.
 function markFinalToolResults(body) {
   const messages = body?.messages;
@@ -343,7 +343,7 @@ function markFinalToolResults(body) {
   if (last?.role !== ROLE.USER || !Array.isArray(last.content)) return false;
   if (!last.content.some((block) => block?.type === CLAUDE_BLOCK.TOOL_RESULT)) return false;
   if (last.content.some((block) => block?.cache_control)) return false;
-  if (countCacheControlBlocks(body) >= CACHE_DEFAULT_MARKERS) return false;
+  if (countCacheControlBlocks(body) >= 4) return false;
   return markLastCacheableBlock(last);
 }
 

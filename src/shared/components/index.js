@@ -8,6 +8,8 @@ export { default as Loading, Spinner, PageLoading, Skeleton, CardSkeleton } from
 export { default as Avatar } from "./Avatar";
 export { default as Badge } from "./Badge";
 export { default as Toggle } from "./Toggle";
+export { default as Pagination } from "./Pagination";
+export { default as PluginMark } from "./PluginMark";
 export { default as ThemeToggle } from "./ThemeToggle";
 export { ThemeProvider } from "./ThemeProvider";
 export { default as Sidebar } from "./Sidebar";
@@ -19,7 +21,6 @@ export { default as ManualConfigModal } from "./ManualConfigModal";
 export { default as ComboFormModal } from "./ComboFormModal";
 export { default as McpMarketplaceModal } from "./McpMarketplaceModal";
 export { default as LanguageSwitcher } from "./LanguageSwitcher";
-export { default as NineRemoteButton } from "./NineRemoteButton";
 export { default as HeaderMenu } from "./HeaderMenu";
 export { default as ChangelogModal } from "./ChangelogModal";
 export { default as RequestLogger } from "./RequestLogger";
@@ -38,7 +39,11 @@ export { default as SegmentedControl } from "./SegmentedControl";
 export { default as Tooltip } from "./Tooltip";
 export { default as ProviderInfoCard } from "./ProviderInfoCard";
 export { default as CapacityBadges } from "./CapacityBadges";
-export { default as SmartPolicyModal } from "./SmartPolicyModal";
+export { default as ModelTierBadge } from "./ModelTierBadge";
+export { default as WelcomeModal } from "./WelcomeModal";
+export { default as UpdateBanner } from "./UpdateBanner";
+export { default as DownloadBackupModal } from "./DownloadBackupModal";
+export { default as PageShell, TableScroll } from "./PageShell";
 
 // Layouts
 export * from "./layouts";

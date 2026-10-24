@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useRef } from "react";
 import PropTypes from "prop-types";
-import { useTheme } from "@/shared/hooks/useTheme";
 import ChangelogModal from "./ChangelogModal";
 import { ConfirmModal } from "./Modal";
+import ThemeModal from "./ThemeModal";
+import { useSessionStore } from "@/store/sessionStore";
 
 function MenuItem({ icon, label, onClick, trailing, danger }) {
   return (
@@ -13,7 +14,7 @@ function MenuItem({ icon, label, onClick, trailing, danger }) {
       className={`flex items-center gap-3 w-full px-4 py-2.5 text-sm transition-colors ${
         danger
           ? "text-red-500 hover:bg-red-500/10"
-          : "text-text-main hover:bg-black/5 dark:hover:bg-white/5"
+          : "text-text-main hover:bg-surface-2"
       }`}
     >
       <span className={`material-symbols-outlined text-[20px] ${danger ? "" : "text-text-muted"}`}>
@@ -34,11 +35,18 @@ MenuItem.propTypes = {
 };
 
 export default function HeaderMenu({ onLogout }) {
+  // The site-wide theme is an administrator setting; a key-signed session gets
+  // no control over it at all.
+  const role = useSessionStore((state) => state.role);
+  const canChangeTheme = role !== "apikey";
+  // Same rule as the theme row: a key session is a guest, not an operator, so
+  // it never sees the control (the route refuses it anyway).
+  const canShutdown = role !== "apikey";
   const [isOpen, setIsOpen] = useState(false);
   const [changelogOpen, setChangelogOpen] = useState(false);
+  const [themeModalOpen, setThemeModalOpen] = useState(false);
   const [shutdownOpen, setShutdownOpen] = useState(false);
   const [isShuttingDown, setIsShuttingDown] = useState(false);
-  const { toggleTheme, isDark } = useTheme();
   const menuRef = useRef(null);
 
   const handleShutdown = async () => {
@@ -71,30 +79,34 @@ export default function HeaderMenu({ onLogout }) {
       <div className="relative" ref={menuRef}>
         <button
           onClick={() => setIsOpen((v) => !v)}
-          className="flex items-center justify-center p-2 rounded-lg text-text-muted hover:text-text-main hover:bg-black/5 dark:hover:bg-white/5 transition-all"
+          className="flex items-center justify-center p-2 rounded-[10px] text-text-muted hover:text-text-main hover:bg-surface-2 transition-all"
           title="Menu"
         >
           <span className="material-symbols-outlined">grid_view</span>
         </button>
 
         {isOpen && (
-          <div className="absolute right-0 top-full mt-2 w-60 bg-surface border border-black/10 dark:border-white/10 rounded-xl shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150 overflow-hidden py-1">
+          <div className="absolute right-0 top-full mt-2 w-60 bg-surface border border-border-subtle rounded-xl shadow-[var(--shadow-elev)] z-50 slide-in-top overflow-hidden py-1">
             <MenuItem
               icon="history"
               label="Change Log"
               onClick={() => { close(); setChangelogOpen(true); }}
             />
-            <MenuItem
-              icon={isDark ? "light_mode" : "dark_mode"}
-              label="Theme"
-              onClick={() => { toggleTheme(); close(); }}
-            />
-            <MenuItem
-              icon="power_settings_new"
-              label="Shutdown"
-              danger
-              onClick={() => { close(); setShutdownOpen(true); }}
-            />
+            {canChangeTheme && (
+              <MenuItem
+                icon="palette"
+                label="Theme"
+                onClick={() => { close(); setThemeModalOpen(true); }}
+              />
+            )}
+            {canShutdown && (
+              <MenuItem
+                icon="power_settings_new"
+                label="Shutdown"
+                danger
+                onClick={() => { close(); setShutdownOpen(true); }}
+              />
+            )}
             <MenuItem
               icon="logout"
               label="Logout"
@@ -106,6 +118,7 @@ export default function HeaderMenu({ onLogout }) {
       </div>
 
       <ChangelogModal isOpen={changelogOpen} onClose={() => setChangelogOpen(false)} />
+      <ThemeModal isOpen={themeModalOpen} onClose={() => setThemeModalOpen(false)} />
       <ConfirmModal
         isOpen={shutdownOpen}
         onClose={() => setShutdownOpen(false)}

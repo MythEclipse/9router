@@ -3,14 +3,9 @@ import { PROVIDERS } from "../config/providers.js";
 import { commandCodeToOpenAIResponse } from "../translator/response/commandcode-to-openai.js";
 import { SSE_DONE } from "../utils/sseConstants.js";
 import { commandCodeThreadId, isCommandCodeThreadId } from "../utils/commandCodeSession.js";
-import {
-  appendCommandCodeReasoning,
-  getCommandCodeReasoning,
-  clearCommandCodeReasoningStore,
-} from "../utils/commandcodeReasoningStore.js";
 
 /**
- * CommandCodeExecutor — talks to https://api.commandcode.ai/alpha/generate
+ * CommandCodeExecutor - talks to https://api.commandcode.ai/alpha/generate
  *
  * Auth: Bearer <user_xxx> API key (stored as the connection's apiKey).
  * Adds the per-conversation `x-session-id` header expected by CommandCode

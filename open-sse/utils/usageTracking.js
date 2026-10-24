@@ -57,6 +57,52 @@ export function addBufferToUsage(usage) {
   return result;
 }
 
+/**
+ * Apply token multipliers for custom/virtual models (e.g. 5x completion output tokens)
+ * @param {object} usage - Usage object containing prompt_tokens / completion_tokens
+ * @param {{ inputMultiplier?: number, outputMultiplier?: number }} multipliers
+ * @returns {object}
+ */
+export function applyUsageMultipliers(usage, multipliers) {
+  if (!usage || typeof usage !== "object" || !multipliers) return usage;
+  const inMult = Number(multipliers.inputMultiplier);
+  const outMult = Number(multipliers.outputMultiplier);
+  if ((!inMult || inMult <= 0) && (!outMult || outMult <= 0)) return usage;
+
+  const result = { ...usage };
+  const inFactor = inMult > 0 ? inMult : 1;
+  const outFactor = outMult > 0 ? outMult : 1;
+
+  if (result.prompt_tokens !== undefined) {
+    result.prompt_tokens = Math.round(result.prompt_tokens * inFactor);
+  }
+  if (result.input_tokens !== undefined) {
+    result.input_tokens = Math.round(result.input_tokens * inFactor);
+  }
+  if (result.promptTokenCount !== undefined) {
+    result.promptTokenCount = Math.round(result.promptTokenCount * inFactor);
+  }
+
+  if (result.completion_tokens !== undefined) {
+    result.completion_tokens = Math.round(result.completion_tokens * outFactor);
+  }
+  if (result.output_tokens !== undefined) {
+    result.output_tokens = Math.round(result.output_tokens * outFactor);
+  }
+  if (result.candidatesTokenCount !== undefined) {
+    result.candidatesTokenCount = Math.round(result.candidatesTokenCount * outFactor);
+  }
+
+  const prompt = result.prompt_tokens ?? result.input_tokens ?? result.promptTokenCount ?? 0;
+  const comp = result.completion_tokens ?? result.output_tokens ?? result.candidatesTokenCount ?? 0;
+  if (result.total_tokens !== undefined || result.totalTokenCount !== undefined) {
+    result.total_tokens = prompt + comp;
+    if (result.totalTokenCount !== undefined) result.totalTokenCount = prompt + comp;
+  }
+
+  return result;
+}
+
 export function filterUsageForFormat(usage, targetFormat) {
   if (!usage || typeof usage !== "object") return usage;
 
@@ -180,7 +226,7 @@ export function canonicalizeUsage(usage) {
   // Claude path: prompt excludes cache; cache_read_input_tokens and/or
   // cache_creation_input_tokens are separate. A cache-miss "first write" only
   // carries cache_creation_input_tokens (no cache_read_input_tokens yet), so
-  // check both fields — otherwise a first-write request falls through to the
+  // check both fields - otherwise a first-write request falls through to the
   // OpenAI passthrough branch below and cache_creation never gets folded in.
   // Guard on the absence of `cached_tokens`: our own canonical output always
   // sets that key (even to 0), so re-running canonicalizeUsage on an already-
@@ -337,7 +383,7 @@ export function mergeUsage(prev, next) {
   }
   const merged = { ...prev };
   for (const [k, v] of Object.entries(next)) {
-    // typeof NaN === "number" — guard with Number.isFinite so one malformed
+    // typeof NaN === "number" - guard with Number.isFinite so one malformed
     // chunk can't poison the whole accumulation (Math.max(x, NaN) is NaN).
     if (typeof v === "number" && Number.isFinite(v)) {
       merged[k] = Math.max(typeof merged[k] === "number" ? merged[k] : 0, v);

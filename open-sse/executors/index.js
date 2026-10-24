@@ -11,17 +11,13 @@ import { CodexExecutor } from "./codex.js";
 import { CursorExecutor } from "./cursor.js";
 import { VertexExecutor } from "./vertex.js";
 import { OpenCodeExecutor } from "./opencode.js";
+import { OpenCodeV2Executor } from "./opencode-v2.js";
 import { OpenCodeGoExecutor } from "./opencode-go.js";
 import { OpenCodeZenExecutor } from "./opencode-zen.js";
-import { GrokWebExecutor } from "./grok-web.js";
 import { GrokCliExecutor } from "./grok-cli.js";
-import { PerplexityWebExecutor } from "./perplexity-web.js";
 import { DeepSeekWebExecutor } from "./deepseek-web.js";
 import { GeminiWebExecutor } from "./gemini-web.js";
-import { MuseWebExecutor } from "./muse-web.js";
-import { VeoAiFreeWebExecutor } from "./veoaifree-web.js";
-import { UcWebExecutor } from "./uc-web.js";
-import { ChatGptWebExecutor } from "./chatgpt-web.js";
+import { KimiWebExecutor } from "./kimi-web.js";
 import { OllamaLocalExecutor } from "./ollama-local.js";
 import { CommandCodeExecutor } from "./commandcode.js";
 import { XiaomiTokenplanExecutor } from "./xiaomi-tokenplan.js";
@@ -52,26 +48,32 @@ const executors = {
   vertex: new VertexExecutor("vertex"),
   "vertex-partner": new VertexExecutor("vertex-partner"),
   opencode: new OpenCodeExecutor(),
+  oc1: new OpenCodeExecutor(),
+  oc: new OpenCodeExecutor(),
+  "opencode-v2": new OpenCodeV2Executor(),
+  oc2: new OpenCodeV2Executor(),
   "opencode-go": new OpenCodeGoExecutor(),
   "opencode-zen": new OpenCodeZenExecutor(),
-  "grok-web": new GrokWebExecutor(),
   "grok-cli": new GrokCliExecutor(),
   gcli: new GrokCliExecutor(), // Alias
   gb: new GrokCliExecutor(), // Alias (Grok Build)
-  "perplexity-web": new PerplexityWebExecutor(),
   "deepseek-web": new DeepSeekWebExecutor(),
+  dsw: new DeepSeekWebExecutor(),
+  "deepseek-cookie": new DeepSeekWebExecutor(),
   "gemini-web": new GeminiWebExecutor(),
-  "muse-web": new MuseWebExecutor(),
-  "veoaifree-web": new VeoAiFreeWebExecutor(),
-  "veo-free": new VeoAiFreeWebExecutor(), // Alias
-  "uc-web": new UcWebExecutor(),
-  "chatgpt-web": new ChatGptWebExecutor(),
+  gweb: new GeminiWebExecutor(),
+  "gemini-cookie": new GeminiWebExecutor(),
+  "kimi-web": new KimiWebExecutor(),
+  kweb: new KimiWebExecutor(),
+  "kimi-cookie": new KimiWebExecutor(),
   "ollama-local": new OllamaLocalExecutor(),
   commandcode: new CommandCodeExecutor(),
   "xiaomi-tokenplan": new XiaomiTokenplanExecutor(),
   "xiaomi-mimo": new XiaomiMimoExecutor(),
+  mimocode: new MimoFreeExecutor(), // MiMoCode free channel (anonymous JWT)
+  "mimocode-free": new MimoFreeExecutor(), // Alias for mimocode
+  mmf: new MimoFreeExecutor(), // Retired id for the same channel
   "mimo-free": new MimoFreeExecutor(),
-  mmf: new MimoFreeExecutor(), // Alias for mimo-free
   "codebuddy-cn": new CodeBuddyExecutor(),
   "codebuddy-intl": new CodeBuddyIntlExecutor(),
   trae: new TraeExecutor(),
@@ -116,15 +118,10 @@ export { CursorExecutor } from "./cursor.js";
 export { VertexExecutor } from "./vertex.js";
 export { DefaultExecutor } from "./default.js";
 export { OpenCodeExecutor } from "./opencode.js";
+export { OpenCodeV2Executor } from "./opencode-v2.js";
 export { OpenCodeGoExecutor } from "./opencode-go.js";
 export { OpenCodeZenExecutor } from "./opencode-zen.js";
-export { GrokWebExecutor } from "./grok-web.js";
 export { GrokCliExecutor } from "./grok-cli.js";
-export { PerplexityWebExecutor } from "./perplexity-web.js";
-export { DeepSeekWebExecutor } from "./deepseek-web.js";
-export { GeminiWebExecutor } from "./gemini-web.js";
-export { MuseWebExecutor } from "./muse-web.js";
-export { ChatGptWebExecutor } from "./chatgpt-web.js";
 export { OllamaLocalExecutor } from "./ollama-local.js";
 export { CommandCodeExecutor } from "./commandcode.js";
 export { XiaomiTokenplanExecutor } from "./xiaomi-tokenplan.js";

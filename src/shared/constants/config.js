@@ -13,15 +13,28 @@ export const APP_CONFIG = {
 
 // GitHub configuration
 export const GITHUB_CONFIG = {
-  changelogUrl: "https://raw.githubusercontent.com/decolua/9router/refs/heads/master/CHANGELOG.md",
+  changelogUrl: "https://raw.githubusercontent.com/serenhope/9router/refs/heads/master/CHANGELOG.md",
   donateUrl: "https://9router.com/api/donate",
+  repoUrl: "https://github.com/serenhope/9router",
+  apiRepo: "serenhope/9router", // update checks compare the running checkout with this
+  branch: "master",
+};
+
+// Post-login thank-you dialog: shown once per login, skippable forever.
+export const WELCOME_CONFIG = {
+  shownKey: "9router:welcomeAfterLogin",
+  hideKey: "9router:welcomeNeverShow",
 };
 
 // Updater configuration
 export const UPDATER_CONFIG = {
+  // This install is a fork of the upstream npm package: pulling the published
+  // `9router` from npm would hand the operator a different codebase than the one
+  // reporting the update, so the command points at this repository instead.
   npmPackageName: "9router",
-  installCmd: "npm i -g 9router",
-  installCmdLatest: "npm i -g 9router@latest --prefer-online",
+  repoPackageSpec: "github:serenhope/9router",
+  installCmd: "npm install -g github:serenhope/9router",
+  installCmdLatest: "npm install -g github:serenhope/9router@master",
   shutdownCountdownSec: 3,
   exitDelayMs: 500,
   statusPort: 20129,
@@ -39,7 +52,7 @@ export const UPDATER_CONFIG = {
 // Theme configuration
 export const THEME_CONFIG = {
   storageKey: "theme",
-  defaultTheme: "system", // "light" | "dark" | "system"
+  defaultTheme: "dark", // "light" | "dark" | "system"
 };
 
 // Subscription
@@ -94,6 +107,14 @@ export const QUOTA_AUTOPING_CONFIG = {
       pingReasoningEffort: "none",
     },
   },
+};
+
+// Telegram auto-backup: send the full DB export (same payload as the manual
+// Download Backup) to the owner chat on an interval.
+export const AUTO_BACKUP_CONFIG = {
+  minIntervalHours: 1, // refuse schedules tighter than hourly
+  retryDelayMs: 1800000, // retry after a failed send (30min)
+  maxBytes: 45 * 1024 * 1024, // Telegram bot upload cap is 50MB. stay under it
 };
 
 // Re-export from providers.js for backward compatibility

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSettings, validateApiKey } from "@/lib/localDb";
 import { getConsistentMachineId } from "@/shared/utils/machineId";
-import { verifyDashboardAuthToken } from "@/lib/auth/dashboardSession";
+import { verifyDashboardAuthToken, getDashboardAuthSession } from "@/lib/auth/dashboardSession";
+import { normalizePermissions, requiredPermissionsForApiPath, canOpenPage, firstAllowedPage } from "@/lib/auth/permissionPaths";
 import { hasTrustedPeerHeaders } from "@/lib/auth/trustedPeer";
 import { buildErrorBody } from "open-sse/utils/error.js";
 import { FORMATS } from "open-sse/translator/formats.js";
@@ -21,7 +22,7 @@ async function hasValidCliToken(request) {
   return token === await getCliToken();
 }
 
-// Public API paths — no auth required (LLM API has its own key auth inside handler).
+// Public API paths - no auth required (LLM API has its own key auth inside handler).
 const PUBLIC_API_PATHS = [
   "/api/health",
   "/api/init",
@@ -32,6 +33,9 @@ const PUBLIC_API_PATHS = [
   "/api/auth/oidc",
   "/api/auth/saml",
   "/api/version",
+  // One non-sensitive value that every visitor needs before sign-in; writing it
+  // is checked inside the route (password session only).
+  "/api/theme",
   "/api/settings/require-login",
 ];
 
@@ -61,17 +65,32 @@ const ALWAYS_PROTECTED = [
   "/api/oauth/zed/auto-import",
 ];
 
-// Require auth, but allow through if requireLogin is disabled.
-//
-// NOTE: there is deliberately no PROTECTED_API_PATHS list here. Authorization for
-// /api/* is deny-by-default below (every path needs auth unless it is on
-// PUBLIC_API_PATHS/PUBLIC_PREFIXES), so an allow-list of "protected" prefixes
-// would be dead weight — and the previous one was exactly that: 18 prefixes that
-// no code read, which reads like a security policy to anyone auditing this file
-// while protecting nothing. Add to PUBLIC_API_PATHS to open a route, and to
-// ALWAYS_PROTECTED / LOCAL_ONLY_PATHS to tighten one.
+// Require auth, but allow through if requireLogin is disabled
+const PROTECTED_API_PATHS = [
+  "/api/settings",
+  "/api/notifications",
+  "/api/keys",
+  "/api/providers",
+  "/api/models/test",
+  "/api/provider-nodes",
+  "/api/proxy-pools",
+  "/api/combos",
+  "/api/models",
+  "/api/model-editor",
+  "/api/usage",
+  "/api/oauth",
+  "/api/cloud",
+  "/api/media-providers",
+  "/api/pricing",
+  "/api/tags",
+  "/api/cli-tools",
+  "/api/mcp",
+  "/api/translator",
+  "/api/error-logs",
+  "/api/tunnel",
+];
 
-// Routes that spawn child processes or read host secrets — restrict to localhost.
+// Routes that spawn child processes or read host secrets - restrict to localhost.
 const LOCAL_ONLY_PATHS = [
   "/api/cli-tools/cowork-settings",
   "/api/cli-tools/antigravity-mitm",
@@ -153,12 +172,16 @@ function extractApiKey(request) {
 async function hasValidApiKey(request) {
   const apiKey = extractApiKey(request);
   if (!apiKey) return false;
-  return await validateApiKey(apiKey);
+  const valid = await validateApiKey(apiKey);
+  // A validator reason string still lets the request reach its handler, which answers
+  // with the precise status, except for a key the owner switched off.
+  return valid === true || (typeof valid === "string" && valid !== "KEY_DISABLED");
 }
 
 async function canAccessPublicLlmApi(request) {
   if (isLocalRequest(request)) return true;
   if (await hasValidCliToken(request)) return true;
+  if (await hasValidToken(request)) return true;
   return await hasValidApiKey(request);
 }
 
@@ -172,6 +195,15 @@ async function canAccessLocalOnlyRoute(request) {
 async function hasValidToken(request) {
   const token = request.cookies.get("auth_token")?.value;
   return await verifyDashboardAuthToken(token);
+}
+
+// Claims of a session that signed in with an API key. Password sessions get null
+// here and are treated as full administrators everywhere else in this file.
+async function getApiKeySession(request) {
+  const token = request.cookies.get("auth_token")?.value;
+  const session = await getDashboardAuthSession(token);
+  if (!session || session.role !== "apikey") return null;
+  return { session, permissions: normalizePermissions(session.permissions) };
 }
 
 // Read settings directly from DB to avoid self-fetch deadlock in proxy
@@ -195,7 +227,7 @@ function isPublicApi(pathname) {
   return PUBLIC_API_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
-// Shared with src/proxy.js — the mimo login branch must respect dashboard auth.
+// Shared with src/proxy.js - the mimo login branch must respect dashboard auth.
 export { isAuthenticated };
 
 export const __test__ = {
@@ -206,11 +238,27 @@ export const __test__ = {
   canAccessLocalOnlyRoute,
 };
 
+function toRedirectUrl(path, request) {
+  const target = new URL(path, request.url);
+  const proto = request.headers?.get?.("x-forwarded-proto");
+  if (proto) {
+    target.protocol = proto.endsWith(":") ? proto : `${proto}:`;
+  }
+  return target;
+}
+
 export async function proxy(request) {
   const { pathname } = request.nextUrl;
 
+  // Sessions signed in with an API key carry their own permission set. Read once
+  // here so every gate below sees the same claims.
+  const apiKeySession = await getApiKeySession(request);
+
   // Local-only gate for spawn-capable / host-secret routes.
   if (LOCAL_ONLY_PATHS.some((p) => pathname.startsWith(p))) {
+    if (apiKeySession) {
+      return NextResponse.json({ error: "This route is not available to API key sessions" }, { status: 403 });
+    }
     if (!(await canAccessLocalOnlyRoute(request))) {
       return NextResponse.json({ error: "Local only: CLI token required" }, { status: 403 });
     }
@@ -218,26 +266,56 @@ export async function proxy(request) {
 
   // Always protected - require valid JWT or local CLI token (machineId-based)
   if (ALWAYS_PROTECTED.some((p) => pathname.startsWith(p))) {
+    if (apiKeySession) {
+      return NextResponse.json({ error: "This route is not available to API key sessions" }, { status: 403 });
+    }
     if (await hasValidCliToken(request) || await hasValidToken(request))
       return NextResponse.next();
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   if (isPublicLlmApi(pathname)) {
+    // Model listing endpoints require API key or authenticated dashboard session
+    if (pathname === "/v1/models" || pathname === "/api/v1/models" || pathname.startsWith("/v1/models/") || pathname.startsWith("/api/v1/models/")) {
+      const apiKey = extractApiKey(request);
+      if (!apiKey && !(await hasValidToken(request)) && !(await hasValidCliToken(request))) {
+        return NextResponse.json(
+          { error: { message: "API key required to view model list", type: "invalid_request_error", code: "invalid_api_key" } },
+          { status: 401 }
+        );
+      }
+    }
     if (await canAccessPublicLlmApi(request)) return NextResponse.next();
     return NextResponse.json(llmApiAuthErrorBody(pathname, "API key required for remote API access"), { status: 401 });
   }
 
-  // Deny-by-default for /api/* — public allow-list bypasses, everything else requires auth.
+  // Deny-by-default for /api/* - public allow-list bypasses, everything else requires auth.
   if (pathname.startsWith("/api/")) {
     if (isPublicApi(pathname)) return NextResponse.next();
-    if (await hasValidCliToken(request) || await isAuthenticated(request))
+    if (await hasValidCliToken(request) || await isAuthenticated(request)) {
+      if (apiKeySession) {
+        const needed = requiredPermissionsForApiPath(pathname, request.method);
+        if (!needed || !needed.some((key) => apiKeySession.permissions[key])) {
+          return NextResponse.json(
+            { error: "This API key does not have permission for this endpoint" },
+            { status: 403 }
+          );
+        }
+      }
       return NextResponse.next();
+    }
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   // Protect all dashboard routes
   if (pathname.startsWith("/dashboard")) {
+    // A key-signed session never reaches a page its permissions do not cover, even
+    // when login is turned off, and lands on the first page it is allowed to open.
+    if (apiKeySession && !canOpenPage(pathname, apiKeySession.permissions)) {
+      const landing = firstAllowedPage(apiKeySession.permissions);
+      return NextResponse.redirect(toRedirectUrl(landing || "/login", request));
+    }
+
     let requireLogin = true;
     let tunnelDashboardAccess = true;
 
@@ -253,7 +331,7 @@ export async function proxy(request) {
           const tunnelHost = settings.tunnelUrl ? new URL(settings.tunnelUrl).hostname.toLowerCase() : "";
           const tailscaleHost = settings.tailscaleUrl ? new URL(settings.tailscaleUrl).hostname.toLowerCase() : "";
           if ((tunnelHost && host === tunnelHost) || (tailscaleHost && host === tailscaleHost)) {
-            return NextResponse.redirect(new URL("/login", request.url));
+            return NextResponse.redirect(toRedirectUrl("/login", request));
           }
         }
       }
@@ -270,16 +348,16 @@ export async function proxy(request) {
       if (await verifyDashboardAuthToken(token)) {
         return NextResponse.next();
       } else {
-        return NextResponse.redirect(new URL("/login", request.url));
+        return NextResponse.redirect(toRedirectUrl("/login", request));
       }
     }
 
-    return NextResponse.redirect(new URL("/login", request.url));
+    return NextResponse.redirect(toRedirectUrl("/login", request));
   }
 
   // Redirect / to /dashboard if logged in, or /dashboard if it's the root
   if (pathname === "/") {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    return NextResponse.redirect(toRedirectUrl("/dashboard", request));
   }
 
   return NextResponse.next();

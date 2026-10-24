@@ -1,4 +1,5 @@
 import { translateResponse, initState } from "../translator/index.js";
+import { indexDeclaredTools, rescueStreamedNames } from "../translator/concerns/toolCallRescue.js";
 import { FORMATS } from "../translator/formats.js";
 import { PROVIDERS } from "../config/providers.js";
 import { liftReasoningAliases } from "../translator/concerns/reasoning.js";
@@ -8,13 +9,14 @@ import { parseSSELine, hasValuableContent, fixInvalidId, formatSSE, ensureStream
 import { restoreToolNames } from "./opencodeFingerprint.js";
 import { getOpenAIResponsesEventName, isOpenAIResponsesTerminalEvent, formatIncompleteOpenAIResponsesStreamFailure } from "./responsesStreamHelpers.js";
 import { dbg, isDebugEnabled } from "./debugLog.js";
+import { applyModelAlias } from "./modelAlias.js";
 
-import { SSE_DONE, SSE_HEADERS, SSE_HEADERS_NO_BUFFER } from "./sseConstants.js";
+import { SSE_DONE, SSE_HEADERS, SSE_HEADERS_NO_BUFFER, SSE_DATA_PREFIX, SSE_DONE_DATA } from "./sseConstants.js";
 
 export { COLORS, formatSSE };
 export { SSE_DONE, SSE_HEADERS, SSE_HEADERS_NO_BUFFER };
 
-// sharedEncoder is stateless — safe to share across streams
+// sharedEncoder is stateless - safe to share across streams
 const sharedEncoder = new TextEncoder();
 
 /**
@@ -29,6 +31,38 @@ const STREAM_MODE = {
 // that saw finish_reason without usage must not hold the client's terminal event
 // forever when the upstream stalls with no usage trailer and no [DONE].
 const PENDING_COMPLETION_FLUSH_MS = 3000;
+
+/**
+ * Frame payload carried by one upstream line, or null when the line carries none.
+ * Spec-shaped upstreams prefix every frame with "data:", but an upstream streaming
+ * NDJSON under a text/event-stream label puts a bare object on the line - dropping
+ * those makes the whole stream parse to zero frames.
+ * @param {string} line
+ * @returns {string|null}
+ */
+export function framePayload(line) {
+  const trimmed = line.trim();
+  if (trimmed.startsWith(SSE_DATA_PREFIX)) return trimmed.slice(SSE_DATA_PREFIX.length).trim();
+  // SSE field lines ("event:", "id:", "retry:") and ":" comments never start with
+  // "{", so only a whole JSON document can be taken for a frame here.
+  return trimmed.startsWith("{") ? trimmed : null;
+}
+
+/**
+ * Parse one line of an upstream body into a chunk. parseSSELine only accepts a
+ * bare object for Ollama, so whatever it rejected for want of a prefix is retried
+ * with one - Ollama's own path stays as it was.
+ * @param {string} line
+ * @param {string} targetFormat
+ * @returns {object|null}
+ */
+export function parseFrameLine(line, targetFormat) {
+  const trimmed = line.trim();
+  const parsed = parseSSELine(trimmed, targetFormat);
+  if (parsed) return parsed;
+  const payload = framePayload(trimmed);
+  return payload === trimmed ? parseSSELine(`${SSE_DATA_PREFIX} ${payload}`, targetFormat) : null;
+}
 
 /**
  * Create unified SSE transform stream
@@ -58,17 +92,28 @@ export function createSSEStream(options = {}) {
     body = null,
     onStreamComplete = null,
     apiKey = null,
-    credentials = null
+    credentials = null,
+    aliasModel = null
   } = options;
 
+  // The live request panel and the usage log name the model the caller spoke.
+  const trackedModel = aliasModel || model;
   let buffer = "";
   let usage = null;
 
-  // Tool-call ids already sent to the client, keyed by the tool-call index.
-  // A late fragment that opens a NEW index without an id must not reach the
-  // client as-is: strict OpenAI-compatible SDKs abort the turn on a
-  // tool_call without a string id (#4992).
-  const seenToolCallIds = new Map();
+  // Tool names a model emits in the wrong case land on no tool at all, since
+  // clients match declared names exactly. A name arrives whole in the first
+  // delta, so it can be corrected as it streams at no latency cost. Arguments
+  // are left alone here: they arrive in fragments and only become a parseable
+  // object at the end, and buffering them would hold back every tool call.
+  // Their recovery happens on the following turn instead, via the history.
+  const toolNameIndex = indexDeclaredTools(body?.tools);
+  const toolNamesRescued = new Map();
+  const fixStreamedToolNames = (chunk) => {
+    if (toolNameIndex.size === 0) return;
+    const fixed = rescueStreamedNames(chunk, toolNameIndex, toolNamesRescued);
+    if (fixed) dbg("SSE", `rescued ${fixed} streamed tool name(s): ${[...toolNamesRescued.entries()].map(([k, v]) => `${k}->${v}`).join(", ")}`);
+  };
 
   // Per-stream decoder with stream:true to correctly handle multi-byte chars split across chunks
   const decoder = new TextDecoder("utf-8", { fatal: false });
@@ -77,7 +122,7 @@ export function createSSEStream(options = {}) {
     ? { ...initState(sourceFormat), provider, toolNameMap, customToolNames: new Set(customToolNames || []), model, sessionId: credentials?._clientSessionId || null,
         // Which upstream format this stream came from. A response translator can be
         // reached either directly (target === its registered source) or as the second
-        // hop of a pivot, and on the terminal null chunk the pivot drops it — so a
+        // hop of a pivot, and on the terminal null chunk the pivot drops it - so a
         // translator that defers closing events until flush needs to know which case
         // it is in. Absent/undefined means "unknown", i.e. do not defer.
         targetFormat }
@@ -121,9 +166,9 @@ export function createSSEStream(options = {}) {
     }
 
     if (hasValidUsage(finalUsage)) {
-      logUsage(isPassthrough ? provider : (state?.provider || targetFormat), finalUsage, model, connectionId, apiKey);
+      logUsage(isPassthrough ? provider : (state?.provider || targetFormat), finalUsage, trackedModel, connectionId, apiKey);
     } else {
-      appendRequestLog({ model, provider, connectionId, tokens: null, status: "200 OK" }).catch(() => { });
+      appendRequestLog({ model: trackedModel, provider, connectionId, tokens: null, status: "200 OK" }).catch(() => { });
     }
 
     if (onStreamComplete) {
@@ -178,12 +223,16 @@ export function createSSEStream(options = {}) {
           let output;
           let injectedUsage = false;
           let responsesTerminal = false;
+          const payload = framePayload(trimmed);
 
-          if (trimmed.startsWith("data:") && trimmed.slice(5).trim() !== "[DONE]") {
+          if (payload !== null && payload !== SSE_DONE_DATA) {
             try {
-              let parsed = JSON.parse(trimmed.slice(5).trim());
+              const parsed = JSON.parse(payload);
 
               const idFixed = fixInvalidId(parsed);
+              // A caller that spoke an alias must not be told the model that served it.
+              const aliased = applyModelAlias(parsed, aliasModel);
+              fixStreamedToolNames(parsed);
 
               // A fragment that opens a new tool-call index without an id breaks
               // strict OpenAI-compatible clients. Mint/reuse one before the
@@ -241,7 +290,7 @@ export function createSSEStream(options = {}) {
               // Strip empty tool_calls arrays that break AI SDK reasoning tracking.
               // Some providers (e.g. CodeBuddy CN) include `"tool_calls": []` in
               // every streaming delta. @ai-sdk/openai-compatible checks
-              // `delta.tool_calls != null` — an empty array passes this check,
+              // `delta.tool_calls != null` - an empty array passes this check,
               // causing premature `reasoning-end` on every chunk.
               if (parsed?.choices) {
                 for (const choice of parsed.choices) {
@@ -287,12 +336,12 @@ export function createSSEStream(options = {}) {
                 parsed.usage = filterUsageForFormat(buffered, FORMATS.OPENAI);
                 output = `data: ${JSON.stringify(parsed)}\n`;
                 injectedUsage = true;
-              } else if (idFixed || fieldsInjected || toolCallIdFixed || toolNameRestored) {
+              } else if (idFixed || fieldsInjected || aliased) {
                 output = `data: ${JSON.stringify(parsed)}\n`;
                 injectedUsage = true;
               }
             } catch {
-              // Skip non-JSON data lines silently — don't forward garbage to clients.
+              // Skip non-JSON data lines silently - don't forward garbage to clients.
               // Upstream providers sometimes return plain-text errors (HTML, rate-limit
               // messages) in the SSE stream that would break downstream JSON decoders.
               continue;
@@ -300,8 +349,11 @@ export function createSSEStream(options = {}) {
           }
 
           if (!injectedUsage) {
-            if (line.startsWith("data:") && !line.startsWith("data: ")) {
-              output = "data: " + line.slice(5) + "\n";
+            if (line.startsWith(SSE_DATA_PREFIX) && !line.startsWith(`${SSE_DATA_PREFIX} `)) {
+              output = `${SSE_DATA_PREFIX} ${line.slice(SSE_DATA_PREFIX.length)}\n`;
+            } else if (payload === trimmed) {
+              // an NDJSON line only reaches the client as a frame once it has a prefix
+              output = `${SSE_DATA_PREFIX} ${payload}\n`;
             } else {
               output = line + "\n";
             }
@@ -317,7 +369,7 @@ export function createSSEStream(options = {}) {
         // Translate mode
         if (!trimmed) continue;
 
-        const parsed = parseSSELine(trimmed, targetFormat);
+        const parsed = parseFrameLine(trimmed, targetFormat);
         if (!parsed) continue;
 
         // Responses API same-format passthrough: preserve event framing + track terminal state
@@ -404,6 +456,8 @@ export function createSSEStream(options = {}) {
 
         // Responses same-format passthrough: re-emit with original event framing
         if (keepsOpenAIResponsesFormat && openAIResponsesEventName) {
+          applyModelAlias(parsed, aliasModel);
+          fixStreamedToolNames(parsed);
           const output = formatSSE({ event: openAIResponsesEventName, data: parsed }, sourceFormat);
           reqLogger?.appendConvertedChunk?.(output);
           controller.enqueue(sharedEncoder.encode(output));
@@ -447,6 +501,8 @@ export function createSSEStream(options = {}) {
               item.usage = filterUsageForFormat(buffered, sourceFormat);
             }
 
+            applyModelAlias(item, aliasModel);
+            fixStreamedToolNames(item);
             const output = formatSSE(item, sourceFormat);
             reqLogger?.appendConvertedChunk?.(output);
             controller.enqueue(sharedEncoder.encode(output));
@@ -471,7 +527,7 @@ export function createSSEStream(options = {}) {
     flush(controller) {
       const evtSummary = Object.entries(eventTypeCounts).map(([k, v]) => `${k}=${v}`).join(",") || "none";
       dbg("SSE", `flush | provider=${provider} | model=${model} | recvLines=${sseLineCount} | emitted=${sseEmittedCount} | events=[${evtSummary}]`);
-      trackPendingRequest(model, provider, connectionId, false);
+      trackPendingRequest(trackedModel, provider, connectionId, false);
       try {
         const remaining = decoder.decode();
         if (remaining) buffer += remaining;
@@ -479,8 +535,13 @@ export function createSSEStream(options = {}) {
         if (mode === STREAM_MODE.PASSTHROUGH) {
           if (buffer) {
             let output = buffer;
-            if (buffer.startsWith("data:") && !buffer.startsWith("data: ")) {
-              output = "data: " + buffer.slice(5);
+            const payload = framePayload(buffer);
+            if (buffer.startsWith(SSE_DATA_PREFIX) && !buffer.startsWith(`${SSE_DATA_PREFIX} `)) {
+              output = `${SSE_DATA_PREFIX} ${buffer.slice(SSE_DATA_PREFIX.length)}`;
+            } else if (payload === buffer.trim()) {
+              // NDJSON tail: give it the prefix, and a newline to end it, or the
+              // [DONE] emitted below lands on the same line and both frames are lost
+              output = `${SSE_DATA_PREFIX} ${payload}\n`;
             }
             reqLogger?.appendConvertedChunk?.(output);
             controller.enqueue(sharedEncoder.encode(output));
@@ -506,11 +567,11 @@ export function createSSEStream(options = {}) {
           // Same parse as the transform loop: without targetFormat this only
           // accepts "data: " lines, so an NDJSON provider (Ollama) lost whatever
           // arrived without its closing newline.
-          const parsed = parseSSELine(buffer.trim(), targetFormat);
+          const parsed = parseFrameLine(buffer.trim(), targetFormat);
           // parseSSELine turns the SSE sentinel "data: [DONE]" into { done: true },
           // which must not be translated. An Ollama chunk also carries done:true,
-          // but it is the real final chunk — it holds finish_reason and the token
-          // counts — so it has to go through.
+          // but it is the real final chunk - it holds finish_reason and the token
+          // counts - so it has to go through.
           const isDoneSentinel = parsed?.done && targetFormat !== FORMATS.OLLAMA;
           if (parsed && !isDoneSentinel) {
             // Same accumulation the transform loop does, so finalizeStream() can
@@ -530,6 +591,8 @@ export function createSSEStream(options = {}) {
             if (translated?.length > 0) {
               for (const item of translated) {
                 if (item === null || item === undefined) continue;
+                applyModelAlias(item, aliasModel);
+                fixStreamedToolNames(item);
                 const output = formatSSE(item, sourceFormat);
                 reqLogger?.appendConvertedChunk?.(output);
                 controller.enqueue(sharedEncoder.encode(output));
@@ -550,6 +613,8 @@ export function createSSEStream(options = {}) {
         if (flushed?.length > 0) {
           for (const item of flushed) {
             if (item === null || item === undefined) continue;
+            applyModelAlias(item, aliasModel);
+            fixStreamedToolNames(item);
             const output = formatSSE(item, sourceFormat);
             reqLogger?.appendConvertedChunk?.(output);
             controller.enqueue(sharedEncoder.encode(output));
@@ -582,7 +647,7 @@ export function createSSEStream(options = {}) {
   });
 }
 
-export function createSSETransformStreamWithLogger(targetFormat, sourceFormat, provider = null, reqLogger = null, toolNameMap = null, model = null, connectionId = null, body = null, onStreamComplete = null, apiKey = null, customToolNames = null, credentials = null) {
+export function createSSETransformStreamWithLogger(targetFormat, sourceFormat, provider = null, reqLogger = null, toolNameMap = null, model = null, connectionId = null, body = null, onStreamComplete = null, apiKey = null, customToolNames = null, credentials = null, aliasModel = null) {
   return createSSEStream({
     mode: STREAM_MODE.TRANSLATE,
     targetFormat,
@@ -596,11 +661,12 @@ export function createSSETransformStreamWithLogger(targetFormat, sourceFormat, p
     body,
     onStreamComplete,
     apiKey,
-    credentials
+    credentials,
+    aliasModel,
   });
 }
 
-export function createPassthroughStreamWithLogger(provider = null, reqLogger = null, model = null, connectionId = null, body = null, onStreamComplete = null, apiKey = null, toolNameMap = null) {
+export function createPassthroughStreamWithLogger(provider = null, reqLogger = null, model = null, connectionId = null, body = null, onStreamComplete = null, apiKey = null, aliasModel = null) {
   return createSSEStream({
     mode: STREAM_MODE.PASSTHROUGH,
     provider,
@@ -610,6 +676,7 @@ export function createPassthroughStreamWithLogger(provider = null, reqLogger = n
     connectionId,
     body,
     onStreamComplete,
-    apiKey
+    apiKey,
+    aliasModel,
   });
 }

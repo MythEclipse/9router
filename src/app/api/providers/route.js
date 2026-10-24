@@ -128,7 +128,7 @@ export async function POST(request) {
     // Validation
     const isWebCookieProvider = !!WEB_COOKIE_PROVIDERS[provider];
     // Dual-auth providers (e.g. codebuddy-cn, xai) live under category "oauth" but also
-    // accept an API key via authModes — they aren't in APIKEY_PROVIDERS, so allow them here.
+    // accept an API key via authModes - they aren't in APIKEY_PROVIDERS, so allow them here.
     const supportsApiKeyMode = !!AI_PROVIDERS[provider]?.authModes?.includes("apikey");
     const isValidProvider = APIKEY_PROVIDERS[provider] ||
       FREE_TIER_PROVIDERS[provider] ||
@@ -171,6 +171,8 @@ export async function POST(request) {
         apiType: node.apiType,
         baseUrl: node.baseUrl,
         nodeName: node.name,
+        quotaEnabled: node.quotaEnabled === true,
+        quotaPath: node.quotaPath || "/credits",
       };
     } else if (isAnthropicCompatibleProvider(provider)) {
       const node = await getProviderNodeById(provider);
@@ -181,6 +183,8 @@ export async function POST(request) {
         prefix: node.prefix,
         baseUrl: node.baseUrl,
         nodeName: node.name,
+        quotaEnabled: node.quotaEnabled === true,
+        quotaPath: node.quotaPath || "/credits",
       };
     } else if (isCustomEmbeddingProvider(provider)) {
       const node = await getProviderNodeById(provider);

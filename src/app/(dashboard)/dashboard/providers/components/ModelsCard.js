@@ -13,14 +13,14 @@ export function ModelRow({ model, fullModel, copied, onCopy, testStatus, isCusto
   const iconColor = testStatus === "ok" ? "#22c55e" : testStatus === "error" ? "#ef4444" : undefined;
 
   return (
-    <div className={`group px-3 py-2 rounded-lg border ${borderColor} hover:bg-sidebar/50`}>
+    <div className={`group min-w-0 max-w-full px-3 py-2 rounded-lg border ${borderColor} hover:bg-sidebar/50`}>
       <div className="flex items-center gap-2">
         <span className="material-symbols-outlined text-base" style={iconColor ? { color: iconColor } : undefined}>
           {testStatus === "ok" ? "check_circle" : testStatus === "error" ? "cancel" : "smart_toy"}
         </span>
-        <div className="flex flex-col gap-1">
-          <code className="text-xs text-text-muted font-mono bg-sidebar px-1.5 py-0.5 rounded">{fullModel}</code>
-          {model.name && <span className="text-[9px] text-text-muted/70 italic pl-1">{model.name}</span>}
+        <div className="flex flex-col gap-1 min-w-0">
+          <code className="text-xs text-text-muted font-mono bg-sidebar px-1.5 py-0.5 rounded min-w-0 truncate" title={fullModel}>{fullModel}</code>
+          {model.name && <span className="text-[9px] text-text-muted/70 italic pl-1 truncate" title={model.name}>{model.name}</span>}
         </div>
         {onTest && (
           <div className="relative group/btn">
@@ -197,7 +197,7 @@ export default function ModelsCard({ providerId, kindFilter, providerAliasOverri
     } finally { setTestingModelId(null); }
   };
 
-  // Built-in models — filter by kindFilter if provided
+  // Built-in models - filter by kindFilter if provided
   const allBuiltIn = getModelsByProviderId(providerId);
   const builtInModels = kindFilter
     ? allBuiltIn.filter((m) => {
@@ -219,7 +219,7 @@ export default function ModelsCard({ providerId, kindFilter, providerAliasOverri
     <>
       <Card>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Models{kindFilter ? ` — ${kindFilter.toUpperCase()}` : ""}</h2>
+          <h2 className="text-lg font-semibold">Models{kindFilter ? ` - ${kindFilter.toUpperCase()}` : ""}</h2>
         </div>
         {testError && <p className="text-xs text-red-500 mb-3 break-words">{testError}</p>}
 
@@ -285,6 +285,6 @@ export default function ModelsCard({ providerId, kindFilter, providerAliasOverri
 
 ModelsCard.propTypes = {
   providerId: PropTypes.string.isRequired,
-  kindFilter: PropTypes.string, // e.g. "tts", "embedding" — filters models shown
+  kindFilter: PropTypes.string, // e.g. "tts", "embedding" - filters models shown
   providerAliasOverride: PropTypes.string, // override alias (e.g. for custom-embedding nodes using prefix)
 };

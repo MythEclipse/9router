@@ -37,6 +37,15 @@ beforeAll(async () => {
   vi.resetModules();
   sqliteDb = await import("@/lib/db/index.js");
   await sqliteDb.initDb();
+
+  // Lowdb setup - direct lowdb usage (mimics legacy behavior)
+  tempLowdb = fs.mkdtempSync(path.join(os.tmpdir(), "9router-bench-lowdb-"));
+  const { Low } = await import("lowdb");
+  const { JSONFile } = await import("lowdb/node");
+  const dbFile = path.join(tempLowdb, "db.json");
+  fs.writeFileSync(dbFile, JSON.stringify({ providerConnections: [], usageHistory: [] }));
+  lowDb = new Low(new JSONFile(dbFile), { providerConnections: [], usageHistory: [] });
+  await lowDb.read();
 });
 
 afterAll(() => {
@@ -45,7 +54,7 @@ afterAll(() => {
   else process.env.DATA_DIR = originalDataDir;
 });
 
-describe("DB Benchmark — SQLite", () => {
+describe("DB Benchmark - SQLite vs Lowdb", () => {
   it(`INSERT ${N_ITEMS} provider connections`, async () => {
     console.log(`\n[INSERT ${N_ITEMS}]`);
 

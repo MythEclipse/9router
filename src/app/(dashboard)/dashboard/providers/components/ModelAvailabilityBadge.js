@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * ModelAvailabilityBadge — compact inline status indicator
+ * ModelAvailabilityBadge - compact inline status indicator
  *
  * Shows green when all models are operational, or amber/red when there are
  * issues, with a hover popover for details and cooldown clearing.
@@ -34,7 +34,7 @@ export default function ModelAvailabilityBadge() {
         setData(json);
       }
     } catch {
-      // silent fail — will retry
+      // silent fail - will retry
     } finally {
       setLoading(false);
     }
@@ -115,7 +115,7 @@ export default function ModelAvailabilityBadge() {
             <div className="flex items-center gap-2">
               <span
                 className="material-symbols-outlined text-[16px]"
-                style={{ color: isHealthy ? "#22c55e" : "#f59e0b" }}
+                style={{ color: isHealthy ? "var(--color-success)" : "var(--color-warning)" }}
               >
                 {isHealthy ? "verified" : "warning"}
               </span>

@@ -254,7 +254,7 @@ function jsonResponse(obj) {
 
 // Model-level transport marker (registry models[].transport, e.g. the Gemini
 // live STT entry's "gemini-live", or a custom model's stored transport).
-// Dispatch reads the marker — never a hardcoded model id — so new realtime
+// Dispatch reads the marker - never a hardcoded model id - so new realtime
 // providers extend sttCore through data, not code.
 function resolveModelTransport(provider, model) {
   const key = PROVIDER_ID_TO_ALIAS[provider] || provider;
@@ -266,7 +266,7 @@ function resolveModelTransport(provider, model) {
 }
 
 /**
- * STT core handler — dispatch by model transport marker, else sttConfig.format.
+ * STT core handler - dispatch by model transport marker, else sttConfig.format.
  * `transport` is the caller-supplied marker override (custom models resolve
  * it in the app layer; built-ins fall back to the registry entry marker).
  * @returns {Promise<{success, response, status?, error?}>}
@@ -308,7 +308,7 @@ export async function handleSttCore({ provider, model, formData, credentials, st
         // envelope stays {text}; verbose_json adds segments mapped from the
         // Live API's incremental inputTranscription deltas. Those frames carry
         // NO timestamps, so segments expose {id,text} only (id = delta order,
-        // Whisper-compatible 0-based) — start/end/duration are deliberately
+        // Whisper-compatible 0-based) - start/end/duration are deliberately
         // absent rather than fabricated as zeros, which would misrepresent
         // provider data to callers diffing transports.
         const fmt = typeof formData?.get === "function"

@@ -13,6 +13,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { AI_PROVIDERS } from "@/shared/constants/providers";
 import { getProviderIconSrc, markProviderIconMissing } from "@/shared/utils/providerIcon";
+import { isCustomLogo } from "@/shared/utils/providerLogo";
 
 // Force-stop FE animation if a provider stays active longer than this
 const FE_ACTIVE_TIMEOUT_MS = 60000;
@@ -94,7 +95,7 @@ ProviderNode.propTypes = {
   data: PropTypes.object.isRequired,
 };
 
-// Center 9Router node — pulse/glow on card only (no expanding rings)
+// Center 9Router node - pulse/glow on card only (no expanding rings)
 function RouterNode({ data }) {
   const powering = (data.activeCount || 0) > 0;
   return (
@@ -307,7 +308,7 @@ function buildLayout(providers, activeSet, lastSet, errorSet) {
     const data = {
       label: (config.name !== p.provider ? config.name : null) || p.nodeName || p.name || p.provider,
       color: config.color || "#6b7280",
-      imageUrl: getProviderImageUrl(p.provider),
+      imageUrl: isCustomLogo(p.nodeLogo) || getProviderImageUrl(p.provider),
       textIcon: config.textIcon || (p.provider || "?").slice(0, 2).toUpperCase(),
       active,
     };
@@ -403,7 +404,7 @@ export default function ProviderTopology({ providers = [], activeRequests = [], 
     [providers, activeSet, lastSet, errorSet]
   );
 
-  // Stable key — only remount when provider list changes
+  // Stable key - only remount when provider list changes
   const providersKey = useMemo(
     () => providers.map((p) => p.provider).sort().join(","),
     [providers]
