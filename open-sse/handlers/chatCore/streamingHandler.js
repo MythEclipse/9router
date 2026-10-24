@@ -6,7 +6,6 @@ import { PROVIDERS } from "../../config/providers.js";
 import { HTTP_STATUS, STREAM_STALL_TIMEOUT_MS } from "../../config/runtimeConfig.js";
 import { buildAbortedResponsesTerminalBytes } from "../../utils/responsesStreamHelpers.js";
 import { buildStreamErrorBytes } from "../../utils/streamHelpers.js";
-import { buildErrorBody } from "../../utils/error.js";
 import { buildRequestDetail, extractRequestConfig, saveUsageStats, formatDoneLine } from "./requestDetail.js";
 import { saveRequestDetail } from "@/lib/usageDb.js";
 import { SSE_HEADERS_CORS as SSE_HEADERS } from "../../utils/sseConstants.js";
@@ -77,7 +76,7 @@ export async function handleStreamingResponse({ providerResponse, provider, mode
     streamController?.handleError?.(new Error(`upstream non-SSE: ${status}`));
     return {
       success: false,
-      response: new Response(JSON.stringify(buildErrorBody(status, shortMsg, clientFormat)), {
+      response: new Response(JSON.stringify({ error: { message: `[${status}]: ${shortMsg}` } }), {
         status,
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
       }),
@@ -95,26 +94,9 @@ export async function handleStreamingResponse({ providerResponse, provider, mode
   const isResponsesPassthrough = sourceFormat === FORMATS.OPENAI_RESPONSES && targetFormat === FORMATS.OPENAI_RESPONSES;
   const onAbortTerminal = isResponsesPassthrough
     ? buildAbortedResponsesTerminalBytes
-    : (message) => buildStreamErrorBytes(HTTP_STATUS.GATEWAY_TIMEOUT, message, clientFormat || sourceFormat);
+    : (message) => buildStreamErrorBytes(HTTP_STATUS.GATEWAY_TIMEOUT, message, sourceFormat);
   const stallTimeoutMs = PROVIDERS[provider]?.stallTimeoutMs || STREAM_STALL_TIMEOUT_MS;
   const transformedBody = pipeWithDisconnect(providerResponse, transformStream, streamController, onAbortTerminal, stallTimeoutMs);
-
-  // Claude Code auto-mode review: the verdict frame must ride on the client's
-  // Claude-format stream, so it is appended after translation (which is what
-  // produces the final message_delta Claude Code reads it from). Only for a
-  // Claude-protocol client — the field means nothing on OpenAI/Gemini wires.
-  const claudeClient = clientFormat === FORMATS.CLAUDE || (clientFormat === null && targetFormat === FORMATS.CLAUDE);
-  const reviewStream = safeguardsPlan?.active && claudeClient
-    ? injectSafeguardsIntoStream({ stream: transformedBody, safeguardsPlan, log })
-    : transformedBody;
-
-  // Web search bridge: wraps AFTER the review stream so a searched turn still
-  // gets its safeguard verdict, and only for a Claude-protocol client — the
-  // server_tool_use/web_search_tool_result pair means nothing on other wires.
-  const searchedStream = webSearchPlan?.active && webSearchPlan.lane === "bridge"
-    && claudeClient && runSearch
-    ? injectWebSearchIntoStream({ stream: reviewStream, webSearchPlan, runSearch, log })
-    : reviewStream;
 
   saveRequestDetail(buildRequestDetail({
     provider, model, connectionId, requestedModel,
@@ -132,17 +114,12 @@ export async function handleStreamingResponse({ providerResponse, provider, mode
 
   return {
     success: true,
-    response: new Response(searchedStream, { headers: { ...SSE_HEADERS, ...upstreamResponseHeaders(providerResponse.headers) } })
+    response: new Response(transformedBody, { headers: { ...SSE_HEADERS, ...upstreamResponseHeaders(providerResponse.headers) } })
   };
 }
 
 /**
- * Explain an empty assistant text without pretending the recorder failed.
- *
- * Streaming turns genuinely come back with no text delta when the model spent the
- * whole turn on reasoning (DeepSeek/OpenCode style), when it answered with tool
- * calls only, or when the upstream returned an empty completion. Each case needs a
- * different follow-up, so the stored row names the case and carries the counts.
+ * Build onStreamComplete callback for streaming usage tracking.
  */
 export function buildOnStreamComplete({ provider, model, connectionId, apiKey, requestedModel, requestStartTime, body, stream, finalBody, translatedBody, clientRawRequest, pxpipe, reqTag, log, modelMultipliers = null, isAntiProbe = false }) {
   const streamDetailId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
@@ -156,14 +133,7 @@ export function buildOnStreamComplete({ provider, model, connectionId, apiKey, r
       ttft: ttftAt ? ttftAt - requestStartTime : Date.now() - requestStartTime,
       total: Date.now() - requestStartTime
     };
-    const thinking = contentObj?.thinking || "";
-    const content = contentObj?.content || "";
-    // An empty content string means no text delta was accumulated — not that the
-    // recorder failed. Say which, and say how much reasoning did arrive, so the row
-    // can be diagnosed without guessing (a turn that billed 77 output tokens and
-    // recorded a bare placeholder looked like a broken feature).
-    const outputTokens = usage?.completion_tokens ?? usage?.output_tokens ?? 0;
-    const safeContent = content || describeEmptyContent({ thinking, outputTokens });
+    const safeContent = contentObj?.content || "[Empty streaming response]";
     const safeThinking = contentObj?.thinking || null;
 
     saveRequestDetail(buildRequestDetail({
