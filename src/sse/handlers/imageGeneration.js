@@ -41,26 +41,6 @@ function recordImageRequestUsage({ provider, model, connectionId, apiKey, endpoi
   }).catch(() => {});
 }
 
-function recordImageRequestUsage({ provider, model, connectionId, apiKey, endpoint, usage }) {
-  if (!usage || typeof usage !== "object") return;
-  const promptTokens = usage.prompt_tokens;
-  const completionTokens = usage.completion_tokens;
-  if (!Number.isSafeInteger(promptTokens) || promptTokens < 0 ||
-      !Number.isSafeInteger(completionTokens) || completionTokens < 0) {
-    return;
-  }
-
-  saveRequestUsage({
-    provider,
-    model,
-    connectionId: connectionId || undefined,
-    apiKey: apiKey || undefined,
-    endpoint: endpoint || null,
-    tokens: usage,
-    status: "success",
-  }).catch(() => {});
-}
-
 /**
  * Handle image generation request
  * @param {Request} request
