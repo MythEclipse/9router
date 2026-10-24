@@ -3,20 +3,37 @@ import path from "path";
 import { spawn, execSync } from "child_process";
 
 export function findOpencodeBinary() {
-  const candidates = [
-    process.env.OPENCODE_BIN,
-    "/usr/local/bin/opencode",
-    "/usr/bin/opencode",
-    "/root/bin/opencode",
-    "/tmp/oc-cli/package/bin/opencode",
-    path.join(process.cwd(), "node_modules", ".bin", "opencode"),
-    path.join(process.cwd(), "node_modules", ".bin", "opencode.cmd"),
-  ];
+  const isWin = process.platform === "win32";
+
+  const candidates = isWin
+    ? [
+        process.env.OPENCODE_BIN,
+        path.join(process.cwd(), "node_modules", ".bin", "opencode.cmd"),
+        path.join(process.cwd(), "node_modules", ".bin", "opencode.exe"),
+        path.join(process.cwd(), "node_modules", ".bin", "opencode.bat"),
+        path.join(process.cwd(), "node_modules", ".bin", "opencode"),
+      ]
+    : [
+        process.env.OPENCODE_BIN,
+        "/usr/local/bin/opencode",
+        "/usr/bin/opencode",
+        "/root/bin/opencode",
+        "/tmp/oc-cli/package/bin/opencode",
+        path.join(process.cwd(), "node_modules", ".bin", "opencode"),
+        path.join(process.cwd(), "node_modules", ".bin", "opencode.cmd"),
+      ];
 
   for (const bin of candidates) {
     if (!bin) continue;
     try {
-      if (fs.existsSync(bin)) return bin;
+      if (fs.existsSync(bin)) {
+        if (isWin && !/\.(cmd|exe|bat)$/i.test(bin)) {
+          if (fs.existsSync(`${bin}.cmd`)) return `${bin}.cmd`;
+          if (fs.existsSync(`${bin}.exe`)) return `${bin}.exe`;
+          if (fs.existsSync(`${bin}.bat`)) return `${bin}.bat`;
+        }
+        return bin;
+      }
     } catch {
       /* ignore */
     }
@@ -24,10 +41,23 @@ export function findOpencodeBinary() {
 
   // Probe system PATH
   try {
-    const isWin = process.platform === "win32";
     const cmd = isWin ? "where opencode 2>nul" : "which opencode 2>/dev/null";
-    const p = execSync(cmd, { encoding: "utf8", timeout: 2000 }).trim().split(/\r?\n/)[0];
-    if (p && fs.existsSync(p)) return p;
+    const lines = execSync(cmd, { encoding: "utf8", timeout: 2000 })
+      .trim()
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
+
+    for (const p of lines) {
+      if (isWin) {
+        if (/\.(cmd|exe|bat)$/i.test(p) && fs.existsSync(p)) return p;
+        if (fs.existsSync(`${p}.cmd`)) return `${p}.cmd`;
+        if (fs.existsSync(`${p}.exe`)) return `${p}.exe`;
+      } else if (fs.existsSync(p)) {
+        return p;
+      }
+    }
+    if (lines[0] && fs.existsSync(lines[0])) return lines[0];
   } catch {
     /* ignore */
   }
@@ -134,18 +164,32 @@ export function executeOpencodeCli({
     env.https_proxy = proxyUrl;
   }
 
+  const isWin = process.platform === "win32";
+  let executable = opencodeBin;
+  if (isWin && !/\.(cmd|exe|bat)$/i.test(executable)) {
+    if (fs.existsSync(`${executable}.cmd`)) {
+      executable = `${executable}.cmd`;
+    } else if (fs.existsSync(`${executable}.exe`)) {
+      executable = `${executable}.exe`;
+    } else if (fs.existsSync(`${executable}.bat`)) {
+      executable = `${executable}.bat`;
+    }
+  }
+
   const child = spawn(
-    opencodeBin,
+    executable,
     ["run", "--model", targetModel, "--format", "default", promptText],
     {
       cwd: process.cwd(),
       env,
       stdio: ["ignore", "pipe", "pipe"],
+      shell: isWin,
+      windowsHide: true,
     }
   );
 
   if (log?.info) {
-    log.info(providerTag, `Engine running via ${opencodeBin} for ${targetModel}`);
+    log.info(providerTag, `Engine running via ${executable} for ${targetModel}`);
   }
 
   if (signal) {
