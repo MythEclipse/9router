@@ -141,6 +141,7 @@ export function createSSEStream(options = {}) {
   let openAIResponsesTerminalSeen = false;
   let openAIResponsesDoneSent = false;
   let streamDoneSent = false;  // track duplicate [DONE] across transform + flush
+  const seenToolCallIds = new Map();
   let finalized = false;
   let completionFlushTimer = null;
 
@@ -168,7 +169,7 @@ export function createSSEStream(options = {}) {
     if (hasValidUsage(finalUsage)) {
       logUsage(isPassthrough ? provider : (state?.provider || targetFormat), finalUsage, trackedModel, connectionId, apiKey);
     } else {
-      appendRequestLog({ model: trackedModel, provider, connectionId, tokens: null, status: "200 OK" }).catch(() => { });
+      Promise.resolve(appendRequestLog({ model: trackedModel, provider, connectionId, tokens: null, status: "200 OK" })).catch(() => { });
     }
 
     if (onStreamComplete) {
@@ -301,9 +302,10 @@ export function createSSEStream(options = {}) {
                 }
               }
 
-              if (!hasValuableContent(parsed, FORMATS.OPENAI)) {
-                continue;
-              }
+              if (!hasValuableContent(parsed, FORMATS.OPENAI) && !hasValidUsage(parsed.usage)) continue;
+
+              const extracted = extractUsage(parsed);
+              if (extracted) usage = mergeUsage(usage, extracted);
 
               const delta = parsed.choices?.[0]?.delta;
               const content = delta?.content;
@@ -315,11 +317,6 @@ export function createSSEStream(options = {}) {
               if (reasoning && typeof reasoning === "string") {
                 totalContentLength += reasoning.length;
                 accumulatedThinking += reasoning;
-              }
-
-              const extracted = extractUsage(parsed);
-              if (extracted) {
-                usage = mergeUsage(usage, extracted);
               }
 
               responsesTerminal = isOpenAIResponsesTerminalEvent(currentOpenAIResponsesEvent, parsed);
@@ -336,11 +333,12 @@ export function createSSEStream(options = {}) {
                 parsed.usage = filterUsageForFormat(buffered, FORMATS.OPENAI);
                 output = `data: ${JSON.stringify(parsed)}\n`;
                 injectedUsage = true;
-              } else if (idFixed || fieldsInjected || aliased) {
+              } else if (idFixed || fieldsInjected || aliased || (extracted && !parsed.choices?.[0]?.finish_reason)) {
                 output = `data: ${JSON.stringify(parsed)}\n`;
                 injectedUsage = true;
               }
-            } catch {
+            } catch (error) {
+              console.error("passthrough frame error", error);
               // Skip non-JSON data lines silently - don't forward garbage to clients.
               // Upstream providers sometimes return plain-text errors (HTML, rate-limit
               // messages) in the SSE stream that would break downstream JSON decoders.
@@ -671,7 +669,6 @@ export function createPassthroughStreamWithLogger(provider = null, reqLogger = n
     mode: STREAM_MODE.PASSTHROUGH,
     provider,
     reqLogger,
-    toolNameMap,
     model,
     connectionId,
     body,

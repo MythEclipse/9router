@@ -100,10 +100,8 @@ export async function getProviderCredentials(
         : new Set();
   const preferredConnectionId = options?.preferredConnectionId || null;
   const requestedModel = options?.requestedModel || model;
-  // Acquire mutex to prevent race conditions
-  const currentMutex = selectionMutex;
-  let resolveMutex;
-  selectionMutex = new Promise(resolve => { resolveMutex = resolve; });
+  // Serialize round-robin selection against concurrent requests for this provider.
+  const mutex = acquireSelectionMutex(resolveProviderId(provider));
 
   try {
     await mutex.wait;
