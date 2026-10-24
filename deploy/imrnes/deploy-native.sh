@@ -153,7 +153,7 @@ NEED_INSTALL=0
 STAMP="${DEPS_DIR}/.install-stamp"
 LOCK_HASH=""
 if [ -f "${RELEASE_DIR}/pnpm-lock.yaml" ] && command -v sha256sum >/dev/null 2>&1; then
-  LOCK_HASH="$(sha256sum "${RELEASE_DIR}/pnpm-lock.yaml" | cut -d' ' -f1)"
+  LOCK_HASH="$(cat "${RELEASE_DIR}/pnpm-lock.yaml" "${RELEASE_DIR}/pnpm-workspace.yaml" | sha256sum | cut -d' ' -f1)"
 fi
 
 if [ ! -d "${DEPS_DIR}/node_modules" ]; then
@@ -168,7 +168,7 @@ fi
 if [ "$NEED_INSTALL" = "1" ]; then
   log "installing dependencies into $DEPS_DIR"
   as_root mkdir -p "$DEPS_DIR"
-  as_root cp "${RELEASE_DIR}/package.json" "${RELEASE_DIR}/pnpm-lock.yaml" "$DEPS_DIR/"
+  as_root cp "${RELEASE_DIR}/package.json" "${RELEASE_DIR}/pnpm-lock.yaml" "${RELEASE_DIR}/pnpm-workspace.yaml" "$DEPS_DIR/"
   # Runs as root with an explicit HOME: sudo's secure_path must not be trusted
   # to find pnpm, and pnpm refuses to write its cache to an unwritable HOME.
   # A subshell with `cd` rather than a --cwd flag: `pnpm --cwd <dir> install`
