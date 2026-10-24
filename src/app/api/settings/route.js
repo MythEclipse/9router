@@ -45,6 +45,10 @@ export async function GET() {
   }
 }
 
+export async function PUT(request) {
+  return PATCH(request);
+}
+
 export async function PATCH(request) {
   try {
     const body = await request.json();

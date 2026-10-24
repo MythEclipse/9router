@@ -26,13 +26,13 @@ One gateway, one API key, any model: an OpenAI-compatible endpoint that routes t
 
 The gateway accepts a request in OpenAI, Claude or Gemini shape, translates it to whatever the target provider speaks, and streams the answer back. Providers are grouped by how you sign in:
 
-| Sign-in    | Providers                                                                                                                                                                                        |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| OAuth      | Claude, OpenAI Codex, Gemini CLI, Antigravity, Kiro, Kimi (Moonshot), Grok CLI, xAI, Cursor, GitHub Copilot, GitLab, Windsurf, Trae, Zed, iFlow, Qoder, Cline, KiloCode, CodeBuddy, Xiaomi MIMO  |
-| API key    | OpenAI, Anthropic, DeepSeek, GLM (Z.ai / Zhipu), MiniMax, Mistral, Perplexity, Groq, Together, Fireworks, Cerebras, SambaNova, SiliconFlow, Nebius, Hugging Face, Venice, Voyage and dozens more |
-| Free tier  | OpenRouter, OpenCode, Kiro, Gemini, Cloudflare AI, NVIDIA, Morph, Poolside, Kimchi, LLM7, api-airforce                                                                                           |
-| Web cookie | DeepSeek Web, Gemini Web, Kimi Web                                                                                                                                                               |
-| Local      | Ollama, LM Studio style self-hosted nodes, self-hosted TTS/STT/embeddings                                                                                                                        |
+| Sign-in | Providers |
+| --- | --- |
+| OAuth | Claude, OpenAI Codex, Gemini CLI, Antigravity, Kiro, Kimi (Moonshot), Grok CLI, xAI, Cursor, GitHub Copilot, GitLab, Windsurf, Trae, Zed, iFlow, Qoder, Cline, KiloCode, CodeBuddy, Xiaomi MIMO |
+| API key | OpenAI, Anthropic, DeepSeek, GLM (Z.ai / Zhipu), MiniMax, Mistral, Perplexity, Groq, Together, Fireworks, Cerebras, SambaNova, SiliconFlow, Nebius, Hugging Face, Venice, Voyage and dozens more |
+| Free tier | OpenRouter, OpenCode, Kiro, Gemini, Cloudflare AI, NVIDIA, Morph, Poolside, Kimchi, LLM7, api-airforce |
+| Web cookie | DeepSeek Web, Gemini Web, Kimi Web |
+| Local | Ollama, LM Studio style self-hosted nodes, self-hosted TTS/STT/embeddings |
 
 It is not only chat. The same gateway also serves text to image, image to text, video generation, text to speech, speech to text, embeddings, web search and web fetch, each with its own `/v1`-style endpoint.
 
@@ -71,24 +71,24 @@ docker run -d -p 20128:20128 -v 9router-data:/app/data 9router-fork
 
 Once it is running:
 
-|                   |                                                                                         |
-| ----------------- | --------------------------------------------------------------------------------------- |
-| Dashboard         | `http://localhost:20127/dashboard` (first login: `seren123`, or set `INITIAL_PASSWORD`) |
-| OpenAI-compatible | `http://localhost:20127/v1`                                                             |
-| Claude-compatible | `http://localhost:20127/v1/messages`                                                    |
-| Gemini-native     | `http://localhost:20127/v1beta/models/{model}:generateContent`                          |
-| Health probe      | `GET /api/health`                                                                       |
+| | |
+| --- | --- |
+| Dashboard | `http://localhost:20127/dashboard` (first login: `seren123`, or set `INITIAL_PASSWORD`) |
+| OpenAI-compatible | `http://localhost:20127/v1` |
+| Claude-compatible | `http://localhost:20127/v1/messages` |
+| Gemini-native | `http://localhost:20127/v1beta/models/{model}:generateContent` |
+| Health probe | `GET /api/health` |
 
 Point any CLI tool or agent at the base URL, generate a key under **Endpoint & Key**, and you are done.
 
 ## Model names you can call
 
-| Form           | Example                                                                  |
-| -------------- | ------------------------------------------------------------------------ |
+| Form | Example |
+| --- | --- |
 | Provider model | `kiro/claude-sonnet-4.5`, `kimi/kimi-k2.6`, `deepseek/deepseek-v4.1-pro` |
-| Custom node    | `mynode/gpt-oss-120b`                                                    |
-| Combo          | `my-combo` (fallback, round-robin, fusion and more)                      |
-| Custom model   | any name you define in Custom Models                                     |
+| Custom node | `mynode/gpt-oss-120b` |
+| Combo | `my-combo` (fallback, round-robin, fusion and more) |
+| Custom model | any name you define in Custom Models |
 
 ## Configuration
 

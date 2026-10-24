@@ -136,6 +136,7 @@ const PAGE_PERMISSION_RULES = [
   { prefix: "/dashboard/arena", permissions: ["manageModels"] },
   { prefix: "/dashboard/cli-tools", permissions: ["manageTools"] },
   { prefix: "/dashboard/token-saver", permissions: ["manageTools"] },
+  { prefix: "/dashboard/logs", permissions: ["manageAdvanced"] },
   { prefix: "/dashboard/console-log", permissions: ["manageAdvanced"] },
   { prefix: "/dashboard/error-log", permissions: ["manageAdvanced"] },
   // The security trail names who signed in and from where, so it stays with the
@@ -197,6 +198,7 @@ export function firstAllowedPage(permissions) {
     { path: "/dashboard/plugins", permissions: ["managePlugins"] },
     { path: "/dashboard/cli-tools", permissions: ["manageTools"] },
     { path: "/dashboard/token-saver", permissions: ["manageTools"] },
+    { path: "/dashboard/logs", permissions: ["manageAdvanced"] },
     { path: "/dashboard/console-log", permissions: ["manageAdvanced"] },
     { path: "/dashboard/error-log", permissions: ["manageAdvanced"] },
     { path: "/dashboard/translator", permissions: ["manageAdvanced"] },

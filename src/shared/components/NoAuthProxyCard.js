@@ -77,6 +77,64 @@ export default function NoAuthProxyCard({ providerId }) {
   const canRotate = proxyPools.length >= 2;
   const isRotation = rotateStrategy !== "none";
 
+  if (providerId === "opencode-v2") {
+    return (
+      <div className="relative overflow-hidden rounded-[var(--r-card)] border border-primary/30 bg-surface shadow-[var(--elev-1)] transition-all">
+        {/* Animated moving gradient shine beam */}
+        <div
+          aria-hidden="true"
+          className="proxy-shimmer-beam pointer-events-none absolute -inset-y-0 -left-1/2 w-1/2 bg-gradient-to-r from-transparent via-primary/15 to-transparent blur-sm"
+        />
+
+        {/* Content */}
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5">
+          <div className="flex items-start sm:items-center gap-3.5">
+            {/* Glowing animated proxy route icon (lan) */}
+            <div className="relative flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/25 shadow-[0_0_16px_rgba(229,106,74,0.2)]">
+              <span className="material-symbols-outlined text-[22px]">lan</span>
+              <span className="absolute -top-1 -right-1 flex size-3">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex size-3 rounded-full bg-emerald-500" />
+              </span>
+            </div>
+
+            <div className="flex flex-col">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[11px] uppercase tracking-wider font-semibold text-text-muted">
+                  Dedicated Routing
+                </span>
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+                  <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  ACTIVE
+                </span>
+              </div>
+
+              {/* Main title: proxy by: t.me/abcseren */}
+              <a
+                href="https://t.me/abcseren"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group mt-0.5 inline-flex items-center gap-1.5 text-base sm:text-lg font-bold text-text-main transition-colors hover:text-primary"
+              >
+                <span>proxy by:</span>
+                <span className="proxy-text-gradient bg-gradient-to-r from-primary via-amber-400 to-primary bg-clip-text text-transparent font-mono">
+                  t.me/abcseren
+                </span>
+                <span className="material-symbols-outlined text-[18px] text-text-muted group-hover:text-primary group-hover:translate-x-0.5 transition-all">
+                  open_in_new
+                </span>
+              </a>
+
+              <p className="text-xs text-text-muted mt-0.5">
+                Residential broadband proxy locked automatically for OpenCode Free V2.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Card>
       <div className="flex items-center gap-3 mb-4">

@@ -712,7 +712,7 @@ function StudioFormModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-text-main mb-1">
-                Input Multiplier <span className="text-text-muted font-normal">(opsional)</span>
+                Input Multiplier <span className="text-text-muted font-normal">(optional)</span>
               </label>
               <Input
                 type="number"
@@ -720,15 +720,15 @@ function StudioFormModal({
                 min="0"
                 value={inputMultiplier}
                 onChange={(e) => setInputMultiplier(e.target.value)}
-                placeholder="misal 1 atau 2 (x2 input)"
+                placeholder="e.g. 1 or 2 (2x input)"
               />
               <p className="text-[11px] text-text-muted mt-1">
-                Kelipatan token input pada kalkulasi usage/quota.
+                Token input multiplier applied to usage and quota calculation.
               </p>
             </div>
             <div>
               <label className="block text-xs font-medium text-text-main mb-1">
-                Output Multiplier <span className="text-text-muted font-normal">(opsional)</span>
+                Output Multiplier <span className="text-text-muted font-normal">(optional)</span>
               </label>
               <Input
                 type="number"
@@ -736,10 +736,10 @@ function StudioFormModal({
                 min="0"
                 value={outputMultiplier}
                 onChange={(e) => setOutputMultiplier(e.target.value)}
-                placeholder="misal 5 (x5 output)"
+                placeholder="e.g. 5 (5x output)"
               />
               <p className="text-[11px] text-text-muted mt-1">
-                Kelipatan token output pada kalkulasi usage/quota.
+                Token output multiplier applied to usage and quota calculation.
               </p>
             </div>
           </div>

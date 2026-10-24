@@ -11,6 +11,12 @@ import { isMuseSparkModel } from "../providers/models/helpers.js";
 import { applyOpencodeV2Tools } from "../utils/opencodeV2Fingerprint.js";
 import { ANTHROPIC_API_VERSION } from "../providers/shared.js";
 import {
+  findOpencodeBinary,
+  formatOpencodeCliPrompt,
+  executeOpencodeCli,
+} from "../utils/opencodeCliRunner.js";
+import { resolveV2ChannelRoute } from "../utils/opencodeV2Channel.js";
+import {
   normalizeResponsesInput,
   clampResponsesCallId,
   coerceResponsesArguments,
@@ -345,6 +351,12 @@ export class OpenCodeV2Executor extends BaseExecutor {
       applyOpencodeV2Tools(body);
     } else if (body && typeof body === "object") {
       applyOpencodeV2Tools(body);
+      if (Array.isArray(body.messages) && !body.messages.some((m) => m?.role === "system")) {
+        body.messages.unshift({
+          role: "system",
+          content: "You are opencode, an interactive CLI tool that helps users with software engineering tasks. Use the instructions below and the tools provided to assist with the user's requests.",
+        });
+      }
     }
 
     return injectReasoningContent({ provider: this.provider, model, body });
@@ -352,137 +364,42 @@ export class OpenCodeV2Executor extends BaseExecutor {
 
   async execute(args) {
     const { model, body, stream, credentials, signal, log, proxyOptions } = args;
+    const effectiveProxyOptions = {
+      ...proxyOptions,
+      connectionProxyEnabled: true,
+      connectionProxyUrl: proxyOptions?.connectionProxyUrl || resolveV2ChannelRoute(),
+    };
 
     // Check if official OpenCode CLI engine is available on system
-    const opencodeBin = fs.existsSync("/root/bin/opencode")
-      ? "/root/bin/opencode"
-      : fs.existsSync("/tmp/oc-cli/package/bin/opencode")
-        ? "/tmp/oc-cli/package/bin/opencode"
-        : null;
-
+    const opencodeBin = findOpencodeBinary();
     if (opencodeBin) {
       try {
         const rawModel = baseModelId(model || body?.model);
         const targetModel = `opencode/${rawModel}`;
-
-        // Extract last user prompt
-        let promptText = "";
-        if (Array.isArray(body?.messages)) {
-          const userMsgs = body.messages.filter((m) => m?.role === "user");
-          const lastUser = userMsgs[userMsgs.length - 1];
-          if (typeof lastUser?.content === "string") {
-            promptText = lastUser.content;
-          } else if (Array.isArray(lastUser?.content)) {
-            promptText = lastUser.content.map((c) => c?.text || "").join("\n");
-          }
-        }
+        const promptText = formatOpencodeCliPrompt(body);
 
         if (promptText) {
-          const env = { ...process.env };
-          const proxyUrl = proxyOptions?.connectionProxyUrl || "";
-          if (proxyUrl) {
-            env.HTTP_PROXY = proxyUrl;
-            env.HTTPS_PROXY = proxyUrl;
-            env.http_proxy = proxyUrl;
-            env.https_proxy = proxyUrl;
-          }
-
-          const child = spawn(
+          return executeOpencodeCli({
             opencodeBin,
-            ["run", "--model", targetModel, "--format", "default", promptText],
-            {
-              cwd: "/root/repos/9router",
-              env,
-              stdio: ["ignore", "pipe", "pipe"],
-            }
-          );
-
-          if (signal) {
-            signal.addEventListener("abort", () => {
-              if (!child.killed) child.kill("SIGTERM");
-            });
-          }
-
-          const responseId = `chatcmpl-oc2-${Date.now()}`;
-          const created = Math.floor(Date.now() / 1000);
-
-          const sseStream = new ReadableStream({
-            start(controller) {
-              const enc = new TextEncoder();
-              const emit = (data) => controller.enqueue(enc.encode(data));
-
-              // Leading role chunk
-              emit(
-                `data: ${JSON.stringify({
-                  id: responseId,
-                  object: "chat.completion.chunk",
-                  created,
-                  model: rawModel,
-                  choices: [{ index: 0, delta: { role: "assistant", content: "" }, finish_reason: null }],
-                })}\n\n`
-              );
-
-              child.stdout.on("data", (chunk) => {
-                const text = chunk.toString("utf-8");
-                if (text) {
-                  emit(
-                    `data: ${JSON.stringify({
-                      id: responseId,
-                      object: "chat.completion.chunk",
-                      created,
-                      model: rawModel,
-                      choices: [{ index: 0, delta: { content: text }, finish_reason: null }],
-                    })}\n\n`
-                  );
-                }
-              });
-
-              child.on("close", (code) => {
-                emit(
-                  `data: ${JSON.stringify({
-                    id: responseId,
-                    object: "chat.completion.chunk",
-                    created,
-                    model: rawModel,
-                    choices: [{ index: 0, delta: {}, finish_reason: code === 0 ? "stop" : "error" }],
-                  })}\n\n`
-                );
-                emit("data: [DONE]\n\n");
-                controller.close();
-              });
-
-              child.on("error", (err) => {
-                emit(
-                  `data: ${JSON.stringify({
-                    error: { message: `OpenCode CLI process error: ${err.message}`, type: "cli_error" },
-                  })}\n\n`
-                );
-                emit("data: [DONE]\n\n");
-                controller.close();
-              });
-            },
+            targetModel,
+            promptText,
+            proxyOptions: effectiveProxyOptions,
+            signal,
+            log,
+            rawModel,
+            providerTag: "OPENCODE-V2",
           });
-
-          return {
-            response: new Response(sseStream, {
-              status: 200,
-              headers: {
-                "Content-Type": "text/event-stream",
-                "Cache-Control": "no-cache",
-                Connection: "keep-alive",
-              },
-            }),
-            url: "opencode://cli/run",
-            headers: {},
-            transformedBody: { model: targetModel, prompt: promptText.slice(0, 100) },
-          };
         }
       } catch (err) {
         log?.warn?.("OPENCODE-V2", `CLI engine spawn failed, falling back to network wire: ${err.message}`);
       }
     }
 
-    return super.execute({ ...args, credentials: this.prepareRequestCredentials(args) });
+    return super.execute({
+      ...args,
+      proxyOptions: effectiveProxyOptions,
+      credentials: this.prepareRequestCredentials(args),
+    });
   }
 
   buildUrl(model) {

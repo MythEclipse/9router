@@ -448,6 +448,12 @@ export async function saveRequestUsage(entry, options = {}) {
     if (entry.requestedModel) entry.model = entry.requestedModel;
     entry.resolvedModel = entry.requestedModel ? resolvedModel : undefined;
 
+    // Cost is priced from the REAL model + provider; the flip below only changes
+    // what the dashboards display, never what is billed.
+    const resolvedModel = entry.model;
+    if (entry.requestedModel) entry.model = entry.requestedModel;
+    entry.resolvedModel = entry.requestedModel ? resolvedModel : undefined;
+
     const tokens = entry.tokens || {};
     const promptTokens = tokens.prompt_tokens || tokens.input_tokens || 0;
     const completionTokens = tokens.completion_tokens || tokens.output_tokens || 0;

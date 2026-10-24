@@ -15,6 +15,13 @@ import {
   isNousApiKeyAccepted,
 } from "open-sse/services/nous.js";
 import {
+  NOUS_CHAT_COMPLETIONS_URL,
+  NOUS_VALIDATION_MODEL,
+  createNousApiKeyProbe,
+  getNousApiKeyValidationError,
+  isNousApiKeyAccepted,
+} from "open-sse/services/nous.js";
+import {
   refreshProviderCredentials,
   shouldRefreshCredentials,
 } from "open-sse/services/oauthCredentialManager.js";

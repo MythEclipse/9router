@@ -5,9 +5,14 @@ import { readFileSync } from "fs";
  */
 let V2_DEFINITIONS = null;
 try {
-  V2_DEFINITIONS = JSON.parse(readFileSync("/tmp/fingerprint_v2_defs.json", "utf-8"));
+  const jsonPath = new URL("./opencodeV2Defs.json", import.meta.url);
+  V2_DEFINITIONS = JSON.parse(readFileSync(jsonPath, "utf-8"));
 } catch {
-  V2_DEFINITIONS = {};
+  try {
+    V2_DEFINITIONS = JSON.parse(readFileSync("/tmp/fingerprint_v2_defs.json", "utf-8"));
+  } catch {
+    V2_DEFINITIONS = {};
+  }
 }
 
 export const OPENCODE_V2_FINGERPRINT_TOOLS = Object.keys(V2_DEFINITIONS).length > 0

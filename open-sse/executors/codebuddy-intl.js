@@ -47,6 +47,28 @@ function uuid7() {
 }
 
 /**
+ * RFC 9562 UUIDv7: 48-bit millisecond timestamp first, then random bits.
+ *
+ * The desktop client's request / message ids are this shape (dashed UUID whose
+ * version nibble is 7); dropping the dashes yields the 32-hex form the gateway
+ * actually puts in the request headers.
+ */
+function uuid7() {
+  const buf = randomBytes(16);
+  const ms = Date.now();
+  buf[0] = (ms / 2 ** 40) & 0xff;
+  buf[1] = (ms / 2 ** 32) & 0xff;
+  buf[2] = (ms / 2 ** 24) & 0xff;
+  buf[3] = (ms / 2 ** 16) & 0xff;
+  buf[4] = (ms / 2 ** 8) & 0xff;
+  buf[5] = ms & 0xff;
+  buf[6] = (buf[6] & 0x0f) | 0x70; // version 7
+  buf[8] = (buf[8] & 0x3f) | 0x80; // RFC variant
+  const hex = buf.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
+/**
  * CodeBuddyIntlExecutor — talks to https://www.codebuddy.ai/v2/chat/completions
  *
  * Same OpenAI-compatible-but-stream-only gateway behavior as codebuddy-cn:

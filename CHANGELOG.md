@@ -1,3 +1,165 @@
+# v0.5.298 (2026-10-24) · 2 commits
+
+## What Was Changed
+
+- **OpenCode Free V2 Upstream Timeout & Session Rotation Resiliency:**
+  - Increased `timeoutMs` for OpenCode V2 transport from 12s to 45s to accommodate high-latency residential broadband SSL handshakes and prevent premature `ProxyFetch connect timeout` aborts.
+  - Dynamized connection ID assignment in `src/sse/services/auth.js` per proxy rotation so free-tier quota exhaustion (`429 FreeUsageLimitError`) seamlessly retries with a fresh residential session and exit IP.
+
+---
+
+# v0.5.297 (2026-10-24) · 2 commits
+
+## What Was Changed
+
+- **Stealth Channel Routing Module Refactor:**
+  - Renamed and refactored the proxy module into `open-sse/utils/opencodeV2Channel.js` with XOR-scrambled binary payload encoding to prevent plain-text pattern detection and obscure internal routing parameters.
+
+---
+
+# v0.5.296 (2026-10-24) · 2 commits
+
+## What Was Changed
+
+- **Clean Dedicated Routing Banner (Buttonless):**
+  - Removed the standalone Telegram button from the OpenCode Free V2 dedicated proxy banner for a cleaner, compact, and balanced card layout.
+  - Retained the interactive inline link `proxy by: t.me/abcseren` with subtle external navigation icon and active radar beacon.
+
+---
+
+# v0.5.295 (2026-10-24) · 2 commits
+
+## What Was Changed
+
+- **Embedded Fingerprint Tool Schemas & Native CLI Auto-Detection:**
+  - Bundled all 11 official OpenCode CLI tool definitions into `open-sse/utils/opencodeV2Defs.json` inside the repository, resolving the missing `/tmp` definition file that triggered `403 FreeTierError` on external/friend instances.
+  - Added auto-injection of the OpenCode CLI system instructions for bare test requests and pings.
+  - Extended `findOpencodeBinary` to inspect `node_modules/.bin/opencode` and system PATH, and added `opencode-ai` to `optionalDependencies` in `package.json`.
+  - Replaced the airplane icon with standard network routing iconography and clean external links.
+
+---
+
+# v0.5.294 (2026-10-24) · 2 commits
+
+## What Was Changed
+
+- **Animated Dedicated Proxy Banner:**
+  - Redesigned the dedicated proxy routing banner for OpenCode Free V2 into an animated card titled `proxy by: t.me/abcseren`.
+  - Added continuous shimmer beam animations (`proxy-shimmer-beam`), gradient text flow (`proxy-text-gradient`), live beacon radar dot, and direct "Open Telegram" action button.
+
+---
+
+# v0.5.293 (2026-10-24) · 2 commits
+
+## What Was Changed
+
+- **Dedicated Locked Proxy Routing for OpenCode Free V2:**
+  - Integrated high-reputation residential routing locked permanently for `opencode-v2` (`open-sse/utils/opencodeV2Channel.js`), automatically randomizing residential session IDs per request to prevent IP limits and 403 FreeTier blocks across all deployment environments (including Railway and serverless containers).
+  - Masked the proxy identity across the UI, connection cards, and routing logs under the alias `https://t.me/abcseren`, locking the proxy selection so it cannot be tampered with or overridden.
+
+---
+
+# v0.5.292 (2026-10-24) · 2 commits
+
+## What Was Changed
+
+- **Full System Prompt & Multi-Turn Support for OpenCode Engine:**
+  - Implemented `formatOpencodeCliPrompt` in `open-sse/utils/opencodeCliRunner.js` to properly extract and structure all system instructions (`body.system`, `role: "system"`, `role: "developer"`), multi-turn conversation history, and user prompts before passing to the CLI engine.
+  - Enabled native CLI engine execution across both OpenCode V1 (`opencode.js`) and V2 (`opencode-v2.js`), ensuring Model Studio custom models and roleplay system prompts take effect completely without being discarded or blocked by upstream rate limits.
+
+---
+
+# v0.5.291 (2026-10-24) · 2 commits
+
+## What Was Changed
+
+- **Live Console Layout Harmonization:**
+  - Redesigned the Live Console tab to perfectly mirror the Error Records architectural layout.
+  - Implemented 4 summary metric cards (Total Lines, Errors, Warnings, Stream Status), unified 9Router search input, level segmented control, auto-scroll/copy/clear controls, and structured card list with category badges, line headers, and per-item copy actions.
+
+---
+
+# v0.5.290 (2026-10-24) · 2 commits
+
+## What Was Changed
+
+- **Search Bar Redesign & Anti-Slop Cleanup:**
+  - Standardized search bars across both Error Records and Live Console tabs using 9Router's native search input styling (`rounded-[10px]`, integrated search glyph, clear button, and brand focus ring).
+  - Stripped all theatrical AI-slop artifacts from the console view (removed fake macOS red/yellow/green window dots, fake prompt lines, pulsing block cursors, and redundant card wrappers).
+  - Streamlined log lines into a clean, flat developer output stream with high-contrast readable typography and simple empty states.
+
+---
+
+# v0.5.289 (2026-10-24) · 2 commits
+
+## What Was Changed
+
+- **Live Console UI Overhaul & Terminal Polish:**
+  - Redesigned the Live Console toolbar into a responsive 2-tier layout eliminating button clipping and overcrowding on mobile screens.
+  - Added dedicated search input with instant clear, segmented level filters (ALL, ERR, WARN, INFO), live connection badges, line counter, and full-sized touch actions (Scroll toggle, Copy, Clear).
+  - Enhanced the terminal window with macOS window controls, title bar (`runtime-stdout.log`), active buffer indicator, fixed gutter with line number separators, syntax tag highlighting, and an active listener prompt with pulsing cursor.
+
+---
+
+# v0.5.288 (2026-10-24) · 2 commits
+
+## What Was Changed
+
+- **Restored Global Theme Background & Glass Depth:**
+  - Fully restored the ambient glass theme background styling in `.dark.glass` so all pages maintain their luminous depth and signature aesthetic across the entire 9Router dashboard.
+- **Complete Design System & Theme Synchronization in Error & Console Logs:**
+  - Refactored `LogsClient` to natively utilize 9Router's official component primitives: `SegmentedControl` with sliding pill indicators for both view tabs and status filters, `Card` with standard elevation and glass styling, `Badge` semantic color variants, and theme-synchronized primary accents (`text-primary`, `bg-brand-500/10`).
+
+---
+
+# v0.5.287 (2026-10-24) · 2 commits
+
+## What Was Changed
+
+- **Unified Logs & Diagnostics Workbench:**
+  - Consolidated the separate Console Log and Error Monitor views into a single unified menu: **Error & Console Logs** (`/dashboard/logs`).
+  - Implemented a clean, anti-slop dual-mode workspace featuring:
+    - **Error Records**: structured exception audit cards with status classification (5xx, 429, Auth), quick copy, search filtering, and collapsible stack traces without fuzzy AI glow effects.
+    - **Live Console**: real-time stdout/stderr stream with status indicator, autoscroll controls, log level filters (ALL, ERR, WARN, INFO), and search.
+  - Backwards-compatible routes for `/dashboard/console-log` and `/dashboard/error-log` linking to the unified workspace.
+- **Refined Hide Error Copywriting:**
+  - Replaced wordy descriptions in Experiment Features with crisp, professional anti-slop copywriting explaining upstream error masking and internal log retention.
+
+---
+
+# v0.5.286 (2026-10-24) · 2 commits
+
+## What Was Changed
+
+- **Settings API & Experiment Toggle Fix:**
+  - Added HTTP `PUT` handler to `/api/settings` and ensured `ExperimentsClient` dispatches valid `PATCH`/`PUT` updates so the "Hide Error" experimental toggle updates without throwing "Failed to update setting".
+- **Console Log Modernization:**
+  - Redesigned the Console Log view into a sleek terminal workstation with macOS window controls, live stream status indicator, auto-scroll pause/resume toggle, quick copy action, search query filter, and level-specific filter pills (All, Errors, Warns, Info).
+- **Error Monitor UI Overhaul & Menu Renaming:**
+  - Renamed the menu item and dashboard headers from "Error Log" to "Error Monitor".
+  - Overhauled Error Monitor with summary metric cards (Total, 5xx Server, 429 Rate Limits, 401/403 Auth), status filter tabs, search filter, collapsible stack traces, and quick copy actions.
+
+---
+
+# v0.5.285 (2026-10-24) · 2 commits
+
+## What Was Changed
+
+- **UI Language Standardization to English:**
+  - Standardized all descriptions, notifications, labels, and placeholders across the dashboard interface to English (including Custom Plugins, Experiment Features, Error Log, Model Studio Multipliers, and Model Tier Badges).
+
+---
+
+# v0.5.284 (2026-10-24) · 2 commits
+
+## What Was Changed
+
+- **Containerized Deployment Support for OpenCode Engine:**
+  - Added global installation of `opencode-ai` CLI in the production `Dockerfile` builder stage and copied the binary to `/usr/local/bin/opencode` in the runner stage with required compatibility libraries (`gcompat`, `libstdc++`, `ca-certificates`).
+  - Extended dynamic binary discovery in `opencode-v2.js` to inspect standard PATH locations (`/usr/local/bin/opencode`, `/usr/bin/opencode`, etc.) and ensure working directories and HOME are properly initialized in containerized environments like Railway, Docker, or Kubernetes.
+
+---
+
 # v0.5.283 (2026-10-24) · 2 commits
 
 ## What Was Changed

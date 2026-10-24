@@ -37,15 +37,8 @@ function readKnown() {
 }
 
 function repoRelative(name) {
-  if (!path.isAbsolute(name)) return name.split(path.sep).join("/");
-  const normalized = path.resolve(name);
-  const rootPrefix = `${path.resolve(repoRoot)}${path.sep}`;
-  if (normalized.startsWith(rootPrefix)) return path.relative(repoRoot, normalized).split(path.sep).join("/");
-
-  // CI artifact paths may come from a different absolute checkout root.
-  const marker = `${path.sep}tests${path.sep}`;
-  const testsIndex = normalized.lastIndexOf(marker);
-  return testsIndex >= 0 ? normalized.slice(testsIndex + 1).split(path.sep).join("/") : normalized.split(path.sep).join("/");
+  const rel = path.isAbsolute(name) ? path.relative(repoRoot, name) : name;
+  return rel.split(path.sep).join("/");
 }
 
 function failuresFrom(report) {
