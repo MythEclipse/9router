@@ -74,9 +74,49 @@ resolve_pnpm() {
 PNPM="$(resolve_pnpm)"
 
 # ── state captured before we touch anything ────────────────────────────────
+# Quarantine legacy releases first: a release whose node_modules is a symlink
+# (the old shared-deps scheme) cannot be re-run if /opt/9router/deps ever gets
+# reinstalled from a different lockfile - different Next major version against
+# an old .next build crashes at startup ("canonicalBase" in base-server.js).
+# A quarantined directory must never become a rollback target.
+LEGACY_DIR="$RELEASES_DIR/.legacy"
+safe_release() {
+  # $1 = release dir. Safe = node_modules is a real directory with next inside.
+  [ -d "${1}/node_modules" ] || return 1
+  [ -L "${1}/node_modules" ] && return 1
+  [ -f "${1}/node_modules/next/package.json" ] || return 1
+  return 0
+}
+as_root_mkdir() { as_root mkdir -p "$1"; }
+as_root_mkdir "$LEGACY_DIR" 2>/dev/null || LEGACY_DIR="/opt/9router/quarantine"
+for rel in "$RELEASES_DIR"/*/; do
+  [ -d "$rel" ] || continue
+  name="$(basename "$rel")"
+  [ "$name" = ".legacy" ] && continue
+  if ! safe_release "$rel"; then
+    log "quarantining legacy release $name (node_modules not self-contained)"
+    if safe_release "$LEGACY_DIR/$name"; then
+      as_root rm -rf "$LEGACY_DIR/$name"
+    fi
+    as_root mv "$rel" "$LEGACY_DIR/$name"
+  fi
+done
+
 PREV_TARGET=""
 if [ -L "$CURRENT_LINK" ]; then
-  PREV_TARGET="$(readlink "$CURRENT_LINK")"
+  raw_prev="$(readlink "$CURRENT_LINK")"
+  # current may point at a quarantined / legacy release (deployed before the
+  # per-release scheme). Re-running it is unreliable - its node_modules is a
+  # symlink into deps, and deps now carries a different Next version than what
+  # that release was built with (crashes at startup, e.g. "canonicalBase") or
+  # its loader hooks predate the next/server shim. Rolling back into such a
+  # directory trades a broken new release for a *definitely* broken old one,
+  # so only accept a self-contained previous release and otherwise go forward.
+  if [ -d "$raw_prev" ] && safe_release "$raw_prev"; then
+    PREV_TARGET="$raw_prev"
+  else
+    log "previous release ${raw_prev:-} is not self-contained; rolling back disabled (deploy goes forward only)"
+  fi
 elif [ -d "$CURRENT_LINK" ]; then
   # First deploy after the Docker era: /opt/9router/current is a real
   # directory. Keep it aside so a rollback can still reach it.
