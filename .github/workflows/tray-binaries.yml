@@ -173,4 +173,3 @@ jobs:
             exit 1
           fi
           echo "✅ $URL serves the expected bytes"
-

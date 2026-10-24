@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 9Router (`9router-app`) - a local AI routing gateway + Next.js dashboard. It exposes one OpenAI-compatible endpoint (`/v1/*`) and routes traffic across 40+ upstream providers with format translation, model-combo fallback, multi-account fallback, OAuth/API-key credential management, token refresh, quota/usage tracking, and optional cloud sync.
 
 Two published artifacts live in this one repo:
+
 - The **dashboard + gateway** (root `package.json`, `9router-app`) - the Next.js server that does the actual routing.
 - The **CLI launcher** (`cli/`, published to npm as `9router`) - a separate package that installs/starts the server and manages the tray. It has its own `package.json`, version, and build.
 
@@ -35,25 +36,30 @@ cd cli && npm run dev  # nodemon watch
 ```
 
 Tests (vitest, in `tests/`, an **independent** ESM package - not wired into root `npm test`):
+
 ```bash
 npm install                             # ROOT deps first - tests import from src/ which needs `open`, `undici`, etc.
 cd tests && npm install                 # then tests' own deps (vitest) → tests/node_modules (allowed by tests/.gitignore)
 npx vitest run                          # all tests; auto-discovers tests/vitest.config.js
 npx vitest run unit/capabilities.test.js   # single file (path relative to tests/)
 ```
+
 > The committed `tests/package.json` `test` script hardcodes Unix paths (`NODE_PATH=/tmp/node_modules …`) - a shared-install workaround from upstream. On Windows (or anywhere), ignore it and use the `npx vitest` form above; `vitest.config.js` resolves the `open-sse`/`@/` aliases from the repo root regardless of where vitest lives.
 >
 > **The suite is NOT expected to be all-green on a plain checkout.** A full Linux/Node 22 run is 3 643 pass / 213 fail out of 3 856. Judge regressions with `tests/__baseline__/compare-fails.mjs`, not a raw run: it reads a vitest JSON report and fails only on a failure that is not catalogued in `tests/__baseline__/known-fails.txt`; a catalogued failure that starts passing is printed as stale so it can be pruned. Expected red:
+>
 > - The catalogue is the source of truth, not this paragraph. It was regenerated from that Linux/Node 22 run: mostly `unit/dashboard-guard` + `unit/security-audit` (a `getDashboardAuthSession` export the guard tests cannot resolve), converter snapshot drift, `UNIQUE constraint failed: combos.name` state leaking between combo tests, and 13 suites that fail to load.
 > - `unit/embeddings.cloud.test.js` imports `cloud/src/handlers/embeddings.js` - the `cloud/` worker dir is **not in this repo**, so it always fails here.
 > - `unit/xai-oauth-service.test.js` times out (5s) when the xAI endpoint-discovery fetch isn't reachable/mocked.
 > - `real/*.real.test.js` make live provider calls - need credentials, skip otherwise.
+
 - `*.real.test.js` under `tests/translator/real/` make live provider calls - skip unless credentials are set.
 - Regression baselines: `tests/__baseline__/verify-*.mjs` compare against committed snapshots (providers, aliases, OAuth URLs). Run these after touching provider registry / alias logic.
 
 ## Architecture
 
 Two authoritative docs already exist - read them before working in these areas rather than re-deriving:
+
 - `docs/ARCHITECTURE.md` - full system: request lifecycle, combo/account fallback, OAuth + token refresh, cloud sync, data model.
 - `open-sse/AGENTS.md` - the routing/translation engine's own conventions and "how to add a provider/executor/translator". **Read this before editing anything under `open-sse/`.**
 
@@ -75,10 +81,12 @@ Two authoritative docs already exist - read them before working in these areas r
 - Never hardcode role/block/model strings - use `open-sse/translator/schema/` and `open-sse/config/` constants. Config-driven and DRY is enforced by convention here.
 
 ### Provider registry (`open-sse/providers/registry/*`)
+
 - One file per provider. `providers/registry/index.js` is an **auto-generated** static import list - regenerate it with `scripts/migrate-registry.mjs` / `injectDisplayToRegistry.mjs`, don't hand-edit.
 - Add a provider: copy `providers/REGISTRY_TEMPLATE.js`, add models to `config/providerModels.js`. Only add an executor for non-OpenAI-compatible upstreams.
 
 ### Persistence - IMPORTANT (ARCHITECTURE.md is stale here)
+
 State is **no longer `db.json`**. It's a SQLite layer under `src/lib/db/` with an adapter fallback chain (`driver.js`): `bun:sqlite` → `better-sqlite3` (optional native dep) → `node:sqlite` (Node ≥22.5) → `sql.js` (pure-JS fallback, always works). `better-sqlite3` is deliberately in `optionalDependencies` so install never fails without build tools.
 
 - `src/lib/localDb.js` is a **backward-compat shim** re-exporting `src/lib/db/index.js`. New code should import from `@/lib/db/index.js`; per-entity logic lives in `src/lib/db/repos/*`. Schema/migrations in `src/lib/db/migrations/`.
@@ -162,6 +170,7 @@ one. The request now sends `contents: {text, highlights}`, and `normalizeExa`
 accepts content nested under `contents` as well as the flat legacy shape.
 
 ### RTK token saver (`open-sse/rtk/`)
+
 Pre-translate hooks that compress `tool_result` content in-place to cut tokens. **Fail-open**: any error returns null and leaves the body untouched - never throw out of them. Skips `is_error`/`status:"error"` results to preserve traces.
 
 ## Conventions & gotchas
