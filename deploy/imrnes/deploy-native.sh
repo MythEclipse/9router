@@ -174,6 +174,18 @@ import('./src/dashboardGuard.js').then(() => {
   process.exit(1);
 });
 ") || true
+# Debug: run custom-server.js directly for 3 seconds to capture any startup error
+# before starting via systemd. If it crashes immediately, we'll see why.
+(cd "$RELEASE_DIR" && as_root env HOME=/root node custom-server.js > /tmp/9router-debug.log 2>&1 &
+DEBUG_PID=$!
+sleep 3
+if kill -0 $DEBUG_PID 2>/dev/null; then
+  echo "custom-server.js is running (PID $DEBUG_PID)"
+  kill $DEBUG_PID 2>/dev/null || true
+else
+  echo "custom-server.js exited immediately. Output:"
+  cat /tmp/9router-debug.log 2>/dev/null || true
+fi) || true
 
 # ── 3. install the unit ────────────────────────────────────────────────────
 # Installed from the payload so the running unit always matches the deployed
