@@ -397,11 +397,13 @@ jobs:
           mkdir -p "$R"
           cp custom-server.js package.json pnpm-lock.yaml pnpm-workspace.yaml next.config.mjs "$R"/
           cp -r src open-sse public deploy scripts "$R"/
-          cp .next/standalone/server.js "$R/server.js"
-          # Anchor both excludes at the transfer root: .next/standalone is a
-          # partial copy and .next/cache is build cache — neither belongs on
-          # the host.
-          rsync -a --exclude='/standalone' --exclude='/cache' .next/ "$R/.next/"
+          # NOTE: do NOT ship .next/standalone/server.js on imrnes — the
+          # standalone entry resolves next from /opt/9router/deps/node_modules
+          # (the old shared tree) instead of the release's own node_modules,
+          # causing "canonicalBase" 503 on every request. Fall back to
+          # `next start` (custom-server.js else-branch) which resolves from
+          # the release dir's own node_modules.
+          cp -r .next "$R/.next/"
           # The deploy script derives the release directory name from this
           # marker, so a re-uploaded payload always lands in a fresh directory.
           printf '%s' "${GITHUB_SHA:0:7}" > "$R/.deploy-sha"
