@@ -168,7 +168,7 @@ jobs:
 
           echo "=== Backup current install (node_modules excluded) ==="
           ssh "$VPS_USER@$VPS_HOST" \
-            "sudo tar czf $ROLLBACK_TAR --exclude=node_modules -C $APP_DIR . && sudo ls -lh $ROLLBACK_TAR"
+            "if [ -d $APP_DIR ]; then sudo tar czf $ROLLBACK_TAR --exclude=node_modules -C $APP_DIR . && sudo ls -lh $ROLLBACK_TAR; else echo 'no existing app dir, skipping backup'; fi"
 
           echo "=== Ship release $SHORT_SHA ==="
           cat /tmp/9router-release.tgz | ssh "$VPS_USER@$VPS_HOST" \
@@ -184,7 +184,7 @@ jobs:
           # absolute path (sudo's secure_path must not be trusted to find it).
           if [ "$NEED_INSTALL" = "1" ]; then
             echo "=== pnpm install on the VPS ==="
-            ssh "$VPS_USER@$VPS_HOST" "cd $APP_DIR && sudo HOME=/root corepack enable pnpm && pnpm install --frozen-lockfile"
+            ssh "$VPS_USER@$VPS_HOST" "cd $APP_DIR && sudo HOME=/root bash -c 'corepack enable pnpm && pnpm install --frozen-lockfile'"
           else
             echo "=== manifests unchanged -> reusing host node_modules ==="
           fi
