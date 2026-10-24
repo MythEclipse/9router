@@ -13,7 +13,7 @@
 # Flow:
 #   1. unpack the tarball into /opt/9router/releases/<sha>
 #   2. (re)install shared deps into /opt/9router/deps when the manifests changed
-#   3. symlink deps/node_modules into the release — imrnes has no bun, and a
+#   3. symlink deps/node_modules into the release — imrnes has no pnpm, and a
 #      279M node_modules per release would double on every rollback target
 #   4. atomically flip /opt/9router/current -> releases/<sha>
 #   5. restart the systemd unit, health-check /api/health
@@ -60,31 +60,18 @@ as_root() {
   fi
 }
 
-# bun is the only supported installer for this lockfile (bun.lock, not
-# package-lock.json); npm cannot resolve it. Auto-provision the pinned version
-# if the host does not have it yet — the previous Docker deploy never needed a
-# JS toolchain on imrnes at all.
-BUN_VERSION="${BUN_VERSION:-1.3.14}"
-resolve_bun() {
-  if command -v bun >/dev/null 2>&1; then
-    command -v bun
+# pnpm is the installer for this lockfile (pnpm-lock.yaml). Node.js ships with
+# corepack, which provides pnpm. Auto-provision if the host does not have it yet.
+resolve_pnpm() {
+  if command -v pnpm >/dev/null 2>&1; then
+    command -v pnpm
     return 0
   fi
-  # The official installer drops the binary in $HOME/.bun/bin and does NOT
-  # symlink it into /usr/local/bin when run with a custom HOME. Check there too.
-  for candidate in /usr/local/bin/bun /root/.bun/bin/bun "$HOME/.bun/bin/bun"; do
-    [ -x "$candidate" ] && { printf '%s\n' "$candidate"; return 0; }
-  done
-  log "installing bun ${BUN_VERSION} (needed for bun.lock)"
-  # Give the installer the HOME whose bin directory we then probe, so a fresh
-  # install lands where resolve_bun looks for it.
-  curl -fsSL "https://bun.sh/install" | as_root bash -s "bun-v${BUN_VERSION}" >/dev/null
-  for candidate in /usr/local/bin/bun /root/.bun/bin/bun; do
-    [ -x "$candidate" ] && { printf '%s\n' "$candidate"; return 0; }
-  done
-  die "bun install did not produce an executable at /usr/local/bin/bun or /root/.bun/bin/bun"
+  log "enabling pnpm via corepack"
+  as_root corepack enable pnpm || die "corepack enable pnpm failed"
+  command -v pnpm || die "pnpm not available after corepack enable"
 }
-BUN="$(resolve_bun)"
+PNPM="$(resolve_pnpm)"
 
 # ── state captured before we touch anything ────────────────────────────────
 PREV_TARGET=""
@@ -165,8 +152,8 @@ as_root tar xzf "$PAYLOAD" -C "$RELEASE_DIR" --exclude=.deploy-sha
 NEED_INSTALL=0
 STAMP="${DEPS_DIR}/.install-stamp"
 LOCK_HASH=""
-if [ -f "${RELEASE_DIR}/bun.lock" ] && command -v sha256sum >/dev/null 2>&1; then
-  LOCK_HASH="$(sha256sum "${RELEASE_DIR}/bun.lock" | cut -d' ' -f1)"
+if [ -f "${RELEASE_DIR}/pnpm-lock.yaml" ] && command -v sha256sum >/dev/null 2>&1; then
+  LOCK_HASH="$(sha256sum "${RELEASE_DIR}/pnpm-lock.yaml" | cut -d' ' -f1)"
 fi
 
 if [ ! -d "${DEPS_DIR}/node_modules" ]; then
@@ -181,17 +168,17 @@ fi
 if [ "$NEED_INSTALL" = "1" ]; then
   log "installing dependencies into $DEPS_DIR"
   as_root mkdir -p "$DEPS_DIR"
-  as_root cp "${RELEASE_DIR}/package.json" "${RELEASE_DIR}/bun.lock" "$DEPS_DIR/"
+  as_root cp "${RELEASE_DIR}/package.json" "${RELEASE_DIR}/pnpm-lock.yaml" "$DEPS_DIR/"
   # Runs as root with an explicit HOME: sudo's secure_path must not be trusted
-  # to find bun, and bun refuses to write its cache to an unwritable HOME.
-  # A subshell with `cd` rather than a --cwd flag: `bun --cwd <dir> install`
+  # to find pnpm, and pnpm refuses to write its cache to an unwritable HOME.
+  # A subshell with `cd` rather than a --cwd flag: `pnpm --cwd <dir> install`
   # is parsed as a SCRIPT named "install", which fails with "Script not found".
   as_root rm -rf "${DEPS_DIR}/node_modules"
   (
     cd "$DEPS_DIR"
-    as_root env HOME=/root "$BUN" install --frozen-lockfile
+    as_root env HOME=/root "$PNPM" install --frozen-lockfile
   )
-  [ -d "${DEPS_DIR}/node_modules" ] || die "bun install produced no node_modules"
+  [ -d "${DEPS_DIR}/node_modules" ] || die "pnpm install produced no node_modules"
 
   # Record what was actually installed, so the next run can tell a matching
   # reuse from a drifted one without trusting a bare directory test.

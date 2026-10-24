@@ -83,28 +83,34 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          bun-version: 1.3.14
+          node-version: 22
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
 
       - name: Install deps
-        run: bun install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: bun run build
+        run: pnpm run build
 
       # Assemble exactly what flake.nix used to copy into $out/lib/9router:
       # the standalone server, the full .next build, the runtime source trees
       # and custom-server.js. node_modules is left out on purpose — the host
-      # keeps its own and only refreshes it when bun.lock changes.
+      # keeps its own and only refreshes it when pnpm-lock.yaml changes.
       - name: Assemble release
         run: |
           set -euo pipefail
           R=/tmp/9router-release
           rm -rf "$R"
           mkdir -p "$R"
-          cp custom-server.js package.json bun.lock "$R"/
+          cp custom-server.js package.json pnpm-lock.yaml "$R"/
           cp -r src open-sse public "$R"/
           cp .next/standalone/server.js "$R/server.js"
           # Anchor both excludes at the transfer root: .next/standalone is a
@@ -147,15 +153,15 @@ jobs:
 
           # Decide BEFORE syncing: once the new tree lands, the host's copies
           # are ours, so comparing afterwards could never detect a change.
-          # A missing bun.lock on the host falls back to package.json.
+          # A missing pnpm-lock.yaml on the host falls back to package.json.
           echo "=== Compare dependency manifests ==="
           ssh "$VPS_USER@$VPS_HOST" "cat $APP_DIR/package.json 2>/dev/null || true" > /tmp/host-package.json
-          ssh "$VPS_USER@$VPS_HOST" "cat $APP_DIR/bun.lock 2>/dev/null || true" > /tmp/host-bun.lock
+          ssh "$VPS_USER@$VPS_HOST" "cat $APP_DIR/pnpm-lock.yaml 2>/dev/null || true" > /tmp/host-pnpm-lock.yaml
           NEED_INSTALL=0
           if [ -s /tmp/host-package.json ] && ! cmp -s package.json /tmp/host-package.json; then
             NEED_INSTALL=1
           fi
-          if [ -s /tmp/host-bun.lock ] && ! cmp -s bun.lock /tmp/host-bun.lock; then
+          if [ -s /tmp/host-pnpm-lock.yaml ] && ! cmp -s pnpm-lock.yaml /tmp/host-pnpm-lock.yaml; then
             NEED_INSTALL=1
           fi
           echo "dependency manifests changed: $NEED_INSTALL (0 = reuse the host's node_modules)"
@@ -174,11 +180,11 @@ jobs:
           ssh "$VPS_USER@$VPS_HOST" \
             "sudo rsync -a --delete --exclude=node_modules /tmp/9router-stage/ $APP_DIR/ && sudo rm -rf /tmp/9router-stage"
 
-          # node_modules is root-owned, so the install runs as root with bun's
+          # node_modules is root-owned, so the install runs as root with pnpm's
           # absolute path (sudo's secure_path must not be trusted to find it).
           if [ "$NEED_INSTALL" = "1" ]; then
-            echo "=== bun install on the VPS ==="
-            ssh "$VPS_USER@$VPS_HOST" "cd $APP_DIR && sudo HOME=/root /usr/local/bin/bun install --frozen-lockfile"
+            echo "=== pnpm install on the VPS ==="
+            ssh "$VPS_USER@$VPS_HOST" "cd $APP_DIR && sudo HOME=/root corepack enable pnpm && pnpm install --frozen-lockfile"
           else
             echo "=== manifests unchanged -> reusing host node_modules ==="
           fi
@@ -335,9 +341,10 @@ jobs:
   #
   # Same payload as deploy-orange, so both lanes ship the identical file set:
   #   .next/standalone/server.js + .next + open-sse + src + public
-  #   + custom-server.js + package.json + bun.lock + deploy/imrnes/*
+  #   + custom-server.js + package.json + pnpm-lock.yaml + deploy/imrnes/*
   # node_modules is NOT in the payload: deploy-native.sh installs it once into
-  # /opt/9router/deps (bun.lock is a bun lockfile, so only bun can resolve it)
+  # /opt/9router/deps (pnpm-lock.yaml is a pnpm lockfile, so only pnpm can
+  # resolve it)
   # and symlinks it into every release.
   deploy-imrnes:
     name: Deploy to imrnes VPS
@@ -362,16 +369,22 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          bun-version: 1.3.14
+          node-version: 22
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
 
       - name: Install deps
-        run: bun install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: bun run build
+        run: pnpm run build
 
       - name: Assemble release
         run: |
@@ -379,7 +392,7 @@ jobs:
           R=/tmp/9router-release-imrnes
           rm -rf "$R"
           mkdir -p "$R"
-          cp custom-server.js package.json bun.lock "$R"/
+          cp custom-server.js package.json pnpm-lock.yaml "$R"/
           cp -r src open-sse public deploy "$R"/
           cp .next/standalone/server.js "$R/server.js"
           # Anchor both excludes at the transfer root: .next/standalone is a
