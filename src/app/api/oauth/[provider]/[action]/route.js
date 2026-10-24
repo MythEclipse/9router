@@ -44,6 +44,8 @@ import {
 import { detectIdeInstalled } from "@/lib/oauth/utils/ideDetect";
 import { ZED_HOSTED_CONFIG } from "@/lib/oauth/constants/oauth";
 
+export const dynamic = "force-dynamic";
+
 async function completeXaiManualCode(code, state) {
   const session = state ? getXaiSessionStatus(state) : null;
   if (!session) {

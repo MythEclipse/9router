@@ -4,6 +4,8 @@ import { applyOutboundProxyEnv } from "@/lib/network/outboundProxy";
 import { verifyDashboardPassword } from "@/lib/auth/dashboardSession";
 import { configureTelegramBackup } from "@/shared/services/telegramBackup";
 
+export const dynamic = "force-dynamic";
+
 const CLI_TOKEN_HEADER = "x-9r-cli-token";
 const PASSWORD_HEADER = "x-9r-password";
 

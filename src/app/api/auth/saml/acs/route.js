@@ -11,6 +11,8 @@ import {
 import { setDashboardAuthCookie } from "@/lib/auth/dashboardSession";
 import { checkLock, recordFail, recordSuccess, getClientIp } from "@/lib/auth/loginLimiter";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(request) {
   const settings = await getSettings();
   const origin = getSamlBaseUrl(request, settings);

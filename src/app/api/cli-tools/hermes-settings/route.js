@@ -6,6 +6,8 @@ import { promisify } from "util";
 import fs from "fs/promises";
 import os from "os";
 
+export const dynamic = "force-dynamic";
+
 import {
   buildModelBlock,
   buildDelegationBlock,

@@ -10,6 +10,8 @@ import { isTrustedNetworkRequest } from "@/lib/auth/trustedPeer";
 import { normalizePermissions, firstAllowedPage } from "@/lib/auth/permissionPaths";
 import { recordSecurityEvent } from "@/lib/db/repos/securityLogRepo";
 
+export const dynamic = "force-dynamic";
+
 // One helper so every branch below writes the same shape, and so the raw secret
 // can never reach the log by accident.
 function audit(request, ip, event) {

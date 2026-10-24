@@ -11,6 +11,8 @@ import {
 } from "@/lib/auth/oidc";
 import { setDashboardAuthCookie } from "@/lib/auth/dashboardSession";
 
+export const dynamic = "force-dynamic";
+
 function clearOidcCookies(cookieStore) {
   cookieStore.delete("oidc_state");
   cookieStore.delete("oidc_nonce");

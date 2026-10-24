@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { clearDashboardAuthCookie } from "@/lib/auth/dashboardSession";
 
+export const dynamic = "force-dynamic";
+
 export async function POST() {
   const cookieStore = await cookies();
   clearDashboardAuthCookie(cookieStore);

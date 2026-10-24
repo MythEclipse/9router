@@ -6,6 +6,8 @@ import { isSamlConfigured } from "@/lib/auth/saml.js";
 import { getDashboardAuthSession } from "@/lib/auth/dashboardSession";
 import { firstAllowedPage, normalizePermissions, FULL_PERMISSIONS, DEFAULT_PERMISSIONS } from "@/lib/auth/permissionPaths";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const settings = await getSettings();

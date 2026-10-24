@@ -3,6 +3,8 @@ import { getProviderConnections } from "@/lib/localDb";
 import { getProviderNodes } from "@/models";
 import { backfillCodexEmails } from "@/lib/oauth/providers";
 import {
+
+export const dynamic = "force-dynamic";
   USAGE_APIKEY_PROVIDERS,
   USAGE_SUPPORTED_PROVIDERS,
   isAnthropicCompatibleProvider,

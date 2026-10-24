@@ -2,6 +2,8 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { LOCALE_COOKIE, normalizeLocale, isSupportedLocale } from "@/i18n/config";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(request) {
   try {
     const { locale } = await request.json();

@@ -9,6 +9,8 @@ import path from "path";
 import os from "os";
 import { resolveModelDisplayName } from "@/shared/utils/modelDisplayName";
 
+export const dynamic = "force-dynamic";
+
 const execAsync = promisify(exec);
 
 const getConfigDir = () => path.join(os.homedir(), ".config", "opencode");

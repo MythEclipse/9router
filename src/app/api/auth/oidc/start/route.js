@@ -11,6 +11,8 @@ import {
 } from "@/lib/auth/oidc";
 import { shouldUseSecureCookie } from "@/lib/auth/dashboardSession";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request) {
   try {
     const config = await getOidcRuntimeConfig();

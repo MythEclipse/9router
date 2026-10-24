@@ -1,6 +1,8 @@
 import { AI_PROVIDERS } from "@/shared/constants/providers";
 import { buildErrorBody } from "open-sse/utils/error.js";
 
+export const dynamic = "force-dynamic";
+
 const CORS = { "Access-Control-Allow-Origin": "*" };
 
 // Provider → internal voices API. Edge/local-device share the generic endpoint.

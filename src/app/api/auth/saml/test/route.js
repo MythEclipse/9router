@@ -4,6 +4,8 @@ import { getSettings } from "@/lib/localDb";
 import { formatX509Certificate } from "@/lib/auth/saml.js";
 import { verifyDashboardAuthToken } from "@/lib/auth/dashboardSession";
 
+export const dynamic = "force-dynamic";
+
 async function canAccessTestRoute() {
   const settings = await getSettings();
   if (settings.requireLogin === false) return true;
