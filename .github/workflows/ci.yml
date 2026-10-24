@@ -506,6 +506,17 @@ jobs:
           scp /tmp/9router-imrnes.tgz "$VPS_USER@$VPS_HOST:/tmp/9router-imrnes.tgz"
           ssh -T "$VPS_USER@$VPS_HOST" 'bash /tmp/9router-deploy.sh /tmp/9router-imrnes.tgz'
 
+      # Capture imrnes service logs when deploy fails, so we can see the
+      # actual Node.js error (e.g. native module load failure) rather than
+      # just a 503 health check.
+      - name: Capture imrnes service logs on failure
+        if: failure()
+        run: |
+          echo "=== imrnes 9router service logs (last 100 lines) ==="
+          ssh -T "$VPS_USER@$VPS_HOST" "journalctl -u 9router --no-pager -n 100" 2>&1 | tail -100 || true
+          echo "=== imrnes 9router service status ==="
+          ssh -T "$VPS_USER@$VPS_HOST" "systemctl status 9router --no-pager -l" 2>&1 | tail -30 || true
+
       - name: Verify unit state
         run: |
           set -euo pipefail
