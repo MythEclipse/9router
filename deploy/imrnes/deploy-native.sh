@@ -176,7 +176,7 @@ import('./src/dashboardGuard.js').then(() => {
 ") || true
 # Debug: run custom-server.js directly for 3 seconds to capture any startup error
 # before starting via systemd. If it crashes immediately, we'll see why.
-(cd "$RELEASE_DIR" && as_root env HOME=/root node custom-server.js > /tmp/9router-debug.log 2>&1 &
+(cd "$RELEASE_DIR" && as_root env HOME=/root PORT=2028 node custom-server.js > /tmp/9router-debug.log 2>&1 &
 DEBUG_PID=$!
 sleep 3
 if kill -0 $DEBUG_PID 2>/dev/null; then
