@@ -184,7 +184,10 @@ jobs:
           # absolute path (sudo's secure_path must not be trusted to find it).
           if [ "$NEED_INSTALL" = "1" ]; then
             echo "=== pnpm install on the VPS ==="
-            ssh "$VPS_USER@$VPS_HOST" "cd $APP_DIR && sudo HOME=/root bash -c 'corepack enable pnpm && pnpm install --frozen-lockfile'"
+            # PNPM_CONFIG_MINIMUM_RELEASE_AGE=0 relaxes the supply-chain policy
+            # that blocks recently-published packages (e.g. deps updated today).
+            # Everything runs under sudo because node_modules is root-owned.
+            ssh "$VPS_USER@$VPS_HOST" "cd $APP_DIR && sudo HOME=/root bash -c 'corepack enable pnpm && PNPM_CONFIG_MINIMUM_RELEASE_AGE=0 pnpm install --frozen-lockfile'"
           else
             echo "=== manifests unchanged -> reusing host node_modules ==="
           fi
