@@ -13,7 +13,7 @@ import {
 } from "@/shared/components";
 import ProviderIcon from "@/shared/components/ProviderIcon";
 import { getCustomLogo } from "@/shared/utils/providerLogo";
-import { MEDIA_PROVIDER_KINDS, AI_PROVIDERS, isCustomEmbeddingProvider } from "@/shared/constants/providers";
+import { MEDIA_PROVIDER_KINDS, AI_PROVIDERS, OAUTH_PROVIDERS, isCustomEmbeddingProvider } from "@/shared/constants/providers";
 import ConnectionsCard from "@/app/(dashboard)/dashboard/providers/components/ConnectionsCard";
 import { WEB_LOGIN_PROVIDERS } from "@/app/(dashboard)/dashboard/providers/components/WebLoginButton";
 import ModelsCard from "@/app/(dashboard)/dashboard/providers/components/ModelsCard";

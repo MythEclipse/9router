@@ -10,6 +10,8 @@ import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 import { useModelCaps } from "@/shared/hooks/useModelCaps";
 import { aggregateComboCapabilities } from "open-sse/providers/capabilities.js";
 import { invalidateModelCaps } from "@/shared/hooks/useModelCaps";
+import Link from "next/link";
+import { resolveProviderId, AI_PROVIDERS } from "@/shared/constants/providers";
 
 // Validate combo name: only a-z, A-Z, 0-9, -, _
 const VALID_NAME_REGEX = /^[a-zA-Z0-9_.\-]+$/;
@@ -50,6 +52,7 @@ function normalizeCapEntry(entry) {
 const STRATEGY_OPTIONS = [
   { value: "fallback", label: "Fallback - try in order" },
   { value: "round-robin", label: "Round Robin - rotate" },
+  { value: "smart", label: "Smart Router - System One" },
   { value: "fusion", label: "Fusion - panel + judge" },
 ];
 
@@ -394,6 +397,7 @@ export default function CombosPage() {
           <ul className="text-sm text-text-muted mt-2 flex flex-col gap-1">
             <li><span className="font-medium text-text-main">Fallback</span> - tries models in order (next on failure)</li>
             <li><span className="font-medium text-text-main">Round Robin</span> - rotates models across requests to spread load</li>
+            <li><span className="font-medium text-text-main">Smart Router</span> - queries a System One decision model to pick the optimal model before generation; supports Smart Switch (adaptive hysteresis), Strict Lock (1 task = 1 session, +0ms latency), and Per-Turn modes to maximize prompt-cache retention</li>
             <li><span className="font-medium text-text-main">Fusion</span> - queries all models in parallel and merges their answers into one, giving the best quality at the highest cost because every request bills all panel models plus the judge (N+1 calls)</li>
           </ul>
           <p className="hidden text-xs text-text-muted mt-3 max-w-2xl">
@@ -646,6 +650,7 @@ function ComboCard({ combo, getCaps, comboByName = {}, activeProviders = [], cop
   const judge = strategy.judgeModel || "";
   const routerModel = strategy.routerModel || "";
   const isFusion = current === "fusion";
+  const isSmart = current === "smart";
   const comboCaps = aggregateComboCapabilities(combo.models, comboByName, getCaps);
 
   return (
