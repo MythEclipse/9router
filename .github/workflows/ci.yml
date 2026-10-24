@@ -178,7 +178,7 @@ jobs:
           # --delete drops build artefacts that no longer exist; the
           # node_modules exclude keeps the host's install in place.
           ssh "$VPS_USER@$VPS_HOST" \
-            "sudo rsync -a --delete --exclude=node_modules /tmp/9router-stage/ $APP_DIR/ && sudo rm -rf /tmp/9router-stage"
+            "sudo rsync -a --delete --exclude=node_modules --exclude=.env /tmp/9router-stage/ $APP_DIR/ && sudo rm -rf /tmp/9router-stage"
 
           # node_modules is root-owned, so the install runs as root with pnpm's
           # absolute path (sudo's secure_path must not be trusted to find it).

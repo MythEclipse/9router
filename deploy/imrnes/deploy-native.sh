@@ -176,7 +176,7 @@ if [ "$NEED_INSTALL" = "1" ]; then
   as_root rm -rf "${DEPS_DIR}/node_modules"
   (
     cd "$DEPS_DIR"
-    as_root env HOME=/root "$PNPM" install --frozen-lockfile
+    as_root env HOME=/root PNPM_CONFIG_MINIMUM_RELEASE_AGE=0 "$PNPM" install --frozen-lockfile
   )
   [ -d "${DEPS_DIR}/node_modules" ] || die "pnpm install produced no node_modules"
 
