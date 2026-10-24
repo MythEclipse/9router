@@ -142,60 +142,26 @@ as_root tar xzf "$PAYLOAD" -C "$RELEASE_DIR" --exclude=.deploy-sha
 [ -f "${RELEASE_DIR}/server.js" ] || die "payload has no server.js (Next standalone)"
 [ -d "${RELEASE_DIR}/.next" ] || die "payload has no .next build"
 
-# ── 2. shared dependency install ───────────────────────────────────────────
-# Only reuse the shared install when it was produced BY THIS SCRIPT from this
-# exact lockfile. Comparing manifests alone is not enough: node_modules can be
-# inherited from an earlier layout (e.g. moved aside from a Docker-era tree),
-# and a .next built against one Next.js version dies at runtime under another
-# with an obscure ENOENT on a build artefact. The stamp is written only after a
-# successful install, so a host that has never run this script always reinstalls.
-NEED_INSTALL=0
-STAMP="${DEPS_DIR}/.install-stamp"
-LOCK_HASH=""
-if [ -f "${RELEASE_DIR}/pnpm-lock.yaml" ] && command -v sha256sum >/dev/null 2>&1; then
-  LOCK_HASH="$(cat "${RELEASE_DIR}/pnpm-lock.yaml" "${RELEASE_DIR}/pnpm-workspace.yaml" | sha256sum | cut -d' ' -f1)"
-fi
-
-if [ ! -d "${DEPS_DIR}/node_modules" ]; then
-  NEED_INSTALL=1
-elif [ ! -f "$STAMP" ]; then
-  log "no install stamp in $DEPS_DIR — assuming an inherited tree"
-  NEED_INSTALL=1
-elif [ -n "$LOCK_HASH" ] && [ "$(cat "$STAMP")" != "$LOCK_HASH" ]; then
-  NEED_INSTALL=1
-fi
-
-if [ "$NEED_INSTALL" = "1" ]; then
-  log "installing dependencies into $DEPS_DIR"
-  as_root mkdir -p "$DEPS_DIR"
-  as_root cp "${RELEASE_DIR}/package.json" "${RELEASE_DIR}/pnpm-lock.yaml" "${RELEASE_DIR}/pnpm-workspace.yaml" "$DEPS_DIR/"
-  # Runs as root with an explicit HOME: sudo's secure_path must not be trusted
-  # to find pnpm, and pnpm refuses to write its cache to an unwritable HOME.
-  # A subshell with `cd` rather than a --cwd flag: `pnpm --cwd <dir> install`
-  # is parsed as a SCRIPT named "install", which fails with "Script not found".
-  as_root rm -rf "${DEPS_DIR}/node_modules"
-  (
-    cd "$DEPS_DIR"
-    as_root env HOME=/root PNPM_CONFIG_MINIMUM_RELEASE_AGE=0 "$PNPM" install --frozen-lockfile
-  )
-  [ -d "${DEPS_DIR}/node_modules" ] || die "pnpm install produced no node_modules"
-
-  # Record what was actually installed, so the next run can tell a matching
-  # reuse from a drifted one without trusting a bare directory test.
-  next_version="$(node -p "require('${DEPS_DIR}/node_modules/next/package.json').version" 2>/dev/null || echo unknown)"
-  log "installed next@${next_version} into $DEPS_DIR"
-  if [ -n "$LOCK_HASH" ]; then
-    printf '%s' "$LOCK_HASH" | as_root tee "$STAMP" >/dev/null
-  else
-    printf 'no-lockfile' | as_root tee "$STAMP" >/dev/null
-  fi
-else
-  log "lockfile unchanged since last install -> reusing $DEPS_DIR/node_modules"
-fi
-
-# node_modules is root-owned and must resolve relative to the release dir
-# (Next resolves deps from __dirname), so every release links to the one copy.
-as_root ln -sfn "${DEPS_DIR}/node_modules" "${RELEASE_DIR}/node_modules"
+# ── 2. install dependencies into the release ───────────────────────────
+# Install node_modules directly into each release directory (not shared),
+# so every release is self-contained and rolling back always uses the
+# node_modules that match its lockfile. A shared node_modules breaks when
+# the lockfile changes between releases: the new node_modules is
+# incompatible with the old release's .next build output (Next.js
+# "canonicalBase" error at base-server.js).
+log "installing dependencies into $RELEASE_DIR"
+# Runs as root with an explicit HOME: sudo's secure_path must not be trusted
+# to find pnpm, and pnpm refuses to write its cache to an unwritable HOME.
+# A subshell with `cd` rather than a --cwd flag: `pnpm --cwd <dir> install`
+# is parsed as a SCRIPT named "install", which fails with "Script not found".
+as_root rm -rf "${RELEASE_DIR}/node_modules"
+(
+  cd "$RELEASE_DIR"
+  as_root env HOME=/root PNPM_CONFIG_MINIMUM_RELEASE_AGE=0 "$PNPM" install --frozen-lockfile
+)
+[ -d "${RELEASE_DIR}/node_modules" ] || die "pnpm install produced no node_modules"
+next_version="$(node -p "require('${RELEASE_DIR}/node_modules/next/package.json').version" 2>/dev/null || echo unknown)"
+log "installed next@${next_version} into $RELEASE_DIR"
 
 # ── 3. install the unit ────────────────────────────────────────────────────
 # Installed from the payload so the running unit always matches the deployed
