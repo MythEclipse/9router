@@ -110,7 +110,7 @@ jobs:
           R=/tmp/9router-release
           rm -rf "$R"
           mkdir -p "$R"
-          cp custom-server.js package.json pnpm-lock.yaml pnpm-workspace.yaml "$R"/
+          cp custom-server.js package.json pnpm-lock.yaml pnpm-workspace.yaml next.config.mjs "$R"/
           cp -r src open-sse public scripts "$R"/
           cp .next/standalone/server.js "$R/server.js"
           # Anchor both excludes at the transfer root: .next/standalone is a
@@ -395,7 +395,7 @@ jobs:
           R=/tmp/9router-release-imrnes
           rm -rf "$R"
           mkdir -p "$R"
-          cp custom-server.js package.json pnpm-lock.yaml pnpm-workspace.yaml "$R"/
+          cp custom-server.js package.json pnpm-lock.yaml pnpm-workspace.yaml next.config.mjs "$R"/
           cp -r src open-sse public deploy scripts "$R"/
           cp .next/standalone/server.js "$R/server.js"
           # Anchor both excludes at the transfer root: .next/standalone is a
