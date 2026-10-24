@@ -161,6 +161,9 @@ as_root rm -rf "${RELEASE_DIR}/node_modules"
 [ -d "${RELEASE_DIR}/node_modules" ] || die "pnpm install produced no node_modules"
 next_version="$(node -p "require('${RELEASE_DIR}/node_modules/next/package.json').version" 2>/dev/null || echo unknown)"
 log "installed next@${next_version} into $RELEASE_DIR"
+# Debug: verify next resolves from the release's own node_modules, not from
+# a shared tree. If this points at /opt/9router/deps, something is wrong.
+(cd "$RELEASE_DIR" && node -e "console.log('next resolves to:', require.resolve('next'))") || true
 
 # ── 3. install the unit ────────────────────────────────────────────────────
 # Installed from the payload so the running unit always matches the deployed
