@@ -29,13 +29,38 @@ export const machineId = mod.machineId;
 export default mod;
 `;
 
+// next/server is also CJS, but trickier than node-machine-id: it reassigns
+// `module.exports` and then writes onto the ORIGINAL `exports` object
+// (next/server.js does both). Node's CJS named-export lexer finds the names
+// from the `exports.X = ...` lines, yet the namespace it produces through
+// this loader evaluates each binding to undefined and `default` is empty
+// (observed on Node 22 with a resolve hook short-circuiting the URL).
+// createRequire goes through the plain CommonJS machinery, which always
+// yields the real NextResponse / NextRequest classes.
+const NEXT_SERVER_SHIM = `
+import { createRequire } from "node:module";
+const mod = createRequire(${JSON.stringify(ROOT)})("next/server");
+export const NextRequest = mod.NextRequest;
+export const NextResponse = mod.NextResponse;
+export const ImageResponse = mod.ImageResponse;
+export const userAgentFromString = mod.userAgentFromString;
+export const userAgent = mod.userAgent;
+export const URLPattern = mod.URLPattern;
+export default mod;
+`;
+
 export async function resolve(specifier, context, next) {
   if (specifier.startsWith("@/")) {
     const r = tryResolve(SRC + specifier.slice(2));
     if (r) return { url: pathToFileURL(r).href, shortCircuit: true };
   }
+  if (specifier === "open-sse" || specifier.startsWith("open-sse/")) {
+    const suffix = specifier === "open-sse" ? "" : specifier.slice("open-sse/".length);
+    const r = tryResolve(path.join(ROOT, "open-sse", suffix));
+    if (r) return { url: pathToFileURL(r).href, shortCircuit: true };
+  }
   if (specifier === "next/server") {
-    return { url: pathToFileURL(ROOT + "node_modules/next/server.js").href, shortCircuit: true };
+    return { url: "data:text/javascript," + encodeURIComponent(NEXT_SERVER_SHIM), shortCircuit: true };
   }
   if (specifier === "node-machine-id") {
     return { url: "data:text/javascript," + encodeURIComponent(NMID_SHIM), shortCircuit: true };
