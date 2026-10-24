@@ -64,13 +64,13 @@ describe("compressWithHeadroom openai-responses format (#1998)", () => {
         content: [{ type: "input_text", text: "investigate bug" }],
       },
       {
-        type: "function_call",
+        type: "custom_tool_call",
         call_id: "call_apply_patch_123",
         name: "apply_patch",
-        arguments: "*** Begin Patch\n*** End Patch",
+        input: "*** Begin Patch\n*** End Patch",
       },
       {
-        type: "function_call_output",
+        type: "custom_tool_call_output",
         call_id: "call_apply_patch_123",
         output: "ok",
       },
@@ -102,6 +102,6 @@ describe("compressWithHeadroom openai-responses format (#1998)", () => {
     expect(data).toBeNull();
     expect(global.fetch).not.toHaveBeenCalled();
     expect(body.input).toEqual(input);
-    expect(diagnostics.reason).toBe("skipped: openai-responses tool/reasoning input is not safe to compress");
+    expect(diagnostics.reason).toBe("no eligible plain-text tool output");
   });
 });
