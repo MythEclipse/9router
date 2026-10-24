@@ -111,7 +111,7 @@ jobs:
           rm -rf "$R"
           mkdir -p "$R"
           cp custom-server.js package.json pnpm-lock.yaml pnpm-workspace.yaml "$R"/
-          cp -r src open-sse public "$R"/
+          cp -r src open-sse public scripts "$R"/
           cp .next/standalone/server.js "$R/server.js"
           # Anchor both excludes at the transfer root: .next/standalone is a
           # partial copy and .next/cache is build cache — neither belongs on
@@ -396,7 +396,7 @@ jobs:
           rm -rf "$R"
           mkdir -p "$R"
           cp custom-server.js package.json pnpm-lock.yaml pnpm-workspace.yaml "$R"/
-          cp -r src open-sse public deploy "$R"/
+          cp -r src open-sse public deploy scripts "$R"/
           cp .next/standalone/server.js "$R/server.js"
           # Anchor both excludes at the transfer root: .next/standalone is a
           # partial copy and .next/cache is build cache — neither belongs on
