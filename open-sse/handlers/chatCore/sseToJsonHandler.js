@@ -12,6 +12,7 @@ import { toOpenAIFinish } from "../../translator/concerns/finishReason.js";
 import { collectJsonFrames } from "../../transformer/jsonToStreamConverter.js";
 import { applyModelAlias, calledModelName } from "../../utils/modelAlias.js";
 import { applyUsageMultipliers } from "../../utils/usageTracking.js";
+import { extractReasoningText } from "../../translator/concerns/reasoning.js";
 import { ROLE, RESPONSES_ITEM, OPENAI_BLOCK, CLAUDE_BLOCK, CLAUDE_EVENT, RESPONSES_EVENT, OPENAI_FINISH, MODEL_FALLBACK } from "../../translator/schema/index.js";
 
 // Frames whose `type` is a provider event name, mapped to the translator format
@@ -315,6 +316,7 @@ function accumulateOpenAIChunks(chunks, fallbackModel) {
   const reasoningParts = [];
   const toolCallMap = new Map(); // index -> { id, type, function: { name, arguments } }
   let usage = null;
+  let finishReason = null;
 
   for (const chunk of chunks) {
     const choice = chunk?.choices?.[0];
