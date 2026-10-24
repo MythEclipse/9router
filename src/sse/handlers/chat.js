@@ -82,6 +82,7 @@ export async function handleChat(request, clientRawRequest = null) {
 
   // Enforce API key if provided or if required by settings
   const settings = await getSettings();
+  const keyAccess = await getKeyAccessContext(request);
   if (settings.requireApiKey && !apiKey) {
     if (shouldLogAuthFailure("chat", getClientIp(request), null)) {
       log.warn("AUTH", "Missing API key (requireApiKey=true)");
@@ -267,7 +268,6 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       const requiredCapabilities = detectRequiredCapabilities(body);
       // Nested combo (a combo member that is itself a combo): the access decision
       // was made on the outer target; only drop adapter models the key may not call.
-      const keyAccess = await getKeyAccessContext(request);
       const augmentedModels = await filterAdapterModels(keyAccess, augmentModelsWithCapacityAdapter(comboModels, requiredCapabilities, chatSettings), comboModels);
       const adapterAdded = augmentedModels.filter((m) => !comboModels.includes(m));
 

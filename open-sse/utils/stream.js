@@ -227,7 +227,7 @@ export function createSSEStream(options = {}) {
 
           if (payload !== null && payload !== SSE_DONE_DATA) {
             try {
-              const parsed = JSON.parse(payload);
+              let parsed = JSON.parse(payload);
 
               const idFixed = fixInvalidId(parsed);
               // A caller that spoke an alias must not be told the model that served it.

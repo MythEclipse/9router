@@ -194,6 +194,13 @@ export async function deleteApiKey(id) {
 if (!global._apiKeyRateLimits) global._apiKeyRateLimits = {};
 const rateLimits = global._apiKeyRateLimits;
 
+// Process-wide memo cache for the api-key list, invalidated on writes so the
+// next request re-reads from SQLite instead of serving stale rows.
+if (!global._apiKeyListCache) global._apiKeyListCache = null;
+export function invalidateApiKeyCache() {
+  global._apiKeyListCache = null;
+}
+
 function checkRateLimits(key, rpmLimit, tpmLimit) {
   if (rpmLimit <= 0 && tpmLimit <= 0) return true;
   const now = Date.now();
