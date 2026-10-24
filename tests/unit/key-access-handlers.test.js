@@ -7,6 +7,7 @@ const fx = vi.hoisted(() => ({
   combos: [
     { id: "c1", name: "Main", models: ["openai/model-a", "openai/model-b"] },
   ],
+  studios: {},
   keys: {},
 }));
 const mocks = vi.hoisted(() => ({
@@ -15,8 +16,11 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/localDb", () => ({
-  getSettings: async () => ({ requireApiKey: false, comboStrategy: "fallback" }),
+  getSettings: async () => ({ requireApiKey: true, comboStrategy: "fallback" }),
+  shouldLogAuthFailure: () => false,
+  isValidApiKey: async () => true,
   getModelAliases: async () => ({}),
+  getStudioModel: async (name) => fx.studios[name] || null,
   getComboByName: async (name) => fx.combos.find((c) => c.name === name) || null,
   getProviderNodes: async () => [],
   getCombos: async () => fx.combos,
@@ -26,6 +30,11 @@ vi.mock("@/lib/localDb", () => ({
 }));
 vi.mock("@/lib/disabledModelsDb", () => ({ getDisabledModels: async () => ({}) }));
 vi.mock("@/lib/db/repos/combosRepo.js", () => ({ getCombos: async () => fx.combos }));
+vi.mock("@/lib/db/repos/modelEditorRepo.js", () => ({
+  getStudioModel: async (name) => fx.studios[name] || null,
+  getModelOverride: async () => null,
+}));
+vi.mock("@/lib/db/repos/aliasRepo.js", () => ({ getModelAliases: async () => ({}) }));
 vi.mock("@/lib/db/repos/apiKeysRepo.js", () => ({
   getApiKeyByKey: async (k) => fx.keys[k] || null,
   getAllowedModelsOfKey: async (k) => fx.keys[k]?.access?.restricted ? fx.keys[k].access.allow : null,
@@ -49,6 +58,7 @@ vi.mock("@/sse/services/auth.js", () => ({
     return failures[valid] || { status: 401, message: "Invalid API key" };
   },
   getProviderCredentials: mocks.getProviderCredentials,
+  getApiKey: async (key) => fx.keys[key] || null,
   markAccountUnavailable: vi.fn(async () => ({ shouldFallback: false })),
   clearAccountError: vi.fn(),
   extractApiKey: (request) => {
@@ -56,6 +66,7 @@ vi.mock("@/sse/services/auth.js", () => ({
     return a?.startsWith("Bearer ") ? a.slice(7) : request.headers.get("x-api-key");
   },
   isValidApiKey: async () => true,
+  shouldLogAuthFailure: () => false,
 }));
 vi.mock("@/sse/services/tokenRefresh.js", () => ({
   checkAndRefreshToken: async (_p, c) => c,
@@ -94,11 +105,13 @@ const post = (path, body, k, extra = {}) => new Request(`http://localhost${path}
 beforeEach(() => {
   vi.clearAllMocks();
   fx.keys = {
-    "sk-open": { id: "o", name: "open", isActive: true, access: { restricted: false, allow: [] } },
-    "sk-combo": { id: "c", name: "combo", isActive: true, access: { restricted: true, allow: ["Main"] } },
-    "sk-b": { id: "b", name: "b", isActive: true, access: { restricted: true, allow: ["openai/model-b"] } },
-    "sk-empty": { id: "e", name: "empty", isActive: true, access: { restricted: true, allow: [] } },
-    "sk-media": {
+    "test-key-6": { id: "o", name: "open", isActive: true, access: { restricted: false, allow: [] } },
+    "test-key-2": { id: "c", name: "combo", isActive: true, access: { restricted: true, allow: ["Main"] } },
+    "test-key-7": { id: "s", name: "studio", isActive: true, access: { restricted: true, allow: ["Main"] } },
+    "test-key-8": { id: "sm", name: "studio-model", isActive: true, access: { restricted: true, allow: ["openai/model-b"] } },
+    "test-key-1": { id: "b", name: "b", isActive: true, access: { restricted: true, allow: ["openai/model-b"] } },
+    "test-key-3": { id: "e", name: "empty", isActive: true, access: { restricted: true, allow: [] } },
+    "test-key-4": {
       id: "m", name: "media", isActive: true,
       access: {
         restricted: true,
@@ -120,40 +133,52 @@ beforeEach(() => {
 
 const chat = (model, k) => handleChat(post("/v1/chat/completions", { model, stream: true, messages: [{ role: "user", content: "hi" }] }, k));
 
+beforeEach(() => {
+  fx.studios = { workhorse: { targetModel: "Main" }, modelalias: { targetModel: "openai/model-b" } };
+});
+
 describe("chat (/v1/chat/completions, /v1/messages, /v1/responses all use handleChat)", () => {
   beforeEach(() => mocks.getProviderCredentials.mockResolvedValue({ connectionId: "conn", connectionName: "mock" }));
 
   it("unrestricted key reaches the provider for the combo and models", async () => {
     for (const m of ["Main", "openai/model-b"]) {
-      expect((await chat(m, "sk-open")).status).toBe(200);
+      expect((await chat(m, "test-key-6")).status).toBe(200);
     }
-    expect((await chat("openai/model-a", "sk-open")).status).toBe(500); // provider error, not a 403
+    expect((await chat("openai/model-a", "test-key-6")).status).toBe(500); // provider error, not a 403
   });
+  it("restricted keys authorize a studio alias by its resolved combo or model target", async () => {
+    expect((await chat("workhorse", "test-key-7")).status).toBe(200);
+    expect((await chat("modelalias", "test-key-8")).status).toBe(200);
+    vi.clearAllMocks();
+    expect((await chat("workhorse", "test-key-8")).status).toBe(403);
+    expect(mocks.handleChatCore).not.toHaveBeenCalled();
+  });
+
   it("restricted-to-combo key: combo 200, direct member and unlisted model 403 before any credential lookup", async () => {
-    expect((await chat("Main", "sk-combo")).status).toBe(200);
+    expect((await chat("Main", "test-key-2")).status).toBe(200);
     vi.clearAllMocks();
     for (const m of ["openai/model-a", "openai/model-b", "openai/gpt-4o"]) {
-      const r = await chat(m, "sk-combo");
+      const r = await chat(m, "test-key-2");
       expect(r.status).toBe(403);
     }
     expect(mocks.getProviderCredentials).not.toHaveBeenCalled();
     expect(mocks.handleChatCore).not.toHaveBeenCalled();
   });
   it("restricted-to-model-B key: B 200; the combo containing B and model A are 403", async () => {
-    expect((await chat("openai/model-b", "sk-b")).status).toBe(200);
+    expect((await chat("openai/model-b", "test-key-1")).status).toBe(200);
     vi.clearAllMocks();
     // Bypass check: a per-member check would skip the failing model-a and serve
     // the combo from model-b. The combo itself is not listed, so it is a 403.
-    expect((await chat("Main", "sk-b")).status).toBe(403);
-    expect((await chat("openai/model-a", "sk-b")).status).toBe(403);
+    expect((await chat("Main", "test-key-1")).status).toBe(403);
+    expect((await chat("openai/model-a", "test-key-1")).status).toBe(403);
     expect(mocks.handleChatCore).not.toHaveBeenCalled();
   });
   it("empty-list key: 403 on everything", async () => {
-    for (const m of ["Main", "openai/model-a", "openai/model-b"]) expect((await chat(m, "sk-empty")).status).toBe(403);
+    for (const m of ["Main", "openai/model-a", "openai/model-b"]) expect((await chat(m, "test-key-3")).status).toBe(403);
     expect(mocks.handleChatCore).not.toHaveBeenCalled();
   });
   it("restricted key on an allowed combo still fails over from an erroring member to the next", async () => {
-    const r = await chat("Main", "sk-combo");
+    const r = await chat("Main", "test-key-2");
     expect(r.status).toBe(200);
     const text = await r.text();
     expect(text).toContain("from-model-b");
@@ -163,7 +188,7 @@ describe("chat (/v1/chat/completions, /v1/messages, /v1/responses all use handle
   it("bypass check: a restricted key sent as x-goog-api-key on the Gemini-compatible route is still restricted", async () => {
     const res = await geminiRoute.POST(
       new Request("http://localhost/v1beta/models/openai/model-a:generateContent", {
-        method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": "sk-b" },
+        method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": "test-key-1" },
         body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: "hi" }] }] }),
       }),
       { params: Promise.resolve({ path: ["openai", "model-a:generateContent"] }) },
@@ -199,30 +224,30 @@ const handlers = [
 
 describe.each(handlers)("%s handler is wired", (_name, call, allowed, denied) => {
   it("denies an unlisted model with 403 before any credential lookup", async () => {
-    const r = await call(denied, "sk-media");
+    const r = await call(denied, "test-key-4");
     expect(r.status).toBe(403);
     expect((await r.json()).error.message).toContain(denied);
     expect(mocks.getProviderCredentials).not.toHaveBeenCalled();
   });
   it("lets a listed model through to the credential lookup", async () => {
-    const r = await call(allowed, "sk-media");
+    const r = await call(allowed, "test-key-4");
     expect(r.status).not.toBe(403);
     expect(mocks.getProviderCredentials).toHaveBeenCalled();
   });
   it("leaves an unrestricted key alone", async () => {
-    const r = await call(denied, "sk-open");
+    const r = await call(denied, "test-key-6");
     expect(r.status).not.toBe(403);
   });
   it("denies everything for the empty-list key", async () => {
-    expect((await call(allowed, "sk-empty")).status).toBe(403);
+    expect((await call(allowed, "test-key-3")).status).toBe(403);
   });
 });
 
 describe("video: a body without a readable model is denied for restricted keys", () => {
   it("multipart / no model -> 403 for restricted, untouched for unrestricted", async () => {
     const noModel = (k) => handleVideoCreate(post("/v1/videos/generations", { prompt: "x" }, k), "generations");
-    expect((await noModel("sk-media")).status).toBe(403);
-    expect((await noModel("sk-open")).status).not.toBe(403);
+    expect((await noModel("test-key-4")).status).toBe(403);
+    expect((await noModel("test-key-6")).status).not.toBe(403);
   });
 });
 
@@ -235,24 +260,24 @@ describe("/v1/models routes filter by key", () => {
   }
 
   it("unrestricted sees the full catalog; restricted keys see only their entries", async () => {
-    const all = await list("sk-open");
+    const all = await list("test-key-6");
     expect(all).toContain("Main");
     const someModel = all.find((id) => id.startsWith("openai/"));
     expect(someModel).toBeTruthy();
-    fx.keys["sk-mix"] = { id: "x", name: "mix", isActive: true, access: { restricted: true, allow: ["Main", someModel.toUpperCase()] } };
-    expect(await list("sk-mix")).toEqual(["Main", someModel]);
-    expect(await list("sk-combo")).toEqual(["Main"]);
-    expect(await list("sk-empty")).toEqual([]);
+    fx.keys["test-key-5"] = { id: "x", name: "mix", isActive: true, access: { restricted: true, allow: ["Main", someModel.toUpperCase()] } };
+    expect(await list("test-key-5")).toEqual(["Main", someModel]);
+    expect(await list("test-key-2")).toEqual(["Main"]);
+    expect(await list("test-key-3")).toEqual([]);
     await expect(list(null)).rejects.toThrow("models GET 401");
   });
   it("/v1/models/{kind} and single-model lookup are filtered too", async () => {
     const kind = async (k, path) => modelsKindRoute.GET(new Request(`http://localhost/v1/models/${path.join("/")}`, { headers: auth(k) }), { params: Promise.resolve({ model: path }) });
-    const emb = await (await kind("sk-open", ["embedding"])).json();
+    const emb = await (await kind("test-key-6", ["embedding"])).json();
     expect(emb.data.length).toBeGreaterThan(0);
-    expect((await (await kind("sk-empty", ["embedding"])).json()).data).toEqual([]);
-    const all = (await (await modelsRoute.GET(new Request("http://localhost/v1/models", { headers: auth("sk-open") }))).json()).data;
+    expect((await (await kind("test-key-3", ["embedding"])).json()).data).toEqual([]);
+    const all = (await (await modelsRoute.GET(new Request("http://localhost/v1/models", { headers: auth("test-key-6") }))).json()).data;
     const one = all.find((m) => m.owned_by !== "combo").id;
-    expect((await kind("sk-open", one.split("/"))).status).toBe(200);
-    expect((await kind("sk-empty", one.split("/"))).status).toBe(404);
+    expect((await kind("test-key-6", one.split("/"))).status).toBe(200);
+    expect((await kind("test-key-3", one.split("/"))).status).toBe(404);
   });
 });

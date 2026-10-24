@@ -125,9 +125,17 @@ export async function enforceKeyAccess(ctx, requested) {
   if (typeof requested !== "string" || !requested) return keyAccessDeniedResponse(ctx, String(requested ?? ""));
   const sets = await getAllowSets(ctx);
   const comboModels = await getComboModels(requested);
-  const allowed = comboModels
-    ? sets.combos.has(lower(requested))
-    : await isModelStringAllowed(ctx, requested);
+  let accessIdentity = requested;
+  if (!comboModels && !requested.includes("/")) {
+    // Studio aliases are names, not grants. Resolve their target before gating;
+    // if that target is a combo, preserve the combo's own allow-list identity.
+    const info = await getModelInfo(requested);
+    if (info?.model && info.model !== requested) accessIdentity = info.model;
+  }
+  const resolvedComboModels = comboModels || await getComboModels(accessIdentity);
+  const allowed = resolvedComboModels
+    ? sets.combos.has(lower(accessIdentity))
+    : await isModelStringAllowed(ctx, accessIdentity);
   return allowed ? null : keyAccessDeniedResponse(ctx, requested);
 }
 

@@ -125,7 +125,17 @@ export async function handleChat(request, clientRawRequest = null) {
     }
   }
 
-  const accessDenied = await enforceKeyAccess(keyAccess, modelStr);
+  // Gate against the same resolved studio/combo identity that will be routed,
+  // while retaining combo grant semantics (aliases are not extra permissions).
+  let accessModel = modelStr;
+  if (!modelStr.includes("/")) {
+    try {
+      const { getStudioModel } = await import("@/lib/db/repos/modelEditorRepo.js");
+      const studio = await getStudioModel(modelStr);
+      if (studio?.targetModel) accessModel = String(studio.targetModel).trim();
+    } catch { /* studio lookup is best-effort; the gate will check the raw name */ }
+  }
+  const accessDenied = await enforceKeyAccess(keyAccess, accessModel);
   if (accessDenied) return accessDenied;
 
   // Bypass naming/warmup requests before combo rotation to avoid wasting rotation slots
@@ -279,10 +289,11 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       const comboCfg = comboStrategies[comboEntryName] || {};
       const keyAccess = await getKeyAccessContext(request);
       const { sessionId: nestedSessionId } = resolveSessionIdentity({
-        headers: request.headers,
+        headers: request?.headers,
         body,
         connectionId: apiKey || "",
-        scope: modelInfo.provider || "chat",
+        // Nested combos share chat-session identity; they are not provider scopes.
+        scope: "chat",
       });
       // Nested combo access remains constrained by this request's API key.
       const augmentedModels = await filterAdapterModels(keyAccess, augmentModelsWithCapacityAdapter(comboModels, requiredCapabilities, chatSettings), comboModels);

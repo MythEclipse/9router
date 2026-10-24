@@ -98,10 +98,13 @@ export async function POST(request, { params }) {
     // Convert Gemini request format to OpenAI/internal format
     const convertedBody = convertGeminiToInternal(body, model, stream);
 
-    // Create new request with converted body
+    // This route supports x-goog-api-key and ?key= in addition to Bearer.
+    const headers = new Headers(request.headers);
+    const clientApiKey = extractGeminiClientApiKey(request);
+    if (clientApiKey) headers.set("Authorization", `Bearer ${clientApiKey}`);
     const newRequest = new Request(request.url, {
       method: "POST",
-      headers: request.headers,
+      headers,
       body: JSON.stringify(convertedBody),
     });
 

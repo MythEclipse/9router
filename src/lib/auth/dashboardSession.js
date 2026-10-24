@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { DATA_DIR } from "@/lib/dataDir";
-import { getSettings } from "@/lib/localDb";
+import { getSettings } from "@/lib/db/repos/settingsRepo.js";
 
 // Fork default password; upstream's 24h session lifetime is kept.
 const DEFAULT_PASSWORD = "seren123";
