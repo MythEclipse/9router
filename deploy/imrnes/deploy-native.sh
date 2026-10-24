@@ -95,7 +95,10 @@ rollback() {
   else
     log "no previous release to restore (nothing to roll back to)"
   fi
-  as_root systemctl restart "$UNIT"
+  as_root systemctl stop "$UNIT" 2>/dev/null || true
+  as_root fuser -k "${PORT}/tcp" 2>/dev/null || true
+  sleep 2
+  as_root systemctl start "$UNIT"
   health_check || log "WARNING: service still unhealthy after rollback"
 }
 
@@ -218,7 +221,13 @@ ACTIVATED=1
 
 # ── 5. restart + health check ──────────────────────────────────────────────
 log "restarting $UNIT"
-as_root systemctl restart "$UNIT"
+# `systemctl restart` alone can race: the old process may not have released
+# port $PORT by the time the new one tries to bind, giving EADDRINUSE.
+# Stop first, kill anything still holding the port, then start clean.
+as_root systemctl stop "$UNIT" 2>/dev/null || true
+as_root fuser -k "${PORT}/tcp" 2>/dev/null || true
+sleep 2
+as_root systemctl start "$UNIT"
 if health_check; then
   ACTIVATED=0
   log "healthy — deploy of ${SHA:0:7} complete"
