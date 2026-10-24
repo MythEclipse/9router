@@ -139,7 +139,6 @@ as_root tar xzf "$PAYLOAD" -C "$RELEASE_DIR" --exclude=.deploy-sha
 # Assert the real entrypoint: a partial payload would otherwise only surface as
 # a failed health check AFTER the symlink is already flipped.
 [ -f "${RELEASE_DIR}/custom-server.js" ] || die "payload has no custom-server.js"
-[ -f "${RELEASE_DIR}/server.js" ] || die "payload has no server.js (Next standalone)"
 [ -d "${RELEASE_DIR}/.next" ] || die "payload has no .next build"
 
 # ── 2. install dependencies into the release ───────────────────────────
