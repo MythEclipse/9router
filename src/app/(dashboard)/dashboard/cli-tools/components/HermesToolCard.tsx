@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, Button, ModelSelectModal, ManualConfigModal } from "@/shared/components";
 import Image from "next/image";
-import BaseUrlSelect from "./BaseUrlSelect";
+import { EndpointField } from "./CardField";
 import { rememberEndpoint, readPresets } from "./cliEndpointPresets";
 import ApiKeySelect from "./ApiKeySelect";
 import { matchKnownEndpoint } from "./cliEndpointMatch";
@@ -491,20 +491,16 @@ export default function HermesToolCard({
               )}
 
               <div className="flex flex-col gap-2">
-                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr] sm:items-center sm:gap-2">
-                  <span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">Select Endpoint</span>
-                  <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">arrow_forward</span>
-                  <BaseUrlSelect
-                    value={customBaseUrl || getEffectiveBaseUrl()}
-                    onChange={setCustomBaseUrl}
-                    requiresExternalUrl={tool.requiresExternalUrl}
-                    tunnelEnabled={tunnelEnabled}
-                    tunnelPublicUrl={tunnelPublicUrl}
-                    tailscaleEnabled={tailscaleEnabled}
-                    tailscaleUrl={tailscaleUrl}
-                    currentUrl={currentBaseUrl}
-                  />
-                </div>
+                <EndpointField
+                  value={customBaseUrl || getEffectiveBaseUrl()}
+                  onChange={setCustomBaseUrl}
+                  requiresExternalUrl={tool.requiresExternalUrl}
+                  tunnelEnabled={tunnelEnabled}
+                  tunnelPublicUrl={tunnelPublicUrl}
+                  tailscaleEnabled={tailscaleEnabled}
+                  tailscaleUrl={tailscaleUrl}
+                  currentUrl={currentBaseUrl}
+                />
 
                 {hermesStatus?.settings?.model?.base_url && (
                   <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr_auto] sm:items-center sm:gap-2">
