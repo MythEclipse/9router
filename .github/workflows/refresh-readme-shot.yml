@@ -14,16 +14,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
-      - run: npm ci --no-audit --no-fund
+      - run: pnpm install --frozen-lockfile
 
       - name: Start the app
         run: |
-          npm run build
-          (npm run start -- --port 20128 >/tmp/app.log 2>&1 &)
+          pnpm run build
+          (pnpm run start -- --port 20128 >/tmp/app.log 2>&1 &)
           for i in $(seq 1 60); do
             curl -sf http://127.0.0.1:20128/api/health >/dev/null && break
             sleep 3
