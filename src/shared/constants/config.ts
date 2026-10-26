@@ -21,6 +21,12 @@ export const SERVER_CONFIG = {
   port: 20128,
 };
 
+/**
+ * Key written into CLI tool configs when no user API key is available yet.
+ * It is a placeholder the gateway accepts locally, not a real credential.
+ */
+export const DEFAULT_LOCAL_API_KEY = "sk_9router";
+
 // Post-login thank-you dialog: shown once per login, skippable forever.
 export const WELCOME_CONFIG = {
   shownKey: "9router:welcomeAfterLogin",

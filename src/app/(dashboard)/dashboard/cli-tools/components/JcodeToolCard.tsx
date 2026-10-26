@@ -7,6 +7,7 @@ import { EndpointField } from "./CardField";
 import { rememberEndpoint } from "./cliEndpointPresets";
 import ApiKeySelect from "./ApiKeySelect";
 import { matchKnownEndpoint } from "./cliEndpointMatch";
+import { DEFAULT_LOCAL_API_KEY } from "@/shared/constants/config";
 
 export default function JcodeToolCard({
   tool,
@@ -153,7 +154,7 @@ export default function JcodeToolCard({
     try {
       const keyToUse = selectedApiKey?.trim()
         || (apiKeys?.length > 0 ? apiKeys[0].key : null)
-        || (!cloudEnabled ? "sk_9router" : null);
+        || (!cloudEnabled ? DEFAULT_LOCAL_API_KEY : null);
 
       const res = await fetch("/api/cli-tools/jcode-settings", {
         method: "POST",
@@ -209,7 +210,7 @@ export default function JcodeToolCard({
   const getManualConfigs = () => {
     const keyToUse = (selectedApiKey && selectedApiKey.trim())
       ? selectedApiKey
-      : (!cloudEnabled ? "sk_9router" : "<API_KEY_FROM_DASHBOARD>");
+      : (!cloudEnabled ? DEFAULT_LOCAL_API_KEY : "<API_KEY_FROM_DASHBOARD>");
 
     const configToml = `[providers.9router]
 type = "openai-compatible"

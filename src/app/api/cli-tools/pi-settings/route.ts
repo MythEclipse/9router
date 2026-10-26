@@ -7,6 +7,7 @@ import os from "os";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { resolveModelDisplayName } from "@/shared/utils/modelDisplayName";
+import { DEFAULT_LOCAL_API_KEY } from "@/shared/constants/config";
 
 export const dynamic = "force-dynamic";
 
@@ -194,7 +195,7 @@ export async function POST(request) {
       modelList = [buildModel(model || "provider/model-id")];
     }
 
-    const requestedApiKey = typeof apiKey === "string" && apiKey.trim() && apiKey !== "sk_9router"
+    const requestedApiKey = typeof apiKey === "string" && apiKey.trim() && apiKey !== DEFAULT_LOCAL_API_KEY
       ? apiKey
       : null;
     const resolvedApiKey = requestedApiKey

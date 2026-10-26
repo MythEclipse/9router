@@ -8,6 +8,7 @@ import { rememberEndpoint } from "./cliEndpointPresets";
 import ApiKeySelect from "./ApiKeySelect";
 import { matchKnownEndpoint } from "./cliEndpointMatch";
 import { getModelsByProviderId, PROVIDER_ID_TO_ALIAS } from "@/shared/constants/models";
+import { DEFAULT_LOCAL_API_KEY } from "@/shared/constants/config";
 
 const PI_DEFAULT_CONTEXT_WINDOW = 128000;
 const PI_DEFAULT_MAX_TOKENS = 16384;
@@ -176,7 +177,7 @@ export default function GenericCliToolCard({
     try {
       const keyToUse = (selectedApiKey && selectedApiKey.trim())
         ? selectedApiKey
-        : (!cloudEnabled ? "sk_9router" : selectedApiKey);
+        : (!cloudEnabled ? DEFAULT_LOCAL_API_KEY : selectedApiKey);
 
       const payload = {
         baseUrl: getEffectiveBaseUrl(),
@@ -297,7 +298,7 @@ export default function GenericCliToolCard({
 
   const getManualConfigContent = () => {
     const effectiveUrl = getEffectiveBaseUrl();
-    const key = selectedApiKey || "sk_9router";
+    const key = selectedApiKey || DEFAULT_LOCAL_API_KEY;
     const mod = selectedModel || "provider/model-id";
 
     switch (tool.id) {

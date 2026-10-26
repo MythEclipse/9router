@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Card, Button, Badge, Modal, Input, ModelSelectModal } from "@/shared/components";
 import Image from "next/image";
+import { DEFAULT_LOCAL_API_KEY } from "@/shared/constants/config";
 
 /** Claude 5.5 model ids - gated behind Antigravity's own paid tier, not Google One. */
 const isClaude55 = (id = "") =>
@@ -151,7 +152,7 @@ export default function AntigravityToolCard({
     try {
       const keyToUse = selectedApiKey?.trim()
         || (apiKeys?.length > 0 ? apiKeys[0].key : null)
-        || (!cloudEnabled ? "sk_9router" : null);
+        || (!cloudEnabled ? DEFAULT_LOCAL_API_KEY : null);
 
       const res = await fetch("/api/cli-tools/antigravity-mitm", {
         method: "POST",
