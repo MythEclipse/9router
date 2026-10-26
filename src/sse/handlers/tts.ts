@@ -6,11 +6,12 @@ import { getSettings } from "@/lib/localDb";
 import { getModelInfo, getComboModels } from "../services/model";
 import { getKeyAccessContext, enforceKeyAccess } from "../services/keyAccess";
 import { handleTtsCore } from "open-sse/handlers/ttsCore";
-import { errorResponse, unavailableResponse } from "open-sse/utils/error";
+import { errorResponse } from "open-sse/utils/error";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig";
 import { AI_PROVIDERS } from "@/shared/constants/providers";
 import { handleComboChat } from "open-sse/services/combo";
 import * as log from "../utils/logger";
+import { unavailableCredentialResponse } from "../services/accountFallbackLoop";
 
 // Derived from providers.js: any TTS provider not noAuth requires stored credentials
 const CREDENTIALED_PROVIDERS = new Set(
@@ -104,15 +105,12 @@ async function handleSingleModelTts(body, modelStr, responseFormat, language, st
   while (true) {
     const credentials = await getProviderCredentials(provider, excludeConnectionIds, model);
 
-    if (!credentials || credentials.allRateLimited) {
-      if (credentials?.allRateLimited) {
-        const msg = lastError || credentials.lastError || "Unavailable";
-        const status = lastStatus || Number(credentials.lastErrorCode) || HTTP_STATUS.SERVICE_UNAVAILABLE;
-        return unavailableResponse(status, `[${provider}/${model}] ${msg}`, credentials.retryAfter, credentials.retryAfterHuman);
-      }
-      if (excludeConnectionIds.size === 0) return errorResponse(HTTP_STATUS.BAD_REQUEST, `No credentials for provider: ${provider}`);
-      return errorResponse(lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE, lastError || "All accounts unavailable");
-    }
+    const unavailable = unavailableCredentialResponse({
+      credentials, excludeConnectionIds, lastError, lastStatus,
+      subject: provider, label: "TTS", logAttemptFailure: false,
+      cooldownSubject: `${provider}/${model}`,
+    });
+    if (unavailable) return unavailable;
 
     log.info("AUTH", `\x1b[32mUsing ${provider} account: ${credentials.connectionName}\x1b[0m`);
 

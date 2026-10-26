@@ -12,12 +12,13 @@ import { getSettings, getCombos } from "@/lib/localDb";
 import { getClientIp } from "@/lib/auth/loginLimiter";
 import { AI_PROVIDERS, resolveProviderId } from "@/shared/constants/providers";
 import { handleSearchCore } from "open-sse/handlers/search/index";
-import { errorResponse, unavailableResponse } from "open-sse/utils/error";
+import { errorResponse } from "open-sse/utils/error";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig";
 import * as log from "../utils/logger";
 import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh";
 import { handleComboChat, getComboModelsFromData } from "open-sse/services/combo";
 import { getKeyAccessContext, enforceKeyAccessProvider } from "../services/keyAccess";
+import { unavailableCredentialResponse } from "../services/accountFallbackLoop";
 
 /** The error arm of a searchCore result. */
 interface SearchFailure {
@@ -198,20 +199,11 @@ async function handleSingleProviderSearch(body, providerInput, request, apiKey, 
       }
     }
 
-    if (!credentials || credentials.allRateLimited) {
-      if (credentials?.allRateLimited) {
-        const errorMsg = lastError || credentials.lastError || "Unavailable";
-        const status = lastStatus || Number(credentials.lastErrorCode) || HTTP_STATUS.SERVICE_UNAVAILABLE;
-        log.warn("SEARCH", `[${providerId}] ${errorMsg} (${credentials.retryAfterHuman})`);
-        return unavailableResponse(status, `[${providerId}] ${errorMsg}`, credentials.retryAfter, credentials.retryAfterHuman);
-      }
-      if (excludeConnectionIds.size === 0) {
-        log.error("AUTH", `No credentials for provider: ${providerId}`);
-        return errorResponse(HTTP_STATUS.BAD_REQUEST, `No credentials for provider: ${providerId}`);
-      }
-      log.warn("SEARCH", "No more accounts available", { provider: providerId });
-      return errorResponse(lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE, lastError || "All accounts unavailable");
-    }
+    const unavailable = unavailableCredentialResponse({
+      credentials, excludeConnectionIds, lastError, lastStatus,
+      subject: providerId, label: "SEARCH",
+    });
+    if (unavailable) return unavailable;
 
     log.info("AUTH", `\x1b[32mUsing ${providerId} account: ${credentials.connectionName}\x1b[0m`);
 

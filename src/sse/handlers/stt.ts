@@ -6,12 +6,13 @@ import { getSettings, getCustomModels } from "@/lib/localDb";
 import { getModelInfo } from "../services/model";
 import { getKeyAccessContext, enforceKeyAccessResolved } from "../services/keyAccess";
 import { handleSttCore } from "open-sse/handlers/sttCore";
-import { errorResponse, unavailableResponse } from "open-sse/utils/error";
+import { errorResponse } from "open-sse/utils/error";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig";
 import { AI_PROVIDERS } from "@/shared/constants/providers";
 import * as log from "../utils/logger";
 import { checkAndRefreshToken } from "../services/tokenRefresh";
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy";
+import { unavailableCredentialResponse } from "../services/accountFallbackLoop";
 
 // Providers requiring credentials for STT
 const CREDENTIALED_PROVIDERS = new Set(
@@ -118,15 +119,12 @@ export async function handleStt(request) {
   while (true) {
     let credentials = await getProviderCredentials(provider, excludeConnectionIds, model);
 
-    if (!credentials || credentials.allRateLimited) {
-      if (credentials?.allRateLimited) {
-        const msg = lastError || credentials.lastError || "Unavailable";
-        const status = lastStatus || Number(credentials.lastErrorCode) || HTTP_STATUS.SERVICE_UNAVAILABLE;
-        return unavailableResponse(status, `[${provider}/${model}] ${msg}`, credentials.retryAfter, credentials.retryAfterHuman);
-      }
-      if (excludeConnectionIds.size === 0) return errorResponse(HTTP_STATUS.BAD_REQUEST, `No credentials for provider: ${provider}`);
-      return errorResponse(lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE, lastError || "All accounts unavailable");
-    }
+    const unavailable = unavailableCredentialResponse({
+      credentials, excludeConnectionIds, lastError, lastStatus,
+      subject: provider, label: "STT", logAttemptFailure: false,
+      cooldownSubject: `${provider}/${model}`,
+    });
+    if (unavailable) return unavailable;
 
     log.info("AUTH", `\x1b[32mUsing ${provider} account: ${credentials.connectionName}\x1b[0m`);
 

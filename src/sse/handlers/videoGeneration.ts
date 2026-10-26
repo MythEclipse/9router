@@ -11,12 +11,13 @@ import { getSettings, getProviderConnectionById } from "@/lib/localDb";
 import { getModelInfo } from "../services/model";
 import { getKeyAccessContext, enforceKeyAccessResolved } from "../services/keyAccess";
 import { handleVideoProxyCore, getVideoConfig, sanitizeSecrets } from "open-sse/handlers/videoCore";
-import { errorResponse, unavailableResponse } from "open-sse/utils/error";
+import { errorResponse } from "open-sse/utils/error";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig";
 import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh";
 
 const NO_AUTH_VIDEO_PROVIDERS = new Set(["veoaifree-web"]);
 import * as log from "../utils/logger";
+import { unavailableCredentialResponse } from "../services/accountFallbackLoop";
 
 // Video generation is xAI-only today; requests without a provider prefix
 // (bare model id, or multipart bodies we deliberately don't parse) land here.
@@ -166,17 +167,12 @@ export async function handleVideoCreate(request, action) {
   while (true) {
     const credentials = await getProviderCredentials(provider, excludeConnectionIds, model, { preferredConnectionId });
 
-    if (!credentials || credentials.allRateLimited) {
-      if (credentials?.allRateLimited) {
-        const errorMsg = lastError || credentials.lastError || "Unavailable";
-        const status = lastStatus || Number(credentials.lastErrorCode) || HTTP_STATUS.SERVICE_UNAVAILABLE;
-        return unavailableResponse(status, `[${provider}/${model || "video"}] ${errorMsg}`, credentials.retryAfter, credentials.retryAfterHuman);
-      }
-      if (excludeConnectionIds.size === 0) {
-        return errorResponse(HTTP_STATUS.BAD_REQUEST, `No credentials for provider: ${provider}`);
-      }
-      return errorResponse(lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE, lastError || "All accounts unavailable");
-    }
+    const unavailable = unavailableCredentialResponse({
+      credentials, excludeConnectionIds, lastError, lastStatus,
+      subject: provider, label: "VIDEO", logAttemptFailure: false,
+      cooldownSubject: `${provider}/${model || "video"}`,
+    });
+    if (unavailable) return unavailable;
 
     const refreshedCredentials = await checkAndRefreshToken(provider, credentials);
 

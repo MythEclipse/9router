@@ -12,12 +12,13 @@ import { getModelInfo, getComboModels } from "../services/model";
 import { getKeyAccessContext, enforceKeyAccess } from "../services/keyAccess";
 import { handleImageGenerationCore } from "open-sse/handlers/imageGenerationCore";
 import { getImageAdapter } from "open-sse/handlers/imageProviders/index";
-import { errorResponse, unavailableResponse } from "open-sse/utils/error";
+import { errorResponse } from "open-sse/utils/error";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig";
 import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh";
 import { handleComboChat } from "open-sse/services/combo";
 import * as log from "../utils/logger";
 import { saveRequestUsage } from "@/lib/usageDb";
+import { unavailableCredentialResponse } from "../services/accountFallbackLoop";
 
 // Providers that don't require credentials (noAuth)
 const NO_AUTH_PROVIDERS = new Set(["sdwebui", "comfyui", "veoaifree-web"]);
@@ -150,17 +151,12 @@ async function handleSingleModelImage(body, modelStr, runOptions: ImageRunOption
   while (true) {
     const credentials = await getProviderCredentials(provider, excludeConnectionIds, model, { preferredConnectionId });
 
-    if (!credentials || credentials.allRateLimited) {
-      if (credentials?.allRateLimited) {
-        const errorMsg = lastError || credentials.lastError || "Unavailable";
-        const status = lastStatus || Number(credentials.lastErrorCode) || HTTP_STATUS.SERVICE_UNAVAILABLE;
-        return unavailableResponse(status, `[${provider}/${model}] ${errorMsg}`, credentials.retryAfter, credentials.retryAfterHuman);
-      }
-      if (excludeConnectionIds.size === 0) {
-        return errorResponse(HTTP_STATUS.BAD_REQUEST, `No credentials for provider: ${provider}`);
-      }
-      return errorResponse(lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE, lastError || "All accounts unavailable");
-    }
+    const unavailable = unavailableCredentialResponse({
+      credentials, excludeConnectionIds, lastError, lastStatus,
+      subject: provider, label: "IMAGE", logAttemptFailure: false,
+      cooldownSubject: `${provider}/${model}`,
+    });
+    if (unavailable) return unavailable;
 
     const refreshedCredentials = await checkAndRefreshToken(provider, credentials);
 

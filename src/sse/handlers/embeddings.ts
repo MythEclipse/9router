@@ -13,11 +13,12 @@ import { getClientIp } from "@/lib/auth/loginLimiter";
 import { getModelInfo } from "../services/model";
 import { getKeyAccessContext, enforceKeyAccessResolved } from "../services/keyAccess";
 import { handleEmbeddingsCore } from "open-sse/handlers/embeddingsCore";
-import { errorResponse, unavailableResponse } from "open-sse/utils/error";
+import { errorResponse } from "open-sse/utils/error";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig";
 import * as log from "../utils/logger";
 import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh";
 import { saveRequestUsage } from "@/lib/usageDb";
+import { unavailableCredentialResponse } from "../services/accountFallbackLoop";
 
 /** Token counts an embeddings provider reports back for one request. */
 interface EmbeddingUsage {
@@ -136,20 +137,12 @@ export async function handleEmbeddings(request) {
     const credentials = await getProviderCredentials(provider, excludeConnectionIds, model);
 
     // All accounts unavailable
-    if (!credentials || credentials.allRateLimited) {
-      if (credentials?.allRateLimited) {
-        const errorMsg = lastError || credentials.lastError || "Unavailable";
-        const status = lastStatus || Number(credentials.lastErrorCode) || HTTP_STATUS.SERVICE_UNAVAILABLE;
-        log.warn("EMBEDDINGS", `[${provider}/${model}] ${errorMsg} (${credentials.retryAfterHuman})`);
-        return unavailableResponse(status, `[${requestedModel || `${provider}/${model}`}] ${errorMsg}`, credentials.retryAfter, credentials.retryAfterHuman);
-      }
-      if (excludeConnectionIds.size === 0) {
-        log.error("AUTH", `No credentials for provider: ${provider}`);
-        return errorResponse(HTTP_STATUS.BAD_REQUEST, `No credentials for provider: ${provider}`);
-      }
-      log.warn("EMBEDDINGS", "No more accounts available", { provider });
-      return errorResponse(lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE, lastError || "All accounts unavailable");
-    }
+    const unavailable = unavailableCredentialResponse({
+      credentials, excludeConnectionIds, lastError, lastStatus,
+      subject: provider, label: "EMBEDDINGS",
+      cooldownSubject: requestedModel || `${provider}/${model}`,
+    });
+    if (unavailable) return unavailable;
 
     log.info("AUTH", `\x1b[32mUsing ${provider} account: ${credentials.connectionName}\x1b[0m`);
 
