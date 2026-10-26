@@ -8,6 +8,7 @@ import { rememberEndpoint } from "./cliEndpointPresets";
 import ApiKeySelect from "./ApiKeySelect";
 import { matchKnownEndpoint } from "./cliEndpointMatch";
 import { DEFAULT_LOCAL_API_KEY } from "@/shared/constants/config";
+import { useModelAliases } from "@/shared/hooks/useModelAliases";
 
 const CLOUD_URL = process.env.NEXT_PUBLIC_CLOUD_URL;
 
@@ -35,7 +36,7 @@ export default function DroidToolCard({
   const [modelList, setModelList] = useState([]);
   const [modelInput, setModelInput] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
-  const [modelAliases, setModelAliases] = useState({});
+  const { modelAliases, refresh: refreshModelAliases } = useModelAliases();
   const [showManualConfigModal, setShowManualConfigModal] = useState(false);
   const [showInstallGuide, setShowInstallGuide] = useState(false);
   const [customBaseUrl, setCustomBaseUrl] = useState("");
@@ -43,16 +44,6 @@ export default function DroidToolCard({
   const seededApiKeyRef = useRef(false);
   const initialStatusLoadedRef = useRef(false);
   const expandedLoadedRef = useRef(false);
-
-  const fetchModelAliases = async () => {
-    try {
-      const res = await fetch("/api/models/alias");
-      const data = await res.json();
-      if (res.ok) setModelAliases(data.aliases || {});
-    } catch (error) {
-      console.log("Error fetching model aliases:", error);
-    }
-  };
 
   const checkDroidStatus = async () => {
     setCheckingDroid(true);
@@ -105,10 +96,10 @@ export default function DroidToolCard({
       if (expandedLoadedRef.current) return;
       expandedLoadedRef.current = true;
       if (!droidStatus) void checkDroidStatus();
-      void fetchModelAliases();
+      void refreshModelAliases();
     }, 0);
     return () => clearTimeout(timer);
-  }, [isExpanded, droidStatus]);
+  }, [isExpanded, droidStatus, refreshModelAliases]);
 
 
   // Pre-fill model list from existing config (supports multi-model), once.

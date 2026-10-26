@@ -8,6 +8,7 @@ import { rememberEndpoint } from "./cliEndpointPresets";
 import ApiKeySelect from "./ApiKeySelect";
 import { matchKnownEndpoint } from "./cliEndpointMatch";
 import { DEFAULT_LOCAL_API_KEY } from "@/shared/constants/config";
+import { useModelAliases } from "@/shared/hooks/useModelAliases";
 
 const ENDPOINT = "/api/cli-tools/deepseek-tui-settings";
 
@@ -34,23 +35,13 @@ export default function DeepSeekTuiToolCard({
   const [selectedApiKey, setSelectedApiKey] = useState("");
   const [selectedModel, setSelectedModel] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
-  const [modelAliases, setModelAliases] = useState({});
+  const { modelAliases, refresh: refreshModelAliases } = useModelAliases();
   const [showManualConfigModal, setShowManualConfigModal] = useState(false);
   const [customBaseUrl, setCustomBaseUrl] = useState("");
   const hasInitializedModel = useRef(false);
   const seededApiKeyRef = useRef(false);
   const initialStatusLoadedRef = useRef(false);
   const expandedLoadedRef = useRef(false);
-
-  const fetchModelAliases = async () => {
-    try {
-      const res = await fetch("/api/models/alias");
-      const data = await res.json();
-      if (res.ok) setModelAliases(data.aliases || {});
-    } catch (error) {
-      console.log("Error fetching model aliases:", error);
-    }
-  };
 
   const checkStatus = async () => {
     setChecking(true);
@@ -103,10 +94,10 @@ export default function DeepSeekTuiToolCard({
       if (expandedLoadedRef.current) return;
       expandedLoadedRef.current = true;
       if (!deepseekStatus) void checkStatus();
-      void fetchModelAliases();
+      void refreshModelAliases();
     }, 0);
     return () => clearTimeout(timer);
-  }, [isExpanded, deepseekStatus]);
+  }, [isExpanded, deepseekStatus, refreshModelAliases]);
 
 
   // Seed the form from the detected config once, after the first status lands.

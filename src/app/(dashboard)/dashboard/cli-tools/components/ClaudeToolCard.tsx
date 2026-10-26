@@ -9,6 +9,7 @@ import ApiKeySelect from "./ApiKeySelect";
 import { matchKnownEndpoint } from "./cliEndpointMatch";
 import { stripModelContextMarker } from "open-sse/utils/modelMarkers";
 import { DEFAULT_LOCAL_API_KEY } from "@/shared/constants/config";
+import { useModelAliases } from "@/shared/hooks/useModelAliases";
 
 const CLOUD_URL = process.env.NEXT_PUBLIC_CLOUD_URL;
 
@@ -53,7 +54,7 @@ export default function ClaudeToolCard({
   const [modalOpen, setModalOpen] = useState(false);
   const [currentEditingAlias, setCurrentEditingAlias] = useState(null);
   const [selectedApiKey, setSelectedApiKey] = useState("");
-  const [modelAliases, setModelAliases] = useState({});
+  const { modelAliases, refresh: refreshModelAliases } = useModelAliases();
   const [showManualConfigModal, setShowManualConfigModal] = useState(false);
   const [customBaseUrl, setCustomBaseUrl] = useState("");
   const [ccFilterNaming, setCcFilterNaming] = useState(false);
@@ -66,16 +67,6 @@ export default function ClaudeToolCard({
   const expandedLoadedRef = useRef(false);
   const autoCompactSeededRef = useRef(false);
   const oneMContextSeededRef = useRef(false);
-
-  const fetchModelAliases = async () => {
-    try {
-      const res = await fetch("/api/models/alias");
-      const data = await res.json();
-      if (res.ok) setModelAliases(data.aliases || {});
-    } catch (error) {
-      console.log("Error fetching model aliases:", error);
-    }
-  };
 
   const checkClaudeStatus = async () => {
     setCheckingClaude(true);
@@ -171,10 +162,10 @@ export default function ClaudeToolCard({
       if (expandedLoadedRef.current) return;
       expandedLoadedRef.current = true;
       if (!claudeStatus) void checkClaudeStatus();
-      void fetchModelAliases();
+      void refreshModelAliases();
     }, 0);
     return () => clearTimeout(timer);
-  }, [isExpanded, claudeStatus]);
+  }, [isExpanded, claudeStatus, refreshModelAliases]);
 
   useEffect(() => {
     fetch("/api/settings").then(r => r.json()).then(data => {

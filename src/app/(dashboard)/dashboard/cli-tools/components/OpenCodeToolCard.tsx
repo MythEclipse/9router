@@ -8,6 +8,7 @@ import { rememberEndpoint } from "./cliEndpointPresets";
 import ApiKeySelect from "./ApiKeySelect";
 import { matchKnownEndpoint } from "./cliEndpointMatch";
 import { DEFAULT_LOCAL_API_KEY } from "@/shared/constants/config";
+import { useModelAliases } from "@/shared/hooks/useModelAliases";
 
 export default function OpenCodeToolCard({ tool, isExpanded, onToggle, baseUrl, apiKeys, activeProviders, cloudEnabled, initialStatus, tunnelEnabled, tunnelPublicUrl, tailscaleEnabled, tailscaleUrl }) {
   const [status, setStatus] = useState(initialStatus || null);
@@ -21,7 +22,7 @@ export default function OpenCodeToolCard({ tool, isExpanded, onToggle, baseUrl, 
   const [subagentModel, setSubagentModel] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [subagentModalOpen, setSubagentModalOpen] = useState(false);
-  const [modelAliases, setModelAliases] = useState({});
+  const { modelAliases, refresh: refreshModelAliases } = useModelAliases();
   const [showManualConfigModal, setShowManualConfigModal] = useState(false);
   const [customBaseUrl, setCustomBaseUrl] = useState("");
   const [selectedModels, setSelectedModels] = useState([]);
@@ -31,16 +32,6 @@ export default function OpenCodeToolCard({ tool, isExpanded, onToggle, baseUrl, 
   const initialStatusLoadedRef = useRef(false);
   const expandedLoadedRef = useRef(false);
   const modelsSeededRef = useRef(false);
-
-  const fetchModelAliases = async () => {
-    try {
-      const res = await fetch("/api/models/alias");
-      const data = await res.json();
-      if (res.ok) setModelAliases(data.aliases || {});
-    } catch (error) {
-      console.log("Error fetching model aliases:", error);
-    }
-  };
 
   const checkStatus = async () => {
     setChecking(true);
@@ -85,10 +76,10 @@ export default function OpenCodeToolCard({ tool, isExpanded, onToggle, baseUrl, 
       if (expandedLoadedRef.current) return;
       expandedLoadedRef.current = true;
       if (!status) void checkStatus();
-      void fetchModelAliases();
+      void refreshModelAliases();
     }, 0);
     return () => clearTimeout(timer);
-  }, [isExpanded, status]);
+  }, [isExpanded, status, refreshModelAliases]);
 
   // Sync models from existing config, once, before the user edits the draft.
   useEffect(() => {

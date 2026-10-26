@@ -10,6 +10,7 @@ import { matchKnownEndpoint } from "./cliEndpointMatch";
 import { rememberEndpoint } from "./cliEndpointPresets";
 import { getCurrentCodexProviderSettings, deriveProfileNameFromModel } from "./codexConfig";
 import { DEFAULT_LOCAL_API_KEY } from "@/shared/constants/config";
+import { useModelAliases } from "@/shared/hooks/useModelAliases";
 
 export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, apiKeys, activeProviders, cloudEnabled, initialStatus, tunnelEnabled, tunnelPublicUrl, tailscaleEnabled, tailscaleUrl }) {
   const [codexStatus, setCodexStatus] = useState(initialStatus || null);
@@ -23,7 +24,7 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
   const [subagentModel, setSubagentModel] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [subagentModalOpen, setSubagentModalOpen] = useState(false);
-  const [modelAliases, setModelAliases] = useState({});
+  const { modelAliases, refresh: refreshModelAliases } = useModelAliases();
   const [showManualConfigModal, setShowManualConfigModal] = useState(false);
   const [customBaseUrl, setCustomBaseUrl] = useState("");
   const [profiles, setProfiles] = useState([]);
@@ -38,16 +39,6 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
   const initialStatusLoadedRef = useRef(false);
   const expandedLoadedRef = useRef(false);
   const configSyncedRef = useRef(false);
-
-  const fetchModelAliases = async () => {
-    try {
-      const res = await fetch("/api/models/alias");
-      const data = await res.json();
-      if (res.ok) setModelAliases(data.aliases || {});
-    } catch (error) {
-      console.log("Error fetching model aliases:", error);
-    }
-  };
 
   const checkCodexStatus = async () => {
     setCheckingCodex(true);
@@ -109,11 +100,11 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
       if (expandedLoadedRef.current) return;
       expandedLoadedRef.current = true;
       if (!codexStatus) void checkCodexStatus();
-      void fetchModelAliases();
+      void refreshModelAliases();
       void fetchProfiles();
     }, 0);
     return () => clearTimeout(timer);
-  }, [isExpanded, codexStatus]);
+  }, [isExpanded, codexStatus, refreshModelAliases]);
 
 
 

@@ -8,6 +8,7 @@ import { rememberEndpoint } from "./cliEndpointPresets";
 import ApiKeySelect from "./ApiKeySelect";
 import { matchKnownEndpoint } from "./cliEndpointMatch";
 import { DEFAULT_LOCAL_API_KEY } from "@/shared/constants/config";
+import { useModelAliases } from "@/shared/hooks/useModelAliases";
 
 export default function ClineToolCard({ tool, isExpanded, onToggle, baseUrl, apiKeys, activeProviders, cloudEnabled, initialStatus, tunnelEnabled, tunnelPublicUrl, tailscaleEnabled, tailscaleUrl }) {
   const [status, setStatus] = useState(initialStatus || null);
@@ -19,23 +20,13 @@ export default function ClineToolCard({ tool, isExpanded, onToggle, baseUrl, api
   const [selectedApiKey, setSelectedApiKey] = useState("");
   const [selectedModel, setSelectedModel] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
-  const [modelAliases, setModelAliases] = useState({});
+  const { modelAliases, refresh: refreshModelAliases } = useModelAliases();
   const [showManualConfigModal, setShowManualConfigModal] = useState(false);
   const [customBaseUrl, setCustomBaseUrl] = useState("");
   const seededApiKeyRef = useRef(false);
   const initialStatusLoadedRef = useRef(false);
   const expandedLoadedRef = useRef(false);
   const modelSeededRef = useRef(false);
-
-  const fetchModelAliases = async () => {
-    try {
-      const res = await fetch("/api/models/alias");
-      const data = await res.json();
-      if (res.ok) setModelAliases(data.aliases || {});
-    } catch (error) {
-      console.log("Error fetching model aliases:", error);
-    }
-  };
 
   const checkStatus = async () => {
     setChecking(true);
@@ -76,10 +67,10 @@ export default function ClineToolCard({ tool, isExpanded, onToggle, baseUrl, api
       if (expandedLoadedRef.current) return;
       expandedLoadedRef.current = true;
       if (!status) void checkStatus();
-      void fetchModelAliases();
+      void refreshModelAliases();
     }, 0);
     return () => clearTimeout(timer);
-  }, [isExpanded, status]);
+  }, [isExpanded, status, refreshModelAliases]);
 
   // Adopt the model written in the settings file only once; afterwards the
   // local draft (typed, selected in the modal, or cleared) wins.

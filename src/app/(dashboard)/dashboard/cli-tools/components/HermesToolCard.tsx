@@ -9,6 +9,7 @@ import ApiKeySelect from "./ApiKeySelect";
 import { matchKnownEndpoint } from "./cliEndpointMatch";
 import { CLI_TOOLS } from "@/shared/constants/cliTools";
 import { DEFAULT_LOCAL_API_KEY } from "@/shared/constants/config";
+import { useModelAliases } from "@/shared/hooks/useModelAliases";
 
 const ENDPOINT = "/api/cli-tools/hermes-settings";
 const HERMES_ROLES = CLI_TOOLS.hermes?.roles || [];
@@ -38,7 +39,7 @@ export default function HermesToolCard({
   const [roleModels, setRoleModels] = useState<Record<string, string>>({});
   const [modalTarget, setModalTarget] = useState("default");
   const [modalOpen, setModalOpen] = useState(false);
-  const [modelAliases, setModelAliases] = useState({});
+  const { modelAliases, refresh: refreshModelAliases } = useModelAliases();
   const [showManualConfigModal, setShowManualConfigModal] = useState(false);
   const [customBaseUrl, setCustomBaseUrl] = useState("");
   const [profiles, setProfiles] = useState([]);
@@ -53,16 +54,6 @@ export default function HermesToolCard({
   const seededApiKeyRef = useRef(false);
   const initialStatusLoadedRef = useRef(false);
   const expandedLoadedRef = useRef(false);
-
-  const fetchModelAliases = async () => {
-    try {
-      const res = await fetch("/api/models/alias");
-      const data = await res.json();
-      if (res.ok) setModelAliases(data.aliases || {});
-    } catch (error) {
-      console.log("Error fetching model aliases:", error);
-    }
-  };
 
   const fetchProfiles = useCallback(async () => {
     try {
@@ -152,11 +143,11 @@ export default function HermesToolCard({
       if (expandedLoadedRef.current) return;
       expandedLoadedRef.current = true;
       if (!hermesStatus) void checkStatus();
-      void fetchModelAliases();
+      void refreshModelAliases();
       void fetchProfiles();
     }, 0);
     return () => clearTimeout(timer);
-  }, [isExpanded, hermesStatus, checkStatus, fetchProfiles]);
+  }, [isExpanded, hermesStatus, checkStatus, fetchProfiles, refreshModelAliases]);
 
 
   // Seed the form from the detected config once, after the first status lands.

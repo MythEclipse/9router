@@ -8,6 +8,7 @@ import { rememberEndpoint } from "./cliEndpointPresets";
 import ApiKeySelect from "./ApiKeySelect";
 import { matchKnownEndpoint } from "./cliEndpointMatch";
 import { DEFAULT_LOCAL_API_KEY } from "@/shared/constants/config";
+import { useModelAliases } from "@/shared/hooks/useModelAliases";
 
 export default function CopilotToolCard({ tool, isExpanded, onToggle, baseUrl, apiKeys, activeProviders, cloudEnabled, initialStatus, tunnelEnabled, tunnelPublicUrl, tailscaleEnabled, tailscaleUrl }) {
   const [status, setStatus] = useState(initialStatus || null);
@@ -17,7 +18,7 @@ export default function CopilotToolCard({ tool, isExpanded, onToggle, baseUrl, a
   const [message, setMessage] = useState(null);
   const [selectedApiKey, setSelectedApiKey] = useState("");
   const [customBaseUrl, setCustomBaseUrl] = useState("");
-  const [modelAliases, setModelAliases] = useState({});
+  const { modelAliases, refresh: refreshModelAliases } = useModelAliases();
   const [showManualConfigModal, setShowManualConfigModal] = useState(false);
   const [selectedModels, setSelectedModels] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
@@ -26,16 +27,6 @@ export default function CopilotToolCard({ tool, isExpanded, onToggle, baseUrl, a
   const initialStatusLoadedRef = useRef(false);
   const expandedLoadedRef = useRef(false);
   const modelsSeededRef = useRef(false);
-
-  const fetchModelAliases = async () => {
-    try {
-      const res = await fetch("/api/models/alias");
-      const data = await res.json();
-      if (res.ok) setModelAliases(data.aliases || {});
-    } catch (error) {
-      console.log("Error fetching model aliases:", error);
-    }
-  };
 
   const checkStatus = async () => {
     setChecking(true);
@@ -80,10 +71,10 @@ export default function CopilotToolCard({ tool, isExpanded, onToggle, baseUrl, a
       if (expandedLoadedRef.current) return;
       expandedLoadedRef.current = true;
       if (!status) void checkStatus();
-      void fetchModelAliases();
+      void refreshModelAliases();
     }, 0);
     return () => clearTimeout(timer);
-  }, [isExpanded, status]);
+  }, [isExpanded, status, refreshModelAliases]);
 
   // Pre-fill from existing config, once: the detected 9Router model list (if
   // the user has not already picked models) becomes the working draft.
