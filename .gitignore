@@ -117,3 +117,8 @@ graphify-out/*
 start-dev-silent.cjs
 debug.log
 .scratch/
+
+# Build artifacts / lint scratch
+tsc_out.txt
+tsconfig.tsbuildinfo
+eslint.tmp.mjs
