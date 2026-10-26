@@ -1,5 +1,30 @@
 "use client";
 
+/**
+ * The first active API key, or "" when none exists.
+ * Example cards all offer "use my key" and share this lookup.
+ */
+export async function fetchFirstActiveApiKey() {
+  try {
+    const res = await fetch("/api/keys");
+    const data = await res.json();
+    return (data.keys || []).find((k) => k.isActive !== false)?.key || "";
+  } catch {
+    return "";
+  }
+}
+
+/** The tunnel public URL, or "" when the tunnel is off. */
+export async function fetchTunnelPublicUrl() {
+  try {
+    const res = await fetch("/api/tunnel/status");
+    const data = await res.json();
+    return data.publicUrl || "";
+  } catch {
+    return "";
+  }
+}
+
 export function Row({ label, children }) {
   return (
     <div className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">

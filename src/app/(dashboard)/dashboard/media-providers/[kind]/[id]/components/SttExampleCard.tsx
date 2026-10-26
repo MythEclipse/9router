@@ -6,7 +6,7 @@ import { getProviderAlias } from "@/shared/constants/providers";
 import { getModelKind } from "@/shared/constants/models";
 import { getModelsByProviderId } from "@/shared/constants/models";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
-import { Row } from "./exampleShared";
+import { Row, fetchFirstActiveApiKey, fetchTunnelPublicUrl } from "./exampleShared";
 
 // Wall clock read, kept out of the component body so a render never looks like
 // it touches time. `handleRun` calls it either side of the fetch to report
@@ -46,14 +46,8 @@ export function SttExampleCard({ providerId }) {
 
   // `localEndpoint` is the client origin, fixed at first paint.
   useEffect(() => {
-    fetch("/api/keys")
-      .then((r) => r.json())
-      .then((d) => { setApiKey((d.keys || []).find((k) => k.isActive !== false)?.key || ""); })
-      .catch(() => {});
-    fetch("/api/tunnel/status")
-      .then((r) => r.json())
-      .then((d) => { if (d.publicUrl) setTunnelEndpoint(d.publicUrl); })
-      .catch(() => {});
+    void fetchFirstActiveApiKey().then(setApiKey);
+    void fetchTunnelPublicUrl().then((url) => { if (url) setTunnelEndpoint(url); });
     const loadCustom = () => {
       fetch("/api/models/custom", { cache: "no-store" })
         .then((r) => r.json())

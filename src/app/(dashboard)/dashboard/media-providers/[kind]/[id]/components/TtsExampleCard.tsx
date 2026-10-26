@@ -9,7 +9,7 @@ import { TTS_PROVIDER_CONFIG } from "@/shared/constants/ttsProviders";
 import { translate } from "@/i18n/runtime";
 import { getTtsVoicesForModel } from "open-sse/config/ttsModels";
 import { GOOGLE_TTS_LANGUAGES } from "open-sse/config/googleTtsLanguages";
-import { Row } from "./exampleShared";
+import { Row, fetchFirstActiveApiKey, fetchTunnelPublicUrl } from "./exampleShared";
 
 const DEFAULT_TTS_RESPONSE_EXAMPLE = `// Audio will appear here after running.
 // Example JSON response (response_format=json):
@@ -95,18 +95,12 @@ export function TtsExampleCard({ providerId }) {
 
   // `localEndpoint` is the client origin, fixed at first paint.
   useEffect(() => {
-    fetch("/api/keys")
-      .then((r) => r.json())
-      .then((d) => { setApiKey((d.keys || []).find((k) => k.isActive !== false)?.key || ""); })
-      .catch(() => {});
+    void fetchFirstActiveApiKey().then(setApiKey);
     fetch("/api/providers", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => { setConnectionCount((d.connections || []).filter((c) => c.provider === providerId && c.isActive !== false).length); })
       .catch(() => {});
-    fetch("/api/tunnel/status")
-      .then((r) => r.json())
-      .then((d) => { if (d.publicUrl) setTunnelEndpoint(d.publicUrl); })
-      .catch(() => {});
+    void fetchTunnelPublicUrl().then((url) => { if (url) setTunnelEndpoint(url); });
 
     // The default voice/chips are initial state (see the lazy initialisers
     // above). api-language providers (edge-tts, local-device, elevenlabs) wait

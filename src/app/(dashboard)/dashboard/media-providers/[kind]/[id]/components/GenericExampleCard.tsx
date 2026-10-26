@@ -6,7 +6,7 @@ import { Card } from "@/shared/components";
 import { MEDIA_PROVIDER_KINDS, getProviderAlias, resolveProviderId } from "@/shared/constants/providers";
 import { getModelsByProviderId, getModelKind } from "@/shared/constants/models";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
-import { Row, KIND_EXAMPLE_CONFIG } from "./exampleShared";
+import { Row, KIND_EXAMPLE_CONFIG, fetchFirstActiveApiKey, fetchTunnelPublicUrl } from "./exampleShared";
 
 const CLOUDFLARE_TEST_IMAGE_URL = "https://pub-1fb693cb11cc46b2b2f656f51e015a2c.r2.dev/dog.png";
 const CLOUDFLARE_TEST_MASK_URL = "https://pub-1fb693cb11cc46b2b2f656f51e015a2c.r2.dev/dog-mask.png";
@@ -80,14 +80,8 @@ export function GenericExampleCard({ providerId, kind }) {
 
   // `localEndpoint` is the client origin, fixed at first paint.
   useEffect(() => {
-    fetch("/api/keys")
-      .then((r) => r.json())
-      .then((d) => { setApiKey((d.keys || []).find((k) => k.isActive !== false)?.key || ""); })
-      .catch(() => {});
-    fetch("/api/tunnel/status")
-      .then((r) => r.json())
-      .then((d) => { if (d.publicUrl) setTunnelEndpoint(d.publicUrl); })
-      .catch(() => {});
+    void fetchFirstActiveApiKey().then(setApiKey);
+    void fetchTunnelPublicUrl().then((url) => { if (url) setTunnelEndpoint(url); });
     // Load active connections of this provider for pinning
     fetch("/api/providers/client")
       .then((r) => r.json())

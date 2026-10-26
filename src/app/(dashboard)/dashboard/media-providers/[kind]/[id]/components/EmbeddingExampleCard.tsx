@@ -5,7 +5,7 @@ import { Card } from "@/shared/components";
 import { getProviderAlias, isCustomEmbeddingProvider } from "@/shared/constants/providers";
 import { getModelsByProviderId, getModelKind } from "@/shared/constants/models";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
-import { Row } from "./exampleShared";
+import { Row, fetchFirstActiveApiKey, fetchTunnelPublicUrl } from "./exampleShared";
 
 const DEFAULT_RESPONSE_EXAMPLE = `{
   "object": "list",
@@ -41,14 +41,8 @@ export function EmbeddingExampleCard({ providerId, customAlias }) {
   // `localEndpoint` is the client origin, fixed at first paint - no effect
   // needed to keep it in sync with anything React owns.
   useEffect(() => {
-    fetch("/api/keys")
-      .then((r) => r.json())
-      .then((d) => { setApiKey((d.keys || []).find((k) => k.isActive !== false)?.key || ""); })
-      .catch(() => {});
-    fetch("/api/tunnel/status")
-      .then((r) => r.json())
-      .then((d) => { if (d.publicUrl) setTunnelEndpoint(d.publicUrl); })
-      .catch(() => {});
+    void fetchFirstActiveApiKey().then(setApiKey);
+    void fetchTunnelPublicUrl().then((url) => { if (url) setTunnelEndpoint(url); });
   }, []);
 
   const endpoint = useTunnel ? tunnelEndpoint : localEndpoint;
