@@ -5,12 +5,8 @@ import Link from "next/link";
 import { CardSkeleton } from "@/shared/components";
 import { CLI_TOOLS } from "@/shared/constants/cliTools";
 import { getModelsByProviderId, PROVIDER_ID_TO_ALIAS } from "@/shared/constants/models";
-import {
-  ClaudeToolCard, CodexToolCard, DroidToolCard, OpenClawToolCard,
-  HermesToolCard, DefaultToolCard, OpenCodeToolCard, CoworkToolCard,
-  ClineToolCard, KiloToolCard, DeepSeekTuiToolCard,
-  JcodeToolCard, GrokBuildToolCard, GenericCliToolCard,
-} from "../components";
+import { DefaultToolCard } from "../components";
+import { resolveToolCard } from "../components/toolCardRegistry";
 
 const CLOUD_URL = process.env.NEXT_PUBLIC_CLOUD_URL;
 
@@ -145,41 +141,18 @@ export default function ToolDetailClient({ toolId, machineId }) {
       hasActiveProviders,
     };
 
-    switch (toolId) {
-      case "claude":
-        return <ClaudeToolCard {...commonProps} activeProviders={getActiveProviders()} modelMappings={modelMappings[toolId] || {}} onModelMappingChange={(a, t) => handleModelMappingChange(toolId, a, t)} hasActiveProviders={hasActiveProviders} cloudEnabled={cloudEnabled} />;
-      case "codex":
-        return <CodexToolCard {...commonProps} activeProviders={getActiveProviders()} cloudEnabled={cloudEnabled} />;
-      case "opencode":
-        return <OpenCodeToolCard {...commonProps} activeProviders={getActiveProviders()} cloudEnabled={cloudEnabled} />;
-      case "cowork":
-        return <CoworkToolCard {...commonProps} activeProviders={getActiveProviders()} hasActiveProviders={hasActiveProviders} cloudEnabled={cloudEnabled} cloudUrl={CLOUD_URL} tunnelEnabled={tunnelEnabled} tunnelPublicUrl={tunnelPublicUrl} tailscaleEnabled={tailscaleEnabled} tailscaleUrl={tailscaleUrl} />;
-      case "droid":
-        return <DroidToolCard {...commonProps} activeProviders={getActiveProviders()} hasActiveProviders={hasActiveProviders} cloudEnabled={cloudEnabled} />;
-      case "openclaw":
-        return <OpenClawToolCard {...commonProps} activeProviders={getActiveProviders()} hasActiveProviders={hasActiveProviders} cloudEnabled={cloudEnabled} />;
-      case "hermes":
-        return <HermesToolCard {...commonProps} activeProviders={getActiveProviders()} hasActiveProviders={hasActiveProviders} cloudEnabled={cloudEnabled} />;
-      case "cline":
-        return <ClineToolCard {...commonProps} activeProviders={getActiveProviders()} cloudEnabled={cloudEnabled} />;
-      case "kilo":
-        return <KiloToolCard {...commonProps} activeProviders={getActiveProviders()} cloudEnabled={cloudEnabled} />;
-      case "deepseek-tui":
-        return <DeepSeekTuiToolCard {...commonProps} activeProviders={getActiveProviders()} hasActiveProviders={hasActiveProviders} cloudEnabled={cloudEnabled} />;
-      case "jcode":
-        return <JcodeToolCard {...commonProps} activeProviders={getActiveProviders()} hasActiveProviders={hasActiveProviders} cloudEnabled={cloudEnabled} />;
-      case "grok-build":
-        return <GrokBuildToolCard {...commonProps} activeProviders={getActiveProviders()} hasActiveProviders={hasActiveProviders} cloudEnabled={cloudEnabled} />;
-      case "pi":
-      case "omp":
-      case "crush":
-      case "forge":
-      case "smelt":
-      case "codewhale":
-        return <GenericCliToolCard {...commonProps} activeProviders={getActiveProviders()} cloudEnabled={cloudEnabled} />;
-      default:
-        return <DefaultToolCard toolId={toolId} {...commonProps} activeProviders={getActiveProviders()} cloudEnabled={cloudEnabled} tunnelEnabled={tunnelEnabled} />;
+    const resolved = resolveToolCard(toolId, {
+      modelMappings,
+      onModelMappingChange: handleModelMappingChange,
+      cloudUrl: CLOUD_URL,
+    });
+
+    if (!resolved) {
+      return <DefaultToolCard toolId={toolId} {...commonProps} activeProviders={getActiveProviders()} cloudEnabled={cloudEnabled} tunnelEnabled={tunnelEnabled} />;
     }
+
+    const { Card, extraProps } = resolved;
+    return <Card {...commonProps} {...extraProps} />;
   };
 
   // Guard removed/unknown tools (e.g. disabled Cowork) to avoid crash on direct URL.
