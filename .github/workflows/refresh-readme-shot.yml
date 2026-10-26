@@ -30,12 +30,12 @@ jobs:
       - name: Start the app
         run: |
           pnpm run build
-          (pnpm run start -- --port 20128 >/tmp/app.log 2>&1 &)
+          PORT=20128 pnpm run start >/tmp/app.log 2>&1 &
           for i in $(seq 1 60); do
             curl -sf http://127.0.0.1:20128/api/health >/dev/null && break
             sleep 3
           done
-          curl -sf http://127.0.0.1:20128/api/health
+          curl -sf http://127.0.0.1:20128/api/health || { echo "app did not come up:"; cat /tmp/app.log; exit 1; }
 
       - name: Capture dashboard screenshot
         run: |
