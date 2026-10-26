@@ -1,4 +1,5 @@
 import { MAX_TOOL_NAME_LEN } from "../config/runtimeConfig";
+import { clampResponsesCallId, coerceResponsesArguments, coerceResponsesOutput } from "../translator/formats/responsesApi";
 
 /**
  * Normalize OpenAI-style `tools` into the flat shape strict Responses backends
@@ -51,4 +52,40 @@ export function normalizeResponsesTools(body: Record<string, any>) {
       if (!n || !validNames.has(n)) delete body.tool_choice;
     }
   }
+}
+
+/**
+ * Drop and repair prior-turn `input` items that strict Responses backends reject,
+ * mutating `body` in place.
+ *
+ * Reasoning items are stripped: their `encrypted_content` can only be decrypted
+ * by the exact caller/account that issued it, and the opencode-family executors
+ * rotate through public/pooled credentials. Under stateless mode (store=false)
+ * OpenAI then rejects the dangling reference as "not found or was deleted", so
+ * dropping the items outright is what lets multi-turn tool loops succeed.
+ *
+ * Function calls get a non-empty name and clamped call ids/arguments; call
+ * outputs get the same id clamping plus coerced output.
+ */
+export function sanitizeResponsesItems(body: Record<string, any>) {
+  if (!Array.isArray(body.input)) return;
+  body.input = body.input.filter((item: any) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return true;
+    if (item.type === "reasoning") return false;
+    delete item.encrypted_content;
+    delete item.reasoning_encrypted_content;
+    if (item.type === "function_call") {
+      if (!item.name || typeof item.name !== "string" || item.name.trim() === "") return false;
+      item.name = item.name.trim().slice(0, MAX_TOOL_NAME_LEN);
+      item.call_id = clampResponsesCallId(item.call_id);
+      item.arguments = coerceResponsesArguments(item.arguments);
+      return true;
+    }
+    if (item.type === "function_call_output") {
+      item.call_id = clampResponsesCallId(item.call_id);
+      item.output = coerceResponsesOutput(item.output);
+      return true;
+    }
+    return true;
+  });
 }

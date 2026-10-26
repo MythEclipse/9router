@@ -8,7 +8,7 @@ import {
   coerceResponsesArguments,
   coerceResponsesOutput,
 } from "../translator/formats/responsesApi";
-import { normalizeResponsesTools } from "../utils/responsesTools";
+import { normalizeResponsesTools, sanitizeResponsesItems } from "../utils/responsesTools";
 import { MAX_TOOL_NAME_LEN } from "../config/runtimeConfig";
 
 const SESSION_HEADER = "x-opencode-session";
@@ -184,32 +184,6 @@ function isResponsesModel(model) {
 // Last line of defense for native Responses clients (sourceFormat === targetFormat
 // skips translation): coerce items in place so malformed tool payloads 400 here
 // with a clear shape instead of upstream as InputValidationError.
-function sanitizeResponsesItems(body) {
-  if (!Array.isArray(body.input)) return;
-  body.input = body.input.filter((item) => {
-    if (!item || typeof item !== "object" || Array.isArray(item)) return true;
-    // Strip prior-turn reasoning items: Muse Spark contributor models route to
-    // an upstream Console backend where encrypted_content cannot be validated across
-    // rotated accounts or sessions, causing 400 "reasoning encrypted_content was not issued to this caller".
-    if (item.type === "reasoning") return false;
-    delete item.encrypted_content;
-    delete item.reasoning_encrypted_content;
-    if (item.type === "function_call") {
-      if (!item.name || typeof item.name !== "string" || item.name.trim() === "") return false;
-      item.name = item.name.trim().slice(0, MAX_TOOL_NAME_LEN);
-      item.call_id = clampResponsesCallId(item.call_id);
-      item.arguments = coerceResponsesArguments(item.arguments);
-      return true;
-    }
-    if (item.type === "function_call_output") {
-      item.call_id = clampResponsesCallId(item.call_id);
-      item.output = coerceResponsesOutput(item.output);
-      return true;
-    }
-    return true;
-  });
-}
-
 export class OpenCodeZenExecutor extends DefaultExecutor {
   constructor() {
     super("opencode-zen");

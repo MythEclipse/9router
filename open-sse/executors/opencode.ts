@@ -19,7 +19,7 @@ import {
   coerceResponsesArguments,
   coerceResponsesOutput,
 } from "../translator/formats/responsesApi";
-import { normalizeResponsesTools } from "../utils/responsesTools";
+import { normalizeResponsesTools, sanitizeResponsesItems } from "../utils/responsesTools";
 
 // OpenCode v2 UA shape: opencode/<channel>/<version>/<client>. Upstream rejects
 // the v1 "opencode/1.18.x" form with 403 FreeTierError since 2026-10-14.
@@ -291,39 +291,6 @@ function resolveOpencodeSession(body, credentials, providerSessionId, clientTool
   }
 
   return stableSessionId(credentials);
-}
-
-function sanitizeResponsesItems(body) {
-  if (!Array.isArray(body.input)) return;
-  body.input = body.input.filter((item) => {
-    if (!item || typeof item !== "object" || Array.isArray(item)) return true;
-    // Strip prior-turn reasoning items: OpenCode Free uses public/pooled credentials
-    // (`Bearer public`) routing to an upstream OpenAI/Console account pool.
-    // OpenAI Responses API strictly enforces that reasoning `encrypted_content`
-    // can only be decrypted by the exact caller/account that issued it; sending it
-    // across different accounts or rotating proxy relays triggers:
-    // [invalid_request_error] reasoning `encrypted_content` was not issued to this caller (400).
-    // Furthermore, under stateless mode (store=false), omitting encrypted_content
-    // causes OpenAI to reject the referenced reasoning item as "not found or was deleted".
-    // Dropping prior reasoning items allows multi-turn conversations and tool-calling
-    // loops to succeed cleanly.
-    if (item.type === "reasoning") return false;
-    delete item.encrypted_content;
-    delete item.reasoning_encrypted_content;
-    if (item.type === "function_call") {
-      if (!item.name || typeof item.name !== "string" || item.name.trim() === "") return false;
-      item.name = item.name.trim().slice(0, MAX_TOOL_NAME_LEN);
-      item.call_id = clampResponsesCallId(item.call_id);
-      item.arguments = coerceResponsesArguments(item.arguments);
-      return true;
-    }
-    if (item.type === "function_call_output") {
-      item.call_id = clampResponsesCallId(item.call_id);
-      item.output = coerceResponsesOutput(item.output);
-      return true;
-    }
-    return true;
-  });
 }
 
 function normalizeOpencodeReasoning(model, body) {
