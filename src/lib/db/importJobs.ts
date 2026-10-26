@@ -9,42 +9,14 @@
 // hash, so a progress poll must not re-derive trust from the database.
 import { randomUUID } from "node:crypto";
 import { issuePollToken } from "./importJobAuth";
+import { createJobStore, touchJob } from "./jobStore";
 
 const RESULT_TTL_MS = 10 * 60 * 1000;
 
-function getStore() {
-  if (!globalThis._importJobs) globalThis._importJobs = new Map();
-  return globalThis._importJobs;
-}
-
-function getTimers() {
-  if (!globalThis._importJobsTimers) globalThis._importJobsTimers = new Map();
-  return globalThis._importJobsTimers;
-}
-
-function clearResultTimer(jobId) {
-  const timers = getTimers();
-  const timer = timers.get(jobId);
-  if (timer) {
-    clearTimeout(timer);
-    timers.delete(jobId);
-  }
-}
-
-function scheduleResultCleanup(jobId) {
-  const timers = getTimers();
-  if (timers.has(jobId)) return;
-  const timer = setTimeout(() => {
-    timers.delete(jobId);
-    getStore().delete(jobId);
-  }, RESULT_TTL_MS);
-  if (typeof timer.unref === "function") timer.unref();
-  timers.set(jobId, timer);
-}
-
-function touch(job) {
-  job.updatedAt = new Date().toISOString();
-}
+const { getStore, scheduleResultCleanup } = createJobStore({
+  globalKey: "importJobs",
+  resultTtlMs: RESULT_TTL_MS,
+});
 
 async function runImportJob(jobId) {
   const store = getStore();
@@ -53,7 +25,7 @@ async function runImportJob(jobId) {
 
   job.status = "running";
   job.message = "Import started";
-  touch(job);
+  touchJob(job);
 
   try {
     const { importDbProgressive } = await import("./index");
@@ -62,7 +34,7 @@ async function runImportJob(jobId) {
       if (!current) return;
       current.progress = progress;
       current.message = `Importing ${progress.currentSection} (${progress.done}/${progress.total})`;
-      touch(current);
+      touchJob(current);
     });
 
     const current = store.get(jobId);
@@ -98,7 +70,7 @@ async function runImportJob(jobId) {
 
     current.status = "done";
     current.message = "Import completed";
-    touch(current);
+    touchJob(current);
   } catch (err) {
     const current = store.get(jobId);
     if (!current) return;
@@ -106,7 +78,7 @@ async function runImportJob(jobId) {
     current.error = err?.message || "Failed to import database";
     current.message = "Import failed";
     current.payload = null;
-    touch(current);
+    touchJob(current);
   } finally {
     scheduleResultCleanup(jobId);
   }

@@ -23,34 +23,15 @@
 // abandons work in flight. Completed records live RESULT_TTL_MS so the dashboard
 // can still show the outcome of a run the operator stopped watching.
 import { randomUUID } from "node:crypto";
+import { createJobStore, touchJob } from "./jobStore";
 
 const RESULT_TTL_MS = 15 * 60 * 1000;
+
+const { getStore, scheduleResultCleanup } = createJobStore({
+  globalKey: "dashboardJobs",
+  resultTtlMs: RESULT_TTL_MS,
+});
 export const DASHBOARD_JOB_POLL_MS = 1000;
-
-function getStore() {
-  if (!globalThis._dashboardJobs) globalThis._dashboardJobs = new Map();
-  return globalThis._dashboardJobs;
-}
-
-function getTimers() {
-  if (!globalThis._dashboardJobsTimers) globalThis._dashboardJobsTimers = new Map();
-  return globalThis._dashboardJobsTimers;
-}
-
-function touch(job) {
-  job.updatedAt = new Date().toISOString();
-}
-
-function scheduleResultCleanup(jobId) {
-  const timers = getTimers();
-  if (timers.has(jobId)) return;
-  const timer = setTimeout(() => {
-    timers.delete(jobId);
-    getStore().delete(jobId);
-  }, RESULT_TTL_MS);
-  if (typeof timer.unref === "function") timer.unref();
-  timers.set(jobId, timer);
-}
 
 /**
  * Handlers by operation kind. Each receives a job and a `report` callback; it
@@ -75,12 +56,12 @@ async function runJob(job) {
   if (!handler) {
     job.status = "error";
     job.message = "Unknown operation";
-    touch(job);
+    touchJob(job);
     return;
   }
 
   job.status = "running";
-  touch(job);
+  touchJob(job);
 
   try {
     await handler(job, {
@@ -89,19 +70,19 @@ async function runJob(job) {
         if (typeof progress === "number") job.progress = progress;
         if (typeof message === "string") job.message = message;
         if (typeof section === "string") job.section = section;
-        touch(job);
+        touchJob(job);
       },
     });
   } catch (err) {
     job.status = "error";
     job.message = job.message || "Failed";
     job.error = err?.message || String(err);
-    touch(job);
+    touchJob(job);
   } finally {
     if (typeof job.progress !== "number") job.progress = 100;
     if (!job.status || job.status === "running") {
       job.status = "done";
-      touch(job);
+      touchJob(job);
     }
     scheduleResultCleanup(job.id);
     perKindRunning.set(job.kind, false);
@@ -169,7 +150,7 @@ export function cancelDashboardJob(jobId) {
   if (!job) return false;
   if (job.status === "queued" || job.status === "running") {
     job.cancelRequested = true;
-    touch(job);
+    touchJob(job);
   }
   return true;
 }

@@ -16,36 +16,17 @@
 // an in-flight import. Records are kept for RESULT_TTL_MS after completion so
 // the dashboard can show the outcome of a run the operator stopped watching.
 import { randomUUID } from "node:crypto";
+import { createJobStore, touchJob } from "./jobStore";
 
 const RESULT_TTL_MS = 15 * 60 * 1000;
+
+const { getStore, scheduleResultCleanup } = createJobStore({
+  globalKey: "proxyImportJobs",
+  resultTtlMs: RESULT_TTL_MS,
+});
 // How often the client is told to poll. Fast enough to feel live, slow enough
 // that a forgotten tab costs almost nothing.
 export const PROXY_IMPORT_POLL_MS = 1000;
-
-function getStore() {
-  if (!globalThis._proxyImportJobs) globalThis._proxyImportJobs = new Map();
-  return globalThis._proxyImportJobs;
-}
-
-function getTimers() {
-  if (!globalThis._proxyImportJobsTimers) globalThis._proxyImportJobsTimers = new Map();
-  return globalThis._proxyImportJobsTimers;
-}
-
-function touch(job) {
-  job.updatedAt = new Date().toISOString();
-}
-
-function scheduleResultCleanup(jobId) {
-  const timers = getTimers();
-  if (timers.has(jobId)) return;
-  const timer = setTimeout(() => {
-    timers.delete(jobId);
-    getStore().delete(jobId);
-  }, RESULT_TTL_MS);
-  if (typeof timer.unref === "function") timer.unref();
-  timers.set(jobId, timer);
-}
 
 /**
  * Claim a queued job and run it to completion. One job runs at a time per
@@ -63,7 +44,7 @@ async function drainQueue() {
   running = true;
   next.status = "running";
   next.message = "Import started";
-  touch(next);
+  touchJob(next);
 
   try {
     const { createProxyPool, getProxyPools } = await import("@/models");
@@ -85,7 +66,7 @@ async function drainQueue() {
         next.message = `Stopped after ${processed}/${total}`;
         next.counts = { created, skipped, failed, processed, total };
         next.entries = null;
-        touch(next);
+        touchJob(next);
         return;
       }
 
@@ -113,7 +94,7 @@ async function drainQueue() {
       next.progress = total > 0 ? Math.round((processed / total) * 100) : 100;
       next.message = `${processed}/${total} proxies`;
       next.counts = { created, skipped, failed, processed, total };
-      touch(next);
+      touchJob(next);
     }
 
     next.progress = 100;
@@ -123,13 +104,13 @@ async function drainQueue() {
     next.counts = { created, skipped, failed, processed, total };
     // The entries are the bulk of the record; drop them once counted.
     next.entries = null;
-    touch(next);
+    touchJob(next);
   } catch (err) {
     next.status = "error";
     next.message = "Import failed";
     next.error = err?.message || "Failed to import proxies";
     next.entries = null;
-    touch(next);
+    touchJob(next);
   } finally {
     running = false;
     scheduleResultCleanup(next.id);
@@ -184,7 +165,7 @@ export function cancelProxyImportJob(jobId) {
   if (!job) return false;
   if (job.status === "queued" || job.status === "running") {
     job.cancelRequested = true;
-    touch(job);
+    touchJob(job);
   }
   return true;
 }
