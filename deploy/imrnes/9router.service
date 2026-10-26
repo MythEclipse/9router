@@ -1,0 +1,26 @@
+[Unit]
+Description=9router LLM router (native, migrated from Docker 2026-10-16)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=netdev
+# App tree lives in a per-SHA release; `current` is flipped atomically by
+# deploy/systemd-deploy.sh. Secrets and runtime state stay OUTSIDE the release:
+# .env is root-of-app (survives every deploy), DATA_DIR=/var/lib/9router holds
+# the SQLite db, auth dir and model catalog.
+WorkingDirectory=/opt/9router/current
+EnvironmentFile=-/opt/9router/.env
+ExecStart=/usr/bin/node custom-server.js
+Restart=always
+RestartSec=5
+# Same hardening as the orange unit: no privilege escalation, bounded memory
+# and task count so a runaway token refresh cannot take the box down.
+NoNewPrivileges=true
+MemoryMax=2G
+TasksMax=256
+
+[Install]
+WantedBy=multi-user.target

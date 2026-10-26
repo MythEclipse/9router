@@ -1,0 +1,91 @@
+import { getAdapter } from "../driver";
+import { parseJson, stringifyJson } from "../helpers/jsonCol";
+import { makeKv } from "../helpers/kvStore";
+
+const aliasKv = makeKv("modelAliases");
+const customKv = makeKv("customModels");
+const mitmKv = makeKv("mitmAlias");
+// modelAliases: key=alias, value=modelString
+export async function getModelAliases() {
+  return await aliasKv.getAll();
+}
+
+export async function setModelAlias(alias, model) {
+  await aliasKv.set(alias, model);
+}
+
+export async function deleteModelAlias(alias) {
+  await aliasKv.remove(alias);
+}
+
+
+// customModels: key=`${providerAlias}|${id}|${type}`, value=full model object
+function customKey(providerAlias, id, type) {
+  return `${providerAlias}|${id}|${type}`;
+}
+
+export async function getCustomModels() {
+  const all = await customKv.getAll();
+  return Object.values(all);
+}
+
+// Atomic upsert inside transaction to prevent duplicate races.
+// Re-adding an existing model updates caps/name/transport without resetting omitted fields.
+export async function addCustomModel({ providerAlias, id, type = "llm", name, ownedBy, caps, transport, inputMultiplier, outputMultiplier, antiProbe }) {
+  const k = customKey(providerAlias, id, type);
+  const inMult = Number(inputMultiplier) > 0 ? Number(inputMultiplier) : undefined;
+  const outMult = Number(outputMultiplier) > 0 ? Number(outputMultiplier) : undefined;
+  const ap = typeof antiProbe === "boolean" ? antiProbe : undefined;
+  const db = await getAdapter();
+  let added = false;
+  db.transaction(() => {
+    const row = db.get(`SELECT value FROM kv WHERE scope = 'customModels' AND key = ?`, [k]);
+    if (row) {
+      const prev = (parseJson(row.value, {}) || {}) as Record<string, unknown>;
+      const next = {
+        ...prev,
+        ...(name ? { name } : {}),
+        ...(ownedBy ? { ownedBy } : {}),
+        ...(caps ? { caps } : {}),
+        ...(transport ? { transport } : {}),
+        ...(inMult !== undefined ? { inputMultiplier: inMult } : {}),
+        ...(outMult !== undefined ? { outputMultiplier: outMult } : {}),
+        ...(ap !== undefined ? { antiProbe: ap } : {}),
+      };
+      db.run(`UPDATE kv SET value = ? WHERE scope = 'customModels' AND key = ?`, [stringifyJson(next), k]);
+      return;
+    }
+    const value = stringifyJson({
+      providerAlias,
+      id,
+      type,
+      name: name || id,
+      ...(ownedBy ? { ownedBy } : {}),
+      ...(caps ? { caps } : {}),
+      ...(transport ? { transport } : {}),
+      ...(inMult !== undefined ? { inputMultiplier: inMult } : {}),
+      ...(outMult !== undefined ? { outputMultiplier: outMult } : {}),
+      ...(ap !== undefined ? { antiProbe: ap } : {}),
+    });
+    db.run(`INSERT INTO kv(scope, key, value) VALUES('customModels', ?, ?)`, [k, value]);
+    added = true;
+  });
+  return added;
+}
+
+export async function deleteCustomModel({ providerAlias, id, type = "llm" }) {
+  await customKv.remove(customKey(providerAlias, id, type));
+}
+
+// mitmAlias: key=toolName, value=mappings object
+export async function getMitmAlias(toolName) {
+  if (toolName) {
+    const v = await mitmKv.get(toolName);
+    return v || {};
+  }
+  return await mitmKv.getAll();
+}
+
+export async function setMitmAliasAll(toolName, mappings) {
+  await mitmKv.set(toolName, mappings || {});
+}

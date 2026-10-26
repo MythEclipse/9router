@@ -37,7 +37,7 @@
 
 ## ⚡ Quick Start
 
-**Option 1 — npm (recommended for desktop):**
+**Option 1 - npm (recommended for desktop):**
 
 ```bash
 npm install -g 9router
@@ -47,7 +47,7 @@ npm install -g 9router
 npx 9router
 ```
 
-**Option 2 — Docker (server/VPS):**
+**Option 2 - Docker (server/VPS):**
 
 ```bash
 docker run -d --name 9router -p 20128:20128 \
@@ -82,7 +82,6 @@ That's it! Start coding with FREE AI models.
 9router                    # Start with default settings
 9router --port 8080        # Custom port
 9router --no-browser       # Don't open browser
-9router --skip-update      # Skip auto-update check
 9router --help             # Show all options
 ```
 
@@ -92,7 +91,7 @@ That's it! Start coding with FREE AI models.
 
 ## 🔌 Connect to a Remote 9Router
 
-Already running 9Router on another machine (e.g. a team server on your LAN)? Point this machine's CLI tools at it — no local server is started:
+Already running 9Router on another machine (e.g. a team server on your LAN)? Point this machine's CLI tools at it - no local server is started:
 
 ```bash
 npx 9router connect http://<server-host>:20128                       # pick tools interactively
@@ -176,7 +175,7 @@ Tools not pointed at 9router are listed as `not configured`. For Codex, OpenCode
 
 See `9router connect --help` for the full list.
 
-> ⚠️ Over plain `http://` the password and API key are sent unencrypted — use a trusted LAN/VPN or put HTTPS in front. The API key is stored in each tool's config file.
+> ⚠️ Over plain `http://` the password and API key are sent unencrypted - use a trusted LAN/VPN or put HTTPS in front. The API key is stored in each tool's config file.
 
 ---
 

@@ -1,37 +1,333 @@
-# Failures that remain on master (triaged 2026-10-21 against v0.5.104). Grouped by cause;
-# remove an entry as soon as its test passes.
 
-# Catalogued before the June translator refactor (9532ec80); expected behavior not
-# re-established from current code, needs the maintainer.
-tests/unit/claude-header-forwarding.test.js :: proxyAwareFetch — api.anthropic.com routing routes api.anthropic.com to gotScraping (non-streaming) and returns ok response
+#   cd tests && npx vitest run --reporter=json --outputFile=vitest-results.json
+# Failures that this checkout already has. Regenerate only from a real run:
+# `file :: (suite)`). An entry that starts passing is reported as stale by
+# report, one `file :: test name` per line (a suite that fails to load uses
+# tests/__baseline__/compare-fails.mjs so it can be pruned.
+# then replace everything below the blank line with the failed entries of that
+tests/translator/bugs-gemini-cursor-commandcode.test.js :: OpenAI → CommandCode image content is preserved as native CommandCode image blocks
+tests/translator/bugs-toClaude-context.test.js :: OpenAI → Claude context mapping assistant reasoning_content becomes a thinking block
+tests/translator/golden-url-header.test.js :: GOLDEN buildHeaders (default executor providers) cline → headers (apiKey / oauth)
+tests/translator/golden-url-header.test.js :: GOLDEN buildHeaders (default executor providers) clinepass → headers (apiKey / oauth)
+tests/translator/golden-url-header.test.js :: GOLDEN buildHeaders (default executor providers) codebuddy-intl → headers (apiKey / oauth)
+tests/translator/golden-url-header.test.js :: GOLDEN buildHeaders (default executor providers) grok-cli → headers (apiKey / oauth)
+tests/translator/golden-url-header.test.js :: GOLDEN buildHeaders (default executor providers) kimi → headers (apiKey / oauth)
+tests/translator/golden-url-header.test.js :: GOLDEN buildUrl (default executor providers) codebuddy-intl → url (stream + non-stream)
+tests/translator/thinking-unified.test.js :: applyThinking per provider format GLM-5.2 also gets reasoning_effort (supported from 5.2 onward)
+tests/unit/account-fallback-4xx.test.js :: checkFallbackError - request-scoped vs account-scoped failures does not cool the account down for a 400 caused by the request
+tests/unit/account-fallback-4xx.test.js :: checkFallbackError - request-scoped vs account-scoped failures does not fall back for an ordinary bad request
+tests/unit/aggregator-providers-batch.test.js :: batch invariants keeps every registry id unique
+tests/unit/alibaba-token-plan-provider.test.js :: Alibaba Token Plan provider keeps every registry id unique after adding the provider
+tests/unit/antigravity-tier-claude55.test.js :: antigravity catalogue: Claude 5.5 is not offered lists no Claude 5.5 model for antigravity
+tests/unit/api-key-cache-invalidation.test.js :: api key cache invalidation authenticates a freshly created key and drops it on deactivate
+tests/unit/api-key-cache-invalidation.test.js :: api key cache invalidation returns the updated access list, not the pre-edit one
+tests/unit/api-key-cost-guard.test.js :: API key daily cost limit adds the cost of a logged request to today's counter
+tests/unit/api-key-cost-guard.test.js :: API key daily cost limit counts logged requests and refuses at the request cap
+tests/unit/api-key-cost-guard.test.js :: API key daily cost limit refuses with COST_LIMIT_EXCEEDED once the day's spend reaches the cap
+tests/unit/api-key-cost-guard.test.js :: API key daily cost limit rolls over: a stamp from an earlier day neither blocks nor survives the next write
+tests/unit/api-key-limit-picker.test.js :: (suite)
+tests/unit/api-key-visibility-guidance.test.js :: API key visibility guidance source verification explains that created keys remain available in the API Keys list
+tests/unit/bell-all-loading.test.js :: bell all loading tasks integration AddApiKeyModal.js registers useTaskStore for bulk key imports
+tests/unit/bell-all-loading.test.js :: bell all loading tasks integration BulkImportCodexModal.js registers useTaskStore for accounts import
+tests/unit/bell-all-loading.test.js :: bell all loading tasks integration BulkImportGrokCliModal.js registers useTaskStore for grok accounts import
+tests/unit/bell-all-loading.test.js :: bell all loading tasks integration profile/page.js registers useTaskStore for backup and import operations
+tests/unit/bell-all-loading.test.js :: bell all loading tasks integration providers/[id]/page.js registers useTaskStore for Qoder and Cline model imports
+tests/unit/bell-all-loading.test.js :: bell all loading tasks integration providers/page.js registers useTaskStore for batch testing
+tests/unit/bell-done.test.js :: (suite)
+tests/unit/bell-only-progress.test.js :: long runs live in the bell, not in the dialog every modal still reports its run to the task store
+tests/unit/bell-only-progress.test.js :: long runs live in the bell, not in the dialog no empty conditional wrappers were left behind by the removal
+tests/unit/bell-only-progress.test.js :: long runs live in the bell, not in the dialog no modal renders an inline progress card
+tests/unit/cached-token-e2e.test.js :: cached-token end-to-end (persist + aggregate + cost) Claude cache usage: canonical prompt is inclusive, cached persisted, cost correct
+tests/unit/cached-token-e2e.test.js :: cached-token end-to-end (persist + aggregate + cost) OpenAI cache usage: inclusive prompt passes through, cached counted once
+tests/unit/chat-content-encoding.test.js :: chat compressed JSON validation parses zstd at /v1/chat/completions before model validation without upstream calls
+tests/unit/chat-content-encoding.test.js :: chat compressed JSON validation parses zstd at /v1/messages before model validation without upstream calls
+tests/unit/chat-content-encoding.test.js :: chat compressed JSON validation parses zstd at /v1/responses before model validation without upstream calls
+tests/unit/ci-baseline-compare.test.js :: CI workflow wiring builds and boots the standalone server so a guard-unavailable build fails CI
+tests/unit/ci-baseline-compare.test.js :: CI workflow wiring keeps the image publish manual
+tests/unit/ci-baseline-compare.test.js :: CI workflow wiring runs the suite through the baseline comparison instead of the raw exit code
+tests/unit/claude-cache-budget-dispatch.test.js :: cache marker budget reaches the dispatched request accepts the snake_case config spelling too
+tests/unit/claude-cache-budget-dispatch.test.js :: cache marker budget reaches the dispatched request drops every marker on a fresh context of a non-caching provider
+tests/unit/claude-cache-budget-dispatch.test.js :: cache marker budget reaches the dispatched request leaves exactly one marker when the provider does not cache
+tests/unit/claude-stream-terminator.test.js :: claude SSE stream termination when the upstream dies mid-stream emits a structured error frame when the upstream yields ZERO events
+tests/unit/codebuddy-block-backoff.test.js :: CodeBuddy Intl block backoff (#5024) backs off for 11128:request illegal
+tests/unit/codebuddy-block-backoff.test.js :: CodeBuddy Intl block backoff (#5024) backs off for conversation id missing
+tests/unit/codebuddy-block-backoff.test.js :: CodeBuddy Intl block backoff (#5024) does not classify every 11128 code as a block
+tests/unit/codebuddy-block-backoff.test.js :: CodeBuddy Intl block backoff (#5024) increases repeated block cooldowns and respects the existing cap
+tests/unit/codebuddy-block-backoff.test.js :: CodeBuddy Intl block backoff (#5024) keeps the same text request-scoped for provider codebuddy-cn
+tests/unit/codebuddy-block-backoff.test.js :: CodeBuddy Intl block backoff (#5024) keeps the same text request-scoped for provider null
+tests/unit/codebuddy-block-backoff.test.js :: CodeBuddy Intl block backoff (#5024) keeps the same text request-scoped for provider openai
+tests/unit/codebuddy-block-backoff.test.js :: CodeBuddy Intl block backoff (#5024) persists the account cooldown and incremented backoff level through the cbai alias
+tests/unit/codebuddy-block-backoff.test.js :: CodeBuddy Intl block backoff (#5024) still stops a combo on a malformed CodeBuddy request
+tests/unit/codebuddy-intl-conversation-headers.test.js :: CodeBuddyIntlExecutor sends the X-Conversation-* family (#4892) always sets the three headers
+tests/unit/codebuddy-intl-conversation-headers.test.js :: CodeBuddyIntlExecutor sends the X-Conversation-* family (#4892) keeps the conversation id stable across retries of the same turn
+tests/unit/codebuddy-intl-conversation-headers.test.js :: CodeBuddyIntlExecutor sends the X-Conversation-* family (#4892) prefers an explicit session id over message-derived key
+tests/unit/codebuddy-intl-conversation-metadata.test.js :: CodeBuddy Intl conversation metadata keeps conversation id stable across turns and rotates per-turn ids
+tests/unit/codebuddy-intl-conversation-metadata.test.js :: CodeBuddy Intl conversation metadata keeps explicit header sessions stable when assistant history grows
+tests/unit/codebuddy-intl-conversation-metadata.test.js :: CodeBuddy Intl conversation metadata preserves caller ids and existing header casing
+tests/unit/codebuddy-intl-conversation-metadata.test.js :: CodeBuddy Intl conversation metadata preserves metadata-only client sessions through Claude translation
+tests/unit/codebuddy-intl-conversation-metadata.test.js :: CodeBuddy Intl conversation metadata supports Headers input and replaces blank required ids
+tests/unit/codex-stt-app.test.js :: refreshes shared OAuth credentials and passes resolved proxy and cancellation through the existing STT handler
+tests/unit/codex-stt-app.test.js :: retries one 401 with persisted forced refresh
+tests/unit/codex-stt-persisted-refresh.test.js :: uses the real persisted refresh service before sending expired-account OAuth audio
+tests/unit/codex-stt-transport.test.js :: uses canonical NO_PROXY and strict unresolved-pool semantics on the direct adapter
+tests/unit/codex-stt-ui.test.js :: documents OAuth reuse, ffmpeg limits and does not offer unsupported response formats
+tests/unit/codex-stt.test.js :: Codex OAuth STT registers a transcription model alongside existing chat and image models
+tests/unit/combo-autoswitch.test.js :: detectRequiredCapabilities web_search tool does NOT add search (detection is deliberately off)
+tests/unit/combo-capabilities.test.js :: aggregateComboCapabilities - context/output limits maxOutput is the minimum across all models
+tests/unit/combo-caps-resolver.test.js :: aggregateComboCapabilities: resolveCaps override uses the fed limits when a resolver supplies them
+tests/unit/combo-credit-fallback.test.js :: combo credit fallback routes a 400 response correctly: Bad request
+tests/unit/combo-empty-failover.test.js :: combo fall-through per client format (real combo.js + streaming pipeline) Anthropic Messages client all members empty → every member is tried, the last one is returned as-is
+tests/unit/combo-empty-failover.test.js :: combo fall-through per client format (real combo.js + streaming pipeline) Anthropic Messages client empty-content first member (role + stop), good second → falls through
+tests/unit/combo-empty-failover.test.js :: combo fall-through per client format (real combo.js + streaming pipeline) Anthropic Messages client reasoning-only first member falls through
+tests/unit/combo-empty-failover.test.js :: combo fall-through per client format (real combo.js + streaming pipeline) Anthropic Messages client zero-byte first member, good second → falls through
+tests/unit/combo-empty-failover.test.js :: combo fall-through per client format (real combo.js + streaming pipeline) OpenAI Responses client all members empty → every member is tried, the last one is returned as-is
+tests/unit/combo-empty-failover.test.js :: combo fall-through per client format (real combo.js + streaming pipeline) OpenAI Responses client empty-content first member (role + stop), good second → falls through
+tests/unit/combo-empty-failover.test.js :: combo fall-through per client format (real combo.js + streaming pipeline) OpenAI Responses client reasoning-only first member falls through
+tests/unit/combo-empty-failover.test.js :: combo fall-through per client format (real combo.js + streaming pipeline) OpenAI Responses client zero-byte first member, good second → falls through
+tests/unit/combo-empty-failover.test.js :: combo fall-through per client format (real combo.js + streaming pipeline) OpenAI Responses client, Responses provider (passthrough) a function_call item counts as content; reasoning-only does not
+tests/unit/combo-empty-failover.test.js :: combo fall-through per client format (real combo.js + streaming pipeline) OpenAI Responses client, Responses provider (passthrough) empty first (created → completed), good second → falls through
+tests/unit/combo-empty-failover.test.js :: combo fall-through per client format (real combo.js + streaming pipeline) OpenAI Responses client, Responses provider (passthrough) zero-byte first (response.failed terminal) → falls through, the failure is not forwarded
+tests/unit/combo-empty-failover.test.js :: combo fall-through per client format (real combo.js + streaming pipeline) OpenAI chat client all members empty → every member is tried, the last one is returned as-is
+tests/unit/combo-empty-failover.test.js :: combo fall-through per client format (real combo.js + streaming pipeline) OpenAI chat client empty-content first member (role + stop), good second → falls through
+tests/unit/combo-empty-failover.test.js :: combo fall-through per client format (real combo.js + streaming pipeline) OpenAI chat client reasoning-only first member falls through
+tests/unit/combo-empty-failover.test.js :: combo fall-through per client format (real combo.js + streaming pipeline) OpenAI chat client zero-byte first member, good second → falls through
+tests/unit/combo-empty-failover.test.js :: inspectSSELine — OpenAI Responses client format function-call argument / custom-tool input deltas with text ARE content; empty ones are NOT
+tests/unit/combo-empty-failover.test.js :: inspectSSELine — OpenAI Responses client format response.incomplete: content_filter → content_filter (no-retry); max_output_tokens → length
+tests/unit/combo-empty-failover.test.js :: inspectSSELine — OpenAI Responses client format response.output_text.done with text IS content; empty text is NOT
+tests/unit/combo-key-access-cleanup.test.js :: deleting a combo revokes its API-key grants does not leak an alias-backed provider model into the catalog after deletion
+tests/unit/combo-key-access-cleanup.test.js :: deleting a combo revokes its API-key grants does not reinterpret a deleted combo grant as a model alias
+tests/unit/combo-key-access-cleanup.test.js :: deleting a combo revokes its API-key grants does not reinterpret a deleted search combo grant as direct provider access
+tests/unit/combo-key-access-cleanup.test.js :: deleting a combo revokes its API-key grants does not treat the combo's database ID as an allow-list name
+tests/unit/combo-key-access-cleanup.test.js :: deleting a combo revokes its API-key grants keeps a formerly combo-only key restricted and denies a recreated combo of the same name
+tests/unit/combo-key-access-cleanup.test.js :: deleting a combo revokes its API-key grants leaves grants intact when deleting the combo fails
+tests/unit/combo-key-access-cleanup.test.js :: deleting a combo revokes its API-key grants leaves unrestricted, unrelated and malformed allow lists untouched
+tests/unit/combo-key-access-cleanup.test.js :: deleting a combo revokes its API-key grants preserves an existing case-variant combo grant until the last matching combo is deleted
+tests/unit/combo-key-access-cleanup.test.js :: deleting a combo revokes its API-key grants removes the name case-insensitively from active and inactive restricted keys, preserving other fields and entries
+tests/unit/combo-key-access-cleanup.test.js :: deleting a combo revokes its API-key grants returns false without changing keys when the combo does not exist
+tests/unit/combo-key-access-cleanup.test.js :: deleting a combo revokes its API-key grants rolls back the combo deletion and earlier key updates if any grant cleanup fails
+tests/unit/combo-request-scoped-fallback.test.js :: combo fallback — request-scoped 4xx from a member flags a generic 400 as request-scoped without cooling the account
+tests/unit/combo-request-scoped-fallback.test.js :: combo fallback — request-scoped 4xx from a member returns the rejected member's response when a later member fails differently
+tests/unit/combo-request-scoped-fallback.test.js :: combo fallback — request-scoped 4xx from a member still returns the last error when every member rejects the request
+tests/unit/combo-smart-router.test.js :: System One Smart Combo Router handleComboChat with smart strategy falls back to the next candidate and clears sticky lock if the chosen model fails
+tests/unit/configured-models-catalog.test.js :: configured public model catalogs does not expand a compatible node beyond saved custom models
+tests/unit/configured-models-catalog.test.js :: configured public model catalogs keeps registry models instead of overwriting them with an account catalog
+tests/unit/configured-models-catalog.test.js :: configured public model catalogs respects disabled saved models and still exposes no-auth free providers
+tests/unit/context-install.test.js :: (suite)
+tests/unit/dashboard-guard.test.js :: dashboard guard error envelopes by protocol answers Anthropic paths with the Messages error envelope
+tests/unit/dashboard-guard.test.js :: dashboard guard error envelopes by protocol answers count_tokens the same way
+tests/unit/dashboard-guard.test.js :: dashboard guard local-only access allows local-only route on loopback when requireLogin=false
+tests/unit/dashboard-guard.test.js :: dashboard guard public LLM API access allows remote /responses rewrite with a valid API key
+tests/unit/dashboard-guard.test.js :: dashboard guard public LLM API access allows remote beta public LLM API with valid Google API key header
+tests/unit/dashboard-guard.test.js :: dashboard guard public LLM API access allows remote beta public LLM API with valid Google key query parameter
+tests/unit/dashboard-guard.test.js :: dashboard guard public LLM API access allows remote codex rewrite with valid API key
+tests/unit/dashboard-guard.test.js :: dashboard guard public LLM API access allows remote public LLM API with valid bearer API key
+tests/unit/dashboard-guard.test.js :: dashboard guard public LLM API access allows remote public LLM API with valid x-api-key
+tests/unit/dashboard-guard.test.js :: dashboard guard public LLM API access allows remote rewritten beta public LLM API with valid API key
+tests/unit/dashboard-six.test.js :: (suite)
+tests/unit/db-concurrent.test.js :: DB Concurrency - atomic safety 100 parallel saveRequestUsage → no count loss
+tests/unit/db-concurrent.test.js :: DB Concurrency - atomic safety daily summary aggregates correctly under parallel writes
+tests/unit/db-concurrent.test.js :: DB Concurrency - atomic safety mixed concurrent: usage + details + connections + aliases
+tests/unit/db-concurrent.test.js :: DB Concurrency - atomic safety records an identical write saved twice in parallel only once
+tests/unit/db-concurrent.test.js :: DB Concurrency - atomic safety saveRequestUsage dedupes byte-identical retries but keeps distinct writes
+tests/unit/db-driver-chain.test.js :: Driver fallback chain falls back to sql.js when both native drivers unavailable
+tests/unit/db-sqlite-vs-lowdb.test.js :: DB SQLite layer - public API parity combos: CRUD
+tests/unit/db-sqlite-vs-lowdb.test.js :: DB SQLite layer - public API parity usage: saveRequestUsage + getUsageHistory + getUsageStats
+tests/unit/dothoosh-provider.test.js :: DotHoosh provider accepts passthrough ids and skips the keyless suggestion fetch
+tests/unit/dothoosh-provider.test.js :: DotHoosh provider declares no provider-wide thinkingFormat so each model resolves its own
+tests/unit/dothoosh-provider.test.js :: DotHoosh provider declares the protocol lanes each model family is served on
+tests/unit/dothoosh-provider.test.js :: DotHoosh provider exposes a small seed of bare (unprefixed) model ids
+tests/unit/dothoosh-provider.test.js :: DotHoosh provider is registered as an OpenAI-compatible apikey provider
+tests/unit/dothoosh-provider.test.js :: DotHoosh provider keeps every registry id unique after adding dothoosh
+tests/unit/dothoosh-provider.test.js :: DotHoosh provider lists every enabled DotHoosh offering
+tests/unit/dothoosh-provider.test.js :: DotHoosh provider points at the verified OpenAI-compatible base URL
+tests/unit/dothoosh-provider.test.js :: DotHoosh provider resolves the Anthropic-compatible claude transport with x-api-key auth
+tests/unit/dothoosh-provider.test.js :: DotHoosh provider resolves the OpenAI Responses transport with bearer auth
+tests/unit/dothoosh-provider.test.js :: DotHoosh provider resolves the OpenAI transport with bearer auth
+tests/unit/dothoosh-provider.test.js :: DotHoosh provider sends only x-api-key and anthropic-version on the claude transport
+tests/unit/dothoosh-provider.test.js :: DotHoosh provider targets the claude wire format for Claude models only
+tests/unit/dynamic-free-models.test.js :: fetchSuggestedModelsServer keeps the free-model predicate stable for known ids
+tests/unit/dynamic-free-models.test.js :: fetchSuggestedModelsServer returns filtered live models when upstream answers
+tests/unit/embeddingProviders.github.test.js :: github embeddings adapter buildBody keeps model, encoding_format and dimensions
+tests/unit/embeddingProviders.github.test.js :: github embeddings adapter buildBody wraps a bare string input into a one-element array
+tests/unit/embeddings.cloud.test.js :: (suite)
+tests/unit/executor-const-guard.test.js :: OpenCode Free endpoint routing routes Muse Spark to /responses and every other model to /chat/completions
+tests/unit/executor-const-guard.test.js :: antigravity retry (429=3, 503=3) 429 attempts = 3
+tests/unit/fish-audio-tts.test.js :: Fish Audio TTS provider keeps registry ids and aliases unique
+tests/unit/force-stream-config.test.js :: forceStream provider config keeps forced-stream providers streaming for JSON clients when body.stream is false
+tests/unit/force-stream-config.test.js :: forceStream provider config keeps forced-stream providers streaming for JSON clients when body.stream is undefined
+tests/unit/forced-sse-client-format.test.js :: handleForcedSSEToJson respects the client's response format returns an Anthropic message body for an Anthropic client
+tests/unit/gemini-4-argon-antigravity.test.js :: Gemini 4 Argon Support & Config maps upstream model IDs correctly
+tests/unit/gemini-4-argon-antigravity.test.js :: Gemini 4 Argon Support & Config registers gemini-4-argon tiered models in antigravity provider registry
+tests/unit/gemini-4-argon-antigravity.test.js :: Gemini 4 Argon Support & Config resolves capabilities correctly for gemini-4-argon models with official limits
+tests/unit/headroom-tool-outputs.test.js :: Headroom native tool-output compression compresses Responses tool strings and text parts without round-tripping protocol items
+tests/unit/headroom-tool-outputs.test.js :: Headroom native tool-output compression fails open atomically when the proxy changes IDs/order
+tests/unit/headroom-tool-outputs.test.js :: Headroom native tool-output compression fails open atomically when the proxy changes message count
+tests/unit/headroom-tool-outputs.test.js :: Headroom native tool-output compression fails open atomically when the proxy changes missing IDs
+tests/unit/headroom-tool-outputs.test.js :: Headroom native tool-output compression fails open atomically when the proxy changes non-string text
+tests/unit/headroom-tool-outputs.test.js :: Headroom native tool-output compression fails open atomically when the proxy changes roles
+tests/unit/headroom-tool-outputs.test.js :: Headroom native tool-output compression preserves original text for an empty or larger result
+tests/unit/key-access-migration.test.js :: apiKeys access columns: upgrade from the previous schema adds the columns, keeps every row, and reads every existing key as unrestricted
+tests/unit/key-access-migration.test.js :: apiKeys access columns: upgrade from the previous schema export/import round-trips access; a backup without access restores unrestricted; malformed access is refused
+tests/unit/key-access-migration.test.js :: apiKeys access columns: upgrade from the previous schema persists access through update, new keys default to unrestricted
+tests/unit/kimchi-strip-reasoning.test.js :: (suite)
+tests/unit/kimchi.test.js :: (suite)
+tests/unit/kiro-catalog-canonical.test.js :: canonical Kiro catalog keeps current model families and removes only synthetic catalog aliases
+tests/unit/local-request-peer-trust-3294.test.js :: peer header trust accepts the legacy Host fallback only in development
+tests/unit/local-request-peer-trust-3294.test.js :: peer header trust keeps serving a genuinely local request stamped by the wrapper
+tests/unit/local-request-peer-trust-3294.test.js :: peer header trust rejects a spoofed loopback peer IP that carries no trust proof
+tests/unit/local-request-peer-trust-3294.test.js :: peer header trust treats 127.0.0.1 as a loopback peer
+tests/unit/local-request-peer-trust-3294.test.js :: peer header trust treats ::1 as a loopback peer
+tests/unit/local-request-peer-trust-3294.test.js :: peer header trust treats ::FFFF:127.0.0.1 as a loopback peer
+tests/unit/local-request-peer-trust-3294.test.js :: peer header trust treats ::ffff:127.0.0.1 as a loopback peer
+tests/unit/local-request-peer-trust-3294.test.js :: peer header trust treats [::1] as a loopback peer
+tests/unit/model-import.test.js :: (suite)
+tests/unit/monaco-version.test.js :: Monaco editor version pin matches the monaco-editor version installed from package.json
+tests/unit/notification-links.test.js :: (suite)
+tests/unit/nous-provider.test.js :: Nous Research provider resolves the provider's public names without alias collisions
 tests/unit/oauth-cursor-auto-import.test.js :: GET /api/oauth/cursor/auto-import extracts tokens using exact keys
-tests/unit/oauth-cursor-auto-import.test.js :: GET /api/oauth/cursor/auto-import falls back to fuzzy key matching on macOS when exact keys are missing
-tests/unit/oauth-cursor-auto-import.test.js :: GET /api/oauth/cursor/auto-import linux uses single hardcoded path and original error message
-tests/unit/oauth-cursor-auto-import.test.js :: GET /api/oauth/cursor/auto-import returns descriptive error if macOS db file exists but cannot be opened
-tests/unit/oauth-cursor-auto-import.test.js :: GET /api/oauth/cursor/auto-import returns login-prompt error when tokens are missing even after fallback
-tests/unit/oauth-cursor-auto-import.test.js :: GET /api/oauth/cursor/auto-import returns not-found when no macOS cursor db paths are accessible
-tests/unit/oauth-cursor-auto-import.test.js :: GET /api/oauth/cursor/auto-import unsupported platform returns 400
+tests/unit/oauth-cursor-auto-import.test.js :: GET /api/oauth/cursor/auto-import falls back to the alternate key aliases
 tests/unit/oauth-cursor-auto-import.test.js :: GET /api/oauth/cursor/auto-import unwraps JSON-encoded string values
-tests/unit/openai-to-claude.test.js :: openaiToClaudeResponse omits empty Read pages tool argument before emitting Claude input deltas
-tests/unit/translator-request-normalization.test.js :: request normalization claudeToOpenAIRequest flattens text-only content arrays into string
-tests/unit/translator-request-normalization.test.js :: request normalization filterToOpenAIFormat flattens text-only arrays to string
-tests/unit/translator-request-normalization.test.js :: request normalization parseSSELine supports provider raw NDJSON stream lines
-tests/unit/translator-request-normalization.test.js :: request normalization translateRequest keeps /v1/messages Claude->OpenAI text payloads string-safe
-
-# Real bug: /api/usage/stats serializes raw API keys as byApiKey property names (GHSA-vjc7).
-# Fixed by decolua/9router#4286.
+tests/unit/observability-payload-redaction.test.js :: request-details payload policy does not hand payloads to an unauthenticated caller when login is disabled
+tests/unit/observability-payload-redaction.test.js :: request-details payload policy fails closed when the settings row cannot be read
+tests/unit/observability-payload-redaction.test.js :: request-details payload policy keeps diagnostic metadata in both modes
+tests/unit/observability-payload-redaction.test.js :: request-details payload policy returns the real payloads for an operator debugging a request
+tests/unit/observability-payload-redaction.test.js :: request-details payload policy says a withheld payload exists instead of looking empty
+tests/unit/observability-payload-redaction.test.js :: request-details payload policy still returns payloads to an authenticated caller when login is disabled
+tests/unit/observability-payload-redaction.test.js :: request-details payload policy withholds every payload field when the operator turns it off
+tests/unit/ollama-systemone.test.js :: handleSystemoneCore request posts to <host>/v1/systemone for Ollama Local without OpenCode header
+tests/unit/openai-to-commandcode.test.js :: openaiToCommandCodeRequest - native image blocks maps Claude/OpenAI base64 image source to a data-URI image block
+tests/unit/openai-to-commandcode.test.js :: openaiToCommandCodeRequest - native image blocks maps OpenAI image_url data URI to CommandCode {type:image,image,mimeType}
+tests/unit/opencode-fingerprint-passthrough-restore.test.js :: opencode fingerprint — tool name restore on the passthrough path restores the caller's tool name in the passthrough stream
+tests/unit/opencode-fingerprint.test.js :: opencodeFingerprint — in-place normalization keeps the caller's name and adopts OpenCode's definition when arguments line up
+tests/unit/opencode-fingerprint.test.js :: opencodeFingerprint — in-place normalization no longer invents alias names that a client plugin may already own
+tests/unit/opencode-fingerprint.test.js :: opencodeFingerprint — in-place normalization normalizes the nested chat shape without adding a system note
+tests/unit/opencode-fingerprint.test.js :: opencodeFingerprint — in-place normalization still conceals a fingerprint name whose arguments do not line up
+tests/unit/opencode-fingerprint.test.js :: opencodeFingerprint — in-place normalization wires a real OpenCode client down to exactly read + shell
+tests/unit/opencode-free-deepseek-effort.test.js :: oc/deepseek-v4.1-flash-free reasoning levels advertises exactly low|high|max
+tests/unit/opencode-free-deepseek-effort.test.js :: oc/deepseek-v4.1-flash-free reasoning levels resolves the same set through the oc alias and the keyed zen lane
+tests/unit/opencode-free-deepseek-effort.test.js :: oc/deepseek-v4.1-flash-free reasoning levels sends the requested level to the OpenCode free chat endpoint end to end
+tests/unit/opencode-free-mimo-reasoning.test.js :: oc/mimo-v2.6-flash-free reasoning levels advertises the OpenAI effort enum and a working off switch
+tests/unit/opencode-free-mimo-reasoning.test.js :: oc/mimo-v2.6-flash-free reasoning levels drops adaptive "auto" instead of shipping a value the lane 400s on
+tests/unit/opencode-free-mimo-reasoning.test.js :: oc/mimo-v2.6-flash-free reasoning levels forwards every level verbatim and disables via reasoning_effort none
+tests/unit/opencode-free-mimo-reasoning.test.js :: oc/mimo-v2.6-flash-free reasoning levels sends the requested level to the free chat endpoint end to end
+tests/unit/opencode-freetier-direct-replay.test.js :: proxied 403 FreeTierError replays direct (#4983) replays once on the direct egress and returns its 200
+tests/unit/opencode-go-models.test.js :: OpenCode Go model catalog matches the documented model IDs
+tests/unit/opencode-go-models.test.js :: OpenCode Go multi-endpoint transports declares openai / claude / openai-responses / gemini transports
+tests/unit/opencode-go-models.test.js :: OpenCode Go multi-endpoint transports resolveTransport picks the endpoint matching the client sourceFormat
+tests/unit/opencode-go-models.test.js :: OpenCode Go multi-endpoint transports uses x-goog-api-key on the gemini transport
+tests/unit/opencode-go-models.test.js :: OpenCode Go per-model supportedFormats declares [openai, claude] for MiniMax + Qwen models
+tests/unit/opencode-go-models.test.js :: OpenCode Go per-model transport guard (chatCore logic) routes MiniMax/Qwen + claude-format client to /messages
+tests/unit/opencode-go-session.test.js :: chatCore provider session forwarding passes the original provider session and client tool on initial and retry execution
+tests/unit/opencode-muse-spark-thinking.test.js :: OpenCode Free Muse Spark thinking advertises reasoning and the requested model limits
+tests/unit/opencode-muse-spark-thinking.test.js :: OpenCode Free Muse Spark thinking leaves the other free models on Chat Completions
+tests/unit/opencode-muse-spark-thinking.test.js :: OpenCode Free Muse Spark thinking routes Union Alpha through Anthropic Messages
+tests/unit/opencode-session-rotation.test.js :: opencode session rotation on FreeUsageLimitError the chat fallback rotates before moving to the next account
+tests/unit/perplexity-web.test.js :: (suite)
+tests/unit/pi-settings-route.test.js :: Pi CLI-tools settings route creates the provider block when the config has none
+tests/unit/pi-settings-route.test.js :: Pi CLI-tools settings route never writes the sk_9router placeholder the card sends
+tests/unit/pi-settings-route.test.js :: Pi CLI-tools settings route resolves the active dashboard key when the card has no key selected
+tests/unit/protocol-errors.test.js :: buildErrorBody protocol envelopes emits the Anthropic Messages envelope for FORMATS.CLAUDE
+tests/unit/protocol-errors.test.js :: buildErrorBody protocol envelopes maps known Anthropic error types per status
+tests/unit/protocol-errors.test.js :: buildErrorBody protocol envelopes never leaks code into the Anthropic envelope
+tests/unit/protocol-errors.test.js :: errorResponse / unavailableResponse envelope routing createErrorResult routes the envelope too
+tests/unit/protocol-errors.test.js :: errorResponse / unavailableResponse envelope routing errorResponse emits Anthropic envelope when clientFormat=claude
+tests/unit/protocol-errors.test.js :: errorResponse / unavailableResponse envelope routing unavailableResponse emits Anthropic envelope for claude endpoints
+tests/unit/protocol-errors.test.js :: streamed error frames follow the client protocol buildStreamErrorBytes wraps the Claude envelope (not OpenAI shape) in event: error
+tests/unit/protocol-errors.test.js :: streamed error frames follow the client protocol writeStreamError emits event: error for Claude clients
+tests/unit/protocol-messages-route.test.js :: POST /v1/messages — Anthropic protocol enforcement accepts a valid Anthropic body past validation (requireApiKey goes 401 envelope)
+tests/unit/protocol-messages-route.test.js :: POST /v1/messages — Anthropic protocol enforcement rejects a body missing max_tokens with a protocol-shaped 400
+tests/unit/protocol-messages-route.test.js :: POST /v1/messages — Anthropic protocol enforcement rejects an empty messages array
+tests/unit/protocol-messages-route.test.js :: POST /v1/messages — Anthropic protocol enforcement returns Anthropic envelope for invalid JSON
+tests/unit/protocol-messages-validation.test.js :: validateClaudeMessageBody error envelopes are Anthropic-shaped
+tests/unit/protocol-messages-validation.test.js :: validateClaudeMessageBody rejects OpenAI-only fields on the Anthropic endpoint
+tests/unit/protocol-messages-validation.test.js :: validateClaudeMessageBody rejects non-positive and non-integer max_tokens
+tests/unit/protocol-messages-validation.test.js :: validateClaudeMessageBody requires a non-empty messages array
+tests/unit/protocol-messages-validation.test.js :: validateClaudeMessageBody requires max_tokens (Anthropic protocol)
+tests/unit/protocol-models-shape.test.js :: GET /v1/models — OpenAI list contract combo entries carry created too
+tests/unit/protocol-models-shape.test.js :: GET /v1/models — OpenAI list contract returns object:list and every entry with id/object/owned_by/created
+tests/unit/protocol-responses-route.test.js :: POST /v1/responses — OpenAI Responses protocol enforcement rejects a non-string/non-array input
+tests/unit/protocol-responses-route.test.js :: POST /v1/responses — OpenAI Responses protocol enforcement requires `input` and answers with the OpenAI error envelope
+tests/unit/provider-model-catalogue.test.js :: (suite)
+tests/unit/qoder-billing.test.js :: isBillingBlock does NOT treat code 10605 as billing (transient model queue)
+tests/unit/qoder-billing.test.js :: wrapQoderSSE billing detection does not map code 10605 to 403 (the queue path handles it)
+tests/unit/qoder-static-models.test.js :: Qoder capabilities gives opaque concrete ids a real window instead of the heuristic default
+tests/unit/qoder-static-models.test.js :: Qoder capabilities marks the frontier pair vision + reasoning
+tests/unit/request-details-tab.test.js :: API route contract - validation boundary page=-5 → 400
+tests/unit/request-details-tab.test.js :: API route contract - validation boundary page=0 → 400 (guard now reachable after NaN-check fix)
+tests/unit/request-details-tab.test.js :: API route contract - validation boundary pageSize=101 → 400
+tests/unit/request-details-tab.test.js :: API route contract - validation boundary pageSize=abc (NaN) → defaults to 20, returns 200
+tests/unit/request-details-tab.test.js :: API route contract - validation boundary valid request → 200 with details + pagination shape
+tests/unit/request-details-tab.test.js :: backupDbLite - excludes requestDetails, keeps critical data backup file omits requestDetails rows but keeps other tables
+tests/unit/request-log-status.test.js :: request log — failures are visible next to successes lists failures and successes together, newest first
+tests/unit/request-log-status.test.js :: request log — lifecycle rows are not usage keeps failures and pending markers out of usage totals
+tests/unit/request-log-status.test.js :: request log — lifecycle rows are not usage keeps lifecycle rows out of the chart series too
+tests/unit/request-log-status.test.js :: request log — status vocabulary matches the reader renders a successful request as success, not as a pending row
+tests/unit/responses-abort-terminal.test.js :: stall abort through pipeWithDisconnect delivers the error frame and closes the stream
 tests/unit/security-audit.test.js :: AUDIT-002: API key masking byApiKey object keys should use masked key, not raw key
-
-# Stale expectations fixed by decolua/9router#3665 (search auto-switch disabled on purpose;
-# reorder returns a copy).
-tests/unit/combo-autoswitch.test.js :: detectRequiredCapabilities web_search tool -> search
-tests/unit/combo-autoswitch.test.js :: reorderByCapabilities keeps order when no model matches
-
-# Live call: the upstream now answers "Unsupported model mimo-auto", the only model the
-# (hidden since 6d96e24b) mimo-free / mmf providers list.
-tests/unit/mimo-free.live.test.js :: MiMo Free anti-abuse gate (live) chat WITH Chrome User-Agent → 200
-
-# Cannot load in this repo: benchmarks lowdb (removed in bee8dad9) / imports the cloud/ worker,
-# which is not part of this repository.
-tests/unit/db-benchmark.test.js :: <suite failed to load>
-tests/unit/embeddings.cloud.test.js :: <suite failed to load>
+tests/unit/shutdown-gate.test.js :: (suite)
+tests/unit/sidebar-permission-gate.test.js :: (suite)
+tests/unit/sidebar-usage-ownedby.test.js :: custom model owned_by the modal collects an optional owned by label
+tests/unit/sidebar-usage-ownedby.test.js :: security log entry is visible to the administrator keeps password sessions and refuses key sessions
+tests/unit/sse-parse-empty-usage.test.js :: parseSSEToOpenAIResponse on empty-completion frames non-streaming retry sees a usage-only choices:[] body as a valid chat.completion
+tests/unit/step5-context-window.test.js :: Step 5 is 1M (#4941) resolves the same way for every provider, not just oc
+tests/unit/step5-context-window.test.js :: Step 5 is 1M (#4941) resolves through the pattern for a fully-qualified provider/model id
+tests/unit/step5-context-window.test.js :: Step 5 is 1M (#4941) step-5-preview advertises 1M, not the stale 128k pin
+tests/unit/step5-context-window.test.js :: Step 5 is 1M (#4941) step-5-preview-free advertises 1M, not the stale 128k pin
+tests/unit/stream-tool-call-id.test.js :: passthrough SSE stream emits an id for a tool call that arrives without one
+tests/unit/strict-proxy-enforcement.test.js :: strictProxy refuses a direct connection (#4333) throws when a pool is assigned but no proxy url resolved
+tests/unit/strict-proxy-enforcement.test.js :: strictProxy refuses a direct connection (#4333) throws when the pool is enabled but carries an empty url
+tests/unit/studio-banner-update.test.js :: banner: cancel, background, and shared look the proxy import runs store-driven under an abort controller
+tests/unit/studio-combo-target.test.js :: studio combo guard unit detects a studio reaching back into the combo being saved
+tests/unit/studio-combo-target.test.js :: studio combo guard unit ignores provider/model members that cannot form a cycle
+tests/unit/studio-combo-target.test.js :: studio combo guard unit rejects a combo that directly contains the studio name
+tests/unit/studio-combo-target.test.js :: studio combo guard unit rejects an indirect cycle through a nested combo and chained studio
+tests/unit/studio-combo-target.test.js :: studio to combo resolution keeps an old provider/model backup importable
+tests/unit/studio-combo-target.test.js :: studio to combo resolution keeps resolving a legacy provider target unchanged
+tests/unit/studio-combo-target.test.js :: studio to combo resolution stores a combo target and resolves it as a combo at runtime
+tests/unit/studio-model-naming.test.js :: two custom names on one model bills each name under itself, with the shared model beside it
+tests/unit/studio-model-naming.test.js :: usage naming bills a custom name under that name and records the base model beside it
+tests/unit/studio-model-naming.test.js :: usage naming keeps an ordinary call named exactly as it was made
+tests/unit/suggested-models-sync.test.js :: suggested-models route durability falls back to built-in models only when nothing was ever synced
+tests/unit/suggested-models-sync.test.js :: suggested-models route durability prefers the synced copy over an empty upstream answer
+tests/unit/suggested-models-sync.test.js :: suggested-models route durability serves the live list untouched when upstream answers
+tests/unit/suggested-models-sync.test.js :: suggested-models route durability serves the synced copy flagged stale when upstream is unreachable
+tests/unit/theme-modes.test.js :: theme mode contract applies dark as plain .dark and glass as .dark.glass
+tests/unit/theme-modes.test.js :: theme mode contract degrades an unknown persisted value to the glass default
+tests/unit/theme-modes.test.js :: theme mode contract re-applies the persisted mode on init (page reload path)
+tests/unit/theme-modes.test.js :: theme mode contract toggles between the two modes starting from the glass default
+tests/unit/theme-security-log.test.js :: security log: sign-ins, refusals and probes are recorded and flagged both API routes stay closed to key sessions
+tests/unit/theme-security-log.test.js :: security log: sign-ins, refusals and probes are recorded and flagged the page colours breaches red and stays reachable
+tests/unit/theme-security-log.test.js :: security log: sign-ins, refusals and probes are recorded and flagged the sidebar lists Security Log and the admin gate keeps it closed to keys
+tests/unit/tokenharbor-provider.test.js :: Token Harbor provider keeps every registry id unique after adding tokenharbor
+tests/unit/update-banner-anim.test.js :: (suite)
+tests/unit/update-banner-apikey.test.js :: (suite)
+tests/unit/usage-account-model-attribution.test.js :: usage stats — per-account rows keep the model dimension reports one row per (account, model) instead of collapsing the account
+tests/unit/usage-account-model-attribution.test.js :: usage stats — per-account rows keep the model dimension sums per-model rows to exactly the provider total (nothing double counted)
+tests/unit/usage-account-model-attribution.test.js :: usageDaily aggregate — secret hygiene never stores the raw API key in the daily aggregate
+tests/unit/usage-api-key-attribution.test.js :: Usage stats API key attribution keeps API keys with the same masked prefix in separate buckets
+tests/unit/usage-charts.test.js :: (suite)
+tests/unit/usage-day-rollup-coalescing.test.js :: day rollup — readers never miss a saved request folds repeated requests into one bucket rather than one blob per bucket
+tests/unit/usage-day-rollup-coalescing.test.js :: day rollup — readers never miss a saved request keeps the delta durable on disk before any flush runs
+tests/unit/usage-day-rollup-coalescing.test.js :: day rollup — readers never miss a saved request leaves nothing pending after a flush and is idempotent when called twice
+tests/unit/usage-day-rollup-coalescing.test.js :: day rollup — readers never miss a saved request logs lifecycle rows (pending/error) without touching the usage rollup
+tests/unit/usage-day-rollup-coalescing.test.js :: day rollup — readers never miss a saved request reports an unflushed request immediately (read-your-writes)
+tests/unit/usage-day-rollup-coalescing.test.js :: day rollup — write cost is independent of blob size does not slow down as the day blob grows
+tests/unit/usage-dedupe-request-identity.test.js :: usage dedupe — keyed on request identity, not wall clock collapses a genuine double-report of one request id
+tests/unit/usage-dedupe-request-identity.test.js :: usage dedupe — keyed on request identity, not wall clock counts two distinct requests that share a timestamp and token counts
+tests/unit/usage-dedupe-request-identity.test.js :: usage dedupe — keyed on request identity, not wall clock keeps the legacy byte-identical dedupe for callers with no request id
+tests/unit/usage-history-retention.test.js :: usageHistory retention drops rows past the retention window and keeps recent ones
+tests/unit/usage-history-retention.test.js :: usageHistory retention never prunes the row it just wrote, however old its timestamp looks
+tests/unit/usage-pending-marker.test.js :: usage PENDING marker / request id closes the pending marker when the usage row lands
+tests/unit/usage-pending-marker.test.js :: usage PENDING marker / request id does not tag an ERROR row with the request id (it would suppress the usage row)
+tests/unit/v1-models-combo-context.test.js :: /v1/models combo limits carries provider-scoped limits through a nested combo
+tests/unit/v1-models-combo-context.test.js :: /v1/models combo limits publishes consistent minimum output limits for a flat combo
+tests/unit/v1-models-combo-context.test.js :: /v1/models combo limits publishes consistent minimum output limits for a nested combo
+tests/unit/v1-models-combo-context.test.js :: /v1/models combo limits publishes consistent minimum output limits for a reversed combo
+tests/unit/v1-models-combo-context.test.js :: /v1/models combo limits uses the real provider for a ds UI-alias seat
+tests/unit/v1-models-combo-context.test.js :: /v1/models combo limits uses the real provider for a ocg UI-alias seat
+tests/unit/v1-models-combo-context.test.js :: /v1/models combo limits uses the real provider for a ps UI-alias seat
+tests/unit/v1-models-combo-context.test.js :: /v1/models combo limits uses the real provider for a xmtp UI-alias seat
+tests/unit/venice-provider.test.js :: Venice AI provider keeps every registry id unique after adding venice
+tests/unit/websearch-claude-code.test.js :: forced-SSE to JSON path (Claude Code stream:false) accepts the web search plan and runner
+tests/unit/windsurf-executor.test.js :: WindsurfExecutor class registry entry and executor fallback use the same chat endpoint (registry in sync)
+tests/unit/zed-native-auth.test.js :: criterion L - decrypt failure errors the session but keeps the server rejects EVERY wrong-key decrypt across many draws, not just this one

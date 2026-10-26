@@ -1,6 +1,6 @@
 # Docker
 
-Run 9Router in a container. Published image: [`decolua/9router`](https://hub.docker.com/r/decolua/9router) — multi-platform `linux/amd64` + `linux/arm64`.
+Run 9Router in a container. Published image: [`decolua/9router`](https://hub.docker.com/r/decolua/9router) - multi-platform `linux/amd64` + `linux/arm64`.
 
 ---
 
@@ -184,4 +184,4 @@ GHCR publishing uses the workflow's `GITHUB_TOKEN` with package write permission
 
 The optional repository variables `ALPINE_MIRROR` and `NPM_REGISTRY` can override the default package mirrors used by the CI Docker build.
 
-Workflow: `.github/workflows/docker-publish.yml`
+Workflow: `.github/workflows/ci.yml` (release lane)

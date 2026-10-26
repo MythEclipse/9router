@@ -153,6 +153,8 @@ Usage DB:
 - API key generation/verification: `src/shared/utils/apiKey.js`
 - Provider secrets persisted in `providerConnections` entries
 - Optional proxy support for upstream calls via env proxy variables (`open-sse/utils/proxyFetch.js`)
+- API keys may be restricted to endpoint categories (`allowedEndpoints`); an empty list preserves unrestricted access. Classification and enforcement are centralized in `src/shared/constants/keyEndpoints.ts` and `src/dashboardGuard.ts`.
+- Perch AI OAuth exchange/refresh uses the server-side `PERCHAI_SUPABASE_ANON_KEY`; a local Perch CLI session can be imported without returning its token to the browser.
 
 ## 5) Cloud Sync
 
@@ -486,6 +488,8 @@ Translations are selected dynamically based on source payload shape and provider
 ## 1) Account/Provider Availability
 
 - provider account cooldown on transient/rate/auth errors
+- account selection prefers accounts with fewer persisted failures after cooldowns expire;
+  successful use clears failure history when no active lock remains
 - account fallback before failing request
 - combo model fallback when current model/provider path is exhausted
 

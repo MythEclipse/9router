@@ -1,0 +1,2 @@
+[tools]
+node = { version = "24", minimum_release_age = "0s", lazy = true }
