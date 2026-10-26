@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { BaseExecutor } from "./base";
 import { PROVIDERS } from "../config/providers";
-import { MEMORY_CONFIG } from "../config/runtimeConfig";
+import { MEMORY_CONFIG, MAX_TOOL_NAME_LEN } from "../config/runtimeConfig";
 import { getThinkingLevels } from "../providers/thinkingLevels";
 import { injectReasoningContent } from "../utils/reasoningContentInjector";
 import { resolveSessionId } from "../utils/sessionManager";
@@ -19,6 +19,7 @@ import {
   coerceResponsesArguments,
   coerceResponsesOutput,
 } from "../translator/formats/responsesApi";
+import { normalizeResponsesTools } from "../utils/responsesTools";
 
 // OpenCode v2 UA shape: opencode/<channel>/<version>/<client>. Upstream rejects
 // the v1 "opencode/1.18.x" form with 403 FreeTierError since 2026-10-14.
@@ -31,7 +32,6 @@ import {
 const OPENCODE_UA = "opencode/1.19.4 ai-sdk/provider-utils/4.0.23 runtime/bun/1.4.4";
 const OPENCODE_CLIENT = "cli";
 const MAX_SESSION_LENGTH = 256;
-const MAX_TOOL_NAME_LEN = 128;
 const SESSION_HEADER = "x-opencode-session";
 const SESSION_FIELD = "_opencodeSession";
 export const OPENCODE_SESSION_RE = /^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/;
@@ -291,36 +291,6 @@ function resolveOpencodeSession(body, credentials, providerSessionId, clientTool
   }
 
   return stableSessionId(credentials);
-}
-
-function normalizeResponsesTools(body) {
-  if (!Array.isArray(body.tools)) return;
-  const validNames = new Set();
-  body.tools = body.tools.filter((tool) => {
-    if (!tool || typeof tool !== "object" || Array.isArray(tool)) return false;
-    const fn = tool.function && typeof tool.function === "object" && !Array.isArray(tool.function) ? tool.function : null;
-    const rawName = typeof tool.name === "string" ? tool.name : (typeof fn?.name === "string" ? fn.name : "");
-    const name = rawName.trim();
-    if (!name) return false;
-    const description = typeof tool.description === "string" ? tool.description : (typeof fn?.description === "string" ? fn.description : "");
-    let parameters = (tool.parameters && typeof tool.parameters === "object" && !Array.isArray(tool.parameters))
-      ? tool.parameters
-      : (fn?.parameters && typeof fn.parameters === "object" && !Array.isArray(fn.parameters) ? fn.parameters : { type: "object", properties: {} });
-    if (parameters.type === "object" && !parameters.properties) parameters = { ...parameters, properties: {} };
-    for (const k of Object.keys(tool)) delete tool[k];
-    tool.type = "function";
-    tool.name = name.slice(0, MAX_TOOL_NAME_LEN);
-    if (description) tool.description = description;
-    tool.parameters = parameters;
-    validNames.add(tool.name);
-    return true;
-  });
-  if (body.tool_choice && typeof body.tool_choice === "object" && !Array.isArray(body.tool_choice)) {
-    if (body.tool_choice.type === "function") {
-      const n = typeof body.tool_choice.name === "string" ? body.tool_choice.name.trim() : "";
-      if (!n || !validNames.has(n)) delete body.tool_choice;
-    }
-  }
 }
 
 function sanitizeResponsesItems(body) {

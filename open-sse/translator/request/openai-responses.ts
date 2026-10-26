@@ -13,8 +13,8 @@ import {
   coerceResponsesOutput,
 } from "../formats/responsesApi";
 import { ROLE, OPENAI_BLOCK, RESPONSES_ITEM } from "../schema/index";
+import { MAX_TOOL_NAME_LEN } from "../../config/runtimeConfig";
 
-const MAX_TOOL_NAME_LEN = 128;
 
 /**
  * Convert OpenAI Responses API request to OpenAI Chat Completions format

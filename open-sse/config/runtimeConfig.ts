@@ -124,3 +124,8 @@ export const MAX_STREAM_BYTES_PER_REQUEST = envBytes("MAX_STREAM_BYTES_PER_REQUE
 
 // Maximum JSON body size for non-streaming responses
 export const MAX_JSON_BODY_SIZE = envBytes("MAX_JSON_BODY_SIZE", 5 * 1024 * 1024); // 5MB default
+
+// Longest tool name accepted by Responses-style backends (OpenAI caps at 64;
+// these accept 128). Shared by the opencode-family executors and the translator.
+export const MAX_TOOL_NAME_LEN = 128;
+
