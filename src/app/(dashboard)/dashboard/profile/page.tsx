@@ -13,6 +13,7 @@ import { APP_CONFIG } from "@/shared/constants/config";
 import { LOCALE_COOKIE, normalizeLocale } from "@/i18n/config";
 import { LOCALE_FLAGS } from "@/shared/constants/locales";
 import { getLocaleFromCookie, formatCountdown, isOidcSaveAllowed, buildOidcPayload, oidcFormFromResponse, oidcSaveMessage, canTestOidc } from "./profileHelpers";
+import { hasXmlParseError, readSamlMetadata, describeSamlImport } from "./samlMetadata";
 
 function readLocaleFromCookie() {
   return getLocaleFromCookie(
@@ -632,43 +633,20 @@ export default function ProfilePage() {
     reader.onload = (e) => {
       try {
         const xmlText = String(e.target?.result || "");
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(xmlText, "text/xml");
-        const parserError = doc.querySelector("parsererror");
-        if (parserError) {
+        const doc = new DOMParser().parseFromString(xmlText, "text/xml");
+        if (hasXmlParseError(doc)) {
           setSamlStatus({ type: "error", message: "Unable to parse valid SAML IdP metadata from XML file" });
           return;
         }
 
-        const entityID = doc.documentElement.getAttribute("entityID") || "";
-        const ssoNodes = Array.from(doc.querySelectorAll("SingleSignOnService, *|SingleSignOnService"));
-        let ssoUrl = "";
-        for (const node of ssoNodes) {
-          const binding = node.getAttribute("Binding") || "";
-          const location = node.getAttribute("Location") || "";
-          if (location) {
-            ssoUrl = location;
-            if (binding.includes("HTTP-Redirect")) break;
-          }
-        }
-
-        const certNodes = Array.from(doc.querySelectorAll("X509Certificate, *|X509Certificate"));
-        let certStr = "";
-        if (certNodes.length > 0) {
-          certStr = certNodes[0].textContent.trim();
-        }
-
+        const fields = readSamlMetadata(doc);
         setSamlForm((prev) => ({
           ...prev,
-          samlEntryPoint: ssoUrl || prev.samlEntryPoint,
+          samlEntryPoint: fields.entryPoint || prev.samlEntryPoint,
           samlIssuer: prev.samlIssuer || "urn:9router:sp",
-          samlCert: certStr || prev.samlCert,
+          samlCert: fields.certificate || prev.samlCert,
         }));
-
-        setSamlStatus({
-          type: "success",
-          message: `IdP Metadata imported! (SSO URL: ${ssoUrl ? "found" : "not found"}, EntityID: ${entityID ? "found" : "not found"}, Cert: ${certStr ? "found" : "not found"})`,
-        });
+        setSamlStatus({ type: "success", message: describeSamlImport(fields) });
       } catch (err) {
         setSamlStatus({ type: "error", message: "Error reading IdP Metadata XML file" });
       }
