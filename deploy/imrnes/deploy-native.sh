@@ -157,12 +157,22 @@ trap 'rc=$?; on_error "$rc" "$LINENO"' ERR
 
 health_check() {
   log "health-check $HEALTH_URL"
-  # --max-time caps EACH attempt, not the whole sequence.
+  # --max-time caps EACH attempt, not the whole sequence. --retry-* means a
+  # failed attempt is EXPECTED output on a slow boot: curl prints its error for
+  # every retry it recovers from, so a bare "curl: (7)" in the log is not a
+  # failure. Report the attempt count so the log says which it was.
+  local attempt=0
   timeout 60 curl --fail --silent --show-error \
     --retry 15 --retry-delay 2 \
     --retry-connrefused --retry-all-errors \
     --max-time 10 \
-    -o /dev/null "$HEALTH_URL"
+    -o /dev/null "$HEALTH_URL" && {
+      log "health-check passed"
+      return 0
+    }
+  attempt=$?
+  log "health-check FAILED after retries (curl exit $attempt) — service never answered"
+  return "$attempt"
 }
 
 # ── 1. unpack the release ──────────────────────────────────────────────────
@@ -204,10 +214,17 @@ as_root rm -rf "${RELEASE_DIR}/node_modules"
 [ -d "${RELEASE_DIR}/node_modules" ] || die "pnpm install produced no node_modules"
 next_version="$(node -p "require('${RELEASE_DIR}/node_modules/next/package.json').version" 2>/dev/null || echo unknown)"
 log "installed next@${next_version} into $RELEASE_DIR"
-# Debug: verify next resolves from the release's own node_modules, not from
-# a shared tree. If this points at /opt/9router/deps, something is wrong.
-(cd "$RELEASE_DIR" && node -e "console.log('next resolves to:', require.resolve('next'))") || true
-# Debug: test that the auth guard module loads (better-sqlite3 native binding etc.)
+# Assert next resolves from the release's own node_modules, not a shared tree.
+# A bad resolution only surfaces much later, as a canonicalBase crash at boot.
+resolved_next="$(cd "$RELEASE_DIR" && node -e "console.log(require.resolve('next'))" 2>/dev/null || echo "")"
+case "$resolved_next" in
+  "$RELEASE_DIR"/*) : ;;
+  *) die "next resolves outside the release ($resolved_next) — refusing to activate" ;;
+esac
+log "next resolves inside the release"
+# Assert the auth guard module loads (better-sqlite3 native binding etc.). This
+# is a load-only probe: it must never bind the service port, or it collides
+# with the live unit and aborts the deploy with EADDRINUSE.
 (cd "$RELEASE_DIR" && node -e "
 require('node:module').register('file://$PWD/scripts/auth-guard-hooks.mjs');
 import('./src/dashboardGuard.js').then(() => {
@@ -216,19 +233,7 @@ import('./src/dashboardGuard.js').then(() => {
   console.error('guard module load FAILED:', e.message);
   process.exit(1);
 });
-") || true
-# Debug: run custom-server.js directly for 3 seconds to capture any startup error
-# before starting via systemd. If it crashes immediately, we'll see why.
-(cd "$RELEASE_DIR" && as_root env HOME=/root PORT=2028 node custom-server.js > /tmp/9router-debug.log 2>&1 &
-DEBUG_PID=$!
-sleep 3
-if kill -0 $DEBUG_PID 2>/dev/null; then
-  echo "custom-server.js is running (PID $DEBUG_PID)"
-  kill $DEBUG_PID 2>/dev/null || true
-else
-  echo "custom-server.js exited immediately. Output:"
-  cat /tmp/9router-debug.log 2>/dev/null || true
-fi) || true
+") || die "guard module failed to load"
 
 # ── 3. install the unit ────────────────────────────────────────────────────
 # Installed from the payload so the running unit always matches the deployed

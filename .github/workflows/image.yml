@@ -1,0 +1,125 @@
+name: Container image
+
+# Publish lane, fully independent of the VPS deploys. 9router runs natively
+# under systemd on our own fleet, so nothing here is a deploy: this only builds
+# and publishes ghcr.io/asepharyana/9router so external consumers can pull it.
+#
+# Split out of ci.yml on purpose. In one file the image build shared a run with
+# the deploys, which meant a docker failure and a VPS rollout showed up as one
+# red run and could not be retried or reasoned about separately.
+
+on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - "deploy/**"
+      - "**/*.md"
+  workflow_dispatch:
+
+jobs:
+  # Rolling container image, published to GHCR so external consumers can pull
+  # 9router without building it. This is a PUBLISH lane, not a deploy lane:
+  # imrnes now runs 9router natively under systemd (see deploy-imrnes below), so
+  # nothing on our own fleet consumes this image any more — but the published
+  # artifact is still maintained, and the tagged release lane below builds
+  # multi-arch manifests from the same Dockerfile.
+  #
+  # Runs in parallel with test and gates nothing but itself — a failed image
+  # build must not block a native deploy, and a failed deploy must not need a
+  # rebuilt image to recover.
+  #
+  # linux/amd64 only: that is the single platform imrnes ran.
+  image:
+    name: Build image
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      IMAGE: ghcr.io/asepharyana/9router
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve tag
+        id: meta
+        run: |
+          set -euo pipefail
+          tag="$(node -p "require('./package.json').version")"
+          echo "Building ${tag} from $(git rev-parse --short HEAD)"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.meta.outputs.tag }}
+            ${{ env.IMAGE }}:latest
+          build-args: |
+            APP_VERSION=${{ steps.meta.outputs.tag }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  smoke:
+    name: Smoke-test image
+    if: github.ref == 'refs/heads/master'
+    needs: image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      IMAGE: ghcr.io/asepharyana/9router
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run image and wait for health
+        env:
+          IMAGE: ${{ env.IMAGE }}
+          TAG: ${{ needs.image.outputs.tag }}
+        run: |
+          set -Eeuo pipefail
+          container="9router-smoke-${GITHUB_RUN_ID}"
+          trap 'docker logs "$container" || true; docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+
+          docker run --detach --name "$container" \
+            --publish 2028:2028 \
+            -e PORT=2028 -e HOSTNAME=0.0.0.0 -e DATA_DIR=/app/data \
+            "${IMAGE}:${TAG}"
+
+          for attempt in {1..45}; do
+            if body="$(curl --fail --silent --show-error http://127.0.0.1:2028/api/health)"; then
+              echo "health OK: ${body}"
+              exit 0
+            fi
+            (( attempt % 5 == 0 )) && echo "waiting for health (${attempt}/45)" >&2
+            sleep 2
+          done
+
+          echo "health check never returned 200" >&2
+          exit 1
