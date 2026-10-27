@@ -84,12 +84,15 @@ function RecentRequests({ requests = [] }) {
   return (
     <Card className="flex min-w-0 flex-col overflow-hidden bg-surface border border-border-subtle" padding="none" style={{ height: 420 }}>
       {/* Header */}
-      <div className="px-3.5 sm:px-4 py-2.5 border-b border-border-subtle shrink-0 flex items-center justify-between bg-surface-2/40">
-        <div className="flex items-center gap-2">
+      {/* The title takes the free space and the counter keeps its own width, so
+          a narrow card truncates "Live Requests Stream" instead of pushing
+          "N logged" past the card's right edge. */}
+      <div className="px-3.5 sm:px-4 py-2.5 border-b border-border-subtle shrink-0 flex items-center justify-between gap-2 bg-surface-2/40">
+        <div className="flex min-w-0 items-center gap-2">
           <span className="material-symbols-outlined text-[15px] text-text-muted">stream</span>
-          <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">Live Requests Stream</span>
+          <span className="truncate text-xs font-semibold text-text-muted uppercase tracking-wider">Live Requests Stream</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <span className="inline-block size-1.5 rounded-full bg-success animate-pulse" />
           <span className="text-[11px] text-text-muted font-mono">{requests.length} logged</span>
         </div>
@@ -110,9 +113,12 @@ function RecentRequests({ requests = [] }) {
                 <th className="py-2 pl-3 pr-1 text-center font-semibold text-text-muted w-6" title="Status">
                   <span className="material-symbols-outlined text-[11px] leading-none select-none text-text-muted/60">radio_button_checked</span>
                 </th>
-                <th className="py-2 px-2 text-left font-semibold text-text-muted">Model & Channel</th>
+                <th className="py-2 px-2 text-left font-semibold text-text-muted">
+                  <span className="hidden xl:inline">Model &amp; Channel</span>
+                  <span className="xl:hidden">Model</span>
+                </th>
                 <th className="py-2 px-2 text-right font-semibold text-text-muted whitespace-nowrap">Tokens (In / Out)</th>
-                <th className="py-2 pl-2 pr-3 text-right font-semibold text-text-muted w-16 sm:w-20">Time</th>
+                <th className="py-2 pl-2 pr-3 text-right font-semibold text-text-muted whitespace-nowrap">Time</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border-subtle/50">
@@ -126,22 +132,22 @@ function RecentRequests({ requests = [] }) {
                     </td>
                     <td className="py-2 px-2 font-mono text-xs text-text-main align-middle min-w-0" title={cleanModel}>
                       <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-1.5">
-                        <span className="truncate max-w-[120px] sm:max-w-[200px] md:max-w-[240px] font-medium text-text-main group-hover:text-primary transition-colors">
+                        <span className="truncate max-w-[120px] sm:max-w-[150px] font-medium text-text-main group-hover:text-primary transition-colors">
                           {cleanModel}
                         </span>
                         {r.provider && (
-                          <span className="text-[9px] uppercase font-mono px-1 py-0.2 rounded bg-surface-2 text-text-muted/90 self-start sm:self-auto border border-border-subtle">
+                          <span className="text-[9px] uppercase font-mono px-1 py-0.2 rounded bg-surface-2 text-text-muted/90 self-start sm:self-auto border border-border-subtle truncate max-w-[90px]" title={r.provider}>
                             {r.provider}
                           </span>
                         )}
                       </div>
                     </td>
                     <td className="py-2 px-2 text-right whitespace-nowrap align-middle">
-                      <div className="inline-flex items-center gap-1 sm:gap-1.5 font-mono text-xs">
+                      <div className="inline-flex items-center gap-1 font-mono text-[11px] sm:text-xs">
                         <span className="text-text-main font-medium">{fmt(r.promptTokens)}↑</span>
                         <span className="text-success font-medium">{fmt(r.completionTokens)}↓</span>
                         {r.cachedTokens > 0 && (
-                          <span className="text-[10px] text-info bg-info/10 px-1 py-0.5 rounded leading-none border border-info/20" title={`${fmt(r.cachedTokens)} cached tokens`}>
+                          <span className="text-[9px] sm:text-[10px] text-info bg-info/10 px-1 py-0.5 rounded leading-none border border-info/20" title={`${fmt(r.cachedTokens)} cached tokens`}>
                             ⚡{fmt(r.cachedTokens)}
                           </span>
                         )}
@@ -301,6 +307,14 @@ const PERIODS = [
   { value: "60d", label: "60D" },
   { value: "all", label: "All" },
 ];
+
+// The provider map is a wide canvas, but the request stream beside it is a
+// table and has to keep its four columns readable: at 2fr/1fr the stream card
+// lands at 351px and its table needs ~470px, so Tokens and Time were clipped.
+// Equally split on large screens the table fits exactly (527px card, 525px
+// table) and the map still gets ~525px for its eight nodes, its ring shrinking
+// with fitView.
+const TOPOLOGY_ROW_GRID = "grid min-w-0 grid-cols-1 items-stretch gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]";
 
 export default function UsageStats({
   period: periodProp,
@@ -717,7 +731,7 @@ export default function UsageStats({
           <RecentRequests requests={stats.recentRequests || []} />
         </>
       ) : (
-        <div className="grid min-w-0 grid-cols-1 items-stretch gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
+        <div className={TOPOLOGY_ROW_GRID}>
           <div className="order-2 lg:order-1 min-w-0">
             <ProviderTopology
               providers={providers}
