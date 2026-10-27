@@ -1,0 +1,34 @@
+# Bun runtime config.
+#
+# custom-server.js loads src/dashboardGuard.ts directly (not through the Next
+# bundle), so Bun resolves its imports itself. TypeScript's `paths` in
+# tsconfig.json is a compile-time-only map: webpack honours it, Bun does not,
+# and the service died at boot with
+#
+#   [AuthGuard] load failed: Cannot find package '@/lib' imported from
+#   /opt/9router/releases/<sha>/src/dashboardGuard.ts
+#
+# The aliases below mirror tsconfig.json. Keep the two in sync — a mismatch
+# only shows up as a boot failure on a deployed host, never in the build.
+
+[install]
+# Match the CI runtime so a lockfile resolved on the runner installs the same
+# tree on the VPS; bun otherwise rewrites peer resolutions between versions.
+frozenLockfile = true
+
+[run]
+# tsconfig.json sets "moduleResolution": "bundler" and relies on extensionless
+# relative imports. Bun's default resolves them, but stating it keeps the
+# behaviour identical if Bun's defaults change.
+bun = true
+
+[resolve]
+# Exact tsconfig.json mirrors. "@/lib/*" also covers the bare "@/lib" package
+# specifier that Bun looks up when an import names a directory.
+"@/lib/*" = "./src/lib/*"
+"@/shared/*" = "./src/shared/*"
+"@/app/*" = "./src/app/*"
+"@/components/*" = "./src/components/*"
+"@/hooks/*" = "./src/hooks/*"
+"@/*" = "./src/*"
+"open-sse/*" = "./open-sse/*"

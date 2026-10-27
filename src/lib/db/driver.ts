@@ -108,8 +108,6 @@ async function initAdapter(): Promise<ResolvedDbAdapter> {
 
   adapter = withNullByteSafeParams(adapter);
 
-  adapter = withNullByteSafeParams(adapter);
-
   if (!state.logged) {
     console.log(`[DB] Driver: ${adapter.driver} | file: ${DATA_FILE}`);
     state.logged = true;
