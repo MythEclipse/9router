@@ -78,7 +78,7 @@ jobs:
       PORT: 4014
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -88,7 +88,7 @@ jobs:
           bun-version: 1.3.14
 
       - name: Cache Next.js build cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ${{ github.workspace }}/.next/cache
@@ -261,7 +261,7 @@ jobs:
       PUBLIC_HOST: omniroute.imrnes.team
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -271,7 +271,7 @@ jobs:
           bun-version: 1.3.14
 
       - name: Cache Next.js build cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ${{ github.workspace }}/.next/cache
@@ -465,7 +465,7 @@ jobs:
       ghcr_image: ${{ steps.release.outputs.ghcr_image }}
     steps:
       - name: Check out release tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.release_tag || github.ref_name }}
           fetch-depth: 1
@@ -563,14 +563,14 @@ jobs:
             runner: ubuntu-24.04-arm
     steps:
       - name: Check out release source at validated commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.release-prepare.outputs.commit }}
           path: source
           fetch-depth: 1
 
       - name: Check out publishing Dockerfile
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.workflow_sha }}
           path: workflow
@@ -579,10 +579,10 @@ jobs:
           fetch-depth: 1
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -590,7 +590,7 @@ jobs:
 
       - name: Build and push platform image by digest
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: source
           file: workflow/Dockerfile
@@ -652,7 +652,7 @@ jobs:
           printf '%s\n' "$IMAGE_DIGEST" > "$RUNNER_TEMP/digests/${{ matrix.suffix }}.txt"
 
       - name: Upload image digest
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: digests-${{ matrix.suffix }}
           path: ${{ runner.temp }}/digests/${{ matrix.suffix }}.txt
@@ -675,17 +675,17 @@ jobs:
       GHCR_IMAGE: ${{ needs.release-prepare.outputs.ghcr_image }}
     steps:
       - name: Download platform digests
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: digests-*
           path: ${{ runner.temp }}/digests
           merge-multiple: true
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -762,7 +762,7 @@ jobs:
 
       - name: Log in to Docker Hub
         if: needs.release-prepare.outputs.publish_dockerhub == 'true'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -871,13 +871,13 @@ jobs:
       # version and macOS SDK. Bumping this changes the sha256.
       GO_VERSION: "1.27.1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
           # The Go module lives in a temp clone of the upstream repo, so there is
@@ -942,7 +942,7 @@ jobs:
       # Uploaded before the mismatch gate below, so a publish run that fails on a
       # checksum mismatch still leaves the bytes downloadable — that is exactly
       # the run where a maintainer needs them to verify the new sha256.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: tray_darwin_arm64
           path: |
