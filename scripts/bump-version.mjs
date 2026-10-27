@@ -132,7 +132,20 @@ function main() {
     `[bump] ${subjects.length} pending commit(s), ${files.length} changed file(s) vs ${base}`,
   );
   for (const subject of subjects) console.log(`[bump]   - ${subject}`);
-  console.log(`[bump] Commit the new version as: "${BUMP_SUBJECT}"`);
+
+  // Commit it here rather than printing an instruction. The hook runs on pre-push:
+  // the push is already in flight, so a version left in the working tree ships as
+  // the OLD number and stays behind as dirt that the next push bumps again from the
+  // stale base. An unstaged bump is an unshipped bump.
+  execFileSync("git", ["add", "package.json"], {
+    cwd: projectRoot,
+    stdio: ["ignore", "ignore", "inherit"],
+  });
+  execFileSync("git", ["commit", "-m", BUMP_SUBJECT, "--no-verify"], {
+    cwd: projectRoot,
+    stdio: ["ignore", "ignore", "inherit"],
+  });
+  console.log(`[bump] Committed ${target} as "${BUMP_SUBJECT}".`);
 }
 
 main();
