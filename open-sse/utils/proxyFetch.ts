@@ -273,11 +273,16 @@ async function getDispatcher(proxyUrl, insecure = false) {
   return proxyDispatchers.get(key);
 }
 
-async function fetchWithTlsFallback(url, options, proxyUrl) {
+/** Transport override for the direct (non-proxy) egress path. */
+type DirectFetchFn = (url: string | URL, options: RequestInit) => Promise<Response>;
+
+async function fetchWithTlsFallback(url, options, proxyUrl, directFetch: DirectFetchFn | null = null) {
   try {
     // Protocol adapters may need Node's HTTP/1 transport on the direct path.
     // Keep proxy/no-proxy resolution and strict-proxy enforcement here.
-    if (!proxyUrl && options.directFetch) return await options.directFetch(url, options);
+    if (!proxyUrl && (directFetch || options.directFetch)) {
+      return await (directFetch || options.directFetch)(url, options);
+    }
     const dispatcher = proxyUrl ? await getDispatcher(proxyUrl) : undefined;
     return await originalFetch(url, dispatcher ? { ...options, dispatcher } : options);
   } catch (err) {
@@ -407,7 +412,7 @@ function targetHost(url) {
   }
 }
 
-export async function proxyAwareFetch(url: string | URL, options: RequestInit = {}, proxyOptions = null, directFetch = null) {
+export async function proxyAwareFetch(url: string | URL, options: RequestInit = {}, proxyOptions = null, directFetch: DirectFetchFn | null = null) {
   const targetUrl = typeof url === "string" ? url : url.toString();
 
   // Vercel relay: forward request via relay headers
@@ -445,7 +450,7 @@ export async function proxyAwareFetch(url: string | URL, options: RequestInit = 
     if (proxyUrl) {
       // Proxy resolves DNS externally (not affected by /etc/hosts) - use proxy directly
       try {
-        return await fetchWithTlsFallback(url, options, proxyUrl);
+        return await fetchWithTlsFallback(url, options, proxyUrl, directFetch);
       } catch (proxyError) {
         if (proxyOptions?.strictProxy === true) {
           throw new Error(`[ProxyFetch] Proxy required but failed (strictProxy=true): ${proxyError.message}`);
@@ -483,7 +488,7 @@ export async function proxyAwareFetch(url: string | URL, options: RequestInit = 
   // got-scraping disabled - use native fetch directly
   // (Re-enable per-host by wrapping with tryGotScrapingFetch when needed)
   if (directFetch) return directFetch(url, options);
-  return fetchWithTlsFallback(url, options, null);
+  return fetchWithTlsFallback(url, options, null, directFetch);
 }
 
 /**
