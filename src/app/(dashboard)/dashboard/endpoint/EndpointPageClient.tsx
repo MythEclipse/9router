@@ -14,9 +14,9 @@ import { TUNNEL_BENEFITS } from "./endpointConstants";
 import { useTunnelExposure } from "./useTunnelExposure";
 import ExposureControl, { exposureStateOf } from "./components/ExposureControl";
 import {
-  limitKindOf as limitKindOfKey,
-  limitCapOf as limitCapOfKey,
-  limitUsedOf as limitUsedOfKey,
+  limitKindOf,
+  limitCapOf,
+  limitUsedOf,
 } from "@/lib/usage/keyBudget";
 
 import { cn } from "@/shared/utils/cn";
@@ -27,14 +27,7 @@ import StatusAlert from "./components/StatusAlert";
 import Tooltip from "./components/Tooltip";
 import SecurityWarning from "./components/SecurityWarning";
 import AllowedEndpointControls from "./components/AllowedEndpointControls";
-
-function formatTokensNumber(num) {
-  if (!num || num <= 0) return "0";
-  if (num >= 1_000_000_000) return (num / 1_000_000_000).toFixed(2) + "B";
-  if (num >= 1_000_000) return (num / 1_000_000).toFixed(2) + "M";
-  if (num >= 1_000) return (num / 1_000).toFixed(1) + "K";
-  return num.toLocaleString();
-}
+import { formatTokensNumber, formatLimitValue, limitFieldLabel, limitHint, limitPlaceholder } from "./limitPresentation";
 
 // One budget per key: the owner picks tokens, money or request count, and the UI
 // shows whichever one is selected. All three caps can stay stored so switching
@@ -144,53 +137,6 @@ function LimitKindPicker({ value, onChange }: LimitKindPickerProps) {
   );
 }
 
-
-function limitKindOf(key) {
-  return limitKindOfKey(key);
-}
-
-function limitCapOf(key, kind = limitKindOf(key)) {
-  return limitCapOfKey(key, kind);
-}
-
-function limitUsedOf(key, kind = limitKindOf(key)) {
-  return limitUsedOfKey(key, kind);
-}
-
-function formatLimitValue(kind, value) {
-  const n = Number(value) || 0;
-  if (kind === "cost") return `$${n.toFixed(2)}`;
-  if (kind === "requests") return `${n.toLocaleString()} req`;
-  return `${formatTokensNumber(n)} tokens`;
-}
-
-function limitFieldLabel(kind) {
-  if (kind === "cost") return "Cost Limit (USD)";
-  if (kind === "requests") return "Request Limit";
-  return "Token Limit";
-}
-
-// One number whose meaning changes with the kind, so the hint has to state the unit's
-// own rule instead of a generic "0 means unlimited": a token cap and a request cap are
-// counted per window, while a cost cap is counted per UTC day and priced per request.
-function limitHint(kind, creatorTokenLimit = 0) {
-  if (kind === "cost") {
-    return "Charges every call at the model's price and adds it up in USD, so the same amount of text costs more on an expensive model. Once today's total (UTC) passes this amount the key answers 429 until 00:00 UTC. 0 = unlimited.";
-  }
-  if (kind === "requests") {
-    return "Counts calls, not size: one call is one request however many tokens it spends, so a huge prompt counts the same as a tiny one. Once the count is reached the key answers 429 until the window resets. 0 = unlimited.";
-  }
-  const base = "Adds up prompt and completion tokens across the reset window, so a long conversation costs more than a short one. When the total is used up the key answers 429 until the window resets. 0 = unlimited.";
-  return creatorTokenLimit > 0
-    ? `${base} Your maximum is ${creatorTokenLimit.toLocaleString()} tokens.`
-    : base;
-}
-
-function limitPlaceholder(kind) {
-  if (kind === "cost") return "2.50";
-  if (kind === "requests") return "1000";
-  return "e.g. 88000000";
-}
 
 // The active budget as a badge. Colour is the only cue that the key is out of room,
 // so it turns red the moment the used value reaches the cap.
