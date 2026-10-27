@@ -19,6 +19,12 @@ import {
   CLIENT_PING_FAST_MS,
 } from "./endpointConstants";
 import { clientPingUrl, clientPingAny } from "./endpointPing";
+import {
+  limitKindOf as limitKindOfKey,
+  limitCapOf as limitCapOfKey,
+  limitUsedOf as limitUsedOfKey,
+} from "@/lib/usage/keyBudget";
+
 import { cn } from "@/shared/utils/cn";
 import useSettingsStore from "@/store/settingsStore";
 import EndpointRow from "./components/EndpointRow";
@@ -34,13 +40,6 @@ function formatTokensNumber(num) {
   if (num >= 1_000_000) return (num / 1_000_000).toFixed(2) + "M";
   if (num >= 1_000) return (num / 1_000).toFixed(1) + "K";
   return num.toLocaleString();
-}
-
-// The cost counter is stamped with the UTC day it belongs to, so a stale stamp means
-// zero spent today — showing the raw counter would keep yesterday's total on screen.
-function spentTodayOf(key) {
-  const today = new Date().toISOString().slice(0, 10);
-  return key?.costDay === today ? Number(key.costSpent) || 0 : 0;
 }
 
 // One budget per key: the owner picks tokens, money or request count, and the UI
@@ -153,19 +152,15 @@ function LimitKindPicker({ value, onChange }: LimitKindPickerProps) {
 
 
 function limitKindOf(key) {
-  return key?.limitKind === "cost" || key?.limitKind === "requests" ? key.limitKind : "tokens";
+  return limitKindOfKey(key);
 }
 
 function limitCapOf(key, kind = limitKindOf(key)) {
-  if (kind === "cost") return Number(key?.dailyCostLimit) || 0;
-  if (kind === "requests") return Number(key?.requestLimit) || 0;
-  return Number(key?.tokenLimit) || 0;
+  return limitCapOfKey(key, kind);
 }
 
 function limitUsedOf(key, kind = limitKindOf(key)) {
-  if (kind === "cost") return spentTodayOf(key);
-  if (kind === "requests") return Number(key?.usedRequests) || 0;
-  return Number(key?.usedTokens) || 0;
+  return limitUsedOfKey(key, kind);
 }
 
 function formatLimitValue(kind, value) {

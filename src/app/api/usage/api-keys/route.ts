@@ -3,6 +3,7 @@ import { getApiKeys } from "@/lib/localDb";
 import { getAdapter } from "@/lib/db/driver";
 import { getSessionContext } from "@/lib/auth/dashboardPermissions";
 import { creatorNameFor, visibleApiKeys } from "@/lib/auth/keyCreator";
+import { limitKindOf, budgetOf, todayKey, spentTodayOf } from "@/lib/usage/keyBudget";
 
 export const dynamic = "force-dynamic";
 
@@ -176,7 +177,7 @@ export async function GET() {
       else row.errors += r.count;
     }
 
-    const todayKey = new Date().toISOString().slice(0, 10);
+    const today = todayKey();
     // Annotated so both row kinds share one shape: the per-key rows carry
     // createdByName and the quota cap fields, the orphan aggregate does not.
     const result: KeyUsageRow[] = keys.map((k) => {
@@ -197,14 +198,13 @@ export async function GET() {
       const resetSpan = intervalMs(k.resetInterval);
       // One unified budget per key: the page shows the kind the owner selected rather
       // than three numbers, and the percentage is measured against that same cap.
-      const kind = k.limitKind === "cost" || k.limitKind === "requests" ? k.limitKind : "tokens";
-      const spentToday = k.costDay === todayKey ? Number(k.costSpent) || 0 : 0;
-      const cap = kind === "cost" ? Number(k.dailyCostLimit) || 0
-        : kind === "requests" ? Number(k.requestLimit) || 0
-        : limit;
-      const usedForCap = kind === "cost" ? spentToday
-        : kind === "requests" ? Number(k.usedRequests) || 0
-        : used;
+      const kind = limitKindOf(k);
+      const budget = budgetOf(k, { tokenCap: limit, tokenUsed: used, today });
+      const cap = budget.cap;
+      const usedForCap = budget.used;
+      // Spend today is the cost counter regardless of which budget is selected: the
+      // report carries both figures, and a token-capped key still has a dollar total.
+      const spentToday = spentTodayOf(k, today);
       return {
         id: k.id,
         name: k.name,
