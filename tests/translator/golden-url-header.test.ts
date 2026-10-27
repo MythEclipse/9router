@@ -41,6 +41,13 @@ const VOLATILE_HEADERS = new Set(["x-msh-device-name", "x-mavis-session-id"]);
 // have nothing to do with the headers under test. Pin it like <NODE>/<HOST>.
 // The value is still asserted — a generic \d+\.\d+ regex would clobber the
 // hardcoded X-Stainless-Runtime-Version that should stay locked.
+//
+// This only replaces an exact match on APP_VERSION, so it cannot reach muse's
+// X-API-VERSION: that is API_VERSION in src/lib/oauth/providers/muse.ts, a protocol
+// constant that stays 1.0.0 across releases. The muse snapshot recorded
+// <APP_VERSION> only because package.json also read 1.0.0 at the time, which made
+// the two indistinguishable; after the bump to 2.0.0 the placeholder stopped
+// matching and the real protocol value is now pinned in the snapshot instead.
 const APP_VERSION = pkg.version || "0.0.0";
 function sanitize(headers) {
   const out = {};

@@ -1219,7 +1219,7 @@ exports[`GOLDEN buildHeaders (default executor providers) > muse → headers (ap
     "Accept": "text/event-stream",
     "Authorization": "Bearer <TOK>",
     "Content-Type": "application/json",
-    "x-api-version": "<APP_VERSION>",
+    "x-api-version": "1.0.0",
   },
 }
 `;
