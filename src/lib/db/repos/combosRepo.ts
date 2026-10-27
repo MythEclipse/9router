@@ -61,6 +61,7 @@ export async function updateCombo(id, data) {
   db.transaction(() => {
     const row = db.get(`SELECT * FROM combos WHERE id = ?`, [id]);
     if (!row) return;
+    const previousName = String(row.name ?? "");
     const merged = { ...rowToCombo(row), ...data, updatedAt: new Date().toISOString() };
     db.run(
       `UPDATE combos SET name = ?, kind = ?, models = ?, contextWindow = ?, updatedAt = ? WHERE id = ?`,
@@ -73,9 +74,38 @@ export async function updateCombo(id, data) {
         id,
       ]
     );
+    // Grants identify combos by NAME. A rename that left the old name in place
+    // would silently revoke every restricted key's access to this combo — the
+    // key keeps its grant on a name that no longer resolves, and the operator
+    // sees "access denied" with nothing obviously changed. Carry the grant over
+    // in the same transaction, exactly as deleteCombo revokes it.
+    if (previousName && previousName.toLowerCase() !== String(merged.name ?? "").toLowerCase()) {
+      renameComboGrants(db, previousName, String(merged.name ?? ""));
+    }
     result = merged;
   });
+  invalidateApiKeyCache();
   return result;
+}
+
+/** Rewrite every restricted key's allow list from `from` to `to` (case-insensitive). */
+function renameComboGrants(db, from, to) {
+  const oldName = from.toLowerCase();
+  const keys = db.all(`SELECT id, accessAllow FROM apiKeys WHERE accessRestricted = 1`);
+  for (const key of keys) {
+    const allow = normalizeAllowList(parseJson(key.accessAllow, []));
+    let changed = false;
+    const updated = allow.map((entry) => {
+      if (entry.toLowerCase() !== oldName) return entry;
+      changed = true;
+      return to;
+    });
+    if (!changed) continue;
+    db.run(`UPDATE apiKeys SET accessAllow = ? WHERE id = ?`, [
+      stringifyJson(normalizeAllowList(updated)),
+      key.id,
+    ]);
+  }
 }
 
 export async function deleteCombo(id) {
