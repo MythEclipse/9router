@@ -1,3 +1,4 @@
+import { normalizeConfigString as normalizeString } from "../../src/lib/network/normalizeConfigString";
 import { Readable } from "stream";
 import { MEMORY_CONFIG } from "../config/runtimeConfig";
 import { dbg } from "./debugLog";
@@ -139,11 +140,6 @@ const GOOGLE_DNS_SERVERS = ["8.8.8.8", "8.8.4.4"];
 const HTTPS_PORT = 443;
 const HTTP_SUCCESS_MIN = 200;
 const HTTP_SUCCESS_MAX = 300;
-
-function normalizeString(value) {
-  if (value === undefined || value === null) return "";
-  return String(value).trim();
-}
 
 /**
  * Resolve real IP using Google DNS (bypass system DNS)
