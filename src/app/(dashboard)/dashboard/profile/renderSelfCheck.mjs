@@ -159,6 +159,38 @@ run("the profile page body renders", () => {
   mod.default({});
 });
 
+// The SSO card is its own component now, so it needs its own check: a dangling
+// reference in it would not fail the page check, because the page only renders it
+// behind `oidcExpanded` and the stub does not evaluate that branch's children calls.
+run("the SSO card body renders", () => {
+  const mod = loadModule(path.join(here, "SsoCard.tsx"), "sso-card");
+  if (typeof mod.default !== "function") throw new Error("SsoCard has no default export function");
+  const noop = () => {};
+  const emptyForm = {
+    authMode: "password", oidcIssuerUrl: "", oidcClientId: "", oidcScopes: "", oidcLoginLabel: "",
+  };
+  const emptySaml = {
+    samlEntryPoint: "", samlIssuer: "urn:9router:sp", samlCert: "",
+    samlLoginLabel: "", samlAttributeEmail: "", samlAttributeName: "",
+  };
+  const sso = {
+    ssoTypeTab: "saml", setSsoTypeTab: noop,
+    oidcExpanded: true, setOidcExpanded: noop,
+    showSamlGuide: false, setShowSamlGuide: noop,
+    oidcForm: emptyForm, oidcClientSecret: "", setOidcClientSecret: noop,
+    oidcStatus: { type: "", message: "" }, oidcLoading: false,
+    oidcTestLoading: false, oidcTestStatus: { type: "", message: "" },
+    samlForm: emptySaml, samlStatus: { type: "", message: "" }, setSamlStatus: noop,
+    samlLoading: false, samlTestLoading: false, samlTestStatus: { type: "", message: "" },
+    idpMetadataFileRef: { current: null }, certFileRef: { current: null },
+    hydrate: noop, updateOidcForm: noop, updateSamlForm: noop,
+    saveOidcSettings: noop, testOidcConnection: noop,
+    handleIdpMetadataUpload: noop, handleCertFileUpload: noop,
+    saveSamlSettings: noop, testSamlConnection: noop,
+  };
+  mod.default({ sso, settings: {}, origin: "http://localhost:20128", settingsLoading: false });
+});
+
 for (const r of results) {
   console.log(`${r.ok ? "ok  " : "FAIL"}  ${r.name}${r.ok ? "" : `\n        ${r.err}`}`);
 }
