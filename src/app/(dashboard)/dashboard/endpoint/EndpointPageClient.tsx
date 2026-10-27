@@ -10,17 +10,8 @@ import { Card, Button, Input, Select, Modal, CardSkeleton, Toggle, ConfirmModal,
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 import { nextResetAt, formatDuration } from "@/shared/utils/interval";
 import { useNow } from "@/shared/hooks/useNow";
-import {
-  TUNNEL_BENEFITS,
-  TUNNEL_PING_INTERVAL_MS,
-  TUNNEL_PING_MAX_MS,
-  STATUS_POLL_FAST_MS,
-  REACHABLE_MISS_THRESHOLD,
-  CLIENT_PING_FAST_MS,
-} from "./endpointConstants";
-import { clientPingUrl, clientPingAny } from "./endpointPing";
-import { ServerSentFrameReader } from "@/shared/utils/sseFrames";
-import { applyProbe, initialReachability, type ReachabilityState } from "./reachability";
+import { TUNNEL_BENEFITS } from "./endpointConstants";
+import { useTunnelExposure } from "./useTunnelExposure";
 import ExposureControl, { exposureStateOf } from "./components/ExposureControl";
 import {
   limitKindOf as limitKindOfKey,
@@ -422,63 +413,35 @@ const scopedModelPatterns =
       .filter(Boolean)
     : null;
 
-  // Cloudflare Tunnel state
-  const [tunnelChecking, setTunnelChecking] = useState(true);
-  const [tunnelEnabled, setTunnelEnabled] = useState(false);
-  const [tunnelReachable, setTunnelReachable] = useState(false);
-  const [tunnelUrl, setTunnelUrl] = useState("");
-  const [tunnelPublicUrl, setTunnelPublicUrl] = useState("");
-  const [tunnelLoading, setTunnelLoading] = useState(false);
-  const [tunnelProgress, setTunnelProgress] = useState("");
-  const [tunnelStatus, setTunnelStatus] = useState(null);
-  const [showEnableTunnelModal, setShowEnableTunnelModal] = useState(false);
-  const [showDisableTunnelModal, setShowDisableTunnelModal] = useState(false);
-
-  // Tailscale state
-  const [tsEnabled, setTsEnabled] = useState(false);
-  const [tsReachable, setTsReachable] = useState(false);
-  const [tsUrl, setTsUrl] = useState("");
-  const [tsLoading, setTsLoading] = useState(false);
-  const [tsProgress, setTsProgress] = useState("");
-  const [tsStatus, setTsStatus] = useState(null);
-  const [tsAuthUrl, setTsAuthUrl] = useState("");
-  const [tsAuthLabel, setTsAuthLabel] = useState("");
-  const [tsInstalled, setTsInstalled] = useState(null); // null=checking, true/false
-  const [tsInstalling, setTsInstalling] = useState(false);
-  const [tsInstallLog, setTsInstallLog] = useState([]);
-  const [tsSudoPassword, setTsSudoPassword] = useState("");
-  const [tsConnecting, setTsConnecting] = useState(false);
-  const [showTsModal, setShowTsModal] = useState(false);
-  const [showDisableTsModal, setShowDisableTsModal] = useState(false);
-  const tsLogRef = useRef(null);
-
-  // Debounce reachable=false: server may briefly return false during background
-  // refresh, so the UI only flips to "reconnecting" after N consecutive misses to
-  // avoid spinner flicker. Browser-side reachable cache (independent of backend DNS
-  // quirks); the miss counter lives in the tracker below.
-  const tunnelClientReachableRef = useRef(false);
-  const tsClientReachableRef = useRef(false);
-  // Whether reachable=true was ever observed this session; distinguishes
-  // "Checking..." (cold) from "Reconnecting..." (lost connection).
-  const [tunnelEverReachable, setTunnelEverReachable] = useState(false);
-  const [tsEverReachable, setTsEverReachable] = useState(false);
-  // The debounce state each probe path folds into, so the server sync and the
-  // browser ping apply the same rule (see ./reachability).
-  const tunnelReachState = useRef(initialReachability());
-  const tsReachState = useRef(initialReachability());
-  // Mirror of the rendered reachability, so the memoized callbacks below can read
-  // the current verdict without taking a state dependency and re-creating.
-  const tunnelReachableRef = useRef(false);
-  const tsReachableRef = useRef(false);
+  // Cloudflare Tunnel + Tailscale lifecycle lives in one hook (see useTunnelExposure).
+  const exposure = useTunnelExposure(requireApiKey, ({ requireApiKey: next, tunnelDashboardAccess: nextAccess }) => {
+    setRequireApiKey(next);
+    setTunnelDashboardAccess(nextAccess);
+  });
+  const {
+    tunnelChecking, tunnelEnabled, tunnelReachable, tunnelUrl, tunnelPublicUrl,
+    tunnelLoading, tunnelProgress, tunnelStatus, tunnelEverReachable,
+    showEnableTunnelModal, showDisableTunnelModal,
+    setShowEnableTunnelModal, setShowDisableTunnelModal, setTunnelChecking,
+    setTunnelLoading, setTunnelProgress, setTunnelStatus,
+    handleEnableTunnel, handleDisableTunnel,
+    tsEnabled, tsReachable, tsUrl, tsLoading, tsProgress, tsStatus,
+    tsAuthUrl, tsAuthLabel, tsInstalled, tsInstalling, tsInstallLog, tsSudoPassword,
+    tsConnecting, showTsModal, showDisableTsModal, tsEverReachable, tsLogRef,
+    setShowTsModal, setShowDisableTsModal, setTsStatus, setTsSudoPassword,
+    setTsLoading, setTsConnecting, setTsProgress,
+    handleInstallTailscale, handleConnectTailscale, handleDisableTailscale,
+    handleOpenTsModal, clearUserAuth,
+    loadSettings,
+  } = exposure;
 
   // API key visibility toggle state
   const [visibleKeys, setVisibleKeys] = useState(new Set());
 
-  // Client-side local/remote detection (UI hint only, not a security gate)
-  const [isRemoteHost] = useState(() => {
+  const isRemoteHost = (() => {
     if (typeof window === "undefined") return false;
     return !["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
-  });
+  })();
 
   const { copied, copy } = useCopyToClipboard();
 
@@ -534,232 +497,27 @@ const scopedModelPatterns =
     }
   };
 
-  // Folds one probe into the debounce rule both probe paths share. `state` is the
-  // per-endpoint tracker ref, `setReachable`/`setEver` the rendered flags.
-  const applyReachability = useCallback(
-    (
-      state: { current: ReachabilityState },
-      ok: boolean,
-      setReachable: (value: boolean) => void,
-      setEver: (value: boolean) => void,
-      wasReachable: boolean,
-    ) => {
-      const result = applyProbe(state.current, ok, REACHABLE_MISS_THRESHOLD, wasReachable);
-      state.current = result.state;
-      setReachable(result.reachable);
-      if (result.recovered) setEver(true);
-      return result;
-    },
-    [],
-  );
-
-  // Keep the ref mirror in step with the rendered flag. A synchronous write during
-  // render would be a side effect, so it happens in the commit phase.
-  useEffect(() => {
-    tunnelReachableRef.current = tunnelReachable;
-  }, [tunnelReachable]);
-  useEffect(() => {
-    tsReachableRef.current = tsReachable;
-  }, [tsReachable]);
-
-  // Reads only state setters, the tracker refs and the memoized applyReachability -
-  // never a state value - so it is memoizable and the poll effect can list it.
-  const syncTunnelStatus = useCallback(async () => {
-    try {
-      const statusRes = await fetch("/api/tunnel/status", { cache: "no-store" });
-      if (!statusRes.ok) return;
-      const data = await statusRes.json();
-      const tEnabled = data.tunnel?.settingsEnabled ?? data.tunnel?.enabled ?? false;
-      const tUrl = data.tunnel?.tunnelUrl || "";
-      setTunnelUrl(tUrl);
-      setTunnelPublicUrl(data.tunnel?.publicUrl || "");
-      setTunnelEnabled(tEnabled);
-      applyReachability(
-        tunnelReachState,
-        tunnelClientReachableRef.current,
-        setTunnelReachable,
-        setTunnelEverReachable,
-        tunnelReachableRef.current,
-      );
-
-      const tsEn = data.tailscale?.settingsEnabled ?? data.tailscale?.enabled ?? false;
-      const tsUrlVal = data.tailscale?.tunnelUrl || "";
-      setTsUrl(tsUrlVal);
-      setTsEnabled(tsEn);
-      applyReachability(
-        tsReachState,
-        tsClientReachableRef.current,
-        setTsReachable,
-        setTsEverReachable,
-        tsReachableRef.current,
-      );
-    } catch {
-      /* ignore poll errors */
-    }
-  }, [applyReachability]);
-
-  // Memoized for the same reason as syncTunnelStatus above: the only captured
-  // values are state setters, refs and the memoized applyReachability.
-  const loadSettings = useCallback(async () => {
-    setTunnelChecking(true);
-    try {
-      const [settingsData, statusRes] = await Promise.all([
-        useSettingsStore.getState().fetchSettings(),
-        fetch("/api/tunnel/status", { cache: "no-store" }),
-      ]);
-      if (settingsData) {
-        const s = settingsData as {
-          requireApiKey?: boolean;
-          tunnelDashboardAccess?: boolean;
-        };
-        setRequireApiKey(s.requireApiKey || false);
-        setTunnelDashboardAccess(s.tunnelDashboardAccess || false);
-      }
-      if (statusRes.ok) {
-        const data = await statusRes.json();
-        const tEnabled = data.tunnel?.settingsEnabled ?? data.tunnel?.enabled ?? false;
-        const tUrl = data.tunnel?.tunnelUrl || "";
-        setTunnelUrl(tUrl);
-        setTunnelPublicUrl(data.tunnel?.publicUrl || "");
-        setTunnelEnabled(tEnabled);
-        applyReachability(
-          tunnelReachState,
-          tunnelClientReachableRef.current,
-          setTunnelReachable,
-          setTunnelEverReachable,
-          tunnelReachableRef.current,
-        );
-
-        const tsEn = data.tailscale?.settingsEnabled ?? data.tailscale?.enabled ?? false;
-        const tsUrlVal = data.tailscale?.tunnelUrl || "";
-        setTsUrl(tsUrlVal);
-        setTsEnabled(tsEn);
-        applyReachability(
-          tsReachState,
-          tsClientReachableRef.current,
-          setTsReachable,
-          setTsEverReachable,
-          tsReachableRef.current,
-        );
-      }
-    } catch (error) {
-      console.log("Error loading settings:", error);
-    } finally {
-      setTunnelChecking(false);
-    }
-  }, [applyReachability]);
-
-  useEffect(() => {
-    fetch("/api/auth/status")
-      .then(res => res.json())
-      .then(data => setAuthStatus(data))
-      .catch(() => {});
-  }, []);
-
-  // Auto-scroll install log
-  useEffect(() => {
-    if (tsLogRef.current) tsLogRef.current.scrollTop = tsLogRef.current.scrollHeight;
-  }, [tsInstallLog]);
-
-  useEffect(() => {
-    // Both loaders only publish into state from their awaited HTTP responses,
-    // so the initial sweep never renders synchronously with the effect body.
-    const load = () => {
-      void fetchData();
-      void loadSettings();
-    };
-    load();
-  }, [loadSettings]);
-
-  // Status poll: only while degraded (not yet reachable). Stop once healthy to avoid spam.
-  // Visibility re-check: refresh once when tab becomes visible.
-  useEffect(() => {
-    const anyEnabled = tunnelEnabled || tsEnabled;
-    if (!anyEnabled) return;
-    const tunnelHealthy = !tunnelEnabled || tunnelReachable;
-    const tsHealthy = !tsEnabled || tsReachable;
-    const allHealthy = tunnelHealthy && tsHealthy;
-    const onVisible = () => {
-      if (!document.hidden) syncTunnelStatus();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    if (allHealthy) return () => document.removeEventListener("visibilitychange", onVisible);
-    const timer = setInterval(() => {
-      if (!document.hidden) syncTunnelStatus();
-    }, STATUS_POLL_FAST_MS);
-    return () => {
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, [tunnelEnabled, tsEnabled, tunnelReachable, tsReachable, syncTunnelStatus]);
-
-  // Browser-side periodic ping: probes tunnel/tailscale URLs directly so UI stays
-  // "reachable" even when backend DNS (1.1.1.1) hiccups on *.ts.net or *.trycloudflare.com.
-  // Adaptive: slow when healthy, fast when degraded; pause when tab hidden.
-  useEffect(() => {
-    const probeBoth = async () => {
-      if (document.hidden) return;
-      if (tunnelEnabled && (tunnelUrl || tunnelPublicUrl)) {
-        const ok = await clientPingAny(tunnelPublicUrl, tunnelUrl);
-        tunnelClientReachableRef.current = ok;
-        applyReachability(
-          tunnelReachState,
-          ok,
-          setTunnelReachable,
-          setTunnelEverReachable,
-          tunnelReachableRef.current,
-        );
-      } else {
-        tunnelClientReachableRef.current = false;
-      }
-      if (tsEnabled && tsUrl) {
-        const ok = await clientPingUrl(tsUrl);
-        tsClientReachableRef.current = ok;
-        applyReachability(
-          tsReachState,
-          ok,
-          setTsReachable,
-          setTsEverReachable,
-          tsReachableRef.current,
-        );
-      } else {
-        tsClientReachableRef.current = false;
-      }
-    };
-    const anyEnabled = (tunnelEnabled && (tunnelUrl || tunnelPublicUrl)) || (tsEnabled && tsUrl);
-    if (!anyEnabled) return;
-    probeBoth();
-    const tunnelHealthy = !tunnelEnabled || tunnelReachable;
-    const tsHealthy = !tsEnabled || tsReachable;
-    if (tunnelHealthy && tsHealthy) return;
-    const id = setInterval(probeBoth, CLIENT_PING_FAST_MS);
-    return () => clearInterval(id);
-  }, [tunnelEnabled, tunnelUrl, tunnelPublicUrl, tsEnabled, tsUrl, tunnelReachable, tsReachable, applyReachability]);
-
-  // Client-side reachable only (server no longer probes; watchdog handles backend health).
-  // Miss-debounce: only flip to false after N consecutive misses.
-  // Trust user intent (settingsEnabled): UI stays "enabled" while watchdog restarts process
-  const handleTunnelDashboardAccess = async (value) => {
+  const handleTunnelDashboardAccess = async (value: boolean) => {
     try {
       const updated = await useSettingsStore
         .getState()
         .patchSettings({ tunnelDashboardAccess: value });
       if (updated) setTunnelDashboardAccess(value);
     } catch (error) {
-      console.log("Error updating tunnelDashboardAccess:", error);
+      console.error("Error updating tunnelDashboardAccess:", error);
     }
   };
 
-  const handleRequireApiKey = async (value) => {
+  const handleRequireApiKey = async (value: boolean) => {
     try {
       const updated = await useSettingsStore.getState().patchSettings({ requireApiKey: value });
       if (updated) setRequireApiKey(value);
     } catch (error) {
-      console.log("Error updating requireApiKey:", error);
+      console.error("Error updating requireApiKey:", error);
     }
   };
 
-  const handleBulkEditApply = async (patch) => {
+  const handleBulkEditApply = async (patch: Record<string, unknown>) => {
     const ids = Array.from(selectedKeyIds);
     const res = await fetch("/api/keys/bulk", {
       method: "PATCH",
@@ -783,359 +541,23 @@ const scopedModelPatterns =
     await fetchData();
   };
 
-  // u2500u2500u2500 Cloudflare Tunnel handlers
-  // Ping tunnel health until reachable. Race multiple URLs (shortlink + direct) - 1 OK is enough.
-  const pingTunnelHealth = async (...urls) => {
-    setTunnelLoading(true);
-    setTunnelProgress("Waiting for tunnel ready...");
-    const targets = urls.filter(Boolean).map((u) => `${u}/api/health`);
-    const start = Date.now();
-    while (Date.now() - start < TUNNEL_PING_MAX_MS) {
-      await new Promise((r) => setTimeout(r, TUNNEL_PING_INTERVAL_MS));
-      const ok = await Promise.any(
-        targets.map(async (h) => {
-          const p = await fetch(h, { mode: "cors", cache: "no-store" });
-          if (p.ok) return true;
-          throw new Error("not ready");
-        }),
-      ).catch(() => false);
-      if (ok) {
-        setTunnelEnabled(true);
-        setTunnelLoading(false);
-        setTunnelProgress("");
-        return true;
-      }
-      // Every 5 pings (~10s), check if backend process still alive
-      if ((Date.now() - start) % 10000 < TUNNEL_PING_INTERVAL_MS) {
-        try {
-          const statusRes = await fetch("/api/tunnel/status");
-          if (statusRes.ok) {
-            const status = await statusRes.json();
-            if (!status.tunnel?.enabled) {
-              setTunnelStatus({ type: "error", message: "Tunnel process stopped unexpectedly." });
-              setTunnelLoading(false);
-              setTunnelProgress("");
-              return false;
-            }
-          }
-        } catch {
-          /* ignore */
-        }
-      }
-    }
-    setTunnelStatus({
-      type: "error",
-      message: "Tunnel created but not reachable. Please try again.",
-    });
-    setTunnelLoading(false);
-    setTunnelProgress("");
-    return false;
-  };
+  useEffect(() => {
+    fetch("/api/auth/status")
+      .then(res => res.json())
+      .then(data => setAuthStatus(data))
+      .catch(() => {});
+  }, []);
 
-  const handleEnableTunnel = async () => {
-    setShowEnableTunnelModal(false);
-    setTunnelLoading(true);
-    setTunnelStatus(null);
-    setTunnelProgress("Creating tunnel...");
-
-    // Poll download progress while enable request is pending
-    let polling = true;
-    const pollProgress = async () => {
-      while (polling) {
-        try {
-          const r = await fetch("/api/tunnel/status");
-          if (r.ok) {
-            const s = await r.json();
-            if (s.download?.downloading) {
-              setTunnelProgress(`Downloading cloudflared... ${s.download.progress}%`);
-            } else if (polling) {
-              setTunnelProgress("Creating tunnel...");
-            }
-          }
-        } catch {
-          /* ignore */
-        }
-        await new Promise((r) => setTimeout(r, 1000));
-      }
+  useEffect(() => {
+    // Both loaders only publish into state from their awaited HTTP responses,
+    // so the initial sweep never renders synchronously with the effect body.
+    const load = () => {
+      void fetchData();
+      void loadSettings();
     };
-    pollProgress();
+    load();
+  }, [loadSettings]);
 
-    try {
-      const res = await fetch("/api/tunnel/enable", { method: "POST" });
-      polling = false;
-      const data = await res.json();
-      if (!res.ok) {
-        setTunnelStatus({ type: "error", message: data.error || "Failed to enable tunnel" });
-        return;
-      }
-
-      const url = data.tunnelUrl;
-      if (!url) {
-        setTunnelStatus({ type: "error", message: "No tunnel URL returned" });
-        return;
-      }
-
-      setTunnelUrl(url);
-      setTunnelPublicUrl(data.publicUrl || "");
-      await pingTunnelHealth(data.publicUrl, url);
-    } catch (error) {
-      setTunnelStatus({ type: "error", message: error.message });
-    } finally {
-      polling = false;
-      setTunnelLoading(false);
-      setTunnelProgress("");
-    }
-  };
-
-  const handleDisableTunnel = async () => {
-    setTunnelLoading(true);
-    setTunnelStatus(null);
-    try {
-      const res = await fetch("/api/tunnel/disable", { method: "POST" });
-      const data = await res.json();
-      if (res.ok) {
-        setTunnelEnabled(false);
-        setTunnelUrl("");
-        setShowDisableTunnelModal(false);
-        setTunnelStatus({ type: "success", message: "Tunnel disabled" });
-      } else {
-        setTunnelStatus({ type: "error", message: data.error || "Failed to disable tunnel" });
-      }
-    } catch (error) {
-      setTunnelStatus({ type: "error", message: error.message });
-    } finally {
-      setTunnelLoading(false);
-    }
-  };
-
-  // u2500u2500u2500 Tailscale handlers
-  const checkTailscaleInstalled = async () => {
-    setTsInstalled(null);
-    try {
-      const res = await fetch("/api/tunnel/tailscale-check");
-      if (res.ok) {
-        const data = await res.json();
-        setTsInstalled(data.installed);
-        return data;
-      }
-    } catch {
-      /* ignore */
-    }
-    setTsInstalled(false);
-    return { installed: false };
-  };
-
-  const handleInstallTailscale = async () => {
-    setTsInstalling(true);
-    setTsStatus(null);
-    setTsInstallLog([]);
-    try {
-      const res = await fetch("/api/tunnel/tailscale-install", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sudoPassword: tsSudoPassword }),
-      });
-      setTsSudoPassword("");
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      const frames = new ServerSentFrameReader();
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          for (const { event, data } of frames.push(decoder.decode(value, { stream: true }))) {
-            if (!data) continue;
-            if (event === "progress") {
-              setTsInstallLog((prev) => [...prev.slice(-50), data.message]);
-            } else if (event === "done") {
-              setTsInstalled(true);
-              setTsInstalling(false);
-              setShowTsModal(false);
-              handleConnectTailscale();
-              return;
-            } else if (event === "error") {
-              setTsStatus({ type: "error", message: data.error || "Install failed" });
-            }
-          }
-        }
-      } finally {
-        reader.releaseLock();
-      }
-    } catch (e) {
-      setTsStatus({ type: "error", message: e.message });
-    } finally {
-      setTsInstalling(false);
-    }
-  };
-
-  // Ping Tailscale health until reachable
-  const pingTsHealth = async (url) => {
-    setTsProgress("Waiting for Tailscale ready...");
-    const healthUrl = `${url}/api/health`;
-    const start = Date.now();
-    while (Date.now() - start < TUNNEL_PING_MAX_MS) {
-      await new Promise((r) => setTimeout(r, TUNNEL_PING_INTERVAL_MS));
-      try {
-        const ping = await fetch(healthUrl, { mode: "no-cors", cache: "no-store" });
-        if (ping.ok || ping.type === "opaque") return true;
-      } catch {
-        /* not ready yet */
-      }
-    }
-    return false;
-  };
-
-  // Show inline login button instead of auto-opening popup (browsers block popups
-  // opened after async work because the user gesture is lost).
-  const requestUserAuth = (url, label) => {
-    setTsAuthUrl(url);
-    setTsAuthLabel(label);
-  };
-
-  const clearUserAuth = () => {
-    setTsAuthUrl("");
-    setTsAuthLabel("");
-  };
-
-  const handleConnectTailscale = async () => {
-    setShowTsModal(false);
-    setTsConnecting(true);
-    setTsLoading(true);
-    setTsStatus(null);
-    setTsProgress("Connecting...");
-    clearUserAuth();
-    try {
-      const res = await fetch("/api/tunnel/tailscale-enable", { method: "POST" });
-      const data = await res.json();
-
-      if (res.ok && data.success) {
-        setTsUrl(data.tunnelUrl || "");
-        const reachable = await pingTsHealth(data.tunnelUrl);
-        setTsEnabled(true);
-        setTsStatus(
-          reachable ? null : { type: "warning", message: "Connected but not reachable yet." },
-        );
-        return;
-      }
-
-      if (data.needsLogin && data.authUrl) {
-        requestUserAuth(data.authUrl, "Open Login Page");
-        setTsProgress("Login required - click \"Open Login Page\" to continue");
-        for (let i = 0; i < 40; i++) {
-          await new Promise((r) => setTimeout(r, 3000));
-          try {
-            const r2 = await fetch("/api/tunnel/tailscale-check");
-            if (r2.ok) {
-              const check = await r2.json();
-              if (check.loggedIn) {
-                clearUserAuth();
-                setTsProgress("Starting funnel...");
-                const res2 = await fetch("/api/tunnel/tailscale-enable", { method: "POST" });
-                const data2 = await res2.json();
-                if (res2.ok && data2.success) {
-                  setTsUrl(data2.tunnelUrl || "");
-                  const ok2 = await pingTsHealth(data2.tunnelUrl);
-                  setTsEnabled(true);
-                  setTsStatus(
-                    ok2 ? null : { type: "warning", message: "Connected but not reachable yet." },
-                  );
-                } else if (data2.funnelNotEnabled && data2.enableUrl) {
-                  await pollFunnelEnable(data2.enableUrl);
-                } else {
-                  setTsStatus({ type: "error", message: data2.error || "Failed to start funnel" });
-                }
-                return;
-              }
-            }
-          } catch {
-            /* retry */
-          }
-        }
-        clearUserAuth();
-        setTsStatus({ type: "error", message: "Login timed out. Please try again." });
-        return;
-      }
-
-      if (data.funnelNotEnabled && data.enableUrl) {
-        await pollFunnelEnable(data.enableUrl);
-        return;
-      }
-
-      setTsStatus({ type: "error", message: data.error || "Failed to connect" });
-    } catch (error) {
-      setTsStatus({ type: "error", message: error.message });
-    } finally {
-      setTsLoading(false);
-      setTsConnecting(false);
-      setTsProgress("");
-      clearUserAuth();
-    }
-  };
-
-  const pollFunnelEnable = async (enableUrl) => {
-    requestUserAuth(enableUrl, "Open Funnel Settings");
-    setTsProgress('Click "Open Funnel Settings" to enable Funnel...');
-    for (let i = 0; i < 40; i++) {
-      await new Promise((r) => setTimeout(r, 3000));
-      try {
-        const res = await fetch("/api/tunnel/tailscale-enable", { method: "POST" });
-        const data = await res.json();
-        if (res.ok && data.success) {
-          clearUserAuth();
-          setTsUrl(data.tunnelUrl || "");
-          const ok3 = await pingTsHealth(data.tunnelUrl);
-          setTsEnabled(true);
-          setTsStatus(
-            ok3 ? null : { type: "warning", message: "Connected but not reachable yet." },
-          );
-          return;
-        }
-        if (data.funnelNotEnabled) continue;
-        if (data.error) {
-          clearUserAuth();
-          setTsStatus({ type: "error", message: data.error });
-          return;
-        }
-      } catch {
-        /* retry */
-      }
-    }
-    clearUserAuth();
-    setTsStatus({ type: "error", message: "Timed out waiting for Funnel to be enabled." });
-  };
-
-  const handleDisableTailscale = async () => {
-    setTsLoading(true);
-    setTsStatus(null);
-    try {
-      const res = await fetch("/api/tunnel/tailscale-disable", { method: "POST" });
-      const data = await res.json();
-      if (res.ok) {
-        setTsEnabled(false);
-        setTsUrl("");
-        setShowDisableTsModal(false);
-        setTsStatus({ type: "success", message: "Tailscale disabled" });
-      } else {
-        setTsStatus({ type: "error", message: data.error || "Failed to disable Tailscale" });
-      }
-    } catch (e) {
-      setTsStatus({ type: "error", message: e.message });
-    } finally {
-      setTsLoading(false);
-    }
-  };
-
-  const handleOpenTsModal = async () => {
-    setTsStatus(null);
-    setTsInstallLog([]);
-    const data = await checkTailscaleInstalled();
-    if (data?.installed && data?.hasCachedPassword) {
-      handleConnectTailscale();
-    } else {
-      setShowTsModal(true);
-    }
-  };
 
   const parseAllowedModelsList = (str) => {
     if (!str || str.trim() === "*" || str.trim() === "") return [];
