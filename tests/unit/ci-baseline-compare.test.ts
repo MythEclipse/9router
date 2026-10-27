@@ -129,6 +129,18 @@ describe("CI workflow wiring", () => {
     expect(workflow).not.toContain("pnpm");
   });
 
+  // The runtime loads src/dashboardGuard.ts outside the Next bundle, so bun has
+  // to resolve its "@/lib" imports itself — and bun reads those aliases from
+  // tsconfig.json, not from a bundler config. Leaving tsconfig out of the
+  // payload boots a live host with a dead auth guard and a permanent 503.
+  it("ships tsconfig.json with the release so bun resolves the path aliases", () => {
+    const copies = workflow.split("\n").filter((line) => line.includes('cp custom-server.js'));
+    expect(copies.length).toBeGreaterThan(0);
+    for (const line of copies) {
+      expect(line).toContain("tsconfig.json");
+    }
+  });
+
   it("keeps the image publish manual", () => {
     expect(workflow).toContain("workflow_dispatch");
   });
