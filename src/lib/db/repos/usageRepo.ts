@@ -350,7 +350,11 @@ async function getConnectionMapCached(): Promise<ConnectionMap> {
     for (const c of all) if (c) map[c.id] = c.name || c.email || c.id;
     connCache.map = map;
     connCache.ts = Date.now();
-  } catch {}
+  } catch (e) {
+    // Leave the cache empty rather than stale: a usage row then shows no connection
+    // name, which reads as "unknown" instead of naming the wrong one.
+    console.error("[usage] failed to load connection names:", e);
+  }
   return connCache.map;
 }
 
@@ -378,7 +382,10 @@ async function ensureRingInitialized() {
       status: (r.status as string | null) ?? null,
       tokens: parseJson<UsageTokens>(r.tokens as string | null, {}),
     }));
-  } catch {}
+  } catch (e) {
+    // The ring is a warm-up cache; an empty one costs a query per read, not correctness.
+    console.error("[usage] failed to prefill the recent-request ring:", e);
+  }
 }
 
 async function calculateCost(
@@ -1014,16 +1021,29 @@ export async function getUsageStats(
   ]);
 
   let allConnections: Awaited<ReturnType<typeof getProviderConnections>> = [];
-  try { allConnections = await getProviderConnections(); } catch {}
+  try {
+    allConnections = await getProviderConnections();
+  } catch (e) {
+    // Without these the report groups every row under an unknown connection.
+    console.error("[usage] failed to load connections for the report:", e);
+  }
   const connectionMap: ConnectionMap = buildConnectionMap(allConnections);
 
   let providerNodeNameMap: ProviderNodeNameMap = {};
   try {
     providerNodeNameMap = buildProviderNodeNameMap(await getProviderNodes());
-  } catch {}
+  } catch (e) {
+    // Node names then fall back to the connection name.
+    console.error("[usage] failed to load provider nodes for the report:", e);
+  }
 
   let allApiKeys: Awaited<ReturnType<typeof getApiKeys>> = [];
-  try { allApiKeys = await getApiKeys(); } catch {}
+  try {
+    allApiKeys = await getApiKeys();
+  } catch (e) {
+    // Rows then show the stored key hash instead of the key's display name.
+    console.error("[usage] failed to load api keys for the report:", e);
+  }
   const { byKey: apiKeyMap, byBucketId: apiKeyBucketMap } = buildApiKeyMaps(allApiKeys, apiKeyBucketId);
 
   // Read enough recent rows to account for filtered lifecycle/zero-usage entries.
@@ -1903,7 +1923,10 @@ export async function getRecentLogs(limit = 200) {
       const { getProviderConnections } = await import("./connectionsRepo");
       const connections = await getProviderConnections();
       for (const c of connections) if (c) connMap[c.id] = c.name || c.email || "";
-    } catch {}
+    } catch (e) {
+      // The log keeps the connection id, so an export stays usable without the name.
+      console.error("[usage] failed to load connection names for the log export:", e);
+    }
 
     return rows.map((r) => {
       const connectionId = r.connectionId ? String(r.connectionId) : "";
