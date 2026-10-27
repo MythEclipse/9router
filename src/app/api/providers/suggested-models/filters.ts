@@ -18,7 +18,24 @@ const NO_CHAT_ROUTE_OPENCODE_MODELS = new Set(["jev-1.13", "jev-1.13-free"]);
 // Upstream deprecates free ids without removing them at once: the id stays in
 // /zen/v1/models but every call answers 410 ModelDeprecated with the
 // replacement named in the message. Dead on arrival, so drop like jev/test.
-const DEPRECATED_OPENCODE_MODELS = new Set(["minimax-m3.1-flash-free"]);
+// The Muse Spark and Nemotron entries below were pulled from the upstream
+// catalogue outright — muse-spark-1.2 and 1.3 exist without the
+// -contributor-free suffix but answer 401 Missing API key, so they are paid
+// ids and must never surface on the free lane.
+const DEPRECATED_OPENCODE_MODELS = new Set([
+  "minimax-m3.1-flash-free",
+  "muse-spark-1.2-contributor-free",
+  "muse-spark-1.3-contributor-free",
+  "nemotron-3-ultra-free",
+]);
+
+/** True when `id` is an id upstream no longer serves, in any of the dead lists. */
+function isRetiredOpencodeModel(id) {
+  return DEAD_FREE_OPENCODE_MODELS.has(id)
+    || DEPRECATED_OPENCODE_MODELS.has(id)
+    || PLACEHOLDER_OPENCODE_MODELS.has(id)
+    || NO_CHAT_ROUTE_OPENCODE_MODELS.has(id);
+}
 
 // tolerant id reader: falls back to `name` when upstream changes its schema
 function opencodeModelId(m) {
@@ -32,7 +49,9 @@ function opencodeModelId(m) {
 // a model cannot be shown under one heading and counted under the other.
 export function isFreeOpencodeModel(m) {
   const id = opencodeModelId(m);
-  if (!id || DEAD_FREE_OPENCODE_MODELS.has(id)) return false;
+  // Retired ids must never read as free: a dead model carrying the "-free"
+  // suffix would otherwise pass the suffix test below.
+  if (!id || isRetiredOpencodeModel(id)) return false;
   const lower = id.toLowerCase();
   return (
     lower.endsWith("-free") ||
@@ -96,7 +115,7 @@ export const FILTERS: Record<string, (models: unknown) => SuggestedModel[]> = {
   "opencode-free": (models) =>
     (Array.isArray(models) ? models : [])
       .map((m) => ({ id: opencodeModelId(m), name: opencodeModelId(m) }))
-      .filter((m) => m.id && !PLACEHOLDER_OPENCODE_MODELS.has(m.id) && !NO_CHAT_ROUTE_OPENCODE_MODELS.has(m.id) && !DEPRECATED_OPENCODE_MODELS.has(m.id))
+      .filter((m) => m.id && !isRetiredOpencodeModel(m.id))
       .map((m) => ({ ...m, isFree: isFreeOpencodeModel(m) }))
       .sort((a, b) => Number(b.isFree) - Number(a.isFree) || a.id.localeCompare(b.id)),
 

@@ -2,10 +2,12 @@ import { getProviderConnectionById, updateProviderConnection } from "@/lib/local
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy";
 import { testProxyUrl } from "@/lib/network/proxyTest";
 import { isOpenAICompatibleProvider, isAnthropicCompatibleProvider, AI_PROVIDERS } from "@/shared/constants/providers";
-import { getDefaultModel } from "open-sse/config/providerModels";
+import { getDefaultModel, getProviderModels, PROVIDER_ID_TO_ALIAS } from "open-sse/config/providerModels";
 import { probeBedrockCredentials } from "open-sse/executors/bedrock";
 import { resolveOllamaLocalHost, PROVIDERS } from "open-sse/config/providers";
 import { CODEX_CLI_VERSION } from "open-sse/config/appConstants";
+import { SERVER_CONFIG } from "@/shared/constants/config";
+import { pingModelByKind } from "@/app/api/models/test/ping";
 import { GROK_CLI_PAGER_USER_AGENT, GROK_CLI_VERSION } from "open-sse/config/grokCli";
 import {
   NOUS_CHAT_COMPLETIONS_URL,
@@ -894,14 +896,26 @@ async function testApiKeyConnection(connection, effectiveProxy = null) {
         return { valid: true, error: null };
       }
       case "opencode": {
-        // Connectivity-only probe: GET /models never exercises the Responses
-        // tool path, so a green dashboard test does NOT rule out 403
-        // FreeTierError on POST /zen/v1/responses with tools (requires
-        // bash+read decoys + tool_choice auto - see OpenCodeExecutor).
-        const res = await fetchWithConnectionProxy("https://opencode.ai/zen/v1/models", {
-          headers: { Authorization: "Bearer public", "User-Agent": "opencode/1.19.4 ai-sdk/provider-utils/4.0.23 runtime/bun/1.4.4" },
-        }, effectiveProxy);
-        return { valid: res.ok, error: res.ok ? null : "OpenCode free tier unavailable" };
+        // Probe the real chat lane, not GET /models: that endpoint answers 200
+        // even while every free chat call is 429, so it could never tell the
+        // user what a real request would do. This rides the same internal
+        // chat route the proxy serves, so the executor's harness, endpoint and
+        // UA are all exercised exactly as a live request would be.
+        const alias = PROVIDER_ID_TO_ALIAS[connection.provider] || connection.provider;
+        const model = getProviderModels(alias)[0]?.id;
+        if (!model) return { valid: false, error: "No opencode model configured" };
+
+        const baseUrl = `http://127.0.0.1:${process.env.PORT || SERVER_CONFIG.port}`;
+        const probe = await pingModelByKind(`${alias}/${model}`, "llm", baseUrl);
+        if (!probe.ok) {
+          return {
+            valid: false,
+            error: probe.status === 429
+              ? "OpenCode free usage limit reached - wait for the window to reset"
+              : probe.error || "OpenCode free tier unavailable",
+          };
+        }
+        return { valid: true, error: null };
       }
       case "opencode-go": {
         const res = await fetchWithConnectionProxy("https://opencode.ai/zen/go/v1/chat/completions", {
