@@ -20,6 +20,7 @@ import {
 } from "./endpointConstants";
 import { clientPingUrl, clientPingAny } from "./endpointPing";
 import { ServerSentFrameReader } from "@/shared/utils/sseFrames";
+import { applyProbe, initialReachability, type ReachabilityState } from "./reachability";
 import {
   limitKindOf as limitKindOfKey,
   limitCapOf as limitCapOfKey,
@@ -450,19 +451,24 @@ const scopedModelPatterns =
   const [showDisableTsModal, setShowDisableTsModal] = useState(false);
   const tsLogRef = useRef(null);
 
-  // Debounce reachable=false: server may briefly return false during background refresh.
-  // Only flip UI to "reconnecting" after N consecutive misses to avoid spinner flicker.
-  const tunnelMissRef = useRef(0);
-  const tsMissRef = useRef(0);
-  // Browser-side reachable cache (independent of backend DNS quirks)
+  // Debounce reachable=false: server may briefly return false during background
+  // refresh, so the UI only flips to "reconnecting" after N consecutive misses to
+  // avoid spinner flicker. Browser-side reachable cache (independent of backend DNS
+  // quirks); the miss counter lives in the tracker below.
   const tunnelClientReachableRef = useRef(false);
   const tsClientReachableRef = useRef(false);
-  // Track whether reachable=true was ever observed in this session.
-  // Distinguishes "Checking..." (initial cold cache) from "Reconnecting..." (lost connection).
-  const tunnelEverReachableRef = useRef(false);
-  const tsEverReachableRef = useRef(false);
+  // Whether reachable=true was ever observed this session; distinguishes
+  // "Checking..." (cold) from "Reconnecting..." (lost connection).
   const [tunnelEverReachable, setTunnelEverReachable] = useState(false);
   const [tsEverReachable, setTsEverReachable] = useState(false);
+  // The debounce state each probe path folds into, so the server sync and the
+  // browser ping apply the same rule (see ./reachability).
+  const tunnelReachState = useRef(initialReachability());
+  const tsReachState = useRef(initialReachability());
+  // Mirror of the rendered reachability, so the memoized callbacks below can read
+  // the current verdict without taking a state dependency and re-creating.
+  const tunnelReachableRef = useRef(false);
+  const tsReachableRef = useRef(false);
 
   // API key visibility toggle state
   const [visibleKeys, setVisibleKeys] = useState(new Set());
@@ -527,25 +533,35 @@ const scopedModelPatterns =
     }
   };
 
-  const updateReachable = useCallback(
-    (_unused, clientRef, missRef, setter, everRef, everSetter) => {
-      const reachable = clientRef.current;
-      if (reachable) {
-        missRef.current = 0;
-        setter(true);
-        if (!everRef.current) {
-          everRef.current = true;
-          everSetter(true);
-        }
-      } else {
-        missRef.current += 1;
-        if (missRef.current >= REACHABLE_MISS_THRESHOLD) setter(false);
-      }
+  // Folds one probe into the debounce rule both probe paths share. `state` is the
+  // per-endpoint tracker ref, `setReachable`/`setEver` the rendered flags.
+  const applyReachability = useCallback(
+    (
+      state: { current: ReachabilityState },
+      ok: boolean,
+      setReachable: (value: boolean) => void,
+      setEver: (value: boolean) => void,
+      wasReachable: boolean,
+    ) => {
+      const result = applyProbe(state.current, ok, REACHABLE_MISS_THRESHOLD, wasReachable);
+      state.current = result.state;
+      setReachable(result.reachable);
+      if (result.recovered) setEver(true);
+      return result;
     },
     [],
   );
 
-  // Reads only state setters, stable refs and the memoized updateReachable -
+  // Keep the ref mirror in step with the rendered flag. A synchronous write during
+  // render would be a side effect, so it happens in the commit phase.
+  useEffect(() => {
+    tunnelReachableRef.current = tunnelReachable;
+  }, [tunnelReachable]);
+  useEffect(() => {
+    tsReachableRef.current = tsReachable;
+  }, [tsReachable]);
+
+  // Reads only state setters, the tracker refs and the memoized applyReachability -
   // never a state value - so it is memoizable and the poll effect can list it.
   const syncTunnelStatus = useCallback(async () => {
     try {
@@ -557,34 +573,32 @@ const scopedModelPatterns =
       setTunnelUrl(tUrl);
       setTunnelPublicUrl(data.tunnel?.publicUrl || "");
       setTunnelEnabled(tEnabled);
-      updateReachable(
-        null,
-        tunnelClientReachableRef,
-        tunnelMissRef,
+      applyReachability(
+        tunnelReachState,
+        tunnelClientReachableRef.current,
         setTunnelReachable,
-        tunnelEverReachableRef,
         setTunnelEverReachable,
+        tunnelReachableRef.current,
       );
 
       const tsEn = data.tailscale?.settingsEnabled ?? data.tailscale?.enabled ?? false;
       const tsUrlVal = data.tailscale?.tunnelUrl || "";
       setTsUrl(tsUrlVal);
       setTsEnabled(tsEn);
-      updateReachable(
-        null,
-        tsClientReachableRef,
-        tsMissRef,
+      applyReachability(
+        tsReachState,
+        tsClientReachableRef.current,
         setTsReachable,
-        tsEverReachableRef,
         setTsEverReachable,
+        tsReachableRef.current,
       );
     } catch {
       /* ignore poll errors */
     }
-  }, [updateReachable]);
+  }, [applyReachability]);
 
   // Memoized for the same reason as syncTunnelStatus above: the only captured
-  // values are state setters, refs and the memoized updateReachable.
+  // values are state setters, refs and the memoized applyReachability.
   const loadSettings = useCallback(async () => {
     setTunnelChecking(true);
     try {
@@ -607,26 +621,24 @@ const scopedModelPatterns =
         setTunnelUrl(tUrl);
         setTunnelPublicUrl(data.tunnel?.publicUrl || "");
         setTunnelEnabled(tEnabled);
-        updateReachable(
-          null,
-          tunnelClientReachableRef,
-          tunnelMissRef,
+        applyReachability(
+          tunnelReachState,
+          tunnelClientReachableRef.current,
           setTunnelReachable,
-          tunnelEverReachableRef,
           setTunnelEverReachable,
+          tunnelReachableRef.current,
         );
 
         const tsEn = data.tailscale?.settingsEnabled ?? data.tailscale?.enabled ?? false;
         const tsUrlVal = data.tailscale?.tunnelUrl || "";
         setTsUrl(tsUrlVal);
         setTsEnabled(tsEn);
-        updateReachable(
-          null,
-          tsClientReachableRef,
-          tsMissRef,
+        applyReachability(
+          tsReachState,
+          tsClientReachableRef.current,
           setTsReachable,
-          tsEverReachableRef,
           setTsEverReachable,
+          tsReachableRef.current,
         );
       }
     } catch (error) {
@@ -634,7 +646,7 @@ const scopedModelPatterns =
     } finally {
       setTunnelChecking(false);
     }
-  }, [updateReachable]);
+  }, [applyReachability]);
 
   useEffect(() => {
     fetch("/api/auth/status")
@@ -689,34 +701,26 @@ const scopedModelPatterns =
       if (tunnelEnabled && (tunnelUrl || tunnelPublicUrl)) {
         const ok = await clientPingAny(tunnelPublicUrl, tunnelUrl);
         tunnelClientReachableRef.current = ok;
-        if (ok) {
-          tunnelMissRef.current = 0;
-          setTunnelReachable(true);
-          if (!tunnelEverReachableRef.current) {
-            tunnelEverReachableRef.current = true;
-            setTunnelEverReachable(true);
-          }
-        } else {
-          tunnelMissRef.current += 1;
-          if (tunnelMissRef.current >= REACHABLE_MISS_THRESHOLD) setTunnelReachable(false);
-        }
+        applyReachability(
+          tunnelReachState,
+          ok,
+          setTunnelReachable,
+          setTunnelEverReachable,
+          tunnelReachableRef.current,
+        );
       } else {
         tunnelClientReachableRef.current = false;
       }
       if (tsEnabled && tsUrl) {
         const ok = await clientPingUrl(tsUrl);
         tsClientReachableRef.current = ok;
-        if (ok) {
-          tsMissRef.current = 0;
-          setTsReachable(true);
-          if (!tsEverReachableRef.current) {
-            tsEverReachableRef.current = true;
-            setTsEverReachable(true);
-          }
-        } else {
-          tsMissRef.current += 1;
-          if (tsMissRef.current >= REACHABLE_MISS_THRESHOLD) setTsReachable(false);
-        }
+        applyReachability(
+          tsReachState,
+          ok,
+          setTsReachable,
+          setTsEverReachable,
+          tsReachableRef.current,
+        );
       } else {
         tsClientReachableRef.current = false;
       }
@@ -729,7 +733,7 @@ const scopedModelPatterns =
     if (tunnelHealthy && tsHealthy) return;
     const id = setInterval(probeBoth, CLIENT_PING_FAST_MS);
     return () => clearInterval(id);
-  }, [tunnelEnabled, tunnelUrl, tunnelPublicUrl, tsEnabled, tsUrl, tunnelReachable, tsReachable]);
+  }, [tunnelEnabled, tunnelUrl, tunnelPublicUrl, tsEnabled, tsUrl, tunnelReachable, tsReachable, applyReachability]);
 
   // Client-side reachable only (server no longer probes; watchdog handles backend health).
   // Miss-debounce: only flip to false after N consecutive misses.
