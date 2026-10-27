@@ -512,9 +512,16 @@ export default function UsageStats({
   const esRef = useRef(null);
   const [chartUpdateKey, setChartUpdateKey] = useState(0);
   const lastBucketSignature = useRef<string | null>(null);
+  const lastFrameRef = useRef<string | null>(null);
+  const statsSeeded = useRef(false);
 
   useEffect(() => {
     if (esRef.current) esRef.current.close();
+    // A new connection (period switch) streams a fresh "full" frame first, so the
+    // seed guard and the de-dupe reference must both restart with it.
+    statsSeeded.current = false;
+    lastFrameRef.current = null;
+    lastBucketSignature.current = null;
 
     const es = new EventSource(`/api/usage/stream?period=${period}`);
     esRef.current = es;
@@ -522,17 +529,29 @@ export default function UsageStats({
     es.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data);
+        // A "pending" frame carries only the live rows, so it must not seed state —
+        // that would leave every aggregate undefined. Wait for the first "full".
+        if (!data || (data._type !== "full" && !statsSeeded.current)) return;
+        if (data._type === "full") statsSeeded.current = true;
         setStats((prev) => {
           if (!prev) return data;
           if (data._type === "full") {
-            return { ...data };
+            // A "full" frame replaces every aggregate. Each one carries the whole
+            // byModel / byAccount map (30+ models, 60+ accounts), so returning a
+            // fresh object re-rendered every table that reads it. Keep the previous
+            // object when the frame is byte-identical, so React sees no change.
+            if (e.data === lastFrameRef.current) return prev;
+            lastFrameRef.current = e.data;
+            return { ...prev, ...data };
           }
+          // "pending" frames only move the live rows; the aggregates are unchanged,
+          // so reuse the previous sub-objects rather than rebuilding them.
           return {
             ...prev,
             activeRequests: data.activeRequests,
             recentRequests: data.recentRequests,
             errorProvider: data.errorProvider,
-            pending: data.pending,
+            pending: data.pending ?? prev.pending,
           };
         });
         if (data._type === "full") {
