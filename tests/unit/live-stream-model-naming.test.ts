@@ -53,6 +53,19 @@ describe("live stream model naming", () => {
     expect(repo).toMatch(/resolvedModel: \(parseJson<Record<string, unknown>>\(r\.meta/);
   });
 
+  it("actually selects the meta column it then parses", () => {
+    // Reading `r.meta` is useless if the query never fetched that column: the
+    // value is silently undefined and every row falls back to the combo name.
+    // That regression only showed while the stream was idle (rows restored from
+    // disk) and disappeared as soon as a live request replaced them, which is
+    // why the previous test — which only checked the parse expression — passed.
+    const restoreQuery = repo.match(
+      /SELECT timestamp, provider, model, connectionId, apiKey, endpoint, cost, status, tokens([^`]*)FROM usageHistory/,
+    );
+    expect(restoreQuery).not.toBeNull();
+    expect(restoreQuery?.[1]).toContain("meta");
+  });
+
   it("exposes requestedModel on RecentRequest so the UI can qualify a row", () => {
     expect(repo).toMatch(/interface RecentRequest \{[\s\S]*?requestedModel\?: string;/);
   });

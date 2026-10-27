@@ -353,7 +353,7 @@ async function ensureRingInitialized() {
   try {
     const db = await getAdapter();
     const rows = db.all<DbRow>(
-      `SELECT timestamp, provider, model, connectionId, apiKey, endpoint, cost, status, tokens FROM usageHistory ORDER BY id DESC LIMIT ?`,
+      `SELECT timestamp, provider, model, connectionId, apiKey, endpoint, cost, status, tokens, meta FROM usageHistory ORDER BY id DESC LIMIT ?`,
       [RING_CAP]
     );
     recentRing.items = rows.reverse().map((r): UsageEntry => ({
