@@ -7,6 +7,7 @@ import os from "os";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { parseTOML, stringifyTOML } from "confbox";
+import { readConfigForWrite } from "@/lib/cliTools/configWrite";
 
 export const dynamic = "force-dynamic";
 
@@ -102,11 +103,11 @@ export async function POST(request) {
     const configPath = getCodewhaleConfigPath();
     await fs.mkdir(getCodewhaleDir(), { recursive: true });
 
-    let existing: CodewhaleConfig = {};
-    try {
-      const raw = await fs.readFile(configPath, "utf-8");
-      existing = parseTOML<CodewhaleConfig>(raw) ?? {};
-    } catch {}
+    // An absent file means a fresh config; an unreadable one must abort the write
+    // rather than let the merge below drop every other setting the user had.
+    const existing: CodewhaleConfig = await readConfigForWrite(fs, configPath, (raw) =>
+      parseTOML<CodewhaleConfig>(raw) ?? {}
+    );
 
     const normalizedBaseUrl = baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
 

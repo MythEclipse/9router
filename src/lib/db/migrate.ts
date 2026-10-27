@@ -104,9 +104,15 @@ function syncSchemaFromTables(adapter) {
       }
     }
 
-    // Indexes (idempotent)
+    // Indexes (idempotent). A failure here does not corrupt anything, but it leaves
+    // the table unindexed, which only shows up later as slow queries — so it is
+    // reported the same way a failed column add is.
     for (const idx of (def as TableDef).indexes || []) {
-      try { adapter.exec(idx); } catch {}
+      try {
+        adapter.exec(idx);
+      } catch (e) {
+        console.warn(`[DB][sync] index failed: ${idx} | ${e instanceof Error ? e.message : String(e)}`);
+      }
     }
   }
 }
