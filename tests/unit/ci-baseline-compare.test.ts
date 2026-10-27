@@ -120,8 +120,13 @@ describe("CI workflow wiring", () => {
   const workflow = readFileSync(resolve(root, ".github/workflows/ci.yml"), "utf8");
 
   it("builds and boots the standalone server so a guard-unavailable build fails CI", () => {
-    expect(workflow).toContain("pnpm run build");
+    expect(workflow).toContain("bun run build");
     expect(workflow).toContain("/api/health");
+  });
+
+  it("installs with bun so the lockfile and the build agree", () => {
+    expect(workflow).toContain("bun install --frozen-lockfile");
+    expect(workflow).not.toContain("pnpm");
   });
 
   it("keeps the image publish manual", () => {

@@ -1,4 +1,4 @@
-ARG NODE_IMAGE=node:22-alpine
+ARG NODE_IMAGE=oven/bun:1.3.14-alpine
 ARG ALPINE_MIRROR=dl-cdn.alpinelinux.org
 ARG NPM_REGISTRY=https://registry.npmjs.org/
 ARG APP_VERSION=unknown
@@ -19,27 +19,30 @@ ARG NPM_REGISTRY
 RUN apk add --no-cache python3 make g++ linux-headers
 
 COPY package.json ./
-# Install opencode-ai CLI globally so runner image has access to opencode binary
-RUN npm install -g opencode-ai --registry="${NPM_REGISTRY}" || true
-# Ensure opencode binary is executable and linked in /usr/local/bin
+# Install opencode-ai CLI globally so the runner image has the opencode binary.
+# The bun image ships no npm, so this rides on bun's global installer; the
+# package layout it produces differs from npm's, hence the fallback probe below
+# searches bun's global root too.
+RUN bun install -g opencode-ai --registry="${NPM_REGISTRY}" || true
+# Ensure opencode binary is executable and linked in /usr/local/bin. bun links
+# global bins straight into its own bin dir, so probe every plausible root.
 RUN if [ ! -f /usr/local/bin/opencode ]; then \
-      find /usr/local/lib/node_modules/opencode* -name "opencode" -type f -exec cp {} /usr/local/bin/opencode \; 2>/dev/null || true; \
+      for d in /usr/local/lib/node_modules "$HOME/.bun/install/global/node_modules" /root/.bun/install/global/node_modules; do \
+        find "$d"/opencode* -name "opencode" -type f -exec cp {} /usr/local/bin/opencode \; 2>/dev/null || true; \
+      done; \
     fi && touch /usr/local/bin/opencode && chmod +x /usr/local/bin/opencode
 # No cache mount here on purpose. Railway's builder requires the id to be
 # prefixed with a key it generates per service, and the documented form is
 # rejected as well, so the mount only breaks the build there. The layer above
 # already caches the install, because package.json is copied on its own.
-RUN npm install \
-      --registry="${NPM_REGISTRY}" \
-      --fetch-retries=5 \
-      --fetch-retry-factor=2 \
-      --fetch-retry-mintimeout=10000 \
-      --fetch-retry-maxtimeout=120000 \
-      --fetch-timeout=300000
+COPY bun.lock ./
+# bun resolves bun.lock; the retry knobs above were npm-specific, and bun
+# already retries registry failures on its own.
+RUN bun install --frozen-lockfile
 
 COPY . ./
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
+RUN bun run build
 
 FROM ${NODE_IMAGE} AS runner
 ARG ALPINE_MIRROR
@@ -117,4 +120,4 @@ RUN apk add --no-cache su-exec curl ca-certificates gcompat libstdc++ && \
 EXPOSE 20128
 
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["node", "custom-server.js"]
+CMD ["bun", "custom-server.js"]

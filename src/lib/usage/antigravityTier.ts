@@ -11,7 +11,6 @@
  * (loadCodeAssist for the tier, fetchAvailableModels for the catalog), reusing
  * the stored OAuth token from the active Antigravity connection.
  */
-import { DatabaseSync } from "node:sqlite";
 
 const DB_PATH = process.env.DATABASE_PATH || "/root/.9router/db/data.sqlite";
 const AG_BASE = "https://daily-cloudcode-pa.googleapis.com/v1internal";
@@ -25,8 +24,14 @@ const CLAUDE55_HINTS = [/opus[-_.]?5[-_.]?5/i, /sonnet[-_.]?5[-_.]?5/i, /opus.?5
 const CACHE_TTL_MS = 5 * 60 * 1000;
 let cache = { at: 0, value: null };
 
-function readToken() {
+// node:sqlite is Node's built-in driver; Bun does not ship it. A static import
+// is therefore fatal under Bun — Turbopack inlines it at build time and the
+// whole route fails to collect. Load it lazily so the module survives on both
+// runtimes, and let a runtime without the built-in fall back to no token
+// (the caller already treats a missing token as "tier unknown").
+async function readToken() {
   try {
+    const { DatabaseSync } = await import("node:sqlite");
     const db = new DatabaseSync(DB_PATH, { readOnly: true });
     const row = db
       .prepare("SELECT data FROM providerConnections WHERE provider = 'antigravity' AND isActive = 1 LIMIT 1")
@@ -64,7 +69,7 @@ async function post(path, token) {
 export async function getAntigravityTier() {
   if (cache.value && Date.now() - cache.at < CACHE_TTL_MS) return cache.value;
 
-  const token = readToken();
+  const token = await readToken();
   if (!token) {
     const out = {
       tierId: null,

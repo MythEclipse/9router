@@ -14,23 +14,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          version: 9
-          run_install: false
+          bun-version: 1.3.14
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - run: pnpm install --frozen-lockfile
+      - run: bun install --frozen-lockfile
 
       - name: Start the app
         run: |
-          pnpm run build
-          PORT=20128 pnpm run start >/tmp/app.log 2>&1 &
+          bun run build
+          PORT=20128 bun run start >/tmp/app.log 2>&1 &
           for i in $(seq 1 60); do
             curl -sf http://127.0.0.1:20128/api/health >/dev/null && break
             sleep 3

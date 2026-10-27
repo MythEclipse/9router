@@ -1,7 +1,7 @@
 pre-commit:
   commands:
     lint-staged:
-      run: pnpm exec lint-staged
+      run: bunx lint-staged
 
 pre-push:
   commands:
@@ -18,6 +18,6 @@ pre-push:
           base="origin/$branch"
         fi
         echo "[lint-staged] checking $base...HEAD"
-        pnpm exec lint-staged --diff="$base...HEAD"
+        bunx lint-staged --diff="$base...HEAD"
     bump:
-      run: pnpm run bump
+      run: bun run bump

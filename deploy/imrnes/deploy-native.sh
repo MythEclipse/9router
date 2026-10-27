@@ -13,7 +13,8 @@
 # Flow:
 #   1. unpack the tarball into /opt/9router/releases/<sha>
 #   2. (re)install shared deps into /opt/9router/deps when the manifests changed
-#   3. symlink deps/node_modules into the release — imrnes has no pnpm, and a
+#   3. symlink deps/node_modules into the release — imrnes has no package
+#      manager beyond bun, and a
 #      279M node_modules per release would double on every rollback target
 #   4. atomically flip /opt/9router/current -> releases/<sha>
 #   5. restart the systemd unit, health-check /api/health
@@ -31,6 +32,9 @@ CURRENT_LINK="${CURRENT_LINK:-/opt/9router/current}"
 PREV_DIR="${CURRENT_LINK}.previous"
 DEPS_DIR="${DEPS_DIR:-/opt/9router/deps}"
 APP_DIR="${APP_DIR:-/opt/9router}"
+# Bun lives inside the app tree: the service user must be able to execute it,
+# and the path appears verbatim in 9router.service's ExecStart.
+BUN_DIR="${BUN_DIR:-/opt/9router/.bun}"
 UNIT="${UNIT:-9router}"
 PORT="${PORT:-2028}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:${PORT}/api/health}"
@@ -60,18 +64,26 @@ as_root() {
   fi
 }
 
-# pnpm is the installer for this lockfile (pnpm-lock.yaml). Node.js ships with
-# corepack, which provides pnpm. Auto-provision if the host does not have it yet.
-resolve_pnpm() {
-  if command -v pnpm >/dev/null 2>&1; then
-    command -v pnpm
+# bun is the installer AND the runtime for this app (see 9router.service). It
+# lives inside the app tree so the service user can execute it without touching
+# /root, and because the path is baked into ExecStart. Node.js ships no bun, so
+# the host gets one on first use.
+resolve_bun() {
+  if [ -x "$BUN_DIR/bin/bun" ]; then
+    echo "$BUN_DIR/bin/bun"
     return 0
   fi
-  log "enabling pnpm via corepack"
-  as_root corepack enable pnpm || die "corepack enable pnpm failed"
-  command -v pnpm || die "pnpm not available after corepack enable"
+  if command -v bun >/dev/null 2>&1; then
+    command -v bun
+    return 0
+  fi
+  log "installing bun into $BUN_DIR"
+  as_root env HOME=/root BUN_INSTALL="$BUN_DIR" bash -c 'curl -fsSL https://bun.sh/install | bash' >/dev/null 2>&1 \
+    || die "bun install failed"
+  [ -x "$BUN_DIR/bin/bun" ] || die "bun not available after install"
+  echo "$BUN_DIR/bin/bun"
 }
-PNPM="$(resolve_pnpm)"
+BUN="$(resolve_bun)"
 
 # ── state captured before we touch anything ────────────────────────────────
 # Quarantine legacy releases first: a release whose node_modules is a symlink
@@ -203,15 +215,13 @@ as_root tar xzf "$PAYLOAD" -C "$RELEASE_DIR" --exclude=.deploy-sha
 # "canonicalBase" error at base-server.js).
 log "installing dependencies into $RELEASE_DIR"
 # Runs as root with an explicit HOME: sudo's secure_path must not be trusted
-# to find pnpm, and pnpm refuses to write its cache to an unwritable HOME.
-# A subshell with `cd` rather than a --cwd flag: `pnpm --cwd <dir> install`
-# is parsed as a SCRIPT named "install", which fails with "Script not found".
+# to find bun, and bun refuses to write its cache to an unwritable HOME.
 as_root rm -rf "${RELEASE_DIR}/node_modules"
 (
   cd "$RELEASE_DIR"
-  as_root env HOME=/root PNPM_CONFIG_MINIMUM_RELEASE_AGE=0 "$PNPM" install --frozen-lockfile
+  as_root env HOME=/root "$BUN" install --frozen-lockfile
 )
-[ -d "${RELEASE_DIR}/node_modules" ] || die "pnpm install produced no node_modules"
+[ -d "${RELEASE_DIR}/node_modules" ] || die "bun install produced no node_modules"
 next_version="$(node -p "require('${RELEASE_DIR}/node_modules/next/package.json').version" 2>/dev/null || echo unknown)"
 log "installed next@${next_version} into $RELEASE_DIR"
 # Assert next resolves from the release's own node_modules, not a shared tree.

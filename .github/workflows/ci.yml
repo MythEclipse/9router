@@ -82,45 +82,37 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          version: 9
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
+          bun-version: 1.3.14
 
       - name: Cache Next.js build cache
         uses: actions/cache@v4
         with:
           path: |
             ${{ github.workspace }}/.next/cache
-          key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml', 'next.config.mjs', 'src/**/*.js', 'src/**/*.jsx', 'src/**/*.ts', 'src/**/*.tsx', 'open-sse/**/*.js', 'open-sse/**/*.ts', 'public/**/*', 'scripts/**/*.js') }}
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('bun.lock', 'next.config.mjs', 'src/**/*.js', 'src/**/*.jsx', 'src/**/*.ts', 'src/**/*.tsx', 'open-sse/**/*.js', 'open-sse/**/*.ts', 'public/**/*', 'scripts/**/*.js') }}
           restore-keys: |
-            ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-
+            ${{ runner.os }}-nextjs-${{ hashFiles('bun.lock') }}-
 
       - name: Install deps
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Build
-        run: pnpm run build
+        run: bun run build
 
       # Assemble exactly what flake.nix used to copy into $out/lib/9router:
       # the standalone server, the full .next build, the runtime source trees
       # and custom-server.js. node_modules is left out on purpose — the host
-      # keeps its own and only refreshes it when pnpm-lock.yaml changes.
+      # keeps its own and only refreshes it when bun.lock changes.
       - name: Assemble release
         run: |
           set -euo pipefail
           R=/tmp/9router-release
           rm -rf "$R"
           mkdir -p "$R"
-          cp custom-server.js package.json pnpm-lock.yaml pnpm-workspace.yaml next.config.mjs "$R"/
+          cp custom-server.js package.json bun.lock next.config.mjs "$R"/
           cp -r src open-sse public scripts "$R"/
           cp .next/standalone/server.js "$R/server.js"
           # Anchor both excludes at the transfer root: .next/standalone is a
@@ -163,15 +155,15 @@ jobs:
 
           # Decide BEFORE syncing: once the new tree lands, the host's copies
           # are ours, so comparing afterwards could never detect a change.
-          # A missing pnpm-lock.yaml on the host falls back to package.json.
+          # A missing bun.lock on the host falls back to package.json.
           echo "=== Compare dependency manifests ==="
           ssh "$VPS_USER@$VPS_HOST" "cat $APP_DIR/package.json 2>/dev/null || true" > /tmp/host-package.json
-          ssh "$VPS_USER@$VPS_HOST" "cat $APP_DIR/pnpm-lock.yaml 2>/dev/null || true" > /tmp/host-pnpm-lock.yaml
+          ssh "$VPS_USER@$VPS_HOST" "cat $APP_DIR/bun.lock 2>/dev/null || true" > /tmp/host-bun.lock
           NEED_INSTALL=0
           if [ -s /tmp/host-package.json ] && ! cmp -s package.json /tmp/host-package.json; then
             NEED_INSTALL=1
           fi
-          if [ -s /tmp/host-pnpm-lock.yaml ] && ! cmp -s pnpm-lock.yaml /tmp/host-pnpm-lock.yaml; then
+          if [ -s /tmp/host-bun.lock ] && ! cmp -s bun.lock /tmp/host-bun.lock; then
             NEED_INSTALL=1
           fi
           echo "dependency manifests changed: $NEED_INSTALL (0 = reuse the host's node_modules)"
@@ -190,14 +182,14 @@ jobs:
           ssh "$VPS_USER@$VPS_HOST" \
             "sudo rsync -a --delete --exclude=node_modules --exclude=.env /tmp/9router-stage/ $APP_DIR/ && sudo rm -rf /tmp/9router-stage"
 
-          # node_modules is root-owned, so the install runs as root with pnpm's
+          # node_modules is root-owned, so the install runs as root with bun's
           # absolute path (sudo's secure_path must not be trusted to find it).
           if [ "$NEED_INSTALL" = "1" ]; then
-            echo "=== pnpm install on the VPS ==="
-            # PNPM_CONFIG_MINIMUM_RELEASE_AGE=0 relaxes the supply-chain policy
-            # that blocks recently-published packages (e.g. deps updated today).
+            echo "=== bun install on the VPS ==="
             # Everything runs under sudo because node_modules is root-owned.
-            ssh "$VPS_USER@$VPS_HOST" "cd $APP_DIR && sudo HOME=/root bash -c 'corepack enable pnpm && PNPM_CONFIG_MINIMUM_RELEASE_AGE=0 pnpm install --frozen-lockfile'"
+            # BUN_INSTALL_CACHE_DIR is not needed: bun falls back to its default
+            # cache, and HOME=/root keeps that writable.
+            ssh "$VPS_USER@$VPS_HOST" "cd $APP_DIR && sudo HOME=/root bash -c 'command -v bun >/dev/null 2>&1 || curl -fsSL https://bun.sh/install | bash >/dev/null; export PATH=/root/.bun/bin:\$PATH; bun install --frozen-lockfile'"
           else
             echo "=== manifests unchanged -> reusing host node_modules ==="
           fi
@@ -246,10 +238,9 @@ jobs:
   #
   # Same payload as deploy-orange, so both lanes ship the identical file set:
   #   .next/standalone/server.js + .next + open-sse + src + public
-  #   + custom-server.js + package.json + pnpm-lock.yaml + deploy/imrnes/*
+  #   + custom-server.js + package.json + bun.lock + deploy/imrnes/*
   # node_modules is NOT in the payload: deploy-native.sh installs it once into
-  # /opt/9router/deps (pnpm-lock.yaml is a pnpm lockfile, so only pnpm can
-  # resolve it)
+  # /opt/9router/deps (bun.lock is resolved by bun on the host)
   # and symlinks it into every release.
   deploy-imrnes:
     name: Deploy to imrnes VPS
@@ -274,33 +265,25 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          version: 9
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
+          bun-version: 1.3.14
 
       - name: Cache Next.js build cache
         uses: actions/cache@v4
         with:
           path: |
             ${{ github.workspace }}/.next/cache
-          key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml', 'next.config.mjs', 'src/**/*.js', 'src/**/*.jsx', 'src/**/*.ts', 'src/**/*.tsx', 'open-sse/**/*.js', 'open-sse/**/*.ts', 'public/**/*', 'scripts/**/*.js') }}
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('bun.lock', 'next.config.mjs', 'src/**/*.js', 'src/**/*.jsx', 'src/**/*.ts', 'src/**/*.tsx', 'open-sse/**/*.js', 'open-sse/**/*.ts', 'public/**/*', 'scripts/**/*.js') }}
           restore-keys: |
-            ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-
+            ${{ runner.os }}-nextjs-${{ hashFiles('bun.lock') }}-
 
       - name: Install deps
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Build
-        run: pnpm run build
+        run: bun run build
 
       - name: Assemble release
         run: |
@@ -308,7 +291,7 @@ jobs:
           R=/tmp/9router-release-imrnes
           rm -rf "$R"
           mkdir -p "$R"
-          cp custom-server.js package.json pnpm-lock.yaml pnpm-workspace.yaml next.config.mjs "$R"/
+          cp custom-server.js package.json bun.lock next.config.mjs "$R"/
           cp -r src open-sse public deploy scripts "$R"/
           cp .next/standalone/server.js "$R/server.js"
           # Anchor both excludes at the transfer root: .next/standalone is a
