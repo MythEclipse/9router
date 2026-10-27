@@ -70,12 +70,19 @@ export function pickSmartProxyPoolId(poolIds, providerId, excludePoolIds = null)
     return state.current;
   }
 
-  // Everything is cooling down or already tried: fall back to the pool whose
-  // cooldown ends first so requests keep flowing instead of failing on the wall.
-  const fallback = poolIds
-    .filter((id) => !excluded || !excluded.has(id))
-    .sort((a, b) => (state.blocked.get(a) ?? 0) - (state.blocked.get(b) ?? 0))[0];
-  const picked = fallback ?? poolIds[0];
+  // Everything is cooling down or already tried: pick the pool whose cooldown
+  // ends FIRST, so this request lands closest to a recovered IP and the next
+  // request after that has a healthy one.
+  //
+  // The sort key has to treat "not blocked" as infinity, not zero. With `?? 0`
+  // an unblocked pool sorts ahead of every cooling one, so a list containing a
+  // never-blocked entry could still return a pool that is mid-cooldown — the
+  // exact choice this fallback exists to avoid.
+  const candidates = poolIds.filter((id) => !excluded || !excluded.has(id));
+  const ordered = (candidates.length > 0 ? candidates : poolIds)
+    .map((id) => ({ id, until: state.blocked.get(id) ?? Number.POSITIVE_INFINITY }))
+    .sort((a, b) => a.until - b.until);
+  const picked = ordered[0].id;
   state.current = picked;
   return picked;
 }

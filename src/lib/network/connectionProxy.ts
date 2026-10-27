@@ -18,8 +18,11 @@ const rotateState = new Map(); // providerId → { index }
  * random:      uniform random pick
  * none/single: return first entry
  *
- * `options.excludePoolIds` (a Set) removes pools already tried in THIS request,
- * so a failure retry can never hand back the pool that just failed.
+ * `options.excludePoolIds` (a Set) removes pools already tried in THIS request.
+ * When every pool is excluded this returns null rather than restarting the list:
+ * re-handing a pool that just failed burns the retry budget on a known-bad IP
+ * and hides the real exhaustion from the caller, which reads it as a healthy
+ * retry loop.
  */
 export function pickProxyPoolId(
   poolIds: string[] | null | undefined,
@@ -28,32 +31,43 @@ export function pickProxyPoolId(
   options: { excludePoolIds?: Set<string> } = {}
 ): string | null {
   if (!poolIds || poolIds.length === 0) return null;
-  if (poolIds.length === 1) return poolIds[0];
 
   const exclude = options.excludePoolIds instanceof Set && options.excludePoolIds.size > 0
     ? options.excludePoolIds
     : null;
-  // Never return nothing: if every pool is already excluded, fall back to the
-  // full list so the caller still gets *a* proxy instead of going out direct.
   const candidates = exclude ? poolIds.filter((id) => !exclude.has(id)) : poolIds;
-  const list = candidates.length > 0 ? candidates : poolIds;
+  if (candidates.length === 0) return null;
+  if (candidates.length === 1) return candidates[0];
 
   if (strategy === "smart") {
-    return pickSmartProxyPoolId(list, providerId, exclude);
+    return pickSmartProxyPoolId(candidates, providerId, exclude);
   }
 
   if (strategy === "round-robin") {
-    const state = rotateState.get(providerId) || { index: -1 };
-    state.index = (state.index + 1) % list.length;
-    rotateState.set(providerId, state);
-    return list[state.index];
+    // `alreadyTried` = this request has already consumed a pool and is retrying.
+    // The cursor is an index into the FULL list so a mid-request exclusion never
+    // shifts which pool the NEXT request starts at, and a retry walks forward
+    // from the cursor without advancing it — otherwise one failure would move
+    // the rotation twice and the sequence degrades to p1,p3,p2 instead of p1,p2,p3.
+    const alreadyTried = Boolean(exclude);
+    const state = rotateState.get(providerId) || { cursor: 0 };
+    const start = state.cursor % poolIds.length;
+    let picked = null;
+    for (let step = 0; step < poolIds.length; step++) {
+      const id = poolIds[(start + step) % poolIds.length];
+      if (!exclude || !exclude.has(id)) { picked = id; break; }
+    }
+    if (!alreadyTried) {
+      rotateState.set(providerId, { cursor: (poolIds.indexOf(picked) + 1) % poolIds.length });
+    }
+    return picked;
   }
 
   if (strategy === "random") {
-    return list[Math.floor(Math.random() * list.length)];
+    return candidates[Math.floor(Math.random() * candidates.length)];
   }
 
-  return poolIds[0]; // "none" or unknown
+  return candidates[0]; // "none" or unknown
 }
 
 /**
