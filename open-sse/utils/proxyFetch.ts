@@ -415,8 +415,13 @@ function targetHost(url) {
 export async function proxyAwareFetch(url: string | URL, options: RequestInit = {}, proxyOptions = null, directFetch: DirectFetchFn | null = null) {
   const targetUrl = typeof url === "string" ? url : url.toString();
 
-  // Vercel relay: forward request via relay headers
-  const vercelRelayUrl = normalizeString(proxyOptions?.vercelRelayUrl);
+  // Relay lane. The Vercel deploy path parks its URL in vercelRelayUrl, while
+  // Cloudflare/Deno/Netlify pools and the generic connection resolver fill
+  // relayUrl. Reading only vercelRelayUrl silently ignored every non-Vercel
+  // relay: the request fell through to a direct dial and hit the upstream gate
+  // as if no relay had been configured at all.
+  const vercelRelayUrl = normalizeString(proxyOptions?.vercelRelayUrl)
+    || normalizeString(proxyOptions?.relayUrl);
   if (vercelRelayUrl) {
     const parsed = new URL(targetUrl);
     const baseHeaders = options.headers instanceof Headers

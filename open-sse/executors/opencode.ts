@@ -401,6 +401,7 @@ export class OpenCodeExecutor extends BaseExecutor {
   }
 
   async execute(args) {
+    const { model, body, stream, signal, log, proxyOptions = null } = args;
     const credentials = this.prepareRequestCredentials(args);
     // Warm the harness cache before the sync transform runs; it resolves from
     // cache on every request after the first.
@@ -408,12 +409,16 @@ export class OpenCodeExecutor extends BaseExecutor {
     return super.execute({
       ...args,
       credentials,
+      // Forwarded, not dropped: this is what routes the request through a
+      // Vercel/Cloudflare/Netlify relay. Without it proxyAwareFetch sees no
+      // vercelRelayUrl and the opencode lane always dials upstream directly.
+      proxyOptions,
       directFetch: async (url, options = {}) => {
         try {
           return await opencodeTlsFetch(url, options, { signal: options.signal });
         } catch (error) {
           if (!(error instanceof OpencodeTlsUnavailableError)) throw error;
-          args.log?.warn?.("OPENCODE", `${error.message}; falling back to native fetch`);
+          log?.warn?.("OPENCODE", `${error.message}; falling back to native fetch`);
           return fetch(url, options);
         }
       },
