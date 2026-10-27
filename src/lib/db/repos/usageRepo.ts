@@ -847,6 +847,77 @@ function loadDaysInRange(
   );
 }
 
+/**
+ * Fold pending day-rollup rows into the `usageDaily` blob before reading it, so
+ * the dashboard never reports a rollup missing the latest saved usage.
+ *
+ * Runs on the caller's already-open handle: opening a second one would take a
+ * savepoint that conflicts with concurrent migrations under the sql.js adapter.
+ */
+function foldPendingRollupRows(adapter: ResolvedDbAdapter): void {
+  const pendingRows = adapter.all<{ dateKey: string; entry: string }>(
+    `SELECT dateKey, entry FROM usagePending ORDER BY id ASC`
+  ) || [];
+  for (const row of pendingRows) {
+    const parsed = parseJson<UsageEntry | null>(row.entry, null);
+    if (!parsed) continue;
+    const stored = adapter.get<{ data: string }>(
+      `SELECT data FROM usageDaily WHERE dateKey = ?`,
+      [row.dateKey]
+    );
+    const day: UsageDay = stored ? parseJson<UsageDay>(stored.data, emptyDay()) : emptyDay();
+    aggregateEntryToDay(day, parsed);
+    adapter.run(
+      `INSERT INTO usageDaily(dateKey, data) VALUES(?, ?) ON CONFLICT(dateKey) DO UPDATE SET data = excluded.data`,
+      [row.dateKey, stringifyJson(day)]
+    );
+  }
+  if (pendingRows.length) adapter.run(`DELETE FROM usagePending`);
+}
+
+/**
+ * Fill the 10 one-minute buckets ending at the current minute.
+ *
+ * The buckets are pre-seeded so a quiet minute renders as zero rather than a gap,
+ * then billed rows inside the window are summed into them.
+ */
+function buildLastTenMinutes(
+  adapter: ResolvedDbAdapter,
+  filterApiKey: string | null,
+  modelAllowed: (model: string) => boolean
+): UsageBucket[] {
+  const now = new Date();
+  const currentMinuteStart = new Date(Math.floor(now.getTime() / 60000) * 60000);
+  const tenMinutesAgo = new Date(currentMinuteStart.getTime() - 9 * 60 * 1000);
+
+  const buckets: UsageBucket[] = [];
+  const bucketMap: Record<number, UsageBucket> = {};
+  for (let i = 0; i < 10; i++) {
+    const ts = currentMinuteStart.getTime() - (9 - i) * 60 * 1000;
+    bucketMap[ts] = { requests: 0, promptTokens: 0, completionTokens: 0, cost: 0 };
+    buckets.push(bucketMap[ts]);
+  }
+
+  const sql = filterApiKey
+    ? `SELECT timestamp, model, promptTokens, completionTokens, cost FROM usageHistory WHERE timestamp >= ? AND timestamp <= ? AND apiKey = ? AND status = 'ok'`
+    : `SELECT timestamp, model, promptTokens, completionTokens, cost FROM usageHistory WHERE timestamp >= ? AND timestamp <= ? AND status = 'ok'`;
+  const params = filterApiKey
+    ? [tenMinutesAgo.toISOString(), now.toISOString(), filterApiKey]
+    : [tenMinutesAgo.toISOString(), now.toISOString()];
+
+  for (const r of adapter.all<DbRow>(sql, params)) {
+    if (!modelAllowed(String(r.model ?? ""))) continue;
+    const minuteStart = Math.floor(new Date(String(r.timestamp)).getTime() / 60000) * 60000;
+    const bucket = bucketMap[minuteStart];
+    if (!bucket) continue;
+    bucket.requests++;
+    bucket.promptTokens += Number(r.promptTokens) || 0;
+    bucket.completionTokens += Number(r.completionTokens) || 0;
+    bucket.cost += Number(r.cost) || 0;
+  }
+  return buckets;
+}
+
 export async function getUsageStats(
   period = "all",
   filterApiKey: string | null = null,
@@ -854,28 +925,7 @@ export async function getUsageStats(
 ): Promise<UsageStats> {
   const db = await getAdapter();
 
-  // Fold any pending day-rollup rows into the daily blob before reading it,
-  // so the dashboard never reports a rollup missing the latest saved usage.
-  // Uses the already-obtained db handle to avoid savepoint conflicts with
-  // concurrent migrations under the sql.js adapter.
-  const pendingRows = db.all<{ dateKey: string; entry: string }>(
-    `SELECT dateKey, entry FROM usagePending ORDER BY id ASC`
-  ) || [];
-  for (const row of pendingRows) {
-    const parsed = parseJson<UsageEntry | null>(row.entry, null);
-    if (!parsed) continue;
-    const stored = db.get<{ data: string }>(
-      `SELECT data FROM usageDaily WHERE dateKey = ?`,
-      [row.dateKey]
-    );
-    const day: UsageDay = stored ? parseJson<UsageDay>(stored.data, emptyDay()) : emptyDay();
-    aggregateEntryToDay(day, parsed);
-    db.run(
-      `INSERT INTO usageDaily(dateKey, data) VALUES(?, ?) ON CONFLICT(dateKey) DO UPDATE SET data = excluded.data`,
-      [row.dateKey, stringifyJson(day)]
-    );
-  }
-  if (pendingRows.length) db.run(`DELETE FROM usagePending`);
+  foldPendingRollupRows(db);
 
   const patterns = parseAllowedModels(allowedModels);
   const modelAllowed = (model: string) => matchesModelPatterns(patterns, model);
@@ -967,35 +1017,7 @@ export async function getUsageStats(
     }
   }
 
-  // last10Minutes - query 10min window
-  const now = new Date();
-  const currentMinuteStart = new Date(Math.floor(now.getTime() / 60000) * 60000);
-  const tenMinutesAgo = new Date(currentMinuteStart.getTime() - 9 * 60 * 1000);
-  const bucketMap: Record<number, UsageBucket> = {};
-  for (let i = 0; i < 10; i++) {
-    const ts = currentMinuteStart.getTime() - (9 - i) * 60 * 1000;
-    bucketMap[ts] = { requests: 0, promptTokens: 0, completionTokens: 0, cost: 0 };
-    stats.last10Minutes.push(bucketMap[ts]);
-  }
-  const recent10Sql = filterApiKey
-    ? `SELECT timestamp, model, promptTokens, completionTokens, cost FROM usageHistory WHERE timestamp >= ? AND timestamp <= ? AND apiKey = ? AND status = 'ok'`
-    : `SELECT timestamp, model, promptTokens, completionTokens, cost FROM usageHistory WHERE timestamp >= ? AND timestamp <= ? AND status = 'ok'`;
-  const recent10Params = filterApiKey
-    ? [tenMinutesAgo.toISOString(), now.toISOString(), filterApiKey]
-    : [tenMinutesAgo.toISOString(), now.toISOString()];
-  const recent10 = db.all<DbRow>(recent10Sql, recent10Params);
-  for (const r of recent10) {
-    if (!modelAllowed(String(r.model ?? ""))) continue;
-    const tt = new Date(String(r.timestamp)).getTime();
-    const minuteStart = Math.floor(tt / 60000) * 60000;
-    const bucket = bucketMap[minuteStart];
-    if (bucket) {
-      bucket.requests++;
-      bucket.promptTokens += Number(r.promptTokens) || 0;
-      bucket.completionTokens += Number(r.completionTokens) || 0;
-      bucket.cost += Number(r.cost) || 0;
-    }
-  }
+  stats.last10Minutes = buildLastTenMinutes(db, filterApiKey, modelAllowed);
 
   if (filterApiKey) {
     let cutoff: string | null = null;
