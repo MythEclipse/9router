@@ -109,7 +109,11 @@ export async function GET() {
       for (const node of nodes) {
         if (node.id && node.name) nodeNameMap[node.id] = node.name;
       }
-    } catch { }
+    } catch (error) {
+      // Non-fatal: connections still list, they just fall back to the raw provider
+      // id instead of the node name. Logged so the degraded display is explainable.
+      console.error("Failed to load provider nodes for names:", error);
+    }
 
     // Hide sensitive fields, enrich name for compatible providers
     const safeConnections = connections.map(c => {

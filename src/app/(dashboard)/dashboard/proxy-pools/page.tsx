@@ -477,17 +477,35 @@ export default function ProxyPoolsPage() {
                 setConfirmState(null);
                 setBulkBusy(true);
                 try {
+                  // Count what actually landed. The previous version reported every id
+                  // as disabled without looking at a single response, so a rejected
+                  // write still showed a green "Disabled N" toast.
+                  let disabled = 0;
+                  const failed: string[] = [];
                   for (const id of deadIds) {
                     try {
-                      await fetch(`/api/proxy-pools/${id}`, {
+                      const res = await fetch(`/api/proxy-pools/${id}`, {
                         method: "PUT",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ isActive: false }),
                       });
-                    } catch {}
+                      if (res.ok) disabled++;
+                      else failed.push(id);
+                    } catch (error) {
+                      console.error(`Failed to disable proxy ${id}:`, error);
+                      failed.push(id);
+                    }
                   }
                   await fetchProxyPools();
-                  notify.success(`Disabled ${deadIds.length} dead proxies`);
+                  if (failed.length === 0) {
+                    notify.success(`Disabled ${disabled} dead proxies`);
+                  } else if (disabled === 0) {
+                    notify.error(`Could not disable any of the ${failed.length} dead proxies`);
+                  } else {
+                    notify.warning(
+                      `Disabled ${disabled} of ${deadIds.length} dead proxies; ${failed.length} failed`
+                    );
+                  }
                 } finally {
                   setBulkBusy(false);
                 }

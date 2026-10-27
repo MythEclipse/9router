@@ -522,7 +522,11 @@ export default function TokenSaverClient() {
           // PRD: run the PXPIPE health check automatically when the page opens
           refreshPxpipeStatus().then(runPxpipeHealth);
         }
-      } catch {}
+      } catch (error) {
+        // Without this the page renders stale defaults with no hint that the read
+        // failed, which reads as "settings are off" rather than "settings unknown".
+        console.error("Failed to load token-saver settings:", error);
+      }
     };
     loadSettings();
     // isWenyanLocale decides whether a wenyan-only caveman level is normalised,

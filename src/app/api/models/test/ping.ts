@@ -52,7 +52,11 @@ async function getInternalHeaders() {
     // because the first key happens to be restricted.
     const activeKeys = keys.filter((k) => k.isActive !== false);
     apiKey = (activeKeys.find((k) => !k.access?.restricted) || activeKeys[0])?.key || null;
-  } catch {}
+  } catch (error) {
+    // A failure here sends the probe out unauthenticated, which surfaces as a
+    // misleading auth error against the provider. Log it so the cause is visible.
+    console.error("Failed to load an API key for the model test:", error);
+  }
 
   const headers = { "Content-Type": "application/json" };
   if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
