@@ -171,7 +171,7 @@ export async function getProviderCredentials(
       const settings = await getSettings();
       const override = (settings.providerStrategies || {})[providerId] || {};
       const strategy = override.rotateStrategy || "none";
-      const excludePoolIds = options?.excludePoolIds instanceof Set ? options.excludePoolIds : new Set();
+      const excludePoolIds = options?.excludePoolIds instanceof Set ? options.excludePoolIds : new Set<string>();
       const isExcluded = (id) => excludePoolIds.has(id)
         || excludeSet.has(`proxy:${id}`)
         || excludeSet.has(id);
@@ -187,7 +187,14 @@ export async function getProviderCredentials(
           log.warn("AUTH", `${provider} | all proxy pools exhausted (${excludeSet.size} excluded)`);
           return null;
         }
-        pickedId = pickProxyPoolId(poolIds, strategy, providerId);
+        pickedId = pickProxyPoolId(poolIds, strategy, providerId, { excludePoolIds });
+        // null means every candidate was already spent by this request. Falling
+        // through would resolve a no-proxy ("noauth") route and egress from the
+        // host's own IP, which is the leak this pool exists to prevent.
+        if (!pickedId) {
+          log.warn("AUTH", `${provider} | no proxy pool left to try in this request`);
+          return null;
+        }
       } else if (pickedId && isExcluded(pickedId)) {
         // Rotation is off, so this pool was chosen explicitly. Silently
         // substituting another pool contradicts the selector — the UI promises
@@ -542,6 +549,44 @@ export async function markAccountUnavailable(
   }
 
   return { shouldFallback: true, cooldownMs };
+}
+
+/**
+ * Record an account that answered 2xx but delivered no usable content.
+ *
+ * This is the silent twin of `markAccountUnavailable`. A loud failure (429/403)
+ * is immediately conclusive, so it takes a model lock. An empty completion is
+ * only weak evidence — the model really did answer, it just produced nothing
+ * (a truncation at max_tokens, a content filter, a reasoning-only reply). Locking
+ * the account would take a healthy credential out of rotation for a per-request
+ * accident.
+ *
+ * But it must NOT be ignored either, and that was the bug: `rateLimitCount` only
+ * ever incremented on loud failures, so an account that answers every request
+ * with an empty 200 accumulated zero strikes and `selectRequiresHealthy` kept
+ * preferring it over accounts with a couple of genuine rate limits. The counter
+ * is what the selector reads, and half of the failure modes never wrote to it.
+ *
+ * So: one strike, no lock, and the strike decays by being cleared on the next
+ * successful (non-empty) response — same lifecycle as a rate-limit strike.
+ */
+export async function markAccountEmptyResponse(
+  connectionId: string | null | undefined,
+  provider: string | null = null,
+  reason = "Zero usable content",
+): Promise<void> {
+  if (!connectionId || connectionId === "noauth" || connectionId.startsWith("proxy:")) return;
+  const connections = await getProviderConnections(provider ? { provider } : {});
+  const conn = connections.find((c) => c.id === connectionId);
+  if (!conn) return;
+
+  await updateProviderConnection(connectionId, {
+    rateLimitCount: (Number(conn.rateLimitCount) || 0) + 1,
+    lastRateLimitAt: Date.now(),
+    lastError: String(reason).slice(0, 200),
+    lastErrorAt: new Date().toISOString(),
+  });
+  log.warn("AUTH", `${conn.displayName || conn.name || connectionId.slice(0, 8)} answered empty, strike ${(Number(conn.rateLimitCount) || 0) + 1}`);
 }
 
 /**

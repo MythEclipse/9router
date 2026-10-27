@@ -47,15 +47,62 @@ function isLockedStreamError(error) {
   return /ReadableStream is locked|Invalid state: The ReadableStream is locked|stream.*locked/i.test(msg);
 }
 
+/**
+ * Sleep that resolves early when `signal` aborts, so a disconnect is noticed
+ * during a cooldown wait instead of after it.
+ */
+function sleepAbortable(ms, signal) {
+  if (!signal) return new Promise<void>((resolve) => setTimeout(resolve, ms));
+  if (signal.aborted) return Promise.resolve<void>(undefined);
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(finish, ms);
+    function finish() {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", finish);
+      resolve();
+    }
+    signal.addEventListener("abort", finish, { once: true });
+  });
+}
+
+/**
+ * Tell the host that a member answered 2xx with no usable content.
+ *
+ * Fail-open on purpose: bookkeeping must never turn a recoverable empty answer
+ * into a thrown error that aborts the whole combo.
+ */
+async function reportEmptyResponse(onEmptyResponse, modelStr, reason) {
+  if (typeof onEmptyResponse !== "function") return;
+  try {
+    await onEmptyResponse(modelStr, reason);
+  } catch { /* telemetry only */ }
+}
+
 // Hard capabilities = input modalities; missing one drops request data (e.g. image
 // stripped). Must be prioritized. Soft (e.g. search) only degrades a feature.
 const HARD_CAPS = new Set(["vision", "pdf", "audioInput", "videoInput", "tools"]);
+
+// How much of a string message `detectRequiredCapabilities` inspects for an
+// embedded data URI. A data URI is the payload when present, so it appears at the
+// very start; anything beyond this window is prose that cannot introduce one.
+const DATA_URI_SCAN_WINDOW = 4096;
 
 // Deep-copy the request body so translator in-place mutations (tool_use/tool_result
 // reshaping, role rewriting) don't leak across combo fallback iterations or parallel
 // panel calls. Covers: OpenAI/Claude `messages`, Gemini `contents`, Responses `input`.
 function deepCopyBody(body) {
   if (!body || typeof body !== "object") return body;
+  // structuredClone copies to full depth, which the hand-rolled version did not:
+  // it only cloned ONE level of `messages`/`contents`/`input`, so `tool_calls`
+  // inside a message, nested `parts`, and every non-array parameter (`tools`,
+  // `metadata`, generation settings) stayed shared by reference across combo
+  // iterations and parallel fusion panels — the exact leak this function exists
+  // to prevent. Both Bun and Node provide it; fall back only if absent.
+  if (typeof structuredClone === "function") {
+    try {
+      return structuredClone(body);
+    } catch { /* non-cloneable payload (e.g. a stream): use the shallow path */ }
+  }
   const copyItem = (m) => ({ ...m, content: Array.isArray(m.content) ? m.content.map(b => ({ ...b })) : m.content });
   const copyContentsItem = (m) => ({ ...m, parts: Array.isArray(m.parts) ? m.parts.map(b => ({ ...b })) : m.parts });
   const copyInputItem = (m) => ({ ...m, content: Array.isArray(m.content) ? m.content.map(b => ({ ...b })) : m.content });
@@ -220,11 +267,18 @@ export function detectRequiredCapabilities(body) {
     // Scan array content blocks
     scanContent(m.content);
 
-    // Scan string content for embedded data URIs
+    // Scan string content for embedded data URIs. Bounded on purpose: a data URI
+    // can only appear at the start of a content string (it is the whole payload
+    // when present), and a multi-megabyte base64 message made the unbounded
+    // `includes` scan the full body once per message, per request. The window
+    // covers the scheme plus generous leading prose without touching megabytes.
     if (typeof m.content === "string") {
-      if (m.content.includes("data:image/")) required.add("vision");
-      else if (m.content.includes("data:audio/")) required.add("audioInput");
-      else if (m.content.includes("data:application/pdf")) required.add("pdf");
+      const head = m.content.length > DATA_URI_SCAN_WINDOW
+        ? m.content.slice(0, DATA_URI_SCAN_WINDOW)
+        : m.content;
+      if (head.includes("data:image/")) required.add("vision");
+      else if (head.includes("data:audio/")) required.add("audioInput");
+      else if (head.includes("data:application/pdf")) required.add("pdf");
     }
   };
 
@@ -392,6 +446,9 @@ export function isZeroContentResponse(data) {
  * @param {boolean} [options.sessionSticky=true] - Keep chosen model across session requests to retain prompt cache
  * @param {number} [options.confidenceThreshold=0.8] - Minimum confidence required for model switch (0-1)
  * @param {Function|null} [options.resolveSmartChoice=null] - Smart router resolver callback: (body, models) => Promise<{ choice, probabilities, confidence } | null>
+ * @param {Function|null} [options.onEmptyResponse=null] - Called as (modelStr, reason) when a
+ *   member answers 2xx with no usable content. The host wires this to the account-health
+ *   counter; open-sse itself must not touch the DB. Fail-open: a throw is swallowed.
  * @returns {Promise<Response>}
  */
 export async function handleComboChat({
@@ -409,6 +466,7 @@ export async function handleComboChat({
   sessionSticky = true,
   confidenceThreshold = 0.8,
   resolveSmartChoice = null,
+  onEmptyResponse = null,
   signal = null,
 }) {
   if (signal?.aborted) {
@@ -565,6 +623,7 @@ export async function handleComboChat({
             if (peeked?.outcome === "empty" && !isNoRetryFinish(peeked.finishReason)) {
               lastError = "Zero usable content";
               lastStatus = 200;
+              await reportEmptyResponse(onEmptyResponse, modelStr, "Zero usable content");
               await drainResponse(peeked.response);
               continue;
             }
@@ -582,6 +641,7 @@ export async function handleComboChat({
               log.warn("COMBO", `Model ${modelStr} returned HTTP 200 with zero usable content, falling back to next model`);
               lastError = "Zero usable content";
               lastStatus = 200;
+              await reportEmptyResponse(onEmptyResponse, modelStr, "Zero usable content (JSON)");
               await drainResponse(result);
               continue;
             }
@@ -644,18 +704,31 @@ export async function handleComboChat({
 
       // For transient errors (503/502/504), wait for cooldown before falling through
       // so a briefly-overloaded provider gets a chance to recover rather than being
-      // skipped immediately (fixes: combo falls through on transient 503)
-      if (cooldownMs && cooldownMs > 0 && cooldownMs <= 5000 &&
-          (result.status === 503 || result.status === 502 || result.status === 504)) {
-        log.info("COMBO", `Model ${modelStr} transient ${result.status}, waiting ${cooldownMs}ms before next`);
-        await new Promise(r => setTimeout(r, cooldownMs));
-      }
+      // skipped immediately (fixes: combo falls through on transient 503).
+      // The wait is abortable: a client that hangs up mid-cooldown should not keep
+      // this loop parked for the full delay.
+      const isTransient = cooldownMs > 0 && cooldownMs <= 5000 &&
+        (result.status === 503 || result.status === 502 || result.status === 504);
 
       // Fallback to next model: release the failed member's stream before moving on.
+      // Exactly one drain — the cooldown wait below reuses this call instead of
+      // repeating it, so the body is never read twice.
       lastError = errorText || String(result.status);
       if (!lastStatus) lastStatus = result.status;
       log.warn("COMBO", `Model ${modelStr} failed, trying next`, { status: result.status });
       await drainResponse(result);
+
+      if (isTransient) {
+        log.info("COMBO", `Model ${modelStr} transient ${result.status}, waiting ${cooldownMs}ms before next`);
+        if (signal?.aborted) {
+          log.warn("COMBO", "Client disconnected during cooldown; stopping fallback");
+          return new Response(JSON.stringify({ error: { message: "Request aborted" } }), {
+            status: 499,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        await sleepAbortable(cooldownMs, signal);
+      }
     } catch (error) {
       // Catch unexpected exceptions to ensure fallback continues. Stream-lock
       // races are retryable: the candidate already consumed/locked its body and

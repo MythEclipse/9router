@@ -3,6 +3,7 @@ import { parseJsonBody } from "@/shared/utils/parseJsonBody";
 import {
   getProviderCredentials,
   markAccountUnavailable,
+  markAccountEmptyResponse,
   clearAccountError,
   extractApiKey,
   isValidApiKey,
@@ -34,7 +35,27 @@ import { stripModelContextMarker } from "open-sse/utils/modelMarkers";
 import { getKeyAccessContext, enforceKeyAccess, filterAdapterModels } from "../services/keyAccess";
 import { resolveSmartChoice } from "../services/systemoneRouter";
 
-/** A Model Studio name, or the legacy per-model override, as the router reads it. */
+/**
+ * Build the `onEmptyResponse` callback for a combo run.
+ *
+ * `combo.ts` sees only the model string, but account health is keyed by
+ * connection. `lastServedConnection` is filled by the single-model path as it
+ * picks a credential, so by the time a member reports an empty answer we know
+ * which account produced it — and only that account takes the strike.
+ */
+function emptyResponseReporter(lastServedConnection: { model?: string; connectionId?: string; provider?: string } | null) {
+  return async (modelStr: string, reason: string) => {
+    if (!lastServedConnection?.connectionId) return;
+    // Guard against a stale slot: the combo may already have moved to a different
+    // member, in which case this account did not produce the empty answer.
+    if (lastServedConnection.model && lastServedConnection.model !== modelStr) return;
+    await markAccountEmptyResponse(lastServedConnection.connectionId, lastServedConnection.provider ?? null, reason);
+  };
+}
+
+/**
+ * A Model Studio name, or the legacy per-model override, as the router reads it.
+ */
 interface ModelOverrideRecord {
   targetModel?: string;
   systemPrompt?: string;
@@ -254,6 +275,10 @@ export async function handleChat(request: Request, clientRawRequest: ClientRawRe
     const augmentedModels = await filterAdapterModels(keyAccess, augmentModelsWithCapacityAdapter(comboModels, requiredCapabilities, settings), comboModels);
     const adapterAdded = augmentedModels.filter((m) => !comboModels.includes(m));
 
+    // Tracks which connection served the member currently being awaited, so an
+    // empty answer can be charged to that account instead of the whole combo.
+    const lastServed: { model?: string; connectionId?: string; provider?: string } | null = {};
+
     if (comboStrategy === "fusion") {
       log.info("CHAT", `Combo "${comboEntryName}" with ${comboModels.length} models (strategy: fusion)`);
       return handleFusionChat({
@@ -281,7 +306,11 @@ export async function handleChat(request: Request, clientRawRequest: ClientRawRe
       body,
       models: augmentedModels,
       handleSingleModel: withCapacityAdapterStripping(
-        (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey),
+        (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey, null, (servedModel, creds) => {
+          lastServed.model = servedModel;
+          lastServed.connectionId = creds.connectionId;
+          lastServed.provider = creds.provider ?? null;
+        }),
         adapterAdded
       ),
       log,
@@ -292,6 +321,7 @@ export async function handleChat(request: Request, clientRawRequest: ClientRawRe
       smartPolicy: comboCfg.smartPolicy || "smart",
       sessionSticky: comboCfg.sessionSticky !== false,
       confidenceThreshold: typeof comboCfg.confidenceThreshold === "number" ? comboCfg.confidenceThreshold : 0.8,
+      onEmptyResponse: emptyResponseReporter(lastServed),
       resolveSmartChoice: comboStrategy === "smart"
         ? (b, m) => resolveSmartChoice({
             body: b,
@@ -309,16 +339,22 @@ export async function handleChat(request: Request, clientRawRequest: ClientRawRe
   if (soloAugmented.length > 1) {
     const adapterAdded = soloAugmented.filter((m) => m !== modelStr);
     log.info("CHAT", `Capacity adapter for [${[...requiredCapabilities].join(",")}] on "${modelStr}" → trying ${soloAugmented.join(", ")}`);
+    const lastServed: { model?: string; connectionId?: string; provider?: string } | null = {};
     return handleComboChat({
       body,
       models: soloAugmented,
       handleSingleModel: withCapacityAdapterStripping(
-        (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey),
+        (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey, null, (servedModel, creds) => {
+          lastServed.model = servedModel;
+          lastServed.connectionId = creds.connectionId;
+          lastServed.provider = creds.provider ?? null;
+        }),
         adapterAdded
       ),
       log,
       comboName: modelStr,
-      comboStrategy: getActiveAdapterStrategy(requiredCapabilities, settings)
+      comboStrategy: getActiveAdapterStrategy(requiredCapabilities, settings),
+      onEmptyResponse: emptyResponseReporter(lastServed),
     });
   }
 
@@ -328,7 +364,7 @@ export async function handleChat(request: Request, clientRawRequest: ClientRawRe
 /**
  * Handle single model chat request
  */
-async function handleSingleModelChat(body, modelStr, clientRawRequest = null, request = null, apiKey = null, requestedModel = null) {
+async function handleSingleModelChat(body, modelStr, clientRawRequest = null, request = null, apiKey = null, requestedModel = null, onServe = null) {
   const clientFormat = request?.url
     ? detectFormatByEndpoint(new URL(request.url).pathname, body)
     : null;
@@ -551,9 +587,16 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
   // aborts (probe budget spent, user cancelled), every proxy is answering the
   // same spent-quota 429 and more attempts cannot help, so stop instead of
   // burning the pool dry past the caller's deadline.
-  const fallbackDeadlineMs = provider === "opencode"
-    ? (proxyFallbackState.deadlineMs ??= Date.now() + OPENCODE_FALLBACK_BUDGET_MS)
-    : Date.now() + GENERIC_FALLBACK_BUDGET_MS;
+  //
+  // The budget applies to EVERY provider, not just opencode. Gating the check on
+  // the provider left non-opencode traffic rotating accounts with no wall-clock
+  // bound at all: N accounts x connect timeout compounded without limit, so a
+  // provider with many dead credentials could hold a request open far past the
+  // caller's patience. opencode keeps the longer budget; it also seeds the
+  // deadline across the nested attempts of ONE request (`??=`), so a retry loop
+  // cannot restart the clock.
+  const fallbackBudgetMs = provider === "opencode" ? OPENCODE_FALLBACK_BUDGET_MS : GENERIC_FALLBACK_BUDGET_MS;
+  const fallbackDeadlineMs = (proxyFallbackState.deadlineMs ??= Date.now() + fallbackBudgetMs);
 
   while (true) {
     if (request?.signal?.aborted) {
@@ -563,11 +606,12 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
         headers: { "Content-Type": "application/json" },
       });
     }
-    if (provider === "opencode" && Date.now() >= fallbackDeadlineMs
-        && (lastError || proxyFallbackState.lastError)) {
+    // Only stop once an attempt has actually failed: a first attempt that is
+    // slow to start is not the same thing as an exhausted rotation.
+    if (Date.now() >= fallbackDeadlineMs && (lastError || proxyFallbackState.lastError)) {
       const error = lastError || proxyFallbackState.lastError;
       const status = lastStatus || proxyFallbackState.lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE;
-      log.warn("FALLBACK", `⏱ fallback budget spent for ${provider}/${model} after ${excludePoolIds.size} proxy pools — returning last error`);
+      log.warn("FALLBACK", `⏱ fallback budget spent for ${provider}/${model} after ${excludePoolIds.size} proxy pools / ${excludeConnectionIds.size} accounts — returning last error`);
       return errorResponse(
         status,
         error,
@@ -581,6 +625,12 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       excludePoolIds,
     });
 
+    // Announce which account is about to serve `modelStr` so the combo's
+    // empty-response report can be attributed to the right connection.
+    if (credentials && !credentials.allRateLimited && typeof onServe === "function") {
+      onServe(modelStr, credentials);
+    }
+
     // All accounts unavailable
     if (!credentials || credentials.allRateLimited) {
       if (credentials?.allRateLimited) {
@@ -591,7 +641,12 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       }
       if (excludeConnectionIds.size === 0 && excludePoolIds.size === 0) {
         log.warn("AUTH", `No active credentials for provider: ${provider}`);
-        return errorResponse(HTTP_STATUS.NOT_FOUND, `No credentials are serving ${calledModel} right now`);
+        // 400, matching every other modality handler (see
+        // unavailableCredentialResponse in accountFallbackLoop). This used to be
+        // 404 while chat-completions' siblings answered 400, so a client that
+        // treats 404 as "do not retry" and 400 as "fix the request" got two
+        // different contracts for the same condition depending on the endpoint.
+        return errorResponse(HTTP_STATUS.BAD_REQUEST, `No credentials are serving ${calledModel} right now`);
       }
       lastError = lastError || proxyFallbackState.lastError;
       lastStatus = lastStatus || proxyFallbackState.lastStatus;
