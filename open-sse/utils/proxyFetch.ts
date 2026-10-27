@@ -5,6 +5,20 @@ import { dbg } from "./debugLog";
 const originalFetch = globalThis.fetch;
 const proxyDispatchers = new Map();
 
+// Bun's fetch ignores undici's `dispatcher`, so a ProxyAgent silently becomes
+// a direct connection — the pool looks configured while every request actually
+// spends the host's own IP. Bun has a native `proxy` option instead; pick the
+// mechanism the running engine actually honours.
+const isBunRuntime = typeof (globalThis as { Bun?: unknown }).Bun !== "undefined";
+
+/** Attach proxy egress to a fetch init for whichever engine is running. */
+async function withProxy(init: RequestInit, proxyUrl: string | null, insecure = false): Promise<RequestInit> {
+  if (!proxyUrl) return init;
+  if (isBunRuntime) return { ...init, proxy: proxyUrl } as RequestInit;
+  const dispatcher = await getDispatcher(proxyUrl, insecure);
+  return { ...init, dispatcher } as unknown as RequestInit;
+}
+
 // ─── TLS fingerprinting via got-scraping (browser-like JA3) ───────────────
 // Disabled: not in use. Kept commented for future re-enable.
 // Restore the original block to re-enable per-host JA3 spoofing.
@@ -283,8 +297,7 @@ async function fetchWithTlsFallback(url, options, proxyUrl, directFetch: DirectF
     if (!proxyUrl && (directFetch || options.directFetch)) {
       return await (directFetch || options.directFetch)(url, options);
     }
-    const dispatcher = proxyUrl ? await getDispatcher(proxyUrl) : undefined;
-    return await originalFetch(url, dispatcher ? { ...options, dispatcher } : options);
+    return await originalFetch(url, await withProxy(options, proxyUrl));
   } catch (err) {
     const isStrictSsl = options.strictTls === true || process.env.STRICT_SSL === "true" || process.env.STRICT_SSL === "1";
     if (!isStrictSsl && isTlsCertError(err)) {
@@ -293,8 +306,7 @@ async function fetchWithTlsFallback(url, options, proxyUrl, directFetch: DirectF
       }
       // ponytail: in-memory insecure agent fallback for self-signed MITM corporate/antivirus certs
       console.warn(`[ProxyFetch] TLS cert verification failed (${err.cause?.code || err.code}), retrying with insecure TLS: ${url}`);
-      const insecureDispatcher = await getDispatcher(proxyUrl, true);
-      return await originalFetch(url, { ...options, dispatcher: insecureDispatcher });
+      return await originalFetch(url, await withProxy(options, proxyUrl, true));
     }
     throw err;
   }
@@ -412,35 +424,33 @@ function targetHost(url) {
   }
 }
 
+/**
+ * Rewrite an upstream request into the relay's header contract.
+ *
+ * Client-side forwarding headers are dropped so the relay cannot echo our own
+ * IP to the upstream gate.
+ */
+function buildRelayRequest(relayUrl: string, targetUrl: string, options: RequestInit): [string, RequestInit] {
+  const parsed = new URL(targetUrl);
+  const baseHeaders: Record<string, string> = options.headers instanceof Headers
+    ? Object.fromEntries(options.headers.entries())
+    : { ...(options.headers || {}) } as Record<string, string>;
+  const relayHeaders: Record<string, string> = {
+    ...baseHeaders,
+    "x-relay-target": `${parsed.protocol}//${parsed.host}`,
+    "x-relay-path": `${parsed.pathname}${parsed.search}`,
+  };
+  for (const key of Object.keys(relayHeaders)) {
+    const lower = key.toLowerCase();
+    if (lower.startsWith("x-forwarded-") || lower === "x-real-ip" || lower.startsWith("x-vercel-")) {
+      delete relayHeaders[key];
+    }
+  }
+  return [relayUrl, { ...options, headers: relayHeaders }];
+}
+
 export async function proxyAwareFetch(url: string | URL, options: RequestInit = {}, proxyOptions = null, directFetch: DirectFetchFn | null = null) {
   const targetUrl = typeof url === "string" ? url : url.toString();
-
-  // Relay lane. The Vercel deploy path parks its URL in vercelRelayUrl, while
-  // Cloudflare/Deno/Netlify pools and the generic connection resolver fill
-  // relayUrl. Reading only vercelRelayUrl silently ignored every non-Vercel
-  // relay: the request fell through to a direct dial and hit the upstream gate
-  // as if no relay had been configured at all.
-  const vercelRelayUrl = normalizeString(proxyOptions?.vercelRelayUrl)
-    || normalizeString(proxyOptions?.relayUrl);
-  if (vercelRelayUrl) {
-    const parsed = new URL(targetUrl);
-    const baseHeaders = options.headers instanceof Headers
-      ? Object.fromEntries(options.headers.entries())
-      : { ...(options.headers || {}) };
-    const relayHeaders = {
-      ...baseHeaders,
-      "x-relay-target": `${parsed.protocol}//${parsed.host}`,
-      "x-relay-path": `${parsed.pathname}${parsed.search}`,
-    };
-    // Strip client-side forwarding headers so Vercel doesn't forward the local IP
-    for (const key of Object.keys(relayHeaders)) {
-      const lower = key.toLowerCase();
-      if (lower.startsWith("x-forwarded-") || lower === "x-real-ip" || lower.startsWith("x-vercel-")) {
-        delete relayHeaders[key];
-      }
-    }
-    return originalFetch(vercelRelayUrl, { ...options, headers: relayHeaders });
-  }
 
   const connectionProxyUrl = resolveConnectionProxyUrl(targetUrl, proxyOptions);
   const envProxyUrl = connectionProxyUrl ? null : normalizeProxyUrl(getEnvProxyUrl(targetUrl));
@@ -448,6 +458,28 @@ export async function proxyAwareFetch(url: string | URL, options: RequestInit = 
   const proxyWasAssigned = !!(proxyOptions?.proxyPoolId || proxyOptions?.enabled);
   if (!proxyUrl && proxyOptions?.strictProxy === true && proxyWasAssigned) {
     throw new Error("[ProxyFetch] strictProxy requires an active proxy URL; none resolved");
+  }
+
+  // Relay lane. The Vercel deploy path parks its URL in vercelRelayUrl, while
+  // Cloudflare/Deno/Netlify pools and the generic connection resolver fill
+  // relayUrl. Reading only vercelRelayUrl silently ignored every non-Vercel
+  // relay: the request fell through to a direct dial and hit the upstream gate
+  // as if no relay had been configured at all.
+  //
+  // The relay hop is the request's route to the relay; it is not a substitute
+  // for the egress proxy. Dialling the relay directly would spend the host's
+  // own IP on behalf of a pool that exists to avoid exactly that, so the hop
+  // rides the proxy when one is configured.
+  const relayUrl = normalizeString(proxyOptions?.vercelRelayUrl)
+    || normalizeString(proxyOptions?.relayUrl);
+  if (relayUrl) {
+    const [hopUrl, hopInit] = buildRelayRequest(relayUrl, targetUrl, options);
+    if (!proxyUrl) return originalFetch(hopUrl, hopInit);
+    const res = await originalFetch(hopUrl, await withProxy(hopInit, proxyUrl));
+    if (res.status === 407) {
+      throw new Error("HTTP 407 Proxy Authentication Required (credentials invalid or plan expired)");
+    }
+    return res;
   }
 
   // MITM DNS bypass: for known MITM-intercepted hosts, resolve real IP to avoid DNS spoof
@@ -475,8 +507,7 @@ export async function proxyAwareFetch(url: string | URL, options: RequestInit = 
 
   if (proxyUrl) {
     try {
-      const dispatcher = await getDispatcher(proxyUrl);
-      const res = await originalFetch(url as string | URL, { ...options, dispatcher } as unknown as RequestInit);
+      const res = await originalFetch(url as string | URL, await withProxy(options, proxyUrl));
       if (res.status === 407) {
         throw new Error("HTTP 407 Proxy Authentication Required (credentials invalid or plan expired)");
       }
