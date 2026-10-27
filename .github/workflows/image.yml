@@ -16,6 +16,14 @@ on:
       - "**/*.md"
   workflow_dispatch:
 
+# The image lane pushes to GHCR, so the default read-only token is not enough.
+# This block used to live in ci.yml; splitting the lane out without carrying it
+# over is what made the first publish fail with "installation not allowed to
+# Write organization package".
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   # Rolling container image, published to GHCR so external consumers can pull
   # 9router without building it. This is a PUBLISH lane, not a deploy lane:
