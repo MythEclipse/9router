@@ -7,6 +7,12 @@ import { labelForResolved, labelForRow, resolvedModelOf } from "../helpers/model
 import { getMeta, setMeta } from "../helpers/metaStore";
 
 import { matchesAllowedModels as matchesModelPatterns, parseAllowedModels } from "./apiKeysRepo";
+import {
+  buildApiKeyMaps,
+  buildConnectionMap,
+  buildProviderNodeNameMap,
+  type ProviderNodeNameMap,
+} from "./usageLookups";
 
 /** Token counts as they arrive from an upstream: several spellings coexist. */
 export interface UsageTokens {
@@ -618,6 +624,8 @@ function pruneHistory(db: ResolvedDbAdapter): void {
 export const __test__ = {
   resetHistoryPruneThrottle() { lastHistoryPruneAt = 0; },
   HISTORY_RETENTION_MS,
+  /** Pinned by tests: the digest the write path stamps into usageDaily. */
+  apiKeyBucketId,
 };
 
 export async function saveRequestUsage(
@@ -960,29 +968,16 @@ export async function getUsageStats(
 
   let allConnections: Awaited<ReturnType<typeof getProviderConnections>> = [];
   try { allConnections = await getProviderConnections(); } catch {}
-  const connectionMap: ConnectionMap = {};
-  for (const c of allConnections) if (c) connectionMap[c.id] = c.name || c.email || c.id;
+  const connectionMap: ConnectionMap = buildConnectionMap(allConnections);
 
-  const providerNodeNameMap: Record<string, string> = {};
+  let providerNodeNameMap: ProviderNodeNameMap = {};
   try {
-    const nodes = await getProviderNodes();
-    for (const n of nodes) if (n.id && n.name) providerNodeNameMap[n.id] = n.name;
+    providerNodeNameMap = buildProviderNodeNameMap(await getProviderNodes());
   } catch {}
 
   let allApiKeys: Awaited<ReturnType<typeof getApiKeys>> = [];
   try { allApiKeys = await getApiKeys(); } catch {}
-  const apiKeyMap: Record<string, ApiKeyLabel> = {};
-  // Bucket id → key record. usageDaily stores only the masked key plus the
-  // bucket id embedded in its entry key, so the daily branch cannot look a name
-  // up by raw key the way the live-history branch does.
-  const apiKeyBucketMap: Record<string, ApiKeyLabel> = {};
-  for (const k of allApiKeys) {
-    if (k.key) {
-      const trimmed = k.key.trim();
-      apiKeyMap[trimmed] = { name: k.name, id: k.id, createdAt: k.createdAt };
-      apiKeyBucketMap[apiKeyBucketId(trimmed)] = { name: k.name, id: k.id, createdAt: k.createdAt };
-    }
-  }
+  const { byKey: apiKeyMap, byBucketId: apiKeyBucketMap } = buildApiKeyMaps(allApiKeys, apiKeyBucketId);
 
   // Read enough recent rows to account for filtered lifecycle/zero-usage entries.
   // `meta` must come along: the `model` column holds the requested name (a combo
