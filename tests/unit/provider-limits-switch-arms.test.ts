@@ -7,12 +7,12 @@ import { fileURLToPath } from "node:url";
  * A `switch` with a repeated `case` compiles, lints and passes every behavioural
  * test: the second branch is simply unreachable. parseQuotaData grew three identical
  * `case "cursor":` blocks this way, so the only way to catch the next one is to read
- * the source.
+ * the source. The path is the parser's own module since it moved out of utils.ts.
  */
 const repoRoot = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "../..");
 const SOURCE = path.join(
   repoRoot,
-  "src/app/(dashboard)/dashboard/usage/components/ProviderLimits/utils.ts"
+  "src/app/(dashboard)/dashboard/usage/components/ProviderLimits/quotaParsing.ts"
 );
 
 function caseLabelsInSwitch(source: string, fnName: string): string[] {
