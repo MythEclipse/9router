@@ -48,13 +48,10 @@ describe("normalizeCapEntry", () => {
     expect(normalizeCapEntry({ models: ["a", ""] }).models).toEqual(["a"]);
   });
 
-  /**
-   * Known-bad, pinned: `String(e?.model || e)` stringifies the whole object when a
-   * legacy entry has an empty model, producing the literal "[object Object]" as a
-   * model id. Pinned so the fix has a test to flip; see the follow-up.
-   */
-  it("currently turns a legacy entry with an empty model into '[object Object]'", () => {
-    expect(normalizeCapEntry([{ model: "" }]).models).toEqual(["[object Object]"]);
+  it("drops a legacy entry whose model is blank instead of storing '[object Object]'", () => {
+    expect(normalizeCapEntry([{ model: "" }]).models).toEqual([]);
+    expect(normalizeCapEntry([{ model: "" }, { model: "a" }]).models).toEqual(["a"]);
+    expect(normalizeCapEntry([{ model: null }]).models).toEqual([]);
   });
 
   it("returns a fresh empty entry for junk, never the shared constant", () => {
@@ -65,16 +62,13 @@ describe("normalizeCapEntry", () => {
     expect(normalizeCapEntry(undefined)).toEqual(EMPTY_CAP_ENTRY);
   });
 
-  /**
-   * Known-bad, pinned: `{ ...EMPTY_CAP_ENTRY }` is a shallow copy, so every empty
-   * entry shares one `models` array. A push on vision's empty entry therefore
-   * appears on audio's too. Pinned so the fix has a test to flip; see the follow-up.
-   */
-  it("currently shares one models array between two empty entries", () => {
+  it("gives each empty entry its own models array", () => {
+    // A shared array would let one capability's edits appear on another.
     const a = normalizeCapEntry(null);
     const b = normalizeCapEntry(null);
     a.models.push("leak");
-    expect(b.models).toEqual(["leak"]);
+    expect(b.models).toEqual([]);
+    expect(EMPTY_CAP_ENTRY.models).toEqual([]);
   });
 });
 
@@ -137,21 +131,23 @@ describe("getPolicyBadgeLabel", () => {
   });
 
   /**
-   * Known-bad, pinned so a refactor cannot silently "fix" it and so the fix has a
-   * failing test to flip. A custom policy with no threshold, or 0, reads 1% instead
-   * of the intended 80%: `(raw || 0.8) * (raw && ...)` multiplies 0.8 by 0 because
-   * the second parenthesised `&&` yields 0 for a falsy raw. See the follow-up fix.
+   * A custom policy with no threshold means the default 80%. It used to read 1%,
+   * because `(raw || 0.8) * (raw && ...)` multiplied 0.8 by 0 for a falsy raw.
    */
-  it("currently mislabels a missing or zero threshold as 1%", () => {
-    expect(getPolicyBadgeLabel({ smartPolicy: "custom" })).toBe("Custom (≥1%)");
+  it("defaults a missing or zero threshold to 80%", () => {
+    expect(getPolicyBadgeLabel({ smartPolicy: "custom" })).toBe("Custom (≥80%)");
     expect(getPolicyBadgeLabel({ smartPolicy: "custom", confidenceThreshold: 0 })).toBe(
-      "Custom (≥1%)"
+      "Custom (≥80%)"
     );
   });
 
-  it("currently truncates a threshold above 1 but below 2 to a whole percent", () => {
+  it("reads a percentage-scale threshold between 1 and 2 as a percentage", () => {
+    // 1.5 is a percentage, not a fraction: the old code truncated it to 2%.
     expect(getPolicyBadgeLabel({ smartPolicy: "custom", confidenceThreshold: 1.5 })).toBe(
       "Custom (≥2%)"
+    );
+    expect(getPolicyBadgeLabel({ smartPolicy: "custom", confidenceThreshold: 1.2 })).toBe(
+      "Custom (≥1%)"
     );
   });
 });

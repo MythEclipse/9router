@@ -40,15 +40,34 @@ export const DEFAULT_FALLBACK_MODEL = "oc/mimo-v2.6-flash-free";
 export const EMPTY_CAP_ENTRY: CapEntry = { enabled: true, roundRobin: false, models: [] };
 
 export const EMPTY_CAPACITY_ADAPTER: CapacityAdapter = {
-  vision: { ...EMPTY_CAP_ENTRY },
-  pdf: { ...EMPTY_CAP_ENTRY },
-  audioInput: { ...EMPTY_CAP_ENTRY },
-  videoInput: { ...EMPTY_CAP_ENTRY },
+  vision: { ...EMPTY_CAP_ENTRY, models: [] },
+  pdf: { ...EMPTY_CAP_ENTRY, models: [] },
+  audioInput: { ...EMPTY_CAP_ENTRY, models: [] },
+  videoInput: { ...EMPTY_CAP_ENTRY, models: [] },
 };
+
+/** A blank entry. Built per call so no two capabilities share one `models` array. */
+function emptyCapEntry(): CapEntry {
+  return { enabled: true, roundRobin: false, models: [] };
+}
 
 /** A retired model id, rewritten to its replacement on read. */
 export const upgradeLegacyModel = (m: string) =>
   m === "oc/mimo-v2.5-free" ? DEFAULT_FALLBACK_MODEL : m;
+
+/**
+ * Read one model reference out of a stored entry.
+ *
+ * The legacy shape held objects (`{model}`), and an entry whose model was blank used
+ * to stringify to the literal `"[object Object]"` and get stored as a model id. Only
+ * non-empty strings survive here.
+ */
+function legacyModelIdOf(entry: unknown): string {
+  if (typeof entry === "string") return entry;
+  const maybe = entry as { model?: unknown } | null;
+  const id = typeof maybe?.model === "string" ? maybe.model : "";
+  return id;
+}
 
 /**
  * Read one capability entry, accepting both storage shapes.
@@ -62,9 +81,7 @@ export function normalizeCapEntry(entry: unknown): CapEntry {
     return {
       enabled: true,
       roundRobin: false,
-      models: entry
-        .map((e: any) => upgradeLegacyModel(String(e?.model || e)))
-        .filter(Boolean),
+      models: entry.map(legacyModelIdOf).map(upgradeLegacyModel).filter(Boolean),
     };
   }
   if (entry && typeof entry === "object") {
@@ -77,7 +94,7 @@ export function normalizeCapEntry(entry: unknown): CapEntry {
         : [],
     };
   }
-  return { ...EMPTY_CAP_ENTRY };
+  return emptyCapEntry();
 }
 
 /** Normalize every known capability out of a raw settings blob. */
@@ -94,8 +111,8 @@ export function normalizeCapacityAdapter(raw: unknown): CapacityAdapter {
  * The badge shown on a combo card for its smart policy.
  *
  * `confidenceThreshold` has been stored both as a fraction (0.85) and as a
- * percentage (85); the scale is inferred from whether it exceeds 1. A missing
- * threshold falls back to 80% rather than 0%, which is what the `|| 0.8` guards.
+ * percentage (85); the scale is inferred from whether it exceeds 1. A missing or
+ * zero threshold means the default 80%, not 0%.
  */
 export function getPolicyBadgeLabel(strategy: ComboStrategy = {}): string {
   const policy = strategy.smartPolicy || (strategy.sessionSticky === false ? "per-turn" : "smart");
@@ -103,8 +120,9 @@ export function getPolicyBadgeLabel(strategy: ComboStrategy = {}): string {
   if (policy === "per-turn") return "Per-Turn";
   if (policy === "custom") {
     const raw = strategy.confidenceThreshold;
-    const pct = Math.round((raw || 0.8) * (raw && raw <= 1 ? 100 : 1));
-    return `Custom (≥${pct || 80}%)`;
+    const fraction = raw ? (raw <= 1 ? raw : raw / 100) : 0.8;
+    const pct = Math.round(fraction * 100);
+    return `Custom (≥${pct}%)`;
   }
   return "Smart (≥80%)";
 }
