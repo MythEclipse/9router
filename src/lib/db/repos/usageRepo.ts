@@ -948,6 +948,53 @@ function periodCutoff(period: string): string | null {
   return span ? new Date(Date.now() - span).toISOString() : null;
 }
 
+/** Shape of a usage row as this file's queries select it. */
+interface RecentRowShape {
+  timestamp?: unknown;
+  provider?: unknown;
+  model?: unknown;
+  tokens?: unknown;
+  status?: unknown;
+  meta?: unknown;
+}
+
+/**
+ * Map usageHistory rows onto the dashboard's recent-request list.
+ *
+ * Two rules live here and are easy to lose: the `meta` blob must be read so a combo
+ * is reported by the model that actually served it (not the alias the caller asked
+ * for), and only billed rows count — pending/error lifecycle rows belong to the
+ * request log and would otherwise inflate the totals.
+ */
+export function mapRecentRequests(
+  rows: RecentRowShape[],
+  options: { limit?: number; isModelAllowed?: (model: string) => boolean } = {}
+): RecentRequest[] {
+  const { limit = 20, isModelAllowed } = options;
+  return rows
+    .map((r): RecentRequest => {
+      const t = parseJson<UsageTokens>((r.tokens as string | null) ?? null, {}) || {};
+      const label = labelForRow(r.model, r.meta);
+      return {
+        timestamp: String(r.timestamp),
+        model: label.display,
+        requestedModel: label.alias,
+        provider: (r.provider as string) || "",
+        promptTokens: t.prompt_tokens || t.input_tokens || 0,
+        completionTokens: t.completion_tokens || t.output_tokens || 0,
+        cachedTokens: t.cached_tokens || t.cache_read_input_tokens || 0,
+        status: (r.status as string) || "ok",
+      };
+    })
+    .filter((e) => {
+      if (e.status !== "ok") return false;
+      if (isModelAllowed && !isModelAllowed(e.model)) return false;
+      if (e.promptTokens === 0 && e.completionTokens === 0) return false;
+      return true;
+    })
+    .slice(0, limit);
+}
+
 export async function getUsageStats(
   period = "all",
   filterApiKey: string | null = null,
@@ -988,30 +1035,7 @@ export async function getUsageStats(
     : `SELECT timestamp, provider, model, tokens, status, meta FROM usageHistory ORDER BY id DESC LIMIT 100`;
   const recentParams = filterApiKey ? [filterApiKey] : [];
   const recentRows = db.all<DbRow>(recentSql, recentParams);
-  const recentRequests = recentRows
-    .map((r): RecentRequest => {
-      const t = parseJson<UsageTokens>(r.tokens as string | null, {}) || {};
-      const label = labelForRow(r.model, r.meta);
-      return {
-        timestamp: String(r.timestamp),
-        model: label.display,
-        requestedModel: label.alias,
-        provider: (r.provider as string) || "",
-        promptTokens: t.prompt_tokens || t.input_tokens || 0,
-        completionTokens: t.completion_tokens || t.output_tokens || 0,
-        cachedTokens: t.cached_tokens || t.cache_read_input_tokens || 0,
-        status: (r.status as string) || "ok",
-      };
-    })
-    .filter((e) => {
-      // Only billed ("ok") rows count toward usage; pending/error lifecycle
-      // rows live in the request log but must never inflate totals.
-      if (e.status !== "ok") return false;
-      if (!modelAllowed(e.model)) return false;
-      if (e.promptTokens === 0 && e.completionTokens === 0) return false;
-      return true;
-    })
-    .slice(0, 20);
+  const recentRequests = mapRecentRequests(recentRows, { limit: 20, isModelAllowed: modelAllowed });
 
   const stats = {
     totalRequests: 0,
