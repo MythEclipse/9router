@@ -7,6 +7,7 @@ import Link from "next/link";
 import { Card, Button, Input, Toggle, ModelSelectModal } from "@/shared/components";
 import ProviderIcon from "@/shared/components/ProviderIcon";
 import { AI_PROVIDERS, MEDIA_PROVIDER_KINDS } from "@/shared/constants/providers";
+import { base64PngDataUrl } from "@/app/(dashboard)/dashboard/media-providers/[kind]/[id]/components/imagePreview";
 
 // Parse "providerId/model" or just "providerId" → { providerId, model }
 function parseModelEntry(entry) {
@@ -224,9 +225,7 @@ export default function ComboDetailPage() {
       // JSON - could be image (data[0].b64_json/url) or generic
       const data = await res.json();
       const first = data?.data?.[0];
-      const imageUrl = first?.b64_json
-        ? `data:image/png;base64,${first.b64_json}`
-        : (first?.url || "");
+      const imageUrl = base64PngDataUrl(first?.b64_json) || first?.url || "";
       setTestResult({ json: JSON.stringify(maskB64(data), null, 2), imageUrl, latencyMs });
     } catch (e) {
       setTestError(e.message || "Network error");

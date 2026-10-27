@@ -7,6 +7,7 @@ import { MEDIA_PROVIDER_KINDS, getProviderAlias, resolveProviderId } from "@/sha
 import { getModelsByProviderId, getModelKind } from "@/shared/constants/models";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 import { Row, KIND_EXAMPLE_CONFIG, fetchFirstActiveApiKey, fetchTunnelPublicUrl } from "./exampleShared";
+import { toImagePreviewSrc, base64PngDataUrl } from "./imagePreview";
 
 const CLOUDFLARE_TEST_IMAGE_URL = "https://pub-1fb693cb11cc46b2b2f656f51e015a2c.r2.dev/dog.png";
 const CLOUDFLARE_TEST_MASK_URL = "https://pub-1fb693cb11cc46b2b2f656f51e015a2c.r2.dev/dog-mask.png";
@@ -26,13 +27,6 @@ function getImageEditDefaults(providerId, modelId) {
     return { image: CLOUDFLARE_TEST_IMAGE_URL, mask_image: CLOUDFLARE_TEST_MASK_URL };
   }
   return {};
-}
-
-function toImagePreviewSrc(value) {
-  const trimmed = typeof value === "string" ? value.trim() : "";
-  if (!trimmed) return "";
-  if (/^(data:image\/|https?:\/\/)/i.test(trimmed)) return trimmed;
-  return `data:image/png;base64,${trimmed}`;
 }
 
 export function GenericExampleCard({ providerId, kind }) {
@@ -573,7 +567,7 @@ export function GenericExampleCard({ providerId, kind }) {
           <div>
             <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">Partial preview</span>
             <Image
-              src={`data:image/png;base64,${partialImage.b64_json}`}
+              src={base64PngDataUrl(partialImage.b64_json)}
               alt="Partial"
               width={512}
               height={512}
@@ -608,7 +602,7 @@ export function GenericExampleCard({ providerId, kind }) {
             <div className="mb-2">
               <div className="flex items-center justify-end mb-1.5">
                 <a
-                  href={binaryImageUrl || (result?.data?.data?.[0]?.b64_json ? `data:image/png;base64,${result.data.data[0].b64_json}` : result?.data?.data?.[0]?.url || "")}
+                  href={binaryImageUrl || base64PngDataUrl(result?.data?.data?.[0]?.b64_json) || result?.data?.data?.[0]?.url || ""}
                   download="image.png"
                   className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-primary transition-colors"
                 >
@@ -617,7 +611,7 @@ export function GenericExampleCard({ providerId, kind }) {
                 </a>
               </div>
               <Image
-                src={binaryImageUrl || (result?.data?.data?.[0]?.b64_json ? `data:image/png;base64,${result.data.data[0].b64_json}` : result?.data?.data?.[0]?.url)}
+                src={binaryImageUrl || base64PngDataUrl(result?.data?.data?.[0]?.b64_json) || result?.data?.data?.[0]?.url}
                 alt="Generated"
                 width={512}
                 height={512}
