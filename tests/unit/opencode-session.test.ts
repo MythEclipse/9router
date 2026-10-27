@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { fetchMock, opencodeTlsFetchMock, nativeSessionMock } = vi.hoisted(() => ({
+const { fetchMock, opencodeTlsFetchMock } = vi.hoisted(() => ({
   fetchMock: vi.fn(),
   opencodeTlsFetchMock: vi.fn(),
-  nativeSessionMock: vi.fn(),
 }));
 
 vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
@@ -12,13 +11,6 @@ vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
 vi.mock("../../open-sse/services/opencodeTlsClient.js", () => ({
   opencodeTlsFetch: opencodeTlsFetchMock,
   OpencodeTlsUnavailableError: class OpencodeTlsUnavailableError extends Error {},
-}));
-vi.mock("../../open-sse/utils/opencodeCliRunner.js", async (importOriginal) => ({
-  ...await importOriginal(),
-  findOpencodeBinary: vi.fn(() => "/usr/bin/opencode"),
-}));
-vi.mock("../../open-sse/utils/opencodeNativeSession.js", () => ({
-  executeOpencodeNativeSession: nativeSessionMock,
 }));
 
 import { getExecutor, hasSpecializedExecutor } from "../../open-sse/executors/index.js";
@@ -63,7 +55,6 @@ beforeEach(() => {
     status: 200,
     headers: { "content-type": "application/json" },
   }));
-  nativeSessionMock.mockReset().mockResolvedValue({ url: "opencode://session/test" });
 });
 
 describe("OpenCode Free Session ID Format", () => {
@@ -363,15 +354,20 @@ describe("OpenCode Stable Session Reuse (429 follow-up)", () => {
     expect(PROVIDERS.opencode?.retry?.[503]?.attempts).toBe(0);
   });
 
-  it("routes v1 to fetch and exposes v2 as a separate native CLI provider", async () => {
+  it("keeps opencode as the single HTTP provider with no native CLI variant", async () => {
     const opencode = getExecutor("opencode");
-    const opencodeV2 = getExecutor("opencode-v2");
     expect(hasSpecializedExecutor("opencode")).toBe(true);
-    expect(hasSpecializedExecutor("opencode-v2")).toBe(true);
-    expect(opencodeV2.constructor.name).toBe("OpenCodeV2Executor");
-    expect(getExecutor("oc2").constructor.name).toBe("OpenCodeV2Executor");
-    expect(isValidModel("oc2", "union-alpha")).toBe(true);
-    expect(getModelTargetFormat("oc2", "union-alpha")).toBe("claude");
+    expect(opencode.constructor.name).toBe("OpenCodeExecutor");
+    // The CLI-backed v2 lane is gone: no provider or alias may resolve to it.
+    expect(hasSpecializedExecutor("opencode-v2")).toBe(false);
+    expect(hasSpecializedExecutor("oc2")).toBe(false);
+    expect(isValidModel("oc2", "union-alpha")).toBe(false);
+    expect(getModelTargetFormat("oc2", "union-alpha")).toBe(null);
+    // The surviving lane still resolves every alias to one executor.
+    expect(getExecutor("oc1").constructor.name).toBe("OpenCodeExecutor");
+    expect(getExecutor("oc").constructor.name).toBe("OpenCodeExecutor");
+    // Endpoint-family routing still applies to unknown/open-lane model ids.
+    expect(getModelTargetFormat("opencode", "union-alpha")).toBe("claude");
 
     const headers = opencode.buildHeaders({}, true, "https://opencode.ai/inference/v1/chat/completions");
     expect(headers["User-Agent"]).toContain("opencode/1.19.4");
@@ -385,19 +381,23 @@ describe("OpenCode Stable Session Reuse (429 follow-up)", () => {
 
     const msgUrl = opencode.buildUrl("union-alpha");
     expect(msgUrl).toBe("https://opencode.ai/inference/v1/messages");
-    expect(opencodeV2.getProvider()).toBe("opencode-v2");
+    expect(opencode.getProvider()).toBe("opencode");
+  });
 
-    const result = await opencodeV2.execute({
+  it("serves the free lane over HTTP through the TLS client, never a spawned CLI", async () => {
+    const opencode = getExecutor("opencode");
+    const result = await opencode.execute({
       model: "big-pickle",
       body: { messages: [{ role: "user", content: "hello" }] },
-      credentials: { connectionId: "connection-v2" },
+      credentials: { connectionId: "connection-http" },
     });
-    expect(result.url).toBe("opencode://session/test");
-    expect(nativeSessionMock).toHaveBeenCalledWith(expect.objectContaining({
-      targetModel: "opencode/big-pickle",
-      rawModel: "big-pickle",
-      opencodeBin: "/usr/bin/opencode",
-    }));
-    expect(fetchMock).not.toHaveBeenCalled();
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(result.url).toBe("https://opencode.ai/inference/v1/chat/completions");
+    // The free tier gates on the real CLI TLS fingerprint, so every direct
+    // attempt must go through the wreq-js transport rather than plain fetch.
+    opencodeTlsFetchMock.mockClear();
+    await fetchMock.mock.calls[0][3]("https://opencode.ai/inference/v1/chat/completions", {});
+    expect(opencodeTlsFetchMock).toHaveBeenCalledOnce();
   });
 });

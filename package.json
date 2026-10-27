@@ -67,7 +67,6 @@
   },
   "optionalDependencies": {
     "@aws-sdk/credential-providers": "^3.1135.0",
-    "opencode-ai": "latest",
     "wreq-js": "^3.2.0"
   },
   "devDependencies": {

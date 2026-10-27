@@ -144,8 +144,7 @@ import p140 from "./xquik";
 import p141 from "./youcom";
 import p142 from "./zed";
 import p143 from "./perchai";
-import p144 from "./opencode-v2";
-import p145 from "./runcrate";
+import p144 from "./runcrate";
 
 export default [
   p0,
@@ -293,5 +292,4 @@ export default [
   p142,
   p143,
   p144,
-  p145,
 ] as RegistryEntry[];

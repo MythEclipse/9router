@@ -10,7 +10,7 @@ import { KimchiExecutor } from "./kimchi";
 import { CodexExecutor } from "./codex";
 import { CursorExecutor } from "./cursor";
 import { VertexExecutor } from "./vertex";
-import { OpenCodeExecutor, OpenCodeV2Executor } from "./opencode";
+import { OpenCodeExecutor } from "./opencode";
 import { OpenCodeGoExecutor } from "./opencode-go";
 import { OpenCodeZenExecutor } from "./opencode-zen";
 import { GrokCliExecutor } from "./grok-cli";
@@ -48,8 +48,6 @@ const executors = {
   vertex: new VertexExecutor("vertex"),
   "vertex-partner": new VertexExecutor("vertex-partner"),
   opencode: new OpenCodeExecutor(),
-  "opencode-v2": new OpenCodeV2Executor(),
-  oc2: new OpenCodeV2Executor(),
   oc1: new OpenCodeExecutor(),
   oc: new OpenCodeExecutor(),
   "opencode-go": new OpenCodeGoExecutor(),
@@ -119,7 +117,6 @@ export { CursorExecutor } from "./cursor";
 export { VertexExecutor } from "./vertex";
 export { DefaultExecutor } from "./default";
 export { OpenCodeExecutor } from "./opencode";
-export { OpenCodeV2Executor } from "./opencode";
 export { OpenCodeGoExecutor } from "./opencode-go";
 export { OpenCodeZenExecutor } from "./opencode-zen";
 export { GrokCliExecutor } from "./grok-cli";

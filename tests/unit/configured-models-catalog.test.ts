@@ -100,6 +100,7 @@ describe("configured public model catalogs", () => {
     expect(models.some(m => m.id === "oc1/union-alpha")).toBe(true);
     expect(models.some(m => m.id === "oc1/beam-free")).toBe(true);
     expect(models.some(m => m.id === "oc1/big-pickle")).toBe(true);
-    expect(models.some(m => m.id.startsWith("oc2/"))).toBe(true);
+    // The CLI-backed oc2 lane was removed; only the HTTP opencode lane remains.
+    expect(models.some(m => m.id.startsWith("oc2/"))).toBe(false);
   });
 });

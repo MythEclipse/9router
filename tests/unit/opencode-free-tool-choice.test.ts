@@ -1,24 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { PROVIDERS } from "../../open-sse/config/providers.js";
-import { OpenCodeExecutor, OpenCodeV2Executor } from "../../open-sse/executors/opencode.js";
+import { OpenCodeExecutor } from "../../open-sse/executors/opencode.js";
 import { proxyAwareFetch } from "../../open-sse/utils/proxyFetch.js";
 import { OPENCODE_FINGERPRINT_TOOLS } from "../../open-sse/utils/opencodeFingerprint.js";
 
-const { executeNativeSessionMock } = vi.hoisted(() => ({
-  executeNativeSessionMock: vi.fn(async () => ({ url: "opencode://session/ses_test" })),
-}));
-
 vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
   proxyAwareFetch: vi.fn(async () => ({ ok: true, status: 200, headers: { get: () => "" } })),
-}));
-
-vi.mock("../../open-sse/utils/opencodeCliRunner.js", () => ({
-  findOpencodeBinary: () => "/usr/bin/opencode",
-  formatOpencodeCliPrompt: () => "cli prompt",
-}));
-
-vi.mock("../../open-sse/utils/opencodeNativeSession.js", () => ({
-  executeOpencodeNativeSession: executeNativeSessionMock,
 }));
 // Break caught: opencode/muse-spark-1.3-contributor-free 400 vì upstream
 // chỉ nhận tool_choice "auto"; named/required/none phải demote sang "auto".
@@ -88,16 +75,15 @@ describe("opencode Free 1.3 tool_choice auto-only", () => {
     expect(out.tool_choice).toEqual(choice);
   });
 
-  it("dùng OpenCode native session, không request trực tiếp khi request có client tools", async () => {
+  it("sends free-lane requests straight to the HTTP inference endpoint", async () => {
     proxyAwareFetch.mockClear();
-    executeNativeSessionMock.mockClear();
-    const ex = new OpenCodeV2Executor();
+    const ex = new OpenCodeExecutor();
     const body = responsesBody(FREE_13, { type: "function", name: "get_weather" });
     const result = await ex.execute({
       model: FREE_13, body, stream: true, credentials: CREDS,
     });
-    expect(result.url).toBe("opencode://session/ses_test");
-    expect(executeNativeSessionMock).toHaveBeenCalledTimes(1);
-    expect(proxyAwareFetch).not.toHaveBeenCalled();
+    expect(result.url).toBe("https://opencode.ai/inference/v1/responses");
+    expect(proxyAwareFetch).toHaveBeenCalledTimes(1);
+    expect(result.transformedBody.tool_choice).toBe("auto");
   });
 });

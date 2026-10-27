@@ -10,10 +10,6 @@ import { applyFingerprintTools } from "../utils/opencodeFingerprint";
 import { ANTHROPIC_API_VERSION } from "../providers/shared";
 import { opencodeTlsFetch, OpencodeTlsUnavailableError } from "../services/opencodeTlsClient";
 import {
-  findOpencodeBinary,
-} from "../utils/opencodeCliRunner";
-import { executeOpencodeNativeSession } from "../utils/opencodeNativeSession";
-import {
   normalizeResponsesInput,
   clampResponsesCallId,
   coerceResponsesArguments,
@@ -21,14 +17,14 @@ import {
 } from "../translator/formats/responsesApi";
 import { normalizeResponsesTools, sanitizeResponsesItems } from "../utils/responsesTools";
 
-// OpenCode v2 UA shape: opencode/<channel>/<version>/<client>. Upstream rejects
-// the v1 "opencode/1.18.x" form with 403 FreeTierError since 2026-10-14.
-// Shape as of the 1.19.x CLI (reverse-engineered 2026-10-23 via mitmproxy):
-// "opencode/<version> ai-sdk/provider-utils/<v> runtime/bun/<v>" with
-// x-opencode-client: cli, x-opencode-project, and a per-message
-// x-opencode-request: msg_<...>. The 9router executor must keep mirroring
-// whatever the current CLI sends: a stale UA is how the free tier tells a
-// relay apart from the real client (upstream #5107).
+// Upstream UA shape: "opencode/<version> ai-sdk/provider-utils/<v> runtime/bun/<v>".
+// OpenCode's older "opencode/<channel>/<version>/<client>" form and the
+// "opencode/1.18.x" form are both rejected with 403 FreeTierError since
+// 2026-10-14. Shape as of the 1.19.x CLI (reverse-engineered 2026-10-23 via
+// mitmproxy); it pairs with x-opencode-client: cli, x-opencode-project, and a
+// per-message x-opencode-request: msg_<...>. This executor has to keep
+// mirroring whatever the current CLI sends: a stale UA is how the free tier
+// tells a relay apart from the real client (upstream #5107).
 const OPENCODE_UA = "opencode/1.19.4 ai-sdk/provider-utils/4.0.23 runtime/bun/1.4.4";
 const OPENCODE_CLIENT = "cli";
 const MAX_SESSION_LENGTH = 256;
@@ -40,7 +36,7 @@ const translatedOpencodeSessions = new Map();
 const MAX_TRANSLATED_SESSIONS = 5000;
 
 function hasValidOpencodeVersion(ua) {
-  // Only the real current CLI shape passes through: the v2 channel shape
+  // Only the real current CLI shape passes through: the older channel shape
   // ("opencode/<channel>/<major>.<minor>.<patch>/<client>") was the previous
   // generation and now reads as a stale relay UA, so anything that is not the
   // current "opencode/<version> ai-sdk/provider-utils/<v> runtime/bun/<v>"
@@ -436,38 +432,3 @@ export class OpenCodeExecutor extends BaseExecutor {
   }
 }
 
-export class OpenCodeV2Executor extends OpenCodeExecutor {
-  constructor() {
-    super("opencode-v2");
-  }
-
-  async execute(args) {
-    const { model, body, proxyOptions, signal, log, reqTag, providerSessionId, clientTool, credentials } = args;
-    const opencodeBin = findOpencodeBinary();
-    if (!opencodeBin) {
-      throw new Error("OpenCode CLI is required for the opencode-v2 provider, but no executable was found");
-    }
-
-    const rawModel = baseModelId(model || body?.model);
-    const targetModel = `opencode/${rawModel}`;
-    try {
-      return await executeOpencodeNativeSession({
-        opencodeBin,
-        targetModel,
-        rawModel,
-        body,
-        providerSessionId,
-        connectionId: credentials?.connectionId,
-        clientTool,
-        proxyOptions,
-        signal,
-        log,
-        reqTag,
-        providerTag: "OPENCODE-V2",
-      });
-    } catch (err) {
-      log?.warn?.("OPENCODE-V2", `Native session execution failed; refusing HTTP fallback: ${err.message}`);
-      throw err;
-    }
-  }
-}

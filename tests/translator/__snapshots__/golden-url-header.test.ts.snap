@@ -1357,28 +1357,6 @@ exports[`GOLDEN buildHeaders (default executor providers) > openai → headers (
 }
 `;
 
-exports[`GOLDEN buildHeaders (default executor providers) > opencode-v2 → headers (apiKey / oauth) 1`] = `
-{
-  "apiKey": {
-    "Accept": "text/event-stream",
-    "Authorization": "Bearer <TOK>",
-    "Content-Type": "application/json",
-    "x-opencode-client": "cli",
-  },
-  "nonStream": {
-    "Authorization": "Bearer <TOK>",
-    "Content-Type": "application/json",
-    "x-opencode-client": "cli",
-  },
-  "oauth": {
-    "Accept": "text/event-stream",
-    "Authorization": "Bearer <TOK>",
-    "Content-Type": "application/json",
-    "x-opencode-client": "cli",
-  },
-}
-`;
-
 exports[`GOLDEN buildHeaders (default executor providers) > opencode-zen → headers (apiKey / oauth) 1`] = `
 {
   "apiKey": {
@@ -2280,13 +2258,6 @@ exports[`GOLDEN buildUrl (default executor providers) > openai → url (stream +
 {
   "nonStream": "https://api.openai.com/v1/chat/completions",
   "stream": "https://api.openai.com/v1/chat/completions",
-}
-`;
-
-exports[`GOLDEN buildUrl (default executor providers) > opencode-v2 → url (stream + non-stream) 1`] = `
-{
-  "nonStream": "https://opencode.ai",
-  "stream": "https://opencode.ai",
 }
 `;
 
