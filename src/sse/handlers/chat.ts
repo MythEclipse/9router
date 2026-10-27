@@ -291,7 +291,7 @@ export async function handleChat(request: Request, clientRawRequest: ClientRawRe
             const { tools, tool_choice, ...cleanBody } = clientRawRequest.body || {};
             cleanRawReq = { ...clientRawRequest, body: cleanBody };
           }
-          return handleSingleModelChat(b, m, cleanRawReq, request, apiKey);
+          return handleSingleModelChat(b, m, cleanRawReq, request, apiKey, comboEntryName);
         },
         log,
         comboName: comboEntryName,
@@ -302,11 +302,15 @@ export async function handleChat(request: Request, clientRawRequest: ClientRawRe
 
     const comboStickyLimit = settings.comboStickyRoundRobinLimit;
     log.info("CHAT", `Combo "${comboEntryName}" with ${augmentedModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`);
+    // The combo name is what the caller asked for, so it is what every member's
+    // response must be labelled with. Without this the client sees whichever
+    // internal provider/model happened to serve the request.
+    const aliasModel = comboEntryName;
     return handleComboChat({
       body,
       models: augmentedModels,
       handleSingleModel: withCapacityAdapterStripping(
-        (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey, null, (servedModel, creds) => {
+        (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey, aliasModel, (servedModel, creds) => {
           lastServed.model = servedModel;
           lastServed.connectionId = creds.connectionId;
           lastServed.provider = creds.provider ?? null;
@@ -344,7 +348,7 @@ export async function handleChat(request: Request, clientRawRequest: ClientRawRe
       body,
       models: soloAugmented,
       handleSingleModel: withCapacityAdapterStripping(
-        (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey, null, (servedModel, creds) => {
+        (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey, modelStr, (servedModel, creds) => {
           lastServed.model = servedModel;
           lastServed.connectionId = creds.connectionId;
           lastServed.provider = creds.provider ?? null;
@@ -436,7 +440,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
               const { tools, tool_choice, ...cleanBody } = clientRawRequest.body || {};
               cleanRawReq = { ...clientRawRequest, body: cleanBody };
             }
-            return handleSingleModelChat(b, m, cleanRawReq, request, apiKey);
+            return handleSingleModelChat(b, m, cleanRawReq, request, apiKey, comboEntryName);
           },
           log,
           comboName: comboEntryName,
@@ -452,7 +456,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
         models: augmentedModels,
         signal: request?.signal,
         handleSingleModel: withCapacityAdapterStripping(
-          (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey),
+          (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey, modelStr),
           adapterAdded
         ),
         log,
