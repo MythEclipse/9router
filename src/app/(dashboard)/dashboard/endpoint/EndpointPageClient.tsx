@@ -19,6 +19,7 @@ import {
   CLIENT_PING_FAST_MS,
 } from "./endpointConstants";
 import { clientPingUrl, clientPingAny } from "./endpointPing";
+import { ServerSentFrameReader } from "@/shared/utils/sseFrames";
 import {
   limitKindOf as limitKindOfKey,
   limitCapOf as limitCapOfKey,
@@ -933,41 +934,28 @@ const scopedModelPatterns =
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const parts = buffer.split("\n\n");
-        buffer = parts.pop() || "";
-        for (const part of parts) {
-          const lines = part.split("\n");
-          let event = "progress";
-          let data = null;
-          for (const line of lines) {
-            if (line.startsWith("event: ")) event = line.slice(7).trim();
-            if (line.startsWith("data: ")) {
-              try {
-                data = JSON.parse(line.slice(6));
-              } catch {
-                /* skip */
-              }
+      const frames = new ServerSentFrameReader();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          for (const { event, data } of frames.push(decoder.decode(value, { stream: true }))) {
+            if (!data) continue;
+            if (event === "progress") {
+              setTsInstallLog((prev) => [...prev.slice(-50), data.message]);
+            } else if (event === "done") {
+              setTsInstalled(true);
+              setTsInstalling(false);
+              setShowTsModal(false);
+              handleConnectTailscale();
+              return;
+            } else if (event === "error") {
+              setTsStatus({ type: "error", message: data.error || "Install failed" });
             }
           }
-          if (!data) continue;
-          if (event === "progress") {
-            setTsInstallLog((prev) => [...prev.slice(-50), data.message]);
-          } else if (event === "done") {
-            setTsInstalled(true);
-            setTsInstalling(false);
-            setShowTsModal(false);
-            handleConnectTailscale();
-            return;
-          } else if (event === "error") {
-            setTsStatus({ type: "error", message: data.error || "Install failed" });
-          }
         }
+      } finally {
+        reader.releaseLock();
       }
     } catch (e) {
       setTsStatus({ type: "error", message: e.message });
