@@ -71,7 +71,7 @@ const leafOf = (value) => {
  *   modelDisplayName("claude-opus-5-5")                    -> "Claude Opus 5.5"
  *   modelDisplayName("gpt-6.1-sol")                        -> "GPT-6.1 Sol"
  *   modelDisplayName("glm-5.3-flash")                      -> "GLM 5.3 Flash"
- *   modelDisplayName("oc/muse-spark-1.3-contributor-free") -> "Muse Spark 1.3 Contributor Free"
+ *   modelDisplayName("oc/deepseek-v4.1-flash-free") -> "DeepSeek V4.1 Flash Free"
  *   modelDisplayName("claude-3-5-sonnet-20241022")          -> "Claude 3.5 Sonnet"
  */
 export function modelDisplayName(idOrSlug) {

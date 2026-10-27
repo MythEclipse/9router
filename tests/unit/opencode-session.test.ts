@@ -185,7 +185,7 @@ describe("OpenCode Free Executor Session Resolution", () => {
     expect(fetchMock.mock.calls[0][3]).toBeTypeOf("function");
     expect(credentials).not.toHaveProperty("_opencodeSession");
 
-    await fetchMock.mock.calls[0][3]("https://opencode.ai/inference/v1/responses", fetchMock.mock.calls[0][1]);
+    await fetchMock.mock.calls[0][3]("https://opencode.ai/inference/openai/v1/responses", fetchMock.mock.calls[0][1]);
     expect(opencodeTlsFetchMock).toHaveBeenCalledOnce();
   });
 
@@ -207,23 +207,23 @@ describe("OpenCode Free User-Agent Validation", () => {
   it("defaults User-Agent to the current CLI form for non-opencode downstream clients", () => {
     const executor = getExecutor("opencode");
     const headersNoUa = executor.buildHeaders({});
-    expect(headersNoUa["User-Agent"]).toBe("opencode/1.19.4 ai-sdk/provider-utils/4.0.23 runtime/bun/1.4.4");
+    expect(headersNoUa["User-Agent"]).toBe("opencode/latest/2.1.4/cli");
 
     const headersClaude = executor.buildHeaders({ rawHeaders: { "user-agent": "Claude-Code/1.0" } });
-    expect(headersClaude["User-Agent"]).toBe("opencode/1.19.4 ai-sdk/provider-utils/4.0.23 runtime/bun/1.4.4");
+    expect(headersClaude["User-Agent"]).toBe("opencode/latest/2.1.4/cli");
   });
 
   it("replaces stale opencode User-Agents, which upstream now rejects with 403", () => {
     const executor = getExecutor("opencode");
     for (const ua of ["opencode", "opencode/1.15.0", "opencode/latest/2.0.26/cli"]) {
-      expect(executor.buildHeaders({ rawHeaders: { "user-agent": ua } })["User-Agent"]).toBe("opencode/1.19.4 ai-sdk/provider-utils/4.0.23 runtime/bun/1.4.4");
+      expect(executor.buildHeaders({ rawHeaders: { "user-agent": ua } })["User-Agent"]).toBe("opencode/latest/2.1.4/cli");
     }
   });
 
   it("preserves a current opencode downstream User-Agent", () => {
     const executor = getExecutor("opencode");
-    const headers = executor.buildHeaders({ rawHeaders: { "user-agent": "opencode/1.19.4 ai-sdk/provider-utils/4.0.23 runtime/bun/1.4.4" } });
-    expect(headers["User-Agent"]).toBe("opencode/1.19.4 ai-sdk/provider-utils/4.0.23 runtime/bun/1.4.4");
+    const headers = executor.buildHeaders({ rawHeaders: { "user-agent": "opencode/latest/2.1.4/cli" } });
+    expect(headers["User-Agent"]).toBe("opencode/latest/2.1.4/cli");
   });
 
   it("sends fetch-route session-affinity headers without a per-message CLI request id", () => {
@@ -301,7 +301,10 @@ describe("OpenCode Stable Session Reuse (429 follow-up)", () => {
     expect(chatNoTools.stream).toBe(true);
     // tool_choice "none" is answered with 403 FreeTierError upstream.
     expect(chatNoTools.tool_choice).toBeUndefined();
-    expect(chatNoTools.tools.map((t) => t.function?.name)).toEqual(["read", "shell"]);
+    expect(chatNoTools.tools.map((t: any) => t.function?.name)).toEqual([
+      "read", "shell", "edit", "glob", "grep", "question",
+      "skill", "subagent", "webfetch", "websearch", "write", "execute",
+    ]);
     expect(chatNoTools.messages[0].role).toBe("system");
     expect(chatNoTools.messages[0].content).toContain("<env>");
     expect(chatNoTools.messages[0].content).toContain("Working directory: /workspace");
@@ -316,13 +319,14 @@ describe("OpenCode Stable Session Reuse (429 follow-up)", () => {
       tool_choice: "auto",
     });
     expect(chatWithTools.tool_choice).toBe("auto");
-    expect(chatWithTools.tools.map((t) => t.function?.name)).toEqual(["Bash", "Read", "read", "shell"]);
+    expect(chatWithTools.tools.map((t: any) => t.function?.name))
+      .toEqual(["Bash", "Read", "read", "shell", "edit", "glob", "grep", "question", "skill", "subagent", "webfetch", "websearch", "write", "execute"]);
 
     const chatClash = executor.transformRequest("nemotron-3-ultra-free", {
       messages: [{ role: "user", content: "hi" }],
       tools: [{ type: "function", function: { name: "read", description: "existing" } }],
     });
-    expect(chatClash.tools.map((t) => t.function?.name)).toEqual(["read_client", "read", "shell"]);
+    expect(chatClash.tools.slice(0, 3).map((t: any) => t.function?.name)).toEqual(["read_client", "read", "shell"]);
     expect(chatClash.tools[0].function.description).toBe("existing");
   });
 
@@ -342,7 +346,7 @@ describe("OpenCode Stable Session Reuse (429 follow-up)", () => {
 
     expect(transformed.stream).toBe(true);
     expect(transformed.reasoning?.effort).toBe("xhigh");
-    expect(transformed.tools.map((tool) => tool.name)).toEqual(["zcode_search", "read", "shell"]);
+    expect(transformed.tools.slice(0, 3).map((tool: any) => tool.name)).toEqual(["zcode_search", "read", "shell"]);
     expect(transformed.instructions).toContain("<env>");
     expect(transformed.instructions).not.toContain(process.cwd());
   });
@@ -369,18 +373,18 @@ describe("OpenCode Stable Session Reuse (429 follow-up)", () => {
     // Endpoint-family routing still applies to unknown/open-lane model ids.
     expect(getModelTargetFormat("opencode", "union-alpha")).toBe("claude");
 
-    const headers = opencode.buildHeaders({}, true, "https://opencode.ai/inference/v1/chat/completions");
-    expect(headers["User-Agent"]).toContain("opencode/1.19.4");
+    const headers = opencode.buildHeaders({}, true, "https://opencode.ai/inference/openai/v1/chat/completions");
+    expect(headers["User-Agent"]).toBe("opencode/latest/2.1.4/cli");
     expect(headers["x-opencode-client"]).toBe("cli");
     expect(headers["x-opencode-session"]).toMatch(/^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/);
     expect(headers["x-session-affinity"]).toBe(headers["x-opencode-session"]);
     expect(headers["x-session-id"]).toBe(headers["x-opencode-session"]);
 
     const url = opencode.buildUrl("deepseek-v4.1-flash-free");
-    expect(url).toBe("https://opencode.ai/inference/v1/chat/completions");
+    expect(url).toBe("https://opencode.ai/inference/openai/v1/chat/completions");
 
     const msgUrl = opencode.buildUrl("union-alpha");
-    expect(msgUrl).toBe("https://opencode.ai/inference/v1/messages");
+    expect(msgUrl).toBe("https://opencode.ai/inference/openai/v1/messages");
     expect(opencode.getProvider()).toBe("opencode");
   });
 
@@ -393,11 +397,11 @@ describe("OpenCode Stable Session Reuse (429 follow-up)", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledOnce();
-    expect(result.url).toBe("https://opencode.ai/inference/v1/chat/completions");
+    expect(result.url).toBe("https://opencode.ai/inference/openai/v1/chat/completions");
     // The free tier gates on the real CLI TLS fingerprint, so every direct
     // attempt must go through the wreq-js transport rather than plain fetch.
     opencodeTlsFetchMock.mockClear();
-    await fetchMock.mock.calls[0][3]("https://opencode.ai/inference/v1/chat/completions", {});
+    await fetchMock.mock.calls[0][3]("https://opencode.ai/inference/openai/v1/chat/completions", {});
     expect(opencodeTlsFetchMock).toHaveBeenCalledOnce();
   });
 });

@@ -7,7 +7,7 @@ import { OpenCodeExecutor } from "../../open-sse/executors/opencode.js";
 import "../translator/registerAll.js";
 import { translateRequest } from "../../open-sse/translator/index.js";
 
-const MODEL = "muse-spark-1.2-contributor-free";
+const MODEL = "muse-spark-1.2";
 const PROVIDER = "opencode";
 
 const input = [{
@@ -18,9 +18,11 @@ const input = [{
 
 describe("OpenCode Free Muse Spark thinking", () => {
   it("advertises reasoning and the requested model limits", () => {
-    expect(PROVIDER_MODELS.oc1?.some((model) => model.id === MODEL)).toBe(true);
-    expect(PROVIDER_MODELS.oc1?.some((model) => model.id === "muse-spark-1.3-contributor-free")).toBe(true);
-    for (const m of [MODEL, "muse-spark-1.3-contributor-free", "muse-spark-1.4-contributor-free", "muse-spark-2.0-contributor-free"]) {
+    // The -contributor-free Muse ids were retired upstream; the registry no
+    // longer lists them. Capability and routing tables still describe the
+    // family, which is what the rest of this test pins.
+    expect(PROVIDER_MODELS.oc1?.some((model) => model.id === MODEL)).toBe(false);
+    for (const m of [MODEL, "muse-spark-1.3", "muse-spark-1.4", "muse-spark-2.0"]) {
       expect(getCapabilitiesForModel(PROVIDER, m)).toMatchObject({
         reasoning: true,
         thinkingFormat: "openai",
@@ -73,7 +75,7 @@ describe("OpenCode Free Muse Spark thinking", () => {
 
     expect(getModelTargetFormat("oc", "union-alpha")).toBe(FORMATS.CLAUDE);
     const url = executor.buildUrl("union-alpha");
-    expect(url).toBe("https://opencode.ai/inference/v1/messages");
+    expect(url).toBe("https://opencode.ai/inference/openai/v1/messages");
     expect(executor.buildHeaders({}, true, url)).toMatchObject({
       "anthropic-version": "2023-06-01",
     });
@@ -100,7 +102,7 @@ describe("OpenCode Free Muse Spark thinking", () => {
     const executor = new OpenCodeExecutor();
     const body = { messages: [{ role: "user", content: "hi" }], max_tokens: 1024 };
     executor.transformRequest("big-pickle", body, true, {});
-    expect(executor.buildUrl("big-pickle")).toBe("https://opencode.ai/inference/v1/chat/completions");
+    expect(executor.buildUrl("big-pickle")).toBe("https://opencode.ai/inference/openai/v1/chat/completions");
     expect(body.max_tokens).toBe(1024);
     expect(body.max_output_tokens).toBeUndefined();
   });
@@ -131,13 +133,13 @@ describe("OpenCode Free Muse Spark thinking", () => {
     expect(out.max_tokens).toBeUndefined();
   });
 
-  it("routes muse-spark-1.3-contributor-free and future Muse Spark models to Responses API", () => {
+  it("routes muse-spark-1.3 and future Muse Spark models to Responses API", () => {
     const executor = new OpenCodeExecutor();
-    const futureModel = "muse-spark-1.4-contributor-free";
+    const futureModel = "muse-spark-1.4";
 
-    for (const m of ["muse-spark-1.3-contributor-free", futureModel]) {
-      expect(executor.buildUrl(m)).toBe("https://opencode.ai/inference/v1/responses");
-      expect(executor.buildUrl(`${m}(high)`)).toBe("https://opencode.ai/inference/v1/responses");
+    for (const m of ["muse-spark-1.3", futureModel]) {
+      expect(executor.buildUrl(m)).toBe("https://opencode.ai/inference/openai/v1/responses");
+      expect(executor.buildUrl(`${m}(high)`)).toBe("https://opencode.ai/inference/openai/v1/responses");
       expect(getModelTargetFormat("oc", m)).toBe("openai-responses");
 
       const body = {
@@ -168,7 +170,7 @@ describe("OpenCode Free Muse Spark thinking", () => {
 
   it("strips prior-turn reasoning items carrying encrypted_content from input", () => {
     const executor = new OpenCodeExecutor();
-    const model = "muse-spark-1.3-contributor-free";
+    const model = "muse-spark-1.3";
     const body = {
       model,
       input: [

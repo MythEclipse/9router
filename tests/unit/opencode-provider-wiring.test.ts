@@ -32,16 +32,16 @@ describe("opencode provider wiring", () => {
 
   it("routes each model family to its inference endpoint", () => {
     expect(opencode.buildUrl("deepseek-v4.1-flash-free"))
-      .toBe("https://opencode.ai/inference/v1/chat/completions");
+      .toBe("https://opencode.ai/inference/openai/v1/chat/completions");
     expect(opencode.buildUrl("muse-spark-1.3-contributor-free"))
-      .toBe("https://opencode.ai/inference/v1/responses");
+      .toBe("https://opencode.ai/inference/openai/v1/responses");
     expect(opencode.buildUrl("union-alpha"))
-      .toBe("https://opencode.ai/inference/v1/messages");
+      .toBe("https://opencode.ai/inference/openai/v1/messages");
   });
 
   it("sends the current CLI fingerprint and a canonical session header", () => {
-    const headers = opencode.buildHeaders({}, true, "https://opencode.ai/inference/v1/chat/completions");
-    expect(headers["User-Agent"]).toBe("opencode/1.19.4 ai-sdk/provider-utils/4.0.23 runtime/bun/1.4.4");
+    const headers = opencode.buildHeaders({}, true, "https://opencode.ai/inference/openai/v1/chat/completions");
+    expect(headers["User-Agent"]).toBe("opencode/latest/2.1.4/cli");
     expect(headers["x-opencode-client"]).toBe("cli");
     expect(headers["Authorization"]).toBe("Bearer public");
     expect(headers["x-opencode-session"]).toMatch(/^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/);

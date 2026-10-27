@@ -38,7 +38,7 @@ export function isDeepSeekModel(modelId) {
 }
 
 // OpenCode Zen free-tier ids all carry the "-free" suffix (e.g.
-// "mimo-v2.6-flash-free", "muse-spark-1.3-contributor-free"). Upstream gates
+// "mimo-v2.6-flash-free", "nemotron-3.5-lightning-free"). Upstream gates
 // these behind the attested free-tier identity even on the keyed lane, so the
 // executor must detect them to switch auth instead of hardcoding a model list.
 export function isOpencodeFreeTierModel(modelId) {

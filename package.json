@@ -17,6 +17,7 @@
     "cli:pack": "npm --prefix cli run pack:cli",
     "cli:publish": "npm --prefix cli run publish:cli",
     "bump": "node scripts/bump-version.mjs",
+    "sync:opencode-harness": "node scripts/sync-opencode-harness.mjs",
     "prepare": "if command -v git >/dev/null 2>&1 && git rev-parse --git-dir >/dev/null 2>&1; then lefthook install; fi"
   },
   "dependencies": {
