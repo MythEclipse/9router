@@ -4,8 +4,12 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { Card, Button, Badge, SegmentedControl, PageShell } from "@/shared/components";
 import { CONSOLE_LOG_CONFIG } from "@/shared/constants/config";
+import { groupIdFor, groupLogs, parseLogLine, SYSTEM_GROUP_ID } from "@/shared/utils/consoleLogGroups";
 
 type BadgeVariant = "default" | "error" | "primary" | "success" | "warning" | "info";
+
+/** Provider filter sentinel: show lines from every provider. */
+const ALL_PROVIDERS = "__all__";
 
 function getStatusBadge(code: unknown): { variant: BadgeVariant; label: string } {
   const num = Number(code) || 500;
@@ -91,6 +95,7 @@ export default function LogsClient({ initialTab = "errors" }) {
   const [consoleConnected, setConsoleConnected] = useState(false);
   const [consoleFilter, setConsoleFilter] = useState("");
   const [consoleLevel, setConsoleLevel] = useState("all");
+  const [consoleProvider, setConsoleProvider] = useState(ALL_PROVIDERS);
   const [autoScroll, setAutoScroll] = useState(true);
   const [consoleCopiedId, setConsoleCopiedId] = useState(null);
   const consoleRef = useRef(null);
@@ -228,9 +233,17 @@ export default function LogsClient({ initialTab = "errors" }) {
       if (consoleLevel === "warn" && item.tag !== "WARN") return false;
       if (consoleLevel === "info" && item.tag !== "INFO" && item.tag !== "DATABASE" && item.tag !== "SYSTEM") return false;
 
+      if (consoleProvider !== ALL_PROVIDERS && groupIdFor(parseLogLine(item.raw)) !== consoleProvider) {
+        return false;
+      }
+
       if (!consoleFilter) return true;
       return item.raw.toLowerCase().includes(consoleFilter.toLowerCase());
     });
+
+  // One chip per provider (plus System), so a failing model can be isolated
+  // instead of hunting through every request line in the buffer.
+  const consoleProviderGroups = useMemo(() => groupLogs(consoleLogs), [consoleLogs]);
 
   const consoleMetrics = useMemo(() => {
     let errors = 0;
@@ -575,6 +588,63 @@ export default function LogsClient({ initialTab = "errors" }) {
                 )}
               </div>
             </div>
+
+            {/* Provider filter. Only rendered once a request line exists, so a
+                quiet server is not buried under an "All / System" pair. */}
+            {consoleProviderGroups.some((group) => group.id !== SYSTEM_GROUP_ID) && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] text-text-muted uppercase font-medium tracking-wide mr-1">
+                  Provider
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setConsoleProvider(ALL_PROVIDERS)}
+                  aria-pressed={consoleProvider === ALL_PROVIDERS}
+                  className={`px-2 py-1 rounded-md border text-[11px] font-medium transition-colors ${
+                    consoleProvider === ALL_PROVIDERS
+                      ? "border-brand-500/50 bg-brand-500/10 text-text-main"
+                      : "border-border-subtle bg-surface-2 text-text-muted hover:text-text-main"
+                  }`}
+                >
+                  All <span className="tabular-nums opacity-70">{consoleLogs.length}</span>
+                </button>
+                {consoleProviderGroups.map((group) => {
+                  const selected = consoleProvider === group.id;
+                  const problems = group.counts.error + group.counts.warn;
+                  return (
+                    <button
+                      key={group.id}
+                      type="button"
+                      onClick={() => setConsoleProvider(group.id)}
+                      aria-pressed={selected}
+                      title={group.label}
+                      className={`flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px] font-medium transition-colors ${
+                        selected
+                          ? "border-brand-500/50 bg-brand-500/10 text-text-main"
+                          : "border-border-subtle bg-surface-2 text-text-muted hover:text-text-main"
+                      }`}
+                    >
+                      <span
+                        className={`size-1.5 rounded-full shrink-0 ${
+                          group.counts.error > 0
+                            ? "bg-danger"
+                            : group.counts.warn > 0
+                              ? "bg-warning"
+                              : "bg-success"
+                        }`}
+                      />
+                      <span className="truncate max-w-[150px]">{group.label}</span>
+                      <span className="tabular-nums opacity-70">{group.lines.length}</span>
+                      {problems > 0 && (
+                        <span className={`tabular-nums ${group.counts.error > 0 ? "text-danger" : "text-warning"}`}>
+                          {problems}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Console Log List (Identical Card style to Error Records) */}
             <Card padding="none" className="divide-y divide-border-subtle max-h-[calc(100dvh-320px)] overflow-y-auto">

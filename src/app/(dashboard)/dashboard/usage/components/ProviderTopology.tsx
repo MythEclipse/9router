@@ -62,11 +62,11 @@ function ProviderNode({ data }: ProviderNodeProps) {
   const [imgError, setImgError] = useState(false);
   return (
     <div
-      className="flex items-center gap-2.5 px-4 py-2.5 rounded-lg border-2 transition-all duration-300 bg-bg"
+      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border transition-all duration-300 bg-bg"
       style={{
         borderColor: active ? color : "var(--color-border)",
-        boxShadow: active ? `0 0 16px ${color}40` : "none",
-        minWidth: "150px",
+        boxShadow: active ? `0 0 12px ${color}40` : "none",
+        minWidth: "112px",
       }}
     >
       <Handle type="target" position={Position.Top} id="top" className="!bg-transparent !border-0 !w-0 !h-0" />
@@ -76,17 +76,17 @@ function ProviderNode({ data }: ProviderNodeProps) {
 
       {/* Provider icon */}
       <div
-        className="w-8 h-8 rounded-md flex items-center justify-center shrink-0"
+        className="w-5 h-5 rounded flex items-center justify-center shrink-0"
         style={{ backgroundColor: `${color}15` }}
       >
         {imageUrl && !imgError ? (
           <Image
             src={imageUrl}
             alt={label}
-            width={24}
-            height={24}
+            width={16}
+            height={16}
             unoptimized
-            className="w-6 h-6 rounded-sm object-contain"
+            className="w-4 h-4 rounded-sm object-contain"
             onError={() => {
               const m = imageUrl?.match(/^\/providers\/([^/]+)\.png$/i);
               if (m) markProviderIconMissing(m[1]);
@@ -94,13 +94,13 @@ function ProviderNode({ data }: ProviderNodeProps) {
             }}
           />
         ) : (
-          <span className="text-sm font-bold" style={{ color }}>{textIcon}</span>
+          <span className="text-[10px] font-bold" style={{ color }}>{textIcon}</span>
         )}
       </div>
 
       {/* Provider name */}
       <span
-        className="text-base font-medium truncate"
+        className="text-xs font-medium truncate"
         style={{ color: active ? color : "var(--color-text)" }}
       >
         {label}
@@ -108,9 +108,9 @@ function ProviderNode({ data }: ProviderNodeProps) {
 
       {/* Active indicator */}
       {active && (
-        <span className="relative flex h-2 w-2 shrink-0">
+        <span className="relative flex h-1.5 w-1.5 shrink-0">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ backgroundColor: color }} />
-          <span className="relative inline-flex rounded-full h-2 w-2" style={{ backgroundColor: color }} />
+          <span className="relative inline-flex rounded-full h-1.5 w-1.5" style={{ backgroundColor: color }} />
         </span>
       )}
     </div>
@@ -126,7 +126,7 @@ function RouterNode({ data }: RouterNodeProps) {
   const powering = ((data as RouterNodeData).activeCount || 0) > 0;
   return (
     <div
-      className={`relative z-[1] flex items-center justify-center px-5 py-3 rounded-xl border-2 min-w-[130px] ${
+      className={`relative z-[1] flex items-center justify-center px-3 py-1.5 rounded-lg border-2 min-w-[92px] ${
         powering
           ? "topology-router-core border-yellow-300 bg-gradient-to-br from-primary/30 via-yellow-400/20 to-cyan-400/25"
           : "border-primary bg-primary/5 shadow-md"
@@ -140,15 +140,15 @@ function RouterNode({ data }: RouterNodeProps) {
       <Image
         src="/favicon.svg"
         alt="9Router"
-        width={24}
-        height={24}
-        className={`w-6 h-6 mr-2 ${powering ? "topology-router-icon" : ""}`}
+        width={16}
+        height={16}
+        className={`w-4 h-4 mr-1.5 ${powering ? "topology-router-icon" : ""}`}
       />
-      <span className={`text-sm font-bold ${powering ? "topology-router-label text-yellow-300" : "text-primary"}`}>
+      <span className={`text-xs font-bold ${powering ? "topology-router-label text-yellow-300" : "text-primary"}`}>
         9Router
       </span>
       {((data as RouterNodeData).activeCount || 0) > 0 && (
-        <span className="ml-2 px-1.5 py-0.5 rounded-full bg-yellow-400 text-black text-xs font-bold topology-router-badge">
+        <span className="ml-1.5 px-1 py-0.5 rounded-full bg-yellow-400 text-black text-[10px] font-bold topology-router-badge">
           {data.activeCount}
         </span>
       )}
@@ -287,18 +287,21 @@ function buildLayout(providers: ProviderTopologyProps["providers"], activeSet: S
   const providerNodes: Node<ProviderNodeData | RouterNodeData>[] = [];
   const topologyEdges: Edge<TopologyEdgeData>[] = [];
   const providerList = providers ?? [];
-  const nodeW = 180;
-  const nodeH = 30;
-  const routerW = 120;
-  const routerH = 44;
-  const nodeGap = 24;
+  // Node metrics must match the rendered box in ProviderNode (minWidth 112,
+  // py-1.5 + text-xs ≈ 26 high). They set the ring radius below, so an
+  // out-of-date value here shows up as overlapping or needlessly huge spacing.
+  const nodeW = 130;
+  const nodeH = 26;
+  const routerW = 92;
+  const routerH = 30;
+  const nodeGap = 16;
 
   const count = providerList.length;
 
   // Compute rx so arc spacing between nodes >= nodeW + nodeGap
   const minRx = ((nodeW + nodeGap) * count) / (2 * Math.PI);
-  const rx = Math.max(320, minRx);
-  const ry = Math.max(200, rx * 0.55); // ellipse ratio ~0.55
+  const rx = Math.max(240, minRx);
+  const ry = Math.max(140, rx * 0.5); // ellipse ratio ~0.5
   if (count === 0) {
     return {
       nodes: [{ id: "router", type: "router", position: { x: 0, y: 0 }, data: { activeCount: 0 }, draggable: false }],
@@ -492,7 +495,7 @@ export default function ProviderTopology({ providers = [], activeRequests = [], 
   }, [nodes.length]);
 
   return (
-    <div ref={containerRef} className="h-[320px] w-full min-w-0 rounded-[var(--r-card)] border border-border-subtle bg-surface shadow-[var(--elev-1)] sm:h-[420px] overflow-hidden">
+    <div ref={containerRef} className="h-[260px] w-full min-w-0 rounded-[var(--r-card)] border border-border-subtle bg-surface shadow-[var(--elev-1)] sm:h-[320px] overflow-hidden">
       {providers.length === 0 ? (
         <div className="h-full flex items-center justify-center text-text-muted text-sm">
           No providers connected
