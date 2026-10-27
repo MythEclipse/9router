@@ -29,6 +29,12 @@ import BulkImportGrokCliModal from "./BulkImportGrokCliModal";
 import CustomConfigCard from "./CustomConfigCard";
 import AutoPingScheduleModal from "./AutoPingScheduleModal";
 import { getScheduleSlotLabels } from "@/shared/services/quotaPingSchedule";
+import {
+  resolveThinkingSuffix as resolveThinkingSuffixOf,
+  providerThinkingLevels as deriveThinkingLevels,
+  summarizeSelectedProxies,
+  initialBulkProxyPoolId,
+} from "./providerDerivations";
 
 const ONE_BY_ONE_DELAY_MS = 1000;
 
@@ -196,34 +202,23 @@ export default function ProviderDetailPage() {
     : (providerId === "qoder" || providerId === "qoder-cn") ? "PAT"
     : "API Key";
   // Resolve suffix "(level)" for a model when a thinking level is picked and the model supports it.
-  const resolveThinkingSuffix = (modelId) => {
-    if (!thinkingMode || thinkingMode === "auto") return null;
-    const levels = getThinkingLevels(providerId, modelId);
-    return levels && levels.includes(thinkingMode) ? thinkingMode : null;
-  };
+  const resolveThinkingSuffix = (modelId) =>
+    resolveThinkingSuffixOf(modelId, thinkingMode, providerId, getThinkingLevels);
   const providerStorageAlias = isCompatible ? providerId : providerAlias;
   // Studio names replace the model they point at: those models leave the list below.
   const studioTargetIndex = buildStudioTargetIndex(studioModels);
   // Union of levels across this provider's reasoning models - drives the level picker options.
   // Include custom models too (e.g. manually added gpt-5.6-sol → max).
-  const providerThinkingLevels = (() => {
-    const set = new Set<string>();
-    const seen = new Set<string>();
-    const addLevels = (modelId) => {
-      if (!modelId || seen.has(modelId)) return;
-      seen.add(modelId);
-      const lv = getThinkingLevels(providerId, modelId);
-      if (lv) lv.forEach((l) => { if (l !== "none") set.add(l); });
-    };
-    for (const m of models) addLevels(m.id);
-    for (const m of kiloFreeModels) addLevels(m.id);
-    for (const entry of customModels) {
-      if (entry.providerAlias !== providerStorageAlias) continue;
-      if ((entry.kind || entry.type || "llm") !== "llm") continue;
-      addLevels(entry.id);
-    }
-    return set.size ? ["auto", ...[...set]] : null;
-  })();
+  const providerThinkingLevels = deriveThinkingLevels(
+    providerId,
+    {
+      models,
+      freeModels: kiloFreeModels,
+      customModels,
+      storageAlias: providerStorageAlias,
+    },
+    getThinkingLevels
+  );
   const providerDisplayAlias = isCompatible
     ? (providerNode?.prefix || providerId)
     : providerAlias;
@@ -1076,22 +1071,11 @@ export default function ProviderDetailPage() {
 
 
 
-  const selectedProxySummary = (() => {
-    if (selectedConnections.length === 0) return "";
-    const poolIds = new Set(selectedConnections.map((conn) => conn.providerSpecificData?.proxyPoolId || "__none__"));
-    if (poolIds.size === 1) {
-      const onlyId = [...poolIds][0];
-      if (onlyId === "__none__") return "All selected currently unbound";
-      const pool = proxyPools.find((p) => p.id === onlyId);
-      return `All selected currently bound to ${pool?.name || onlyId}`;
-    }
-    return "Selected connections have mixed proxy bindings";
-  })();
+  const selectedProxySummary = summarizeSelectedProxies(selectedConnections, proxyPools);
 
   const openBulkProxyModal = () => {
     if (selectedConnections.length === 0) return;
-    const uniquePoolIds = [...new Set(selectedConnections.map((conn) => conn.providerSpecificData?.proxyPoolId || "__none__"))];
-    setBulkProxyPoolId(uniquePoolIds.length === 1 ? uniquePoolIds[0] : "__none__");
+    setBulkProxyPoolId(initialBulkProxyPoolId(selectedConnections));
     setShowBulkProxyModal(true);
   };
 
