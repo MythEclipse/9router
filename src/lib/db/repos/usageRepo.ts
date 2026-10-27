@@ -918,6 +918,20 @@ function buildLastTenMinutes(
   return buckets;
 }
 
+/**
+ * ISO cutoff for a period, or null for unbounded ("all").
+ * `today` means local midnight, so it cannot be derived from PERIOD_MS.
+ */
+function periodCutoff(period: string): string | null {
+  if (period === "today") {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    return startOfDay.toISOString();
+  }
+  const span = PERIOD_MS[period];
+  return span ? new Date(Date.now() - span).toISOString() : null;
+}
+
 export async function getUsageStats(
   period = "all",
   filterApiKey: string | null = null,
@@ -1020,20 +1034,7 @@ export async function getUsageStats(
   stats.last10Minutes = buildLastTenMinutes(db, filterApiKey, modelAllowed);
 
   if (filterApiKey) {
-    let cutoff: string | null = null;
-    if (period === "today") {
-      const startOfDay = new Date();
-      startOfDay.setHours(0, 0, 0, 0);
-      cutoff = startOfDay.toISOString();
-    } else if (period === "24h") {
-      cutoff = new Date(Date.now() - PERIOD_MS["24h"]).toISOString();
-    } else if (period === "7d") {
-      cutoff = new Date(Date.now() - PERIOD_MS["7d"]).toISOString();
-    } else if (period === "30d") {
-      cutoff = new Date(Date.now() - PERIOD_MS["30d"]).toISOString();
-    } else if (period === "60d") {
-      cutoff = new Date(Date.now() - PERIOD_MS["60d"]).toISOString();
-    }
+    const cutoff = periodCutoff(period);
 
     const where: string[] = ["apiKey = ?", "status = 'ok'"];
     const params: unknown[] = [filterApiKey];
