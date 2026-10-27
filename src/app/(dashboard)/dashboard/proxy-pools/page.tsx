@@ -19,6 +19,12 @@ import {
   readStoredDashboardJob,
   clearStoredDashboardJob,
 } from "@/shared/utils/dashboardJobsClient";
+import {
+  getStatusVariant,
+  formatDateTime,
+  normalizeFormData,
+  parseProxyImport,
+} from "./proxyPoolParsing";
 
 // One task id for the batch import, shared by the loop, the seed of `importing`
 // after a navigation, and the banner in the layout dock.
@@ -61,28 +67,6 @@ const followDashboardJob = async (kind, jobId, { title, pollMs = 1000, onFinal }
   }
 };
 
-function getStatusVariant(status) {
-  if (status === "active") return "success";
-  if (status === "error") return "error";
-  return "default";
-}
-
-function formatDateTime(value) {
-  if (!value) return "Never";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Never";
-  return date.toLocaleString();
-}
-
-function normalizeFormData(data: { name?: string; proxyUrl?: string; noProxy?: string; isActive?: boolean; strictProxy?: boolean } = {}) {
-  return {
-    name: data.name || "",
-    proxyUrl: data.proxyUrl || "",
-    noProxy: data.noProxy || "",
-    isActive: data.isActive !== false,
-    strictProxy: data.strictProxy === true,
-  };
-}
 
 export default function ProxyPoolsPage() {
   const [proxyPools, setProxyPools] = useState([]);
@@ -759,64 +743,13 @@ export default function ProxyPoolsPage() {
     }
   };
 
-  const parseProxyLine = (line) => {
-    const trimmed = line.trim();
-    if (!trimmed) return null;
-
-    if (trimmed.includes("://")) {
-      const parsed = new URL(trimmed);
-      const hostLabel = parsed.port ? `${parsed.hostname}:${parsed.port}` : parsed.hostname;
-      return {
-        proxyUrl: parsed.toString(),
-        name: `Imported ${hostLabel}`,
-      };
-    }
-
-    const parts = trimmed.split(":");
-    if (parts.length === 4) {
-      const [host, port, username, password] = parts;
-      if (!host || !port || !username || !password) {
-        throw new Error("Invalid host:port:user:pass format");
-      }
-
-      const proxyUrl = `http://${encodeURIComponent(username)}:${encodeURIComponent(password)}@${host}:${port}`;
-      const parsed = new URL(proxyUrl);
-      return {
-        proxyUrl: parsed.toString(),
-        name: `Imported ${host}:${port}`,
-      };
-    }
-
-    throw new Error("Unsupported format");
-  };
-
   const handleBatchImport = async () => {
-    const lines = batchImportText
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean);
+    const { entries: parsedEntries, errors: invalidLines } = parseProxyImport(batchImportText);
 
-    if (lines.length === 0) {
+    if (parsedEntries.length === 0 && invalidLines.length === 0) {
       notify.warning("Please paste at least one proxy line.");
       return;
     }
-
-    const parsedEntries = [];
-    const invalidLines = [];
-
-    lines.forEach((line, index) => {
-      try {
-        const parsed = parseProxyLine(line);
-        if (parsed) {
-          parsedEntries.push({
-            ...parsed,
-            lineNumber: index + 1,
-          });
-        }
-      } catch (error) {
-        invalidLines.push(`Line ${index + 1}: ${error.message}`);
-      }
-    });
 
     if (invalidLines.length > 0) {
       notify.error(`Invalid proxy format:\n${invalidLines.join("\n")}`);
