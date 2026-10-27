@@ -991,16 +991,24 @@ export async function getUsageStats(
   }
 
   // Read enough recent rows to account for filtered lifecycle/zero-usage entries.
+  // `meta` must come along: the `model` column holds the requested name (a combo
+  // survives there) and the real target rides in `meta.resolvedModel`, so a row
+  // mapped without it reports the combo as if it were a model.
   const recentSql = filterApiKey
-    ? `SELECT timestamp, provider, model, tokens, status FROM usageHistory WHERE apiKey = ? ORDER BY id DESC LIMIT 100`
-    : `SELECT timestamp, provider, model, tokens, status FROM usageHistory ORDER BY id DESC LIMIT 100`;
+    ? `SELECT timestamp, provider, model, tokens, status, meta FROM usageHistory WHERE apiKey = ? ORDER BY id DESC LIMIT 100`
+    : `SELECT timestamp, provider, model, tokens, status, meta FROM usageHistory ORDER BY id DESC LIMIT 100`;
   const recentParams = filterApiKey ? [filterApiKey] : [];
   const recentRows = db.all<DbRow>(recentSql, recentParams);
   const recentRequests = recentRows
     .map((r): RecentRequest => {
       const t = parseJson<UsageTokens>(r.tokens as string | null, {}) || {};
+      const resolved = (parseJson<Record<string, unknown>>(r.meta as string | null, {}) || {}).resolvedModel as string | null | undefined;
+      const requested = String(r.model ?? "");
       return {
-        timestamp: String(r.timestamp), model: String(r.model ?? ""), provider: (r.provider as string) || "",
+        timestamp: String(r.timestamp),
+        model: resolved || requested,
+        requestedModel: resolved ? requested : undefined,
+        provider: (r.provider as string) || "",
         promptTokens: t.prompt_tokens || t.input_tokens || 0,
         completionTokens: t.completion_tokens || t.output_tokens || 0,
         cachedTokens: t.cached_tokens || t.cache_read_input_tokens || 0,
@@ -1879,7 +1887,7 @@ export async function getRecentLogs(limit = 200) {
   try {
     const db = await getAdapter();
     const rows = db.all<DbRow>(
-      `SELECT timestamp, provider, model, connectionId, promptTokens, completionTokens, status, tokens FROM usageHistory ORDER BY id DESC LIMIT ?`,
+      `SELECT timestamp, provider, model, connectionId, promptTokens, completionTokens, status, tokens, meta FROM usageHistory ORDER BY id DESC LIMIT ?`,
       [limit],
     );
     if (!rows.length) return [];
@@ -1895,7 +1903,10 @@ export async function getRecentLogs(limit = 200) {
       const connectionId = r.connectionId ? String(r.connectionId) : "";
       const ts = formatLogDate(new Date(String(r.timestamp)));
       const p = String(r.provider ?? "").toUpperCase() || "-";
-      const m = String(r.model ?? "") || "-";
+      // The stored `model` is the name the caller asked for; the real target is
+      // in meta. A log line that names the combo claims the combo served it.
+      const resolvedName = (parseJson<Record<string, unknown>>(r.meta as string | null, {}) || {}).resolvedModel as string | null | undefined;
+      const m = String(resolvedName || r.model || "") || "-";
       const account = connMap[connectionId] || (connectionId ? connectionId.slice(0, 8) : "-");
       const tk = r.tokens ? parseJson<UsageTokens>(r.tokens as string, {}) : {};
       const sent = r.promptTokens != null ? Number(r.promptTokens) : (tk.prompt_tokens ?? "-");
