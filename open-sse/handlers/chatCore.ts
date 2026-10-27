@@ -531,7 +531,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
 
   const executor = getExecutor(provider);
   trackPendingRequest(trackedModel, provider, connectionId, true);
-  appendRequestLog({ model: trackedModel, provider, connectionId, status: "PENDING" }).catch(() => { });
+  appendRequestLog({ model: trackedModel, provider, connectionId, status: "PENDING", requestedModel: model }).catch(() => { });
 
   const msgCount = countOf(translatedBody.messages) || countOf(translatedBody.input) || countOf(translatedBody.contents) || countOf(translatedBody.request?.contents) || 0;
   log?.debug?.("REQUEST", `${provider.toUpperCase()} | ${model} | ${msgCount} msgs`);
@@ -626,7 +626,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     reqLogger.logTargetRequest(providerUrl, providerHeaders, finalBody);
   } catch (error) {
     trackPendingRequest(trackedModel, provider, connectionId, false, true);
-    appendRequestLog({ model: trackedModel, provider, connectionId, status: `FAILED ${error.name === "AbortError" ? 499 : HTTP_STATUS.BAD_GATEWAY}` }).catch(() => { });
+    appendRequestLog({ model: trackedModel, provider, connectionId, status: `FAILED ${error.name === "AbortError" ? 499 : HTTP_STATUS.BAD_GATEWAY}`, requestedModel: model }).catch(() => { });
     saveRequestDetail(buildRequestDetail({
       provider, model, connectionId, requestedModel,
       latency: { ttft: 0, total: Date.now() - requestStartTime },
@@ -761,7 +761,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     if (!toolFallbackRecovered) {
       trackPendingRequest(trackedModel, provider, connectionId, false, true);
       const { statusCode, message, resetsAtMs } = firstFailure;
-      appendRequestLog({ model: trackedModel, provider, connectionId, status: `FAILED ${statusCode}` }).catch(() => { });
+      appendRequestLog({ model: trackedModel, provider, connectionId, status: `FAILED ${statusCode}`, requestedModel: model }).catch(() => { });
       saveRequestDetail(buildRequestDetail({
         provider, model, connectionId, requestedModel,
         latency: { ttft: 0, total: Date.now() - requestStartTime },
@@ -797,7 +797,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   }
 
   const sharedCtx = { provider, model, body, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, requestedModel, clientRawRequest, onRequestSuccess, pxpipe: pxpipeSummary, reqTag, log, pluginResult, modelMultipliers, isAntiProbe };
-  const appendLog = (extra) => appendRequestLog({ model: trackedModel, provider, connectionId, ...extra }).catch(() => { })
+  const appendLog = (extra) => appendRequestLog({ model: trackedModel, provider, connectionId, requestedModel: model, ...extra }).catch(() => { })
   const trackDone = () => trackPendingRequest(trackedModel, provider, connectionId, false);
 
   // Upstream shape mismatch: a provider can answer with a finished JSON document

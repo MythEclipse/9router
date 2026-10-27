@@ -1770,6 +1770,8 @@ export interface RequestLogEntry {
   endpoint?: string | null;
   status?: string | null;
   requestId?: string | null;
+  /** The name the caller asked for, when it differs from the serving model. */
+  requestedModel?: string | null;
 }
 
 export async function appendRequestLog({
@@ -1781,16 +1783,26 @@ export async function appendRequestLog({
   endpoint,
   status,
   requestId,
+  requestedModel,
 }: RequestLogEntry = {}): Promise<void> {
   const upper = typeof status === "string" ? status.toUpperCase() : "";
   const isFailure = upper.includes("FAILED");
   const isPending = upper.includes("PENDING");
   if (!isFailure && !isPending) return;
 
+  // A lifecycle row (pending marker, failed call) lands in the same table the
+  // live stream reads, and the caller passes the REQUESTED name there — a combo.
+  // Without the alias the row carries meta={} and the dashboard shows the combo
+  // until the terminal row replaces it, which reads as the model flickering
+  // between the real target and the combo name once per request.
+  const realModel = requestedModel || model;
+  const aliasModelName = requestedModel ? model : undefined;
+
   try {
     await saveRequestUsage({
       provider: provider || "unknown",
-      model: model || "unknown",
+      model: realModel || "unknown",
+      requestedModel: aliasModelName,
       connectionId: connectionId || undefined,
       apiKey: undefined,
       endpoint: endpoint || null,
