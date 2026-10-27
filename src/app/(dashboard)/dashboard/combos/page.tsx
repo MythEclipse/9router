@@ -12,18 +12,22 @@ import { aggregateComboCapabilities } from "open-sse/providers/capabilities";
 import { invalidateModelCaps } from "@/shared/hooks/useModelCaps";
 import Link from "next/link";
 import { resolveProviderId, AI_PROVIDERS } from "@/shared/constants/providers";
+import {
+  CAPACITY_ADAPTER_CAPS,
+  DEFAULT_FALLBACK_MODEL,
+  EMPTY_CAP_ENTRY,
+  EMPTY_CAPACITY_ADAPTER,
+  normalizeCapEntry,
+  getPolicyBadgeLabel,
+  addCapModel,
+  removeCapModelAt,
+  removeCapModel,
+  moveCapModel,
+} from "./capacityAdapter";
 
 // Validate combo name: only a-z, A-Z, 0-9, -, _
 const VALID_NAME_REGEX = /^[a-zA-Z0-9_.\-]+$/;
 
-// Capacity adapter: global fallback pools of models per input-modality capability.
-// A request needing a capability the target model/combo lacks switches straight
-// to the first enabled model here instead of erroring or dropping the data.
-const CAPACITY_ADAPTER_CAPS = [
-  { key: "vision", label: "Vision", icon: "visibility", desc: "images (png, jpg, webp, …)" },
-  // pdf, videoInput temporarily hidden - no translator support yet for those blocks.
-  { key: "audioInput", label: "Audio", icon: "graphic_eq", desc: "audio input" },
-];
 /** Per-combo routing strategy persisted alongside the model list. */
 interface ComboStrategy {
   fallbackStrategy?: string;
@@ -44,31 +48,6 @@ interface CapEntry {
 
 type CapacityAdapter = Record<string, CapEntry>;
 
-const DEFAULT_FALLBACK_MODEL = "oc/mimo-v2.6-flash-free";
-const EMPTY_CAP_ENTRY: CapEntry = { enabled: true, roundRobin: false, models: [] };
-const EMPTY_CAPACITY_ADAPTER: CapacityAdapter = {
-  vision: { ...EMPTY_CAP_ENTRY },
-  pdf: { ...EMPTY_CAP_ENTRY },
-  audioInput: { ...EMPTY_CAP_ENTRY },
-  videoInput: { ...EMPTY_CAP_ENTRY },
-};
-const upgradeLegacyModel = (m: string) => (m === "oc/mimo-v2.5-free" ? DEFAULT_FALLBACK_MODEL : m);
-
-// Backward-compat: legacy stored form was an array of {model, enabled}.
-function normalizeCapEntry(entry: unknown): CapEntry {
-  if (Array.isArray(entry)) {
-    return { enabled: true, roundRobin: false, models: entry.map((e) => upgradeLegacyModel(String(e?.model || e))).filter(Boolean) };
-  }
-  if (entry && typeof entry === "object") {
-    const obj = entry as { enabled?: unknown; roundRobin?: unknown; models?: unknown };
-    return {
-      enabled: obj.enabled !== false,
-      roundRobin: !!obj.roundRobin,
-      models: Array.isArray(obj.models) ? obj.models.map((m) => upgradeLegacyModel(String(m))).filter(Boolean) : [],
-    };
-  }
-  return { ...EMPTY_CAP_ENTRY };
-}
 
 const STRATEGY_OPTIONS = [
   { value: "fallback", label: "Fallback - try in order" },
@@ -77,17 +56,6 @@ const STRATEGY_OPTIONS = [
   { value: "fusion", label: "Fusion - panel + judge" },
 ];
 
-function getPolicyBadgeLabel(strategy: ComboStrategy = {}): string {
-  const policy = strategy.smartPolicy || (strategy.sessionSticky === false ? "per-turn" : "smart");
-  if (policy === "strict") return "Strict Lock";
-  if (policy === "per-turn") return "Per-Turn";
-  if (policy === "custom") {
-    const raw = strategy.confidenceThreshold;
-    const pct = Math.round((raw || 0.8) * (raw && raw <= 1 ? 100 : 1));
-    return `Custom (≥${pct || 80}%)`;
-  }
-  return "Smart (≥80%)";
-}
 
 export default function CombosPage() {
   const [combos, setCombos] = useState([]);
@@ -965,28 +933,19 @@ function CapacityAdapterCap({ cap, entry, onChange, activeProviders, getCaps }) 
   const patch = (p) => onChange({ ...entry, ...p });
 
   const handleAdd = (model) => {
-    const value = model?.value || model?.name || model;
-    if (!value || models.includes(value)) return;
-    patch({ models: [...models, value] });
+    patch({ models: addCapModel(models, model) });
   };
 
   const handleDeselect = (model) => {
-    const value = model?.value || model?.name || model;
-    const next = models.filter((m) => m !== value);
-    patch({ models: next.length === 0 ? [DEFAULT_FALLBACK_MODEL] : next });
+    patch({ models: removeCapModel(models, model) });
   };
 
   const handleRemove = (index) => {
-    const next = models.filter((_, i) => i !== index);
-    patch({ models: next.length === 0 ? [DEFAULT_FALLBACK_MODEL] : next });
+    patch({ models: removeCapModelAt(models, index) });
   };
 
   const handleMove = (index, delta) => {
-    const target = index + delta;
-    if (target < 0 || target >= models.length) return;
-    const next = [...models];
-    [next[index], next[target]] = [next[target], next[index]];
-    patch({ models: next });
+    patch({ models: moveCapModel(models, index, delta) });
   };
 
   return (
