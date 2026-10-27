@@ -21,6 +21,7 @@ import {
 import { clientPingUrl, clientPingAny } from "./endpointPing";
 import { ServerSentFrameReader } from "@/shared/utils/sseFrames";
 import { applyProbe, initialReachability, type ReachabilityState } from "./reachability";
+import ExposureControl, { exposureStateOf } from "./components/ExposureControl";
 import {
   limitKindOf as limitKindOfKey,
   limitCapOf as limitCapOfKey,
@@ -1412,6 +1413,22 @@ const scopedModelPatterns =
   }
 
   const currentEndpoint = baseUrl;
+  // The two exposure rows render through one state chart (see ExposureControl), so
+  // the flags are folded here rather than re-tested in the JSX.
+  const tunnelExposureState = exposureStateOf({
+    enabled: tunnelEnabled,
+    loading: tunnelLoading,
+    reachable: tunnelReachable,
+    checking: tunnelChecking,
+    hasError: tunnelStatus?.type === "error",
+  });
+  const tsExposureState = exposureStateOf({
+    enabled: tsEnabled,
+    loading: tsLoading,
+    reachable: tsReachable,
+    connecting: tsConnecting,
+    hasError: tsStatus?.type === "error",
+  });
 
   return (
     <div className="flex flex-col gap-8">
@@ -1436,204 +1453,50 @@ const scopedModelPatterns =
               manages keys, it never republishes the endpoint. */}
           {!isApiKeyUser && (
           <>
-          {/* Cloudflare Tunnel */}
-          <div className="flex flex-wrap items-center gap-2 min-w-0">
-            <span className={`text-xs font-mono px-1.5 py-0.5 rounded shrink-0 min-w-[88px] max-w-[140px] truncate text-center ${
-              tunnelEnabled ? "bg-primary/10 text-primary" : "bg-surface-2 text-text-muted"
-            }`}>Tunnel</span>
-            {tunnelEnabled && !tunnelLoading && tunnelReachable ? (
-              <>
-                <Input value={`${tunnelPublicUrl || tunnelUrl}/v1`} readOnly className="flex-1 min-w-0 font-mono text-sm" inputClassName="truncate" />
-                <button
-                  onClick={() => copy(`${tunnelPublicUrl || tunnelUrl}/v1`, "tunnel_url")}
-                  className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded text-text-muted hover:text-primary transition-colors shrink-0"
-                >
-                  <span className="material-symbols-outlined text-[18px]">
-                    {copied === "tunnel_url" ? "check" : "content_copy"}
-                  </span>
-                </button>
-                <button
-                  onClick={() => setShowDisableTunnelModal(true)}
-                  className="p-2 hover:bg-red-500/10 rounded text-red-500 transition-colors shrink-0"
-                  title="Disable Tunnel"
-                >
-                  <span className="material-symbols-outlined text-[18px]">power_settings_new</span>
-                </button>
-              </>
-            ) : tunnelEnabled && !tunnelLoading && !tunnelReachable ? (
-              <>
-                <div className="min-w-0 flex-1 flex items-center gap-2 px-3 py-1.5 rounded border border-amber-300 dark:border-amber-800 bg-amber-500/5 text-sm text-amber-600 dark:text-amber-400">
-                  <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
-                  {tunnelEverReachable ? "Tunnel reconnecting..." : "Tunnel checking..."}
-                </div>
-                <button
-                  onClick={() => setShowDisableTunnelModal(true)}
-                  className="p-2 hover:bg-red-500/10 rounded text-red-500 transition-colors shrink-0"
-                  title="Disable Tunnel"
-                >
-                  <span className="material-symbols-outlined text-[18px]">power_settings_new</span>
-                </button>
-              </>
-            ) : tunnelLoading ? (
-              <>
-                <div className="min-w-0 flex-1 flex items-center gap-2 px-3 py-1.5 rounded border border-border bg-input text-sm text-text-muted">
-                  <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
-                  {tunnelProgress || "Creating tunnel..."}
-                </div>
-                <button
-                  onClick={() => {
-                    setTunnelLoading(false);
-                    setTunnelProgress("");
-                  }}
-                  className="p-2 hover:bg-red-500/10 rounded text-red-500 transition-colors shrink-0"
-                  title="Stop"
-                >
-                  <span className="material-symbols-outlined text-[18px]">power_settings_new</span>
-                </button>
-              </>
-            ) : tunnelStatus?.type === "error" ? (
-              <>
-                <div className="min-w-0 flex-1 flex items-center gap-2 px-3 py-1.5 rounded border border-red-300 dark:border-red-800 bg-red-500/5 text-sm text-red-600 dark:text-red-400">
-                  <span className="material-symbols-outlined text-sm">error</span>
-                  {tunnelStatus.message}
-                </div>
-                <Button
-                  size="sm"
-                  icon="cloud_upload"
-                  onClick={() => setShowEnableTunnelModal(true)}
-                >
-                  Enable
-                </Button>
-              </>
-            ) : tunnelChecking ? (
-              <>
-                <div className="min-w-0 flex-1 flex items-center gap-2 px-3 py-1.5 rounded border border-border bg-input text-sm text-text-muted">
-                  <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
-                  Checking...
-                </div>
-                <button
-                  onClick={() => setTunnelChecking(false)}
-                  className="p-2 hover:bg-red-500/10 rounded text-red-500 transition-colors shrink-0"
-                  title="Stop"
-                >
-                  <span className="material-symbols-outlined text-[18px]">power_settings_new</span>
-                </button>
-              </>
-            ) : (
-              <Button
-                size="sm"
-                icon="cloud_upload"
-                onClick={() => {
-                  if (!requireApiKey) {
-                    setTunnelStatus({
-                      type: "error",
-                      message:
-                        'Security required: Enable "Require API key" before activating the tunnel.',
-                    });
-                    return;
-                  }
-                  setShowEnableTunnelModal(true);
-                }}
-              >
-                Enable
-              </Button>
-            )}
-          </div>
-          {/* Tailscale */}
-          <div className="flex flex-wrap items-center gap-2 min-w-0">
-            <span className={`text-xs font-mono px-1.5 py-0.5 rounded shrink-0 min-w-[88px] max-w-[140px] truncate text-center ${
-              tsEnabled ? "bg-primary/10 text-primary" : "bg-surface-2 text-text-muted"
-            }`}>Tailscale</span>
-            {tsEnabled && !tsLoading && tsReachable ? (
-              <>
-                <Input value={`${tsUrl}/v1`} readOnly className="flex-1 min-w-0 font-mono text-sm" inputClassName="truncate" />
-                <button
-                  onClick={() => copy(`${tsUrl}/v1`, "ts_url")}
-                  className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded text-text-muted hover:text-primary transition-colors shrink-0"
-                >
-                  <span className="material-symbols-outlined text-[18px]">
-                    {copied === "ts_url" ? "check" : "content_copy"}
-                  </span>
-                </button>
-                <button
-                  onClick={() => setShowDisableTsModal(true)}
-                  className="p-2 hover:bg-red-500/10 rounded text-red-500 transition-colors shrink-0"
-                  title="Disable Tailscale"
-                >
-                  <span className="material-symbols-outlined text-[18px]">power_settings_new</span>
-                </button>
-              </>
-            ) : tsEnabled && !tsLoading && !tsReachable ? (
-              <>
-                <div className="min-w-0 flex-1 flex items-center gap-2 px-3 py-1.5 rounded border border-amber-300 dark:border-amber-800 bg-amber-500/5 text-sm text-amber-600 dark:text-amber-400">
-                  <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
-                  {tsEverReachable ? "Tailscale reconnecting..." : "Tailscale checking..."}
-                </div>
-                <button
-                  onClick={() => setShowDisableTsModal(true)}
-                  className="p-2 hover:bg-red-500/10 rounded text-red-500 transition-colors shrink-0"
-                  title="Disable Tailscale"
-                >
-                  <span className="material-symbols-outlined text-[18px]">power_settings_new</span>
-                </button>
-              </>
-            ) : tsLoading || tsConnecting ? (
-              <>
-                <div className="min-w-0 flex-1 flex items-center gap-2 px-3 py-1.5 rounded border border-border bg-input text-sm text-text-muted">
-                  <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
-                  {tsProgress || "Connecting..."}
-                </div>
-                {tsAuthUrl && (
-                  <Button
-                    size="sm"
-                    icon="open_in_new"
-                    onClick={() =>
-                      window.open(
-                        tsAuthUrl,
-                        "tailscale_auth",
-                        "width=600,height=700,noopener,noreferrer",
-                      )
-                    }
-                  >
-                    {tsAuthLabel || "Open"}
-                  </Button>
-                )}
-                <button
-                  onClick={() => {
-                    setTsLoading(false);
-                    setTsConnecting(false);
-                    setTsProgress("");
-                    clearUserAuth();
-                  }}
-                  className="p-2 hover:bg-red-500/10 rounded text-red-500 transition-colors shrink-0"
-                  title="Stop"
-                >
-                  <span className="material-symbols-outlined text-[18px]">power_settings_new</span>
-                </button>
-              </>
-            ) : tsStatus?.type === "error" ? (
-              <>
-                <div className="min-w-0 flex-1 flex items-center gap-2 px-3 py-1.5 rounded border border-red-300 dark:border-red-800 bg-red-500/5 text-sm text-red-600 dark:text-red-400">
-                  <span className="material-symbols-outlined text-sm">error</span>
-                  {tsStatus.message}
-                </div>
-                <Button size="sm" icon="vpn_lock" onClick={handleOpenTsModal}>
-                  Enable
-                </Button>
-              </>
-            ) : (
-              <Button
-                size="sm"
-                icon="vpn_lock"
-                onClick={() => {
-                  handleOpenTsModal();
-                }}
-                className="bg-linear-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white!"
-              >
-                Enable
-              </Button>
-            )}
-          </div>
+          <ExposureControl
+            label="Tunnel"
+            state={tunnelExposureState}
+            url={tunnelPublicUrl || tunnelUrl}
+            copyId="tunnel_url"
+            copied={copied}
+            onCopy={copy}
+            progress={tunnelProgress || "Creating tunnel..."}
+            degradedText={tunnelEverReachable ? "Tunnel reconnecting..." : "Tunnel checking..."}
+            errorMessage={tunnelStatus?.message || ""}
+            enableIcon="cloud_upload"
+            blockedReason={requireApiKey ? undefined : 'Security required: Enable "Require API key" before activating the tunnel.'}
+            onEnable={() => setShowEnableTunnelModal(true)}
+            onDisable={() => setShowDisableTunnelModal(true)}
+            onStop={() => {
+              setTunnelLoading(false);
+              setTunnelProgress("");
+            }}
+            onBlocked={(message) => setTunnelStatus({ type: "error", message })}
+          />
+          <ExposureControl
+            label="Tailscale"
+            state={tsExposureState}
+            url={tsUrl}
+            copyId="ts_url"
+            copied={copied}
+            onCopy={copy}
+            progress={tsProgress || "Connecting..."}
+            degradedText={tsEverReachable ? "Tailscale reconnecting..." : "Tailscale checking..."}
+            errorMessage={tsStatus?.message || ""}
+            authUrl={tsAuthUrl}
+            authLabel={tsAuthLabel}
+            enableIcon="vpn_lock"
+            enableClassName="bg-linear-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white!"
+            onEnable={() => handleOpenTsModal()}
+            onDisable={() => setShowDisableTsModal(true)}
+            onStop={() => {
+              setTsLoading(false);
+              setTsConnecting(false);
+              setTsProgress("");
+              clearUserAuth();
+            }}
+            onBlocked={(message) => setTsStatus({ type: "error", message })}
+          />
           </>
           )}
         </div>
