@@ -14,34 +14,7 @@ import { buildStudioTargetIndex } from "@/shared/utils/studioModelVisibility";
 import { fetchSuggestedModels } from "@/shared/utils/providerModelsFetcher";
 import { resolveProviderName, findOwningGroupId, humanizeCompatId } from "@/shared/utils/providerDisplay";
 import { formatContextWindow } from "@/shared/utils/contextWindow";
-
-// Same matching rules the server applies to allowedModels: exact name, `prefix*`
-// and `*suffix`, case-insensitive. Mirrored here so a scoped session only ever sees
-// the models it may hand out.
-function matchesModelScope(patterns, value, id) {
-  if (!patterns || patterns.length === 0) return true;
-  const candidates = [value, id]
-    .filter(Boolean)
-    .map((v) => String(v).trim().toLowerCase());
-  if (candidates.length === 0) return false;
-  return candidates.some((req) =>
-    patterns.some((allowed) => {
-      if (allowed === "*" || allowed === req) return true;
-      if (allowed.endsWith("*")) return req.startsWith(allowed.slice(0, -1));
-      if (allowed.startsWith("*")) return req.endsWith(allowed.slice(1));
-      return false;
-    })
-  );
-}
-
-// A custom model whose providerAlias is a deleted compat node id must not open
-// a ghost group in the picker. isOrphanCompatAlias is true only when the alias
-// looks like a generated compat node id and no live node claims it.
-function isOrphanCompatAlias(alias, providerNodes) {
-  if (typeof alias !== "string" || !alias) return false;
-  if (humanizeCompatId(alias) === "") return false;
-  return !(providerNodes || []).some((n) => n?.id === alias);
-}
+import { matchesModelScope, isOrphanCompatAlias } from "@/shared/utils/modelPickerPredicates";
 
 // The window every client needs before it starts compacting, shown next to the
 // model name so a 1M model is never picked as if it were a 256k one.
@@ -732,7 +705,7 @@ export default function ModelSelectModal({
         // An orphaned compat node id would resolve to a ghost
         // "OpenAI Compatible (xxxx)" heading via humanizeCompatId, so the
         // model is hidden instead of opening that group.
-        if (isOrphanCompatAlias(modelAlias, providerNodes)) continue;
+        if (isOrphanCompatAlias(modelAlias, providerNodes, humanizeCompatId)) continue;
         const entry = {
           id: m.id,
           name: m.name || m.id,
