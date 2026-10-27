@@ -75,12 +75,17 @@ describe("splitImportLines", () => {
 });
 
 describe("parseProxyImport", () => {
-  it("numbers entries by their position after blank lines are dropped", () => {
-    // Matches the original: blanks are filtered before numbering, so a report can
-    // point one line above where the operator sees the problem.
+  it("numbers entries by their position in the pasted text", () => {
+    // A blank line in the middle must not shift the reported numbers: the operator
+    // reads them against what they pasted.
     const { entries, errors } = parseProxyImport("http://a.example:1\n\n1.2.3.4:8080:u:p\n");
     expect(errors).toEqual([]);
-    expect(entries.map((e: { lineNumber: number }) => e.lineNumber)).toEqual([1, 2]);
+    expect(entries.map((e: { lineNumber: number }) => e.lineNumber)).toEqual([1, 3]);
+  });
+
+  it("reports a bad line against the real line number even after blanks", () => {
+    const { errors } = parseProxyImport("\n\nnope\n");
+    expect(errors).toEqual(["Line 3: Unsupported format"]);
   });
 
   it("reports every bad line, not just the first", () => {

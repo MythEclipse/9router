@@ -62,21 +62,26 @@ export interface ParsedImport {
  * Parse a whole paste.
  *
  * Every bad line is reported, not just the first: an operator fixing a thousand-line
- * paste should not discover the problems one round trip at a time.
+ * paste should not discover the problems one round trip at a time. Line numbers refer
+ * to the pasted text, so a blank line in the middle does not shift them.
  */
 export function parseProxyImport(text: string): ParsedImport {
   const entries: ParsedImport["entries"] = [];
   const errors: string[] = [];
 
-  splitImportLines(text).forEach((line, index) => {
-    try {
-      const parsed = parseProxyLine(line);
-      if (parsed) entries.push({ ...parsed, lineNumber: index + 1 });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      errors.push(`Line ${index + 1}: ${message}`);
-    }
-  });
+  (text || "")
+    .split(/\r?\n/)
+    .forEach((rawLine, index) => {
+      const line = rawLine.trim();
+      if (!line) return;
+      try {
+        const parsed = parseProxyLine(line);
+        if (parsed) entries.push({ ...parsed, lineNumber: index + 1 });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        errors.push(`Line ${index + 1}: ${message}`);
+      }
+    });
 
   return { entries, errors };
 }
