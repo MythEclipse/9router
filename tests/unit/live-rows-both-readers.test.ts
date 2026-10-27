@@ -47,13 +47,11 @@ describe("every live-row reader resolves the alias", () => {
 
   it("maps the resolved model in the stats reader too, not just the ring", () => {
     // The ring reader already did this; the stats reader is the regression.
-    const occurrences = repo.match(/model: resolved \|\| requested/g) ?? [];
-    expect(occurrences.length).toBeGreaterThanOrEqual(1);
-    const ringOccurrences = repo.match(/model: displayModel/g) ?? [];
-    expect(ringOccurrences.length).toBeGreaterThanOrEqual(1);
+    expect(repo).toContain("const label = labelForRow(r.model, r.meta);");
+    expect(repo).toContain("model: label.display,");
   });
 
   it("keeps the alias as a qualifier in the stats reader", () => {
-    expect(repo).toContain("requestedModel: resolved ? requested : undefined,");
+    expect(repo).toContain("requestedModel: label.alias,");
   });
 });

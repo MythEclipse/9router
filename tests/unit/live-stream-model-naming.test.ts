@@ -49,8 +49,9 @@ describe("live stream model naming", () => {
 
   it("reads resolvedModel back out of the meta column on ring restore", () => {
     // A restart must not regress the live stream to the combo name, so the ring
-    // restore has to pull resolvedModel out of meta rather than only copying model.
-    expect(repo).toMatch(/resolvedModel: \(parseJson<Record<string, unknown>>\(r\.meta/);
+    // restore has to resolve the alias through the shared helper rather than
+    // copying `model` verbatim.
+    expect(repo).toMatch(/resolvedModel: resolvedModelOf\(r\.meta\)/);
   });
 
   it("actually selects the meta column it then parses", () => {

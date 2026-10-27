@@ -3,6 +3,7 @@ import { createHash } from "crypto";
 import { getAdapter } from "../driver";
 import type { DbRow, ResolvedDbAdapter } from "../types";
 import { parseJson, stringifyJson } from "../helpers/jsonCol";
+import { labelForResolved, labelForRow, resolvedModelOf } from "../helpers/modelLabel";
 import { getMeta, setMeta } from "../helpers/metaStore";
 
 import { matchesAllowedModels as matchesModelPatterns, parseAllowedModels } from "./apiKeysRepo";
@@ -361,9 +362,9 @@ async function ensureRingInitialized() {
       provider: (r.provider as string | null) ?? null,
       model: (r.model as string | null) ?? null,
       // The `model` column holds the name the caller asked for (a combo name
-      // survives there); the real target rides along in meta. Restoring it keeps
-      // the live stream honest after a restart instead of showing the combo.
-      resolvedModel: (parseJson<Record<string, unknown>>(r.meta as string | null, {}) || {}).resolvedModel as string | null ?? null,
+      // survives there); the real target rides along in meta. Resolving it here
+      // keeps the live stream honest after a restart instead of showing the combo.
+      resolvedModel: resolvedModelOf(r.meta),
       connectionId: (r.connectionId as string | null) ?? null,
       apiKey: (r.apiKey as string | null) ?? null,
       endpoint: (r.endpoint as string | null) ?? null,
@@ -562,15 +563,12 @@ export async function getActiveRequests(
       const t = e.tokens || {};
       // The live stream is an operational view: an operator scanning it needs to
       // know which upstream actually served the call, not which combo abstracted
-      // it. `model` carries the requested name (a combo survives there) and
-      // `resolvedModel` the real target, so display the real one and keep the
-      // alias as the qualifier.
-      const resolved = (e as { resolvedModel?: string | null }).resolvedModel;
-      const displayModel = resolved || String(e.model ?? "");
+      // it. The ring stores that pair as fields, so it is already resolved here.
+      const label = labelForResolved(e.model, (e as { resolvedModel?: string | null }).resolvedModel);
       return {
         timestamp: String(e.timestamp),
-        model: displayModel,
-        requestedModel: resolved ? String(e.model ?? "") : undefined,
+        model: label.display,
+        requestedModel: label.alias,
         provider: e.provider || "",
         promptTokens: t.prompt_tokens || t.input_tokens || 0,
         completionTokens: t.completion_tokens || t.output_tokens || 0,
@@ -835,11 +833,7 @@ export async function getUsageHistory(
     cost: Number(r.cost) || 0,
     status: (r.status as string | null) ?? null,
     tokens: parseJson<UsageTokens>(r.tokens as string | null, {}),
-    resolvedModel: (() => {
-      try {
-        return (parseJson<Record<string, unknown>>(r.meta as string | null, {}) || {}).resolvedModel as string | null || null;
-      } catch { return null; }
-    })(),
+    resolvedModel: resolvedModelOf(r.meta),
   }));
 }
 
@@ -1002,12 +996,11 @@ export async function getUsageStats(
   const recentRequests = recentRows
     .map((r): RecentRequest => {
       const t = parseJson<UsageTokens>(r.tokens as string | null, {}) || {};
-      const resolved = (parseJson<Record<string, unknown>>(r.meta as string | null, {}) || {}).resolvedModel as string | null | undefined;
-      const requested = String(r.model ?? "");
+      const label = labelForRow(r.model, r.meta);
       return {
         timestamp: String(r.timestamp),
-        model: resolved || requested,
-        requestedModel: resolved ? requested : undefined,
+        model: label.display,
+        requestedModel: label.alias,
         provider: (r.provider as string) || "",
         promptTokens: t.prompt_tokens || t.input_tokens || 0,
         completionTokens: t.completion_tokens || t.output_tokens || 0,
@@ -1102,10 +1095,7 @@ export async function getUsageStats(
       stats.byModel[modelKey] ||= {
         requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0,
         rawModel, provider: providerDisplayName,
-        resolvedModel:
-          (parseJson<Record<string, unknown>>(r.meta as string | null, {}) || {}).resolvedModel as
-            | string
-            | undefined,
+        resolvedModel: resolvedModelOf(r.meta) ?? undefined,
         lastUsed: rawTimestamp,
       };
       stats.byModel[modelKey].requests++;
@@ -1383,10 +1373,7 @@ export async function getUsageStats(
       stats.byModel[modelKey] ||= {
         requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0,
         rawModel, provider: providerDisplayName,
-        resolvedModel:
-          (parseJson<Record<string, unknown>>(r.meta as string | null, {}) || {}).resolvedModel as
-            | string
-            | undefined,
+        resolvedModel: resolvedModelOf(r.meta) ?? undefined,
         lastUsed: rawTimestamp,
       };
       stats.byModel[modelKey].requests++;
@@ -1905,8 +1892,7 @@ export async function getRecentLogs(limit = 200) {
       const p = String(r.provider ?? "").toUpperCase() || "-";
       // The stored `model` is the name the caller asked for; the real target is
       // in meta. A log line that names the combo claims the combo served it.
-      const resolvedName = (parseJson<Record<string, unknown>>(r.meta as string | null, {}) || {}).resolvedModel as string | null | undefined;
-      const m = String(resolvedName || r.model || "") || "-";
+      const m = labelForRow(r.model, r.meta).display || "-";
       const account = connMap[connectionId] || (connectionId ? connectionId.slice(0, 8) : "-");
       const tk = r.tokens ? parseJson<UsageTokens>(r.tokens as string, {}) : {};
       const sent = r.promptTokens != null ? Number(r.promptTokens) : (tk.prompt_tokens ?? "-");
