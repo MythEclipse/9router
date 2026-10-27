@@ -12,25 +12,14 @@ import { useTaskStore } from "@/store/taskStore";
 import { APP_CONFIG } from "@/shared/constants/config";
 import { LOCALE_COOKIE, normalizeLocale } from "@/i18n/config";
 import { LOCALE_FLAGS } from "@/shared/constants/locales";
+import { getLocaleFromCookie, formatCountdown, isOidcSaveAllowed, buildOidcPayload, oidcFormFromResponse, oidcSaveMessage, canTestOidc } from "./profileHelpers";
 
-function getLocaleFromCookie() {
-  if (typeof document === "undefined") return "en";
-  const cookie = document.cookie
-    .split(";")
-    .find((c) => c.trim().startsWith(`${LOCALE_COOKIE}=`));
-  const value = cookie ? decodeURIComponent(cookie.split("=")[1]) : "en";
-  return normalizeLocale(value);
-}
-
-function formatCountdown(ms) {
-  const total = Math.floor(Math.max(0, Number.isFinite(ms) ? ms : 0) / 1000);
-  const days = Math.floor(total / 86400);
-  const hours = Math.floor((total % 86400) / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  const seconds = total % 60;
-  const pad = (n) => String(n).padStart(2, "0");
-  const clock = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
-  return days > 0 ? `${days}d ${clock}` : clock;
+function readLocaleFromCookie() {
+  return getLocaleFromCookie(
+    typeof document === "undefined" ? undefined : document.cookie,
+    LOCALE_COOKIE,
+    normalizeLocale
+  );
 }
 
 // Live countdown to the next automatic backup. The ticking state stays inside
@@ -128,7 +117,7 @@ interface OidcSavePayload {
 
 export default function ProfilePage() {
   const router = useRouter();
-  const [locale, setLocale] = useState(() => getLocaleFromCookie());
+  const [locale, setLocale] = useState(() => readLocaleFromCookie());
   const [langOpen, setLangOpen] = useState(false);
   const [shutdownOpen, setShutdownOpen] = useState(false);
   const sessionRole = useSessionStore((state) => state.role);
@@ -517,11 +506,17 @@ export default function ProfilePage() {
   const saveOidcSettings = async (authMode = oidcForm.authMode || "password") => {
     const issuerUrl = oidcForm.oidcIssuerUrl.trim();
     const clientId = oidcForm.oidcClientId.trim();
-    const scopes = oidcForm.oidcScopes.trim();
-    const loginLabel = oidcForm.oidcLoginLabel.trim();
     const secret = oidcClientSecret.trim();
 
-    if (authMode !== "password" && (!issuerUrl || !clientId || !secret) && !settings.oidcConfigured) {
+    if (
+      !isOidcSaveAllowed({
+        authMode,
+        issuerUrl,
+        clientId,
+        secret,
+        alreadyConfigured: Boolean(settings.oidcConfigured),
+      })
+    ) {
       setOidcStatus({ type: "error", message: "Issuer URL, client ID, and client secret are required to enable OIDC." });
       return;
     }
@@ -531,17 +526,7 @@ export default function ProfilePage() {
     setOidcTestStatus({ type: "", message: "" });
 
     try {
-      const payload: OidcSavePayload = {
-        authMode,
-        ssoType: "oidc",
-        oidcIssuerUrl: issuerUrl,
-        oidcClientId: clientId,
-        oidcScopes: scopes || "openid profile email",
-        oidcLoginLabel: loginLabel || "Sign in with OIDC",
-      };
-      if (secret) {
-        payload.oidcClientSecret = secret;
-      }
+      const payload: OidcSavePayload = buildOidcPayload(oidcForm, secret, authMode);
 
       const res = await fetch("/api/settings", {
         method: "PATCH",
@@ -552,23 +537,9 @@ export default function ProfilePage() {
       const data = await res.json();
       if (res.ok) {
         setSettings((prev) => ({ ...prev, ...data }));
-        setOidcForm({
-          authMode: data?.authMode || authMode,
-          oidcIssuerUrl: data?.oidcIssuerUrl || issuerUrl,
-          oidcClientId: data?.oidcClientId || clientId,
-          oidcScopes: data?.oidcScopes || scopes || "openid profile email",
-          oidcLoginLabel: data?.oidcLoginLabel || loginLabel || "Sign in with OIDC",
-        });
+        setOidcForm(oidcFormFromResponse(data, { authMode, form: oidcForm }));
         setOidcClientSecret("");
-        setOidcStatus({
-          type: "success",
-          message:
-            authMode === "oidc"
-              ? "OIDC login enabled"
-              : authMode === "both"
-                ? "Password and OIDC login enabled"
-                : "OIDC settings saved",
-        });
+        setOidcStatus({ type: "success", message: oidcSaveMessage(authMode) });
       } else {
         setOidcStatus({ type: "error", message: data.error || "Failed to save OIDC settings" });
       }
@@ -585,7 +556,7 @@ export default function ProfilePage() {
     const scopes = oidcForm.oidcScopes.trim();
     const secret = oidcClientSecret.trim();
 
-    if (!issuerUrl || !clientId) {
+    if (!canTestOidc(issuerUrl, clientId)) {
       setOidcTestStatus({ type: "error", message: "Issuer URL and client ID are required to test the connection." });
       return;
     }
