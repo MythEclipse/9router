@@ -106,6 +106,9 @@ export function checkFallbackError(status, errorText, backoffLevel = 0, provider
 
 /**
  * Check if account is currently unavailable (cooldown not expired)
+ * @deprecated Reads the legacy `unavailableUntil` field, which the live path
+ * never writes — locks are flat `modelLock_*` fields now. Use
+ * `isModelLockActive(connection, model)` instead.
  */
 export function isAccountUnavailable(unavailableUntil) {
   if (!unavailableUntil) return false;
@@ -121,6 +124,9 @@ export function getUnavailableUntil(cooldownMs) {
 
 /**
  * Get the earliest rateLimitedUntil from a list of accounts
+ * @deprecated Reads the legacy `rateLimitedUntil` field, which the live path
+ * never writes — locks are flat `modelLock_*` fields now. Use
+ * `getEarliestModelLockUntil(connection)` per connection instead.
  * @param {Array} accounts - Array of account objects with rateLimitedUntil
  * @returns {string|null} Earliest rateLimitedUntil ISO string, or null
  */
@@ -216,21 +222,6 @@ export function buildClearModelLocksUpdate(connection) {
 }
 
 /**
- * Filter available accounts (not in cooldown)
- */
-export function filterAvailableAccounts(accounts, excludeId = null) {
-  const now = Date.now();
-  return accounts.filter(acc => {
-    if (excludeId && acc.id === excludeId) return false;
-    if (acc.rateLimitedUntil) {
-      const until = new Date(acc.rateLimitedUntil).getTime();
-      if (until > now) return false;
-    }
-    return true;
-  });
-}
-
-/**
  * Reset account state when request succeeds
  * Clears cooldown and resets backoff level to 0
  * @param {object} account - Account object
@@ -247,24 +238,3 @@ export function resetAccountState(account) {
   };
 }
 
-/**
- * Apply error state to account
- * @param {object} account - Account object
- * @param {number} status - HTTP status code
- * @param {string} errorText - Error message
- * @returns {object} Updated account with error state
- */
-export function applyErrorState(account, status, errorText) {
-  if (!account) return account;
-
-  const backoffLevel = account.backoffLevel || 0;
-  const { cooldownMs, newBackoffLevel } = checkFallbackError(status, errorText, backoffLevel);
-
-  return {
-    ...account,
-    rateLimitedUntil: cooldownMs > 0 ? getUnavailableUntil(cooldownMs) : null,
-    backoffLevel: newBackoffLevel ?? backoffLevel,
-    lastError: { status, message: errorText, timestamp: new Date().toISOString() },
-    status: "error"
-  };
-}

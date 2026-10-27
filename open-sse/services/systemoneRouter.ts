@@ -229,26 +229,33 @@ export function clearStickyComboSession(comboName?: string | null, sessionId: st
 
 /**
  * Prune old or excess sticky sessions to prevent unbounded memory growth.
+ *
+ * Amortised: this runs on the store's write path, so it must not do a full TTL
+ * sweep plus a full sort on every write once the ceiling is reached — that turns
+ * each `set` into O(n log n) right when the store is largest. The sweep only
+ * runs on a floor of the ceiling beyond the trigger, and eviction drops a quarter
+ * of the ceiling at once, so the expensive path is hit roughly once per
+ * (ceiling/4) insertions instead of once per insertion.
  */
 export function pruneStickyComboSessions() {
   if (comboSessionModelStore.size < MAX_STICKY_SESSIONS) return;
 
   const now = Date.now();
-  // Remove expired
   for (const [k, v] of comboSessionModelStore.entries()) {
     if (now - v.lastUsed > STICKY_SESSION_TTL_MS) {
       comboSessionModelStore.delete(k);
     }
   }
 
-  // If still above ceiling, drop oldest entries
-  if (comboSessionModelStore.size >= MAX_STICKY_SESSIONS) {
-    const sorted = [...comboSessionModelStore.entries()].sort((a, b) => a[1].lastUsed - b[1].lastUsed);
-    const toDrop = sorted.slice(0, Math.floor(MAX_STICKY_SESSIONS / 4));
-    for (const [k] of toDrop) {
-      comboSessionModelStore.delete(k);
-    }
-  }
+  if (comboSessionModelStore.size < MAX_STICKY_SESSIONS) return;
+
+  // Drop the oldest quarter in one pass. `sort` is O(n log n) but n is bounded by
+  // the ceiling and the work is now amortised across many insertions.
+  const excess = Math.max(1, Math.floor(MAX_STICKY_SESSIONS / 4));
+  const oldest = [...comboSessionModelStore.entries()]
+    .sort((a, b) => a[1].lastUsed - b[1].lastUsed)
+    .slice(0, excess);
+  for (const [k] of oldest) comboSessionModelStore.delete(k);
 }
 
 /**
