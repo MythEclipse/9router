@@ -135,6 +135,11 @@ function RecentRequests({ requests = [] }) {
                         <span className="truncate max-w-[120px] sm:max-w-[150px] font-medium text-text-main group-hover:text-primary transition-colors">
                           {cleanModel}
                         </span>
+                        {r.requestedModel && r.requestedModel !== cleanModel && (
+                          <span className="text-[9px] font-mono text-text-muted/70 truncate max-w-[90px] self-start sm:self-auto" title={`requested as ${r.requestedModel}`}>
+                            ← {r.requestedModel}
+                          </span>
+                        )}
                         {r.provider && (
                           <span className="text-[9px] uppercase font-mono px-1 py-0.2 rounded bg-surface-2 text-text-muted/90 self-start sm:self-auto border border-border-subtle truncate max-w-[90px]" title={r.provider}>
                             {r.provider}

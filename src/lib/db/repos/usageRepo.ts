@@ -360,6 +360,10 @@ async function ensureRingInitialized() {
       timestamp: String(r.timestamp),
       provider: (r.provider as string | null) ?? null,
       model: (r.model as string | null) ?? null,
+      // The `model` column holds the name the caller asked for (a combo name
+      // survives there); the real target rides along in meta. Restoring it keeps
+      // the live stream honest after a restart instead of showing the combo.
+      resolvedModel: (parseJson<Record<string, unknown>>(r.meta as string | null, {}) || {}).resolvedModel as string | null ?? null,
       connectionId: (r.connectionId as string | null) ?? null,
       apiKey: (r.apiKey as string | null) ?? null,
       endpoint: (r.endpoint as string | null) ?? null,
@@ -514,6 +518,8 @@ export interface ApiKeyLabel {
 export interface RecentRequest {
   timestamp: string;
   model: string;
+  /** The name the caller asked for, when it differs from the serving model. */
+  requestedModel?: string;
   provider: string;
   promptTokens: number;
   completionTokens: number;
@@ -554,9 +560,17 @@ export async function getActiveRequests(
     .sort((a, b) => Number(new Date(String(b.timestamp))) - Number(new Date(String(a.timestamp))))
     .map((e): RecentRequest => {
       const t = e.tokens || {};
+      // The live stream is an operational view: an operator scanning it needs to
+      // know which upstream actually served the call, not which combo abstracted
+      // it. `model` carries the requested name (a combo survives there) and
+      // `resolvedModel` the real target, so display the real one and keep the
+      // alias as the qualifier.
+      const resolved = (e as { resolvedModel?: string | null }).resolvedModel;
+      const displayModel = resolved || String(e.model ?? "");
       return {
         timestamp: String(e.timestamp),
-        model: String(e.model ?? ""),
+        model: displayModel,
+        requestedModel: resolved ? String(e.model ?? "") : undefined,
         provider: e.provider || "",
         promptTokens: t.prompt_tokens || t.input_tokens || 0,
         completionTokens: t.completion_tokens || t.output_tokens || 0,
