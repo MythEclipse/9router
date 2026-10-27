@@ -84,7 +84,17 @@ export const ERROR_RULES = [
   { text: "quota exceeded",           backoff: true },
   { text: "insufficient credit",      backoff: true },
   { text: "credit balance is too low", backoff: true },
-  { text: "capacity",                 backoff: true },
+  // NEVER add the bare word "capacity" as a rule. It appears in benign
+  // client-side 4xx bodies ("max_tokens exceeds the model's maximum output
+  // capacity of 8192", "context capacity"), and a text rule outranks the
+  // client-mistake rules at the bottom of this list. Matching it therefore
+  // cooled a healthy account down AND burned a proxy IP over the caller's own
+  // bad parameter. Only phrases that name upstream saturation may match.
+  { text: "at capacity",              backoff: true },
+  { text: "over capacity",            backoff: true },
+  { text: "no capacity",              backoff: true },
+  { text: "out of capacity",          backoff: true },
+  { text: "capacity limit reached",   backoff: true },
   { text: "overloaded",               backoff: true },
 
   // Upstream shape mismatch (wrong content-type, unreadable stream): the transport
