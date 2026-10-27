@@ -3,7 +3,29 @@ function normalizeString(value) {
   return String(value).trim();
 }
 
-const ALLOWED_PROXY_SCHEMES = ["http:", "https:", "socks5:", "socks4:", "socks5h:", "socks4a:"];
+// The schemes the SERVING RUNTIME can actually speak — not the list node's
+// undici would accept. On a `bun --bun` process (how this app is started),
+// `fetch(url, { proxy })` rejects socks4/socks4a/socks5/socks5h with
+// `UnsupportedProxyProtocol`. Accepting them here is not a harmless
+// permissiveness: a configured-but-unusable proxy trips the no-leak policy in
+// proxyFetch, which blocks the direct fallback, so EVERY request through such a
+// pool fails with no escape hatch while the dashboard reports the pool healthy.
+// Keep this list and the transport in agreement — see isSupportedProxyScheme.
+const ALLOWED_PROXY_SCHEMES = ["http:", "https:"];
+
+/**
+ * Schemes the settings validator accepts. socks* are rejected before they can
+ * reach a request, so the failure surfaces at configuration time (a clear
+ * validation error) instead of at every request afterwards.
+ */
+export function isSupportedProxyScheme(url) {
+  if (!url) return false;
+  try {
+    return ALLOWED_PROXY_SCHEMES.includes(new URL(url).protocol);
+  } catch {
+    return false;
+  }
+}
 
 function validateProxyUrl(url) {
   if (!url) return null;

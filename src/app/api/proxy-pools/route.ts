@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createProxyPool, getProviderConnections, getProxyPools } from "@/models";
+import { isSupportedProxyScheme } from "@/lib/network/outboundProxy";
 import type { Connection } from "@/shared/types/domain";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +40,16 @@ function normalizeProxyPoolInput(
 
   if (!proxyUrl) {
     return { error: "Proxy URL is required" };
+  }
+
+  // Reject at configuration time what the runtime cannot dial. A pool saved with
+  // a socks URL would answer every request with UnsupportedProxyProtocol while
+  // the no-leak policy blocks the direct fallback — a permanently dead pool that
+  // the dashboard reports healthy.
+  if (!isSupportedProxyScheme(proxyUrl)) {
+    return {
+      error: "Proxy URL must use http:// or https:// — socks proxies are not supported by the serving runtime",
+    };
   }
 
   return { name, proxyUrl, noProxy, isActive, strictProxy, type };

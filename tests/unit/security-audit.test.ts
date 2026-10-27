@@ -112,14 +112,26 @@ describe("AUDIT-003: Proxy URL validation", () => {
     expect(process.env.HTTP_PROXY).toContain("https://proxy.example.com");
   });
 
-  it("should accept valid socks5 proxy URLs", async () => {
+  // AUDIT-003 originally asserted that socks5 is ACCEPTED here. It is not:
+  // `bun --bun` (how this app runs) answers socks4/socks4a/socks5/socks5h with
+  // `UnsupportedProxyProtocol`, and because a configured proxy blocks the direct
+  // fallback, accepting one produces a pool that fails every request with no
+  // escape hatch while the dashboard reports it healthy. The validator must
+  // agree with the transport, so socks is now rejected at configuration time.
+  it("should reject socks proxy URLs the serving runtime cannot dial", async () => {
     vi.resetModules();
     const { applyOutboundProxyEnv } = await import("../../src/lib/network/outboundProxy");
-    applyOutboundProxyEnv({
-      outboundProxyEnabled: true,
-      outboundProxyUrl: "socks5://proxy.example.com:1080",
-    });
-    expect(process.env.ALL_PROXY).toBe("socks5://proxy.example.com:1080");
+    for (const url of [
+      "socks5://proxy.example.com:1080",
+      "socks4://proxy.example.com:1080",
+      "socks5h://proxy.example.com:1080",
+      "socks4a://proxy.example.com:1080",
+    ]) {
+      applyOutboundProxyEnv({ outboundProxyEnabled: true, outboundProxyUrl: url });
+      expect(process.env.HTTP_PROXY).toBeUndefined();
+      expect(process.env.HTTPS_PROXY).toBeUndefined();
+      expect(process.env.ALL_PROXY).toBeUndefined();
+    }
   });
 
   it("should reject URLs with shell metacharacters (newline)", async () => {
