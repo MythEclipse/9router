@@ -12,7 +12,7 @@ import { useTaskStore } from "@/store/taskStore";
 import { APP_CONFIG } from "@/shared/constants/config";
 import { LOCALE_COOKIE, normalizeLocale } from "@/i18n/config";
 import { LOCALE_FLAGS } from "@/shared/constants/locales";
-import { getLocaleFromCookie, formatCountdown, isOidcSaveAllowed, buildOidcPayload, oidcFormFromResponse, oidcSaveMessage, canTestOidc } from "./profileHelpers";
+import { getLocaleFromCookie, formatCountdown, isOidcSaveAllowed, buildOidcPayload, oidcFormFromResponse, oidcSaveMessage, canTestOidc, oidcTestSuccessMessage } from "./profileHelpers";
 import { hasXmlParseError, readSamlMetadata, describeSamlImport } from "./samlMetadata";
 
 function readLocaleFromCookie() {
@@ -601,15 +601,7 @@ export default function ProfilePage() {
 
       const data = await res.json().catch(() => ({}));
       if (res.ok && data?.ok) {
-        const statusMessage = data.clientSecretTested
-          ? data.clientSecretValid === true
-            ? `Connection OK. Discovery loaded from ${data.issuerUrl}. Client secret validated too.`
-            : `Connection OK. Discovery loaded from ${data.issuerUrl}. Client secret was not checked.`
-          : `Connection OK. Discovery loaded from ${data.issuerUrl}.`;
-        setOidcTestStatus({
-          type: "success",
-          message: statusMessage,
-        });
+        setOidcTestStatus({ type: "success", message: oidcTestSuccessMessage(data) });
       } else {
         setOidcTestStatus({ type: "error", message: data.error || "OIDC connection test failed" });
       }

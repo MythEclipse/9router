@@ -128,3 +128,22 @@ export function oidcSaveMessage(authMode: string): string {
 export function canTestOidc(issuerUrl: string, clientId: string): boolean {
   return Boolean((issuerUrl || "").trim() && (clientId || "").trim());
 }
+
+/**
+ * The message after a successful OIDC connection test.
+ *
+ * Three outcomes, because the test can succeed without having checked the secret —
+ * the secret is only sent when the operator typed one. Reporting a plain "OK" in that
+ * case would claim a check that never ran, and the next login is when it shows.
+ */
+export function oidcTestSuccessMessage(result: {
+  issuerUrl?: string;
+  clientSecretTested?: boolean;
+  clientSecretValid?: boolean;
+}): string {
+  const discovery = `Discovery loaded from ${result.issuerUrl}.`;
+  if (!result.clientSecretTested) return `Connection OK. ${discovery}`;
+  if (result.clientSecretValid === true) return `Connection OK. ${discovery} Client secret validated too.`;
+  return `Connection OK. ${discovery} Client secret was not checked.`;
+}
+

@@ -9,6 +9,7 @@ import {
   getLocaleFromCookie,
   DEFAULT_OIDC_SCOPES,
   DEFAULT_OIDC_LOGIN_LABEL,
+  oidcTestSuccessMessage,
 } from "@/app/(dashboard)/dashboard/profile/profileHelpers";
 
 const upcase = (v: string) => (v ? v.toUpperCase() : "EN");
@@ -210,5 +211,47 @@ describe("getLocaleFromCookie", () => {
 
   it("does not match a cookie whose name merely ends with the locale name", () => {
     expect(getLocaleFromCookie("my-locale=id", "locale", upcase)).toBe("EN");
+  });
+});
+
+describe("oidcTestSuccessMessage", () => {
+  it("does not claim the secret was checked when none was sent", () => {
+    const msg = oidcTestSuccessMessage({ issuerUrl: "https://idp", clientSecretTested: false });
+    expect(msg).toBe("Connection OK. Discovery loaded from https://idp.");
+    expect(msg).not.toContain("secret");
+  });
+
+  it("says validated when the secret was tested and passed", () => {
+    expect(
+      oidcTestSuccessMessage({ issuerUrl: "https://idp", clientSecretTested: true, clientSecretValid: true })
+    ).toBe("Connection OK. Discovery loaded from https://idp. Client secret validated too.");
+  });
+
+  it("says not checked when the secret was tested and failed", () => {
+    // The test itself succeeded (discovery loaded); only the secret is unproven.
+    expect(
+      oidcTestSuccessMessage({ issuerUrl: "https://idp", clientSecretTested: true, clientSecretValid: false })
+    ).toBe("Connection OK. Discovery loaded from https://idp. Client secret was not checked.");
+  });
+
+  it("treats an undefined clientSecretValid as not checked", () => {
+    expect(
+      oidcTestSuccessMessage({ issuerUrl: "https://idp", clientSecretTested: true })
+    ).toContain("Client secret was not checked.");
+  });
+
+  it("matches the nested ternary it replaced", () => {
+    const legacy = (data: { issuerUrl?: string; clientSecretTested?: boolean; clientSecretValid?: boolean }) =>
+      data.clientSecretTested
+        ? data.clientSecretValid === true
+          ? `Connection OK. Discovery loaded from ${data.issuerUrl}. Client secret validated too.`
+          : `Connection OK. Discovery loaded from ${data.issuerUrl}. Client secret was not checked.`
+        : `Connection OK. Discovery loaded from ${data.issuerUrl}.`;
+    for (const tested of [true, false, undefined]) {
+      for (const valid of [true, false, undefined]) {
+        const input = { issuerUrl: "https://idp", clientSecretTested: tested, clientSecretValid: valid };
+        expect(oidcTestSuccessMessage(input)).toBe(legacy(input));
+      }
+    }
   });
 });
