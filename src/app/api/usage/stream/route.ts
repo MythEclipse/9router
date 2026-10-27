@@ -3,6 +3,11 @@ import { getSessionContext } from "@/lib/auth/dashboardPermissions";
 
 export const dynamic = "force-dynamic";
 
+// Cap how often the whole aggregate map is pushed. Aggregates are a summary —
+// 2s stale is imperceptible, while re-sending them per request (~5/s under load)
+// re-rendered every table reading them and made the page flash continuously.
+const FULL_FRAME_MIN_INTERVAL_MS = 2000;
+
 export async function GET(request) {
   const encoder = new TextEncoder();
   const { searchParams } = new URL(request.url);
@@ -14,7 +19,7 @@ export async function GET(request) {
   const apiKeyFilter = typeof ctx.apiKeyFilter === "string" ? ctx.apiKeyFilter : null;
   const allowedModels = typeof ctx.allowedModels === "string" ? ctx.allowedModels : "*";
 
-  const state = { closed: false, keepalive: null, send: null, sendPending: null, cachedStats: null, lastFullSignature: null };
+  const state = { closed: false, keepalive: null, send: null, sendPending: null, cachedStats: null, lastFullAt: 0 };
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -33,15 +38,17 @@ export async function GET(request) {
           // shipping the aggregate map twice per tick is what made the page flicker.
           const { activeRequests, recentRequests, errorProvider } = await getActiveRequests(apiKeyFilter, allowedModels);
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ activeRequests, recentRequests, errorProvider, pending: stats.pending ?? null, _type: "pending" })}\n\n`));
-          // The aggregates are a large map (one bucket per model, account, key and
-          // endpoint). A finished request changes one bucket, but re-sending the
-          // whole map forced the dashboard to rebuild and re-render every table
-          // several times a second — the page looked like it was flickering. Send
-          // it only when its totals actually move; the frame above already carried
-          // this request's live row.
-          const signature = `${stats.totalRequests}|${stats.totalPromptTokens}|${stats.totalCompletionTokens}|${stats.totalCost}`;
-          if (signature === state.lastFullSignature) return;
-          state.lastFullSignature = signature;
+          // The aggregate map is large (one bucket per model, account, key and
+          // endpoint) and a finished request changes exactly one bucket. Under
+          // real load this route fires ~5 times a second, so re-sending the whole
+          // map re-rendered every table reading it and the page never sat still.
+          // Totals move on every request, so comparing them dedupes nothing —
+          // pace the frame by wall-clock instead. Aggregates are a summary; being
+          // up to FULL_FRAME_MIN_INTERVAL_MS stale is invisible, five re-renders a
+          // second is not.
+          const now = Date.now();
+          if (now - state.lastFullAt < FULL_FRAME_MIN_INTERVAL_MS) return;
+          state.lastFullAt = now;
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ ...stats, _type: "full" })}\n\n`));
         } catch {
           state.closed = true;

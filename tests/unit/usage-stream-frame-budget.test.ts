@@ -4,18 +4,17 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
- * The Usage page mirrors an SSE stream. Two things make it flicker, and both are
- * about *how much* is re-sent rather than how it is rendered:
+ * The Usage page mirrors an SSE stream. What made it flash was not how the rows
+ * were rendered but *how much* was re-sent: the aggregates (`byModel`,
+ * `byAccount`, …) are a large map, and the route pushed the whole thing once per
+ * finished request — ~5 frames a second under real load. Every table reading it
+ * re-rendered, so the page never sat still.
  *
- *  1. The aggregates (`byModel`, `byAccount`, …) are a large map. A finished
- *     request changes exactly one bucket, but the old route re-sent the whole map
- *     on every tick — several times a second under load — so every table that
- *     reads them re-rendered and the page flashed.
- *  2. The cheap "pending" frame ALSO spread `stats` into itself, shipping the
- *     same map twice per tick.
- *
- * The live rows are small (20 entries) and must keep flowing, so they ride on a
- * frame that carries nothing else.
+ * Two invariants keep it calm:
+ *  - the aggregate map is paced by wall-clock, since totals move on every request
+ *    and comparing them dedupes nothing;
+ *  - the 20 live rows still ride every tick, on a frame carrying nothing else, so
+ *    the table keeps moving while the map is quiet.
  */
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -28,38 +27,39 @@ const page = readFileSync(
   "utf8",
 );
 
-const LIVE_FRAME_MARK = '_type: "pending" })\\n\\n`);';
-const GUARD = "if (signature === state.lastFullSignature) return;";
+const lines = route.split("\n");
+const indexOfLine = (predicate: (line: string) => boolean) => lines.findIndex(predicate);
 
 describe("usage stream frame budget", () => {
-  it("suppresses a full frame whose totals did not move", () => {
-    // Without this guard a per-request "update" re-sends every bucket.
-    expect(route).toContain(GUARD);
-    expect(route).toContain("state.lastFullSignature = signature;");
+  it("paces the aggregate frame by time rather than by total movement", () => {
+    // Totals change on every request, so a totals-based guard suppresses nothing.
+    expect(route).toContain("FULL_FRAME_MIN_INTERVAL_MS");
+    expect(route).toMatch(/now - state\.lastFullAt < FULL_FRAME_MIN_INTERVAL_MS\) return;/);
+    expect(route).toMatch(/state\.lastFullAt = now;/);
   });
 
-  it("keys the signature on the aggregate totals, not only the request count", () => {
-    expect(route).toContain("${stats.totalPromptTokens}");
-    expect(route).toContain("${stats.totalCompletionTokens}");
-    expect(route).toContain("${stats.totalCost}");
+  it("keeps the pacing interval short enough to look live", () => {
+    const declared = route.match(/FULL_FRAME_MIN_INTERVAL_MS = (\d+)/);
+    expect(declared).not.toBeNull();
+    const ms = Number(declared?.[1]);
+    // Long enough to stop the storm, short enough that the summary still feels live.
+    expect(ms).toBeGreaterThanOrEqual(1000);
+    expect(ms).toBeLessThanOrEqual(5000);
+  });
+
+  it("enqueues the live rows before the aggregate frame is throttled", () => {
+    // If the throttle came first, a quiet map would freeze the table.
+    const liveAt = indexOfLine((l) => l.includes('_type: "pending"') && l.includes("enqueue"));
+    const throttleAt = indexOfLine((l) => l.includes("lastFullAt < FULL_FRAME_MIN_INTERVAL_MS"));
+    expect(liveAt).toBeGreaterThan(-1);
+    expect(throttleAt).toBeGreaterThan(-1);
+    expect(liveAt).toBeLessThan(throttleAt);
   });
 
   it("does not spread the aggregate map into the live frame", () => {
-    // The offending shape was `{ ...state.cachedStats, ...` / `{ ...stats, ...`
-    // inside the live frame.
+    // Shipping the map twice per tick was half the problem.
     expect(route).not.toContain("...state.cachedStats, activeRequests");
     expect(route).not.toContain("...stats, activeRequests");
-  });
-
-  it("still sends the live rows even when the aggregates are suppressed", () => {
-    // The live frame must be enqueued BEFORE the signature early-return,
-    // otherwise a quiet aggregate means a frozen table.
-    const lines = route.split("\n");
-    const liveAt = lines.findIndex((l) => l.includes('_type: "pending"') && l.includes("enqueue"));
-    const guardAt = lines.findIndex((l) => l.includes("lastFullSignature) return"));
-    expect(liveAt).toBeGreaterThan(-1);
-    expect(guardAt).toBeGreaterThan(-1);
-    expect(liveAt).toBeLessThan(guardAt);
   });
 
   it("does not seed page state from a live-only frame", () => {
