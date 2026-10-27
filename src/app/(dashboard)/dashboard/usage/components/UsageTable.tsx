@@ -4,9 +4,10 @@ import { useState, useEffect, useCallback, useMemo, useRef, Fragment, type React
 import Card from "@/shared/components/Card";
 import Badge from "@/shared/components/Badge";
 import { TableScroll } from "@/shared/components/PageShell";
+import { formatCount, formatCostCents } from "@/shared/utils/chartFormat";
 
-const fmt = (n?: number) => new Intl.NumberFormat().format(n || 0);
-const fmtCost = (n?: number) => `$${(n || 0).toFixed(2)}`;
+const fmt = formatCount;
+const fmtCost = formatCostCents;
 
 /** One group produced by `groupDataByKey`: a key plus its rows. */
 interface UsageGroup {

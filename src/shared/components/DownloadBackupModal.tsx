@@ -5,14 +5,7 @@ import Modal from "./Modal";
 import Button from "./Button";
 import Input from "./Input";
 import Badge from "./Badge";
-
-function formatBytes(bytes) {
-  if (!bytes || bytes === 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
-}
+import { formatByteSize } from "@/shared/utils/chartFormat";
 
 const DEFAULT_SECTIONS = [
   { key: "settings", label: "Settings & System Config", default: true, isHeavy: false },
@@ -100,7 +93,7 @@ export default function DownloadBackupModal({ isOpen, onClose, onDownload, loadi
       footer={
         <div className="flex items-center justify-between w-full">
           <div className="text-xs text-text-muted">
-            Total Size: <span className="font-semibold text-text-main">{formatBytes(totalSelectedBytes)}</span>
+            Total Size: <span className="font-semibold text-text-main">{formatByteSize(totalSelectedBytes)}</span>
           </div>
           <div className="flex gap-2">
             <Button variant="ghost" onClick={onClose} disabled={loading}>
@@ -138,7 +131,7 @@ export default function DownloadBackupModal({ isOpen, onClose, onDownload, loadi
             {DEFAULT_SECTIONS.map((sec) => {
               const info = summary?.[sec.key];
               const isChecked = Boolean(selected[sec.key]);
-              const bytesFormatted = info ? formatBytes(info.bytes) : null;
+              const bytesFormatted = info ? formatByteSize(info.bytes) : null;
               const countText = info ? `${info.count} item${info.count !== 1 ? "s" : ""}` : null;
 
               return (

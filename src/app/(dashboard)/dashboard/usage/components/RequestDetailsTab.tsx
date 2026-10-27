@@ -13,6 +13,7 @@ import {
   getInputTokens,
   getOutputTokens,
 } from "@/lib/tokenDisplay";
+import { formatBytes } from "@/shared/utils/chartFormat";
 
 let providerNameCache = null;
 let providerNodesCache = null;
@@ -26,12 +27,6 @@ function isWithheld(value) {
 // Pretty-printing multi-megabyte JSON on render blocks the main thread, so payload
 // bodies above this size are collapsed behind an explicit expand.
 const BIG_PAYLOAD_CHARS = 60000;
-
-function formatBytes(n) {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 // JSON.stringify throws on circular / BigInt values and returns undefined for
 // functions; a payload viewer must degrade to something rather than blank the tab.

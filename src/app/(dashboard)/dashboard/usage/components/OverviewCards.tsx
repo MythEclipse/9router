@@ -2,9 +2,10 @@
 import Card from "@/shared/components/Card";
 import Badge from "@/shared/components/Badge";
 import { Sparkline } from "./UsageChartsBits";
+import { formatCount, formatCostCents } from "@/shared/utils/chartFormat";
 
-const fmt = (n) => new Intl.NumberFormat().format(n || 0);
-const fmtCost = (n) => `$${(n || 0).toFixed(2)}`;
+const fmt = formatCount;
+const fmtCost = formatCostCents;
 
 /**
  * Summary cards.

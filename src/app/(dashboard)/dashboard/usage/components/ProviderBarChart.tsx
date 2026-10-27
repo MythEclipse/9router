@@ -12,22 +12,13 @@ import {
   Cell,
 } from "recharts";
 import Card from "@/shared/components/Card";
+import { formatTokenCount, formatCostScaled } from "@/shared/utils/chartFormat";
 
 const COLORS = ["#6366f1", "#14b8a6", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#10b981", "#f97316"];
 
-const fmtTokens = (n) => {
-  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
-  return String(n || 0);
-};
-
 // Prices come from the pricing table, so a model without one contributes 0.
-const fmtCost = (n) => {
-  if (!n) return "$0";
-  if (n >= 100) return `$${n.toFixed(0)}`;
-  if (n >= 1) return `$${n.toFixed(2)}`;
-  return `$${n.toFixed(4)}`;
-};
+const fmtTokens = formatTokenCount;
+const fmtCost = formatCostScaled;
 
 interface ProviderBarChartProps {
   byProvider?: object

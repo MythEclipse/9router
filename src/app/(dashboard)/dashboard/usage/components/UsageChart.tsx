@@ -11,15 +11,11 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import Card from "@/shared/components/Card";
+import { formatTokenCount, formatCostPrecise, formatRawCount } from "@/shared/utils/chartFormat";
 
-const fmtTokens = (n) => {
-  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
-  return String(n || 0);
-};
-
-const fmtCost = (n) => `$${(n || 0).toFixed(4)}`;
-const fmtRequests = (n) => String(n || 0);
+const fmtTokens = formatTokenCount;
+const fmtCost = formatCostPrecise;
+const fmtRequests = formatRawCount;
 
 const VIEW_MODES = [
   { value: "tokens", label: "Tokens" },

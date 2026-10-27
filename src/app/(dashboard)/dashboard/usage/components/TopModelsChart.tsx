@@ -3,14 +3,11 @@
 import { useState, useMemo } from "react";
 import Card from "@/shared/components/Card";
 import ModelTierBadge from "@/shared/components/ModelTierBadge";
+import { formatTokenCount } from "@/shared/utils/chartFormat";
 
 const COLORS = ["#6366f1", "#14b8a6", "#f59e0b", "#ef4444", "#8b5cf6"];
 
-const fmtTokens = (n) => {
-  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
-  return String(n || 0);
-};
+const fmtTokens = formatTokenCount;
 
 interface TopModelsChartProps {
   byModel?: object
