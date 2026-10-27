@@ -20,6 +20,7 @@ import { getProviderCustomModelRows } from "@/shared/utils/providerCustomModels"
 import ModelRow from "./ModelRow";
 import PassthroughModelsSection from "./PassthroughModelsSection";
 import CompatibleModelsSection from "./CompatibleModelsSection";
+import { availableModels } from "./availableModels";
 import ConnectionRow from "./ConnectionRow";
 import AddApiKeyModal from "./AddApiKeyModal";
 import EditCompatibleNodeModal, { editCompatibleNodeModalKey } from "./EditCompatibleNodeModal";
@@ -1401,32 +1402,18 @@ export default function ProviderDetailPage() {
 
         {/* Suggested models from provider API or built-in catalog - show only models not yet added. */}
         {(() => {
-          const addedFullModels = new Set([
-            ...Object.values(modelAliases),
-            ...customModelRows.map((model) => model.fullModel),
-          ]);
-          // Combine suggestedModels from API and built-in models
-          const combinedAvailable = [
-            ...suggestedModels,
-            ...models.map((m) => ({ id: m.id, name: m.name || m.id, isFree: m.isFree })),
-            ...kiloFreeModels.map((m) => ({ id: m.id, name: m.name || m.id, isFree: true })),
-          ];
-          // Deduplicate by ID
-          const seenIds = new Set();
-          const uniqueAvailable = [];
-          for (const m of combinedAvailable) {
-            if (!m?.id || seenIds.has(m.id)) continue;
-            seenIds.add(m.id);
-            uniqueAvailable.push(m);
-          }
+          const { free: freeSuggested, paid: paidSuggested, total } = availableModels({
+            suggested: suggestedModels,
+            builtIn: models.map((m) => ({ id: m.id, name: m.name || m.id, isFree: m.isFree })),
+            extraFree: kiloFreeModels.map((m) => ({ id: m.id, name: m.name || m.id, isFree: true })),
+            addedIdentifiers: [
+              ...Object.values(modelAliases),
+              ...customModelRows.map((model) => model.fullModel),
+            ],
+            providerAlias: providerStorageAlias,
+          });
 
-          const notAdded = uniqueAvailable.filter(
-            (m) => !addedFullModels.has(`${providerStorageAlias}/${m.id}`) && !addedFullModels.has(m.id)
-          );
-          const freeSuggested = notAdded.filter((m) => m.isFree === true);
-          const paidSuggested = notAdded.filter((m) => m.isFree !== true);
-
-          if (notAdded.length === 0 && !suggestedModelsError) return null;
+          if (total === 0 && !suggestedModelsError) return null;
           return (
             <div className="w-full mt-2">
               {freeSuggested.length > 0 && (
