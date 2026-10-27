@@ -189,15 +189,12 @@ export async function getProviderCredentials(
         }
         pickedId = pickProxyPoolId(poolIds, strategy, providerId);
       } else if (pickedId && isExcluded(pickedId)) {
-        const fallbackPoolIds = allPools
-          .filter(p => p.proxyUrl && p.id !== pickedId)
-          .map(p => p.id)
-          .filter(id => !isExcluded(id));
-        if (fallbackPoolIds.length === 0) {
-          log.warn("AUTH", `${provider} | all proxy pools exhausted (${excludePoolIds.size + excludeSet.size} excluded)`);
-          return null;
-        }
-        pickedId = pickProxyPoolId(fallbackPoolIds, "round-robin", `${providerId}:fallback`);
+        // Rotation is off, so this pool was chosen explicitly. Silently
+        // substituting another pool contradicts the selector — the UI promises
+        // "Uses the selected pool above" — and sends traffic through an IP the
+        // user deliberately did not pick. Stop instead.
+        log.warn("AUTH", `${provider} | selected proxy pool ${pickedId.slice(0, 8)} is unavailable; rotation is off so no substitute is used`);
+        return null;
       } else if (!pickedId && excludeSet.has("noauth")) {
         log.warn("AUTH", `${provider} | direct no-auth route already tried`);
         return null;

@@ -34,8 +34,10 @@ const pools = [
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Rotation must be ON for the code to consider every active pool; with it off
+  // the selected pool is honoured and never substituted.
   mocks.getSettings.mockResolvedValue({
-    providerStrategies: { opencode: { proxyPoolId: "netlify-a" } },
+    providerStrategies: { opencode: { proxyPoolId: "netlify-a", rotateStrategy: "round-robin" } },
   });
   mocks.getProxyPools.mockResolvedValue(pools);
   mocks.pickProxyPoolId.mockImplementation((ids) => ids[0]);
