@@ -1,8 +1,4 @@
-function normalizeString(value) {
-  if (value === undefined || value === null) return "";
-  return String(value).trim();
-}
-
+import { normalizeConfigString as normalizeString } from "@/lib/network/normalizeConfigString";
 // The schemes the SERVING RUNTIME can actually speak — not the list node's
 // undici would accept. On a `bun --bun` process (how this app is started),
 // `fetch(url, { proxy })` rejects socks4/socks4a/socks5/socks5h with

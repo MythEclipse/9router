@@ -1,12 +1,8 @@
+import { normalizeConfigString as normalizeString } from "@/lib/network/normalizeConfigString";
 import { getProxyPoolById } from "@/models";
 import { pickSmartProxyPoolId } from "./proxyHealth";
 
 // Safely normalize any value into a trimmed string.
-function normalizeString(value) {
-  if (value === undefined || value === null) return "";
-  return String(value).trim();
-}
-
 // ─── Proxy pool rotation state (in-memory) ─────────────────────────
 const rotateState = new Map(); // providerId → { index }
 

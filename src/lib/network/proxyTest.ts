@@ -1,3 +1,4 @@
+import { normalizeConfigString as normalizeString } from "@/lib/network/normalizeConfigString";
 import { ProxyAgent, fetch as undiciFetch } from "undici";
 
 const DEFAULT_TEST_URL = "https://google.com/";
@@ -18,11 +19,6 @@ function getErrorMessage(err) {
   }
 
   return base;
-}
-
-function normalizeString(value: unknown): string {
-  if (value === undefined || value === null) return "";
-  return String(value).trim();
 }
 
 export async function testProxyUrl({
