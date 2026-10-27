@@ -52,13 +52,45 @@ function timeAgo(timestamp: string | number | Date) {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
+// One shared 1s heartbeat drives every relative timestamp on the page. A timer
+// per row meant 20 rows = 20 intervals, each waking its own component on its own
+// phase, so the whole table shimmered once a second instead of the labels simply
+// ageing. Subscribers are module-level so the tick is shared, not per instance.
+const timeTickers = new Set<(updater: (t: number) => number) => void>();
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+
+/** One row of the live stream; mirrors RecentRequest in usageRepo. */
+interface LiveRequest {
+  timestamp: string;
+  model: string;
+  requestedModel?: string;
+  provider: string;
+  promptTokens: number;
+  completionTokens: number;
+  cachedTokens: number;
+  status: string;
+}
+
+const NO_REQUESTS: LiveRequest[] = [];
+
+function heartbeat() {
+  for (const notify of timeTickers) notify((t) => t + 1);
+}
+
 // Auto-update time display every second without re-rendering parent
 function TimeAgo({ timestamp }) {
   const [, setTick] = useState(0);
 
   useEffect(() => {
-    const timer = setInterval(() => setTick((t) => t + 1), 1000);
-    return () => clearInterval(timer);
+    timeTickers.add(setTick);
+    heartbeatTimer ??= setInterval(heartbeat, 1000);
+    return () => {
+      timeTickers.delete(setTick);
+      if (timeTickers.size === 0 && heartbeatTimer) {
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
+      }
+    };
   }, []);
 
   return <>{timeAgo(timestamp)}</>;
@@ -80,7 +112,7 @@ function TopologyUnavailableNote() {
   );
 }
 
-function RecentRequests({ requests = [] }) {
+function RecentRequests({ requests = NO_REQUESTS }: { requests?: LiveRequest[] }) {
   return (
     <Card className="flex min-w-0 flex-col overflow-hidden bg-surface border border-border-subtle" padding="none" style={{ height: 420 }}>
       {/* Header */}
@@ -122,11 +154,16 @@ function RecentRequests({ requests = [] }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-border-subtle/50">
-              {requests.map((r, i) => {
+              {requests.map((r) => {
                 const ok = !r.status || r.status === "ok" || r.status === "success";
                 const cleanModel = (r.model || "unknown").replace(/^\/+/, "");
+                // Keyed by the row's identity, not its position. With an index key
+                // React reuses each <tr> slot when a new request lands at the top,
+                // so every row's content shifts down one node and the table appears
+                // to blink/flash on each SSE tick instead of one row sliding in.
+                const rowKey = `${r.timestamp}|${r.model}|${r.provider}|${r.promptTokens}|${r.completionTokens}`;
                 return (
-                  <tr key={i} className="hover:bg-bg-hover transition-colors group">
+                  <tr key={rowKey} className="hover:bg-bg-hover transition-colors group">
                     <td className="py-2 pl-3 pr-1 text-center align-middle">
                       <span className={`inline-block size-2 rounded-full ${ok ? "bg-success" : "bg-danger"}`} />
                     </td>
@@ -474,6 +511,7 @@ export default function UsageStats({
   // SSE connection - real-time updates synced to selected period
   const esRef = useRef(null);
   const [chartUpdateKey, setChartUpdateKey] = useState(0);
+  const lastBucketSignature = useRef<string | null>(null);
 
   useEffect(() => {
     if (esRef.current) esRef.current.close();
@@ -498,7 +536,16 @@ export default function UsageStats({
           };
         });
         if (data._type === "full") {
-          setChartUpdateKey((k) => k + 1);
+          // Refetching the chart on every push made the whole card flash: one
+          // "update" fires per finished request and one "pending" per lifecycle
+          // change, so under load the chart remounted several times a second.
+          // The stream already carries the bucket totals in `data`, so bump the
+          // key only when those actually change, not merely when a row landed.
+          const bucketSignature = `${data.totalRequests ?? ""}|${data.totalPromptTokens ?? ""}|${data.totalCompletionTokens ?? ""}|${data.totalCost ?? ""}`;
+          if (bucketSignature !== lastBucketSignature.current) {
+            lastBucketSignature.current = bucketSignature;
+            setChartUpdateKey((k) => k + 1);
+          }
         }
         if (hasLoadedStats.current) setLoading(false);
       } catch (err) {
@@ -733,7 +780,7 @@ export default function UsageStats({
       {loading || isApiKeyUser === null ? spinner : isApiKeyUser ? (
         <>
           <TopologyUnavailableNote />
-          <RecentRequests requests={stats.recentRequests || []} />
+          <RecentRequests requests={stats.recentRequests || NO_REQUESTS} />
         </>
       ) : (
         <div className={TOPOLOGY_ROW_GRID}>
@@ -746,7 +793,7 @@ export default function UsageStats({
             />
           </div>
           <div className="order-1 lg:order-2 min-w-0">
-            <RecentRequests requests={stats.recentRequests || []} />
+            <RecentRequests requests={stats.recentRequests || NO_REQUESTS} />
           </div>
         </div>
       )}
