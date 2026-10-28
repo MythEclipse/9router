@@ -6,6 +6,7 @@ import { getMetaSync, setMetaSync } from "./helpers/metaStore.ts"
 import { latestVersion, MIGRATIONS } from "./migrations/index.ts"
 import { DB_DIR, LEGACY_FILES } from "./paths.ts"
 import { buildCreateTableSql, SCHEMA_VERSION, TABLES, type TableDef } from "./schema.ts"
+import type { DbAdapter } from "./types.ts"
 import { getAppVersion } from "./version.ts"
 
 // Marker file: prevents re-importing legacy JSON when user wipes data.sqlite.
@@ -28,13 +29,19 @@ export class MigrationAborted extends Error {
 }
 
 // Insert rows one-by-one, collect failures, then assert COUNT(*) matches input length.
-function importWithAssertion(adapter, tableName, rows, insertFn, rowMeta) {
-	const dropped = []
+function importWithAssertion(
+	adapter: DbAdapter,
+	tableName: string,
+	rows: Record<string, unknown>[],
+	insertFn: (row: Record<string, unknown>) => void,
+	rowMeta: (row: Record<string, unknown>) => Record<string, unknown>,
+) {
+	const dropped: unknown[] = []
 	for (const row of rows) {
 		try {
 			insertFn(row)
 		} catch (err) {
-			dropped.push({ ...rowMeta(row), reason: err.message })
+			dropped.push({ ...rowMeta(row), reason: err instanceof Error ? err.message : String(err) })
 		}
 	}
 	const inserted = adapter.get(`SELECT COUNT(*) as c FROM ${tableName}`)?.c ?? 0
@@ -50,16 +57,30 @@ function importWithAssertion(adapter, tableName, rows, insertFn, rowMeta) {
 	}
 }
 
-function readJsonSafe(file) {
+/**
+ * Legacy blobs store each section as an array of rows, and older exports omit
+ * sections entirely. This narrows both cases without asserting a shape the
+ * file cannot guarantee.
+ */
+function legacyRows(blob: LegacyBlob, key: string): Record<string, unknown>[] {
+	const value = blob[key]
+	return Array.isArray(value) ? (value as Record<string, unknown>[]) : []
+}
+
+/** Legacy export blob: arrays of rows under arbitrary top-level keys. */
+type LegacyBlob = Record<string, unknown>
+
+function readJsonSafe(file: string): LegacyBlob | null {
 	if (!fs.existsSync(file)) return null
 	try {
-		return JSON.parse(fs.readFileSync(file, "utf-8"))
+		const parsed = JSON.parse(fs.readFileSync(file, "utf-8"))
+		return parsed && typeof parsed === "object" ? (parsed as LegacyBlob) : null
 	} catch {
 		return null
 	}
 }
 
-function isFreshDb(adapter) {
+function isFreshDb(adapter: DbAdapter) {
 	// Table _meta may not exist yet on truly fresh DB
 	try {
 		const row = adapter.get(`SELECT COUNT(*) as c FROM _meta`)
@@ -70,7 +91,7 @@ function isFreshDb(adapter) {
 }
 
 // ─── Versioned migrations runner (skip-version safe) ─────────────────────
-function runVersionedMigrations(adapter) {
+function runVersionedMigrations(adapter: DbAdapter) {
 	// Bootstrap _meta first so we can read schemaVersion
 	adapter.exec(buildCreateTableSql("_meta", TABLES._meta))
 
@@ -92,14 +113,14 @@ function runVersionedMigrations(adapter) {
 }
 
 // ─── Auto-sync (additive only): add missing tables/columns/indexes ───────
-function syncSchemaFromTables(adapter) {
+function syncSchemaFromTables(adapter: DbAdapter) {
 	for (const [tableName, def] of Object.entries(TABLES)) {
 		// Create table if absent
 		adapter.exec(buildCreateTableSql(tableName, def))
 
 		// Diff columns
 		const existing = adapter.all(`PRAGMA table_info(${tableName})`)
-		const existingNames = new Set(existing.map((r) => r.name))
+		const existingNames = new Set(existing.map((r) => String(r.name)))
 		for (const [colName, colDef] of Object.entries(def.columns)) {
 			if (!existingNames.has(colName)) {
 				// SQLite ADD COLUMN restrictions: no PRIMARY KEY / UNIQUE w/o NULL ok.
@@ -133,7 +154,7 @@ function syncSchemaFromTables(adapter) {
 }
 
 // ─── Legacy JSON import (one-time) ───────────────────────────────────────
-function importLegacyMain(adapter, data) {
+function importLegacyMain(adapter: DbAdapter, data: Record<string, unknown>) {
 	if (!data || typeof data !== "object") return
 
 	if (data.settings) {
@@ -146,7 +167,7 @@ function importLegacyMain(adapter, data) {
 	importWithAssertion(
 		adapter,
 		"providerConnections",
-		data.providerConnections || [],
+		legacyRows(data, "providerConnections"),
 		(c) => {
 			const {
 				id,
@@ -182,7 +203,7 @@ function importLegacyMain(adapter, data) {
 	importWithAssertion(
 		adapter,
 		"providerNodes",
-		data.providerNodes || [],
+		legacyRows(data, "providerNodes"),
 		(n) => {
 			const { id, type, name, createdAt, updatedAt, ...rest } = n
 			adapter.run(
@@ -203,7 +224,7 @@ function importLegacyMain(adapter, data) {
 	importWithAssertion(
 		adapter,
 		"proxyPools",
-		data.proxyPools || [],
+		legacyRows(data, "proxyPools"),
 		(p) => {
 			const { id, isActive, testStatus, createdAt, updatedAt, ...rest } = p
 			adapter.run(
@@ -224,7 +245,7 @@ function importLegacyMain(adapter, data) {
 	importWithAssertion(
 		adapter,
 		"apiKeys",
-		data.apiKeys || [],
+		legacyRows(data, "apiKeys"),
 		(k) => {
 			adapter.run(
 				`INSERT OR REPLACE INTO apiKeys(id, key, name, machineId, isActive, createdAt) VALUES(?, ?, ?, ?, ?, ?)`,
@@ -244,7 +265,7 @@ function importLegacyMain(adapter, data) {
 	importWithAssertion(
 		adapter,
 		"combos",
-		data.combos || [],
+		legacyRows(data, "combos"),
 		(c) => {
 			adapter.run(
 				`INSERT OR REPLACE INTO combos(id, name, kind, models, createdAt, updatedAt) VALUES(?, ?, ?, ?, ?, ?)`,
@@ -267,7 +288,7 @@ function importLegacyMain(adapter, data) {
 			stringifyJson(model),
 		])
 	}
-	for (const m of data.customModels || []) {
+	for (const m of legacyRows(data, "customModels")) {
 		const k = `${m.providerAlias}|${m.id}|${m.type || "llm"}`
 		adapter.run(`INSERT OR REPLACE INTO kv(scope, key, value) VALUES('customModels', ?, ?)`, [
 			k,
@@ -288,10 +309,11 @@ function importLegacyMain(adapter, data) {
 	}
 }
 
-function importLegacyUsage(adapter, data) {
+function importLegacyUsage(adapter: DbAdapter, data: Record<string, unknown>) {
 	if (!data || typeof data !== "object") return
-	for (const e of data.history || []) {
-		const t = e.tokens || {}
+	for (const e of legacyRows(data, "history")) {
+		const t = (e.tokens || {}) as Record<string, unknown>
+		const num = (v: unknown): number => (typeof v === "number" ? v : 0)
 		adapter.run(
 			`INSERT INTO usageHistory(timestamp, provider, model, connectionId, apiKey, endpoint, promptTokens, completionTokens, cost, status, tokens, meta) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			[
@@ -301,8 +323,8 @@ function importLegacyUsage(adapter, data) {
 				e.connectionId || null,
 				e.apiKey || null,
 				e.endpoint || null,
-				t.prompt_tokens || t.input_tokens || 0,
-				t.completion_tokens || t.output_tokens || 0,
+				num(t.prompt_tokens) || num(t.input_tokens) || 0,
+				num(t.completion_tokens) || num(t.output_tokens) || 0,
 				e.cost || 0,
 				e.status || "ok",
 				stringifyJson(t),
@@ -321,7 +343,7 @@ function importLegacyUsage(adapter, data) {
 	}
 }
 
-function importLegacyDisabled(adapter, data) {
+function importLegacyDisabled(adapter: DbAdapter, data: Record<string, unknown>) {
 	if (!data || typeof data.disabled !== "object") return
 	for (const [provider, ids] of Object.entries(data.disabled)) {
 		adapter.run(`INSERT OR REPLACE INTO kv(scope, key, value) VALUES('disabledModels', ?, ?)`, [
@@ -331,7 +353,7 @@ function importLegacyDisabled(adapter, data) {
 	}
 }
 
-function importLegacyDetails(adapter, data) {
+function importLegacyDetails(adapter: DbAdapter, data: Record<string, unknown>) {
 	if (!data || !Array.isArray(data.records)) return
 	for (const r of data.records) {
 		adapter.run(
@@ -350,7 +372,7 @@ function importLegacyDetails(adapter, data) {
 }
 
 // ─── Main entry ──────────────────────────────────────────────────────────
-export async function runMigrationOnce(adapter) {
+export async function runMigrationOnce(adapter: DbAdapter) {
 	if (_migratedAdapters.has(adapter)) return
 	_migratedAdapters.add(adapter)
 
