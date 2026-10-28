@@ -356,7 +356,7 @@ export default function LoginPage() {
 
                 {loginMethod === "password" && (
                   <p className="text-xs text-center text-text-muted mt-2">
-                    Default password is <code className="bg-sidebar px-1 rounded">seren123</code>
+                    Default password is <code className="bg-sidebar px-1 rounded">123456</code>
                   </p>
                 )}
               </form>

@@ -155,7 +155,7 @@ export async function POST(request) {
       );
     }
 
-    // Default password is 'seren123' if not set
+    // Default password is '123456' if not set
     const storedHash = settings.password;
 
     if (settings.authMode === "sso" || settings.authMode === "saml" || settings.authMode === "oidc") {
@@ -173,7 +173,7 @@ export async function POST(request) {
       isValid = await bcrypt.compare(password, storedHash);
     } else {
       // Use env var or default
-      const initialPassword = process.env.INITIAL_PASSWORD || "seren123";
+      const initialPassword = process.env.INITIAL_PASSWORD || "123456";
       isValid = password === initialPassword;
     }
 
