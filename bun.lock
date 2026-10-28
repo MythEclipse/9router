@@ -38,6 +38,7 @@
       "name": "9router-web",
       "version": "4.2.0",
       "dependencies": {
+        "9router-api": "workspace:*",
         "@9router/auth": "workspace:*",
         "@9router/db": "workspace:*",
         "@9router/pricing": "workspace:*",
@@ -129,18 +130,12 @@
       "dependencies": {
         "@9router/db": "workspace:*",
       },
-      "devDependencies": {
-        "@types/bun": "^1.4.4",
-      },
     },
     "packages/db": {
       "name": "@9router/db",
       "version": "0.0.0",
       "dependencies": {
         "@9router/pricing": "workspace:*",
-      },
-      "devDependencies": {
-        "@types/bun": "^1.4.4",
       },
     },
     "packages/pricing": {

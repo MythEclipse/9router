@@ -11,6 +11,7 @@
 import { join } from "node:path"
 import type { UseCases } from "9router-api/application/use-cases"
 import { createUseCases } from "9router-api/infrastructure/use-cases-factory"
+import { createApiKeyStore } from "./apiKeyStore"
 import { createComboPresetPort } from "./comboPresetPort"
 
 const CACHE_KEY = Symbol.for("9router.useCases")
@@ -28,6 +29,7 @@ function cache(): Cache {
 			gatewayUrl: process.env.GATEWAY_URL,
 			onRotationError: (error) => console.warn("combo rotation reset failed:", error),
 			comboPresets: createComboPresetPort(),
+			apiKeyStore: createApiKeyStore(),
 			// Turbopack rewrites import.meta.url, so the migrator cannot find the
 			// journal on its own here. copy-standalone-assets.mjs stages it at
 			// <server cwd>/migrations.

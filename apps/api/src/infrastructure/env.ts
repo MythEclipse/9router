@@ -29,6 +29,13 @@ const EnvSchema = z.object({
 	 * `CHANGELOG.md`, which ships beside the app rather than inside this bundle.
 	 */
 	WEB_APP_DIR: z.string().default("apps/web"),
+
+	/**
+	 * Base URL of the gateway process that owns combo rotation state. Unset means
+	 * "no gateway to notify" — the rotation reset becomes a no-op, which is what a
+	 * standalone API or a test wants.
+	 */
+	GATEWAY_URL: z.string().url().optional(),
 })
 
 export type Env = z.infer<typeof EnvSchema>
