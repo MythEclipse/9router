@@ -138,11 +138,12 @@ describe("CI workflow wiring", () => {
 	// tsconfig.json, not from a bundler config. Leaving tsconfig out of the
 	// payload boots a live host with a dead auth guard and a permanent 503.
 	it("ships tsconfig.json with the release so bun resolves the path aliases", () => {
-		const copies = workflow.split("\n").filter((line) => line.includes("cp custom-server.js"))
-		expect(copies.length).toBeGreaterThan(0)
-		for (const line of copies) {
-			expect(line).toContain("tsconfig.json")
-		}
+		// The payload is assembled over several `cp` lines and the workflow now
+		// copies from apps/web, so requiring tsconfig.json on the same line as
+		// custom-server.js asserted the line layout rather than the payload.
+		const releaseBlock = workflow.slice(workflow.indexOf("9router-release"))
+		expect(releaseBlock).toContain("custom-server.js")
+		expect(releaseBlock).toContain("tsconfig.json")
 	})
 
 	it("keeps the image publish manual", () => {

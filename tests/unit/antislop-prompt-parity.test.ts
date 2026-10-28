@@ -147,7 +147,7 @@ describe("Anti Slop reproduces the skill, it does not summarise it", () => {
 
 	it("is in sync with its sources", async () => {
 		const { execFileSync } = await import("node:child_process")
-		const script = path.join(ROOT, "scripts/generateAntislopPrompt.mjs")
+		const script = path.join(ROOT, "apps/web/scripts/generateAntislopPrompt.mjs")
 		expect(() => execFileSync(process.execPath, [script, "--check"], { stdio: "pipe" })).not.toThrow()
 	})
 })

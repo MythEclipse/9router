@@ -6,15 +6,15 @@ import { describe, expect, it } from "vitest"
  * Sources are formatted without semicolons, so literals ending in ";"
  * never matched. Normalise both sides before comparing.
  */
-const withoutSemicolons = (text: string) =>
-	text.replace(/;\s*$/gm, "").replace(/;\n/g, "\n")
+const withoutSemicolons = (text: string) => text.replace(/;\s*$/gm, "").replace(/;\n/g, "\n")
 
 const root = resolve(__dirname, "../..")
-const modal = withoutSemicolons(readFileSync(
-	resolve(root, "apps/web/src/shared/components/ChangelogModal.tsx"),
-	"utf8",
+const modal = withoutSemicolons(
+	readFileSync(resolve(root, "apps/web/src/shared/components/ChangelogModal.tsx"), "utf8"),
 )
-const globals = readFileSync(resolve(root, "apps/web/src/app/globals.css"), "utf8"))
+const globals = withoutSemicolons(
+	readFileSync(resolve(root, "apps/web/src/app/globals.css"), "utf8"),
+)
 const layout = readFileSync(resolve(root, "apps/web/src/app/layout.tsx"), "utf8")
 
 describe("changelog: every release card shows a commit count", () => {
@@ -82,7 +82,11 @@ describe("icon subset: 114 KB instead of the 3.96 MB package font", () => {
 	})
 
 	it("enables the rlig feature the font actually ships", () => {
-		expect(globals).toMatch(/font-feature-settings:\s*'liga' 1, 'rlig' 1/)
+		// Quote style and line wrapping are formatting; the two features are the
+		// property under test.
+		expect(globals.replace(/["']/g, "'").replace(/\s+/g, " ")).toMatch(
+			/font-feature-settings: 'liga' 1,\s*'rlig' 1/,
+		)
 	})
 
 	it("reveals icons from fonts.ready with a hard fallback, never hanging at 0", () => {

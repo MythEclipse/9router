@@ -87,6 +87,9 @@ function copyRecursive(src, dest) {
 	}
 }
 
+/** Entry points a Next standalone build may ship; probed in this order. */
+const ENTRY_CANDIDATES = ["server.js", "custom-server.js"]
+
 function resolveStandaloneBuild(appDir, buildDistDir) {
 	const legacyStandaloneRoot = path.join(appDir, ".next", "standalone")
 	const resolvedStandaloneRoot = path.join(buildDistDir, "standalone")
@@ -100,13 +103,17 @@ function resolveStandaloneBuild(appDir, buildDistDir) {
 	// standalone/apps/web/ once the app moved to apps/web. Adding a fifth shape to
 	// a list of guesses is what produced this bug, so search for the entry instead
 	// and take the shallowest match.
-	const entryFile = fs.existsSync(legacyStandaloneRoot) ? "server.js" : "custom-server.js"
-
-	const found = findEntryDir(standaloneRoot, entryFile)
+	//
+	// Both names are probed. Deciding by whether the legacy `.next/standalone`
+	// directory existed meant a workspace build whose only entry is `server.js`
+	// looked for `custom-server.js` and reported the build as missing.
+	const found =
+		findEntryDir(standaloneRoot, ENTRY_CANDIDATES[0]) ??
+		findEntryDir(standaloneRoot, ENTRY_CANDIDATES[1])
 	if (!found) {
 		throw new Error(
 			`Next.js standalone build not found under ${standaloneRoot}; ` +
-				`no ${entryFile} anywhere in the traced output.`,
+				`no ${ENTRY_CANDIDATES.join(" or ")} anywhere in the traced output.`,
 		)
 	}
 
