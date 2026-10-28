@@ -1,0 +1,65 @@
+$schema: "https://moonrepo.dev/schemas/project.json"
+
+id: "api"
+language: "typescript"
+stack: "backend"
+layer: "application"
+
+project:
+ name: "9router-api"
+ description: "Hono + oRPC + Drizzle API (hexagonal four-layer)"
+
+tasks:
+ typecheck:
+  command: "bunx tsc --noEmit -p tsconfig.json"
+  inputs:
+   - "src/**/*"
+   - "tests/**/*"
+   - "tsconfig.json"
+  options:
+   runInCI: true
+
+ test:
+  command: "bun test tests/"
+  deps:
+   - "~:typecheck"
+  inputs:
+   - "src/**/*"
+   - "tests/**/*"
+  options:
+   runInCI: true
+
+ lint:
+  command: "bunx biome check --no-errors-on-unmatched apps/api"
+  options:
+   runInCI: true
+
+ dev:
+  command: "bun --watch src/main.ts"
+  options:
+   cache: false
+   persistent: true
+
+ # The bundler copies migrations/ beside dist/ and asserts its presence; a
+ # payload without the journal starts on an empty schema, so this must fail.
+ build:
+  command: "bun run scripts/build.ts"
+  deps:
+   - "~:typecheck"
+   - "~:test"
+  inputs:
+   - "src/**/*"
+   - "migrations/**/*"
+   - "scripts/build.ts"
+  outputs:
+   - "dist"
+  options:
+   runInCI: true
+
+ start:
+  command: "bun dist/main.js"
+  deps:
+   - "~:build"
+  options:
+   cache: false
+   persistent: true
