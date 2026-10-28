@@ -1,23 +1,24 @@
 pre-commit:
-  commands:
-    lint-staged:
-      run: bunx lint-staged
+ commands:
+  biome:
+   # Biome owns lint AND format now; eslint and prettier are gone.
+   # Autofix only, and never fail the commit here: the baseline gate below is
+   # what decides pass/fail, because ~425 pre-existing a11y defects are known.
+   glob: "*.{js,jsx,ts,tsx,json,jsonc,mjs,cjs,css}"
+   run: bunx biome check --write --no-errors-on-unmatched {staged_files} || true
+   stage_fixed: true
+  biome-baseline:
+   # Fails only when a commit ADDS violations. ~425 pre-existing a11y defects are
+   # baselined because each needs real markup work, not an autofix.
+   run: node scripts/biome-baseline.mjs
 
 pre-push:
-  commands:
-    # lefthook does not substitute {push_remote_branch} in a command that has no
-    # `files`/`glob` filter, so it reaches lint-staged literally and the diff
-    # resolves to nothing. Resolve the range in the shell instead: the branch's
-    # own upstream, falling back to origin/<branch>.
-    lint-staged:
-      run: |
-        branch="$(git rev-parse --abbrev-ref HEAD)"
-        base="$(git for-each-ref --format='%(upstream:short)' "refs/heads/$branch")"
-        if [ -z "$base" ] || ! git rev-parse --verify --quiet "$base" >/dev/null; then
-          echo "[lint-staged] no usable upstream for $branch, falling back to origin/$branch"
-          base="origin/$branch"
-        fi
-        echo "[lint-staged] checking $base...HEAD"
-        bunx lint-staged --diff="$base...HEAD"
-    bump:
-      run: bun run bump
+ commands:
+  # lefthook does not substitute {push_remote_branch} in a command that has no
+  # `files`/`glob` filter, so it reaches the shell literally and the diff
+  # resolves to nothing. Resolve the range in the shell instead: the branch's
+  # own upstream, falling back to origin/<branch>.
+  typecheck:
+   run: node node_modules/typescript/bin/tsc -p apps/web/tsconfig.json --noEmit
+  bump:
+   run: bun run bump

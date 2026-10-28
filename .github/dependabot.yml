@@ -1,22 +1,22 @@
 version: 2
 updates:
-  # "bun" is the ecosystem that reads bun.lock: it uses npm's registry metadata
-  # but resolves the lockfile bun actually produces, so the PRs it opens match
-  # what `bun install` will do. The npm ecosystem would look for a lockfile that
-  # no longer exists in this repo.
-  - package-ecosystem: "bun"
-    directory: "/"
-    schedule:
-      interval: "daily"
-    open-pull-requests-limit: 10
-    groups:
-      production:
-        dependency-type: "production"
-        update-types:
-          - "minor"
-          - "patch"
-      development:
-        dependency-type: "development"
-        update-types:
-          - "minor"
-          - "patch"
+ # "bun" is the ecosystem that reads bun.lock: it uses npm's registry metadata
+ # but resolves the lockfile bun actually produces, so the PRs it opens match
+ # what `bun install` will do. The npm ecosystem would look for a lockfile that
+ # no longer exists in this repo.
+ - package-ecosystem: "bun"
+   directory: "/"
+   schedule:
+    interval: "daily"
+   open-pull-requests-limit: 10
+   groups:
+    production:
+     dependency-type: "production"
+     update-types:
+      - "minor"
+      - "patch"
+    development:
+     dependency-type: "development"
+     update-types:
+      - "minor"
+      - "patch"

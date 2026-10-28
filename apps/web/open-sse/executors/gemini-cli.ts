@@ -1,0 +1,102 @@
+import {
+	GEMINI_CLI_API_CLIENT,
+	geminiCLIUserAgent,
+	OAUTH_ENDPOINTS,
+} from "../config/appConstants.ts"
+import { PROVIDERS } from "../config/providers.ts"
+import { BaseExecutor } from "./base.ts"
+
+export class GeminiCLIExecutor extends BaseExecutor {
+	/** Model id captured in transformRequest so buildHeaders can fingerprint it. */
+	private _currentModel: string | null = null
+
+	constructor() {
+		super("gemini-cli", PROVIDERS["gemini-cli"])
+	}
+
+	buildUrl(_model, stream, _urlIndex = 0) {
+		const action = stream ? "streamGenerateContent?alt=sse" : "generateContent"
+		return `${this.config.baseUrl}:${action}`
+	}
+
+	buildHeaders(credentials, stream = true) {
+		return {
+			"Content-Type": "application/json",
+			Authorization: `Bearer ${credentials.accessToken}`,
+			"User-Agent": geminiCLIUserAgent(this._currentModel),
+			"X-Goog-Api-Client": GEMINI_CLI_API_CLIENT,
+			Accept: stream ? "text/event-stream" : "application/json",
+		}
+	}
+
+	transformRequest(model, body, _stream, credentials) {
+		// Store model for use in buildHeaders (called by base.execute after transformRequest)
+		this._currentModel = model
+		// Cloud Code Assist wraps the Gemini payload: { project, model, request: <body> }
+		if (body && body.request && body.model) return body
+		return {
+			project: credentials?.projectId || body?.project,
+			model,
+			request: body,
+		}
+	}
+
+	// Parse RetryInfo.retryDelay from Google API 429 body to surface upstream retry hint
+	parseError(
+		response: Response,
+		bodyText: string,
+	): { status: number; message: string; retryAfter?: string } {
+		const base: { status: number; message: string; retryAfter?: string } = super.parseError(
+			response,
+			bodyText,
+		)
+		if (response.status !== 429 || !bodyText) return base
+		try {
+			const parsed = JSON.parse(bodyText)
+			const details = parsed?.error?.details
+			if (Array.isArray(details)) {
+				for (const d of details) {
+					if (d?.["@type"] === "type.googleapis.com/google.rpc.RetryInfo" && d?.retryDelay) {
+						base.retryAfter = String(d.retryDelay)
+						break
+					}
+				}
+			}
+		} catch {}
+		return base
+	}
+
+	async refreshCredentials(credentials, log) {
+		if (!credentials.refreshToken) return null
+
+		try {
+			const response = await fetch(OAUTH_ENDPOINTS.google.token, {
+				method: "POST",
+				headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+				body: new URLSearchParams({
+					grant_type: "refresh_token",
+					refresh_token: credentials.refreshToken,
+					client_id: this.config.clientId,
+					client_secret: this.config.clientSecret,
+				}),
+			})
+
+			if (!response.ok) return null
+
+			const tokens = await response.json()
+			log?.info?.("TOKEN", "Gemini CLI refreshed")
+
+			return {
+				accessToken: tokens.access_token,
+				refreshToken: tokens.refresh_token || credentials.refreshToken,
+				expiresIn: tokens.expires_in,
+				projectId: credentials.projectId,
+			}
+		} catch (error) {
+			log?.error?.("TOKEN", `Gemini CLI refresh error: ${error.message}`)
+			return null
+		}
+	}
+}
+
+export default GeminiCLIExecutor

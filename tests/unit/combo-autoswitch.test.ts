@@ -1,93 +1,101 @@
-import { describe, it, expect } from "vitest";
-import { detectRequiredCapabilities, reorderByCapabilities } from "../../open-sse/services/combo.js";
+import { describe, expect, it } from "vitest"
+import { detectRequiredCapabilities, reorderByCapabilities } from "../../open-sse/services/combo.js"
 
 describe("detectRequiredCapabilities", () => {
-  it("text-only -> empty", () => {
-    const r = detectRequiredCapabilities({ messages: [{ role: "user", content: "hi" }] });
-    expect(r.size).toBe(0);
-  });
+	it("text-only -> empty", () => {
+		const r = detectRequiredCapabilities({ messages: [{ role: "user", content: "hi" }] })
+		expect(r.size).toBe(0)
+	})
 
-  it("openai image_url -> vision", () => {
-    const r = detectRequiredCapabilities({ messages: [{ role: "user", content: [
-      { type: "image_url", image_url: { url: "x" } },
-    ] }] });
-    expect(r.has("vision")).toBe(true);
-  });
+	it("openai image_url -> vision", () => {
+		const r = detectRequiredCapabilities({
+			messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: "x" } }] }],
+		})
+		expect(r.has("vision")).toBe(true)
+	})
 
-  it("openai file -> pdf", () => {
-    const r = detectRequiredCapabilities({ messages: [{ role: "user", content: [
-      { type: "file", file: { file_data: "data:application/pdf;base64,x" } },
-    ] }] });
-    expect(r.has("pdf")).toBe(true);
-  });
+	it("openai file -> pdf", () => {
+		const r = detectRequiredCapabilities({
+			messages: [
+				{
+					role: "user",
+					content: [{ type: "file", file: { file_data: "data:application/pdf;base64,x" } }],
+				},
+			],
+		})
+		expect(r.has("pdf")).toBe(true)
+	})
 
-  it("gemini inlineData image -> vision", () => {
-    const r = detectRequiredCapabilities({ contents: [{ role: "user", parts: [
-      { inlineData: { mimeType: "image/png", data: "x" } },
-    ] }] });
-    expect(r.has("vision")).toBe(true);
-  });
+	it("gemini inlineData image -> vision", () => {
+		const r = detectRequiredCapabilities({
+			contents: [{ role: "user", parts: [{ inlineData: { mimeType: "image/png", data: "x" } }] }],
+		})
+		expect(r.has("vision")).toBe(true)
+	})
 
-  it("antigravity request.contents image -> vision", () => {
-    const r = detectRequiredCapabilities({ request: { contents: [{ role: "user", parts: [
-      { inlineData: { mimeType: "image/jpeg", data: "x" } },
-    ] }] } });
-    expect(r.has("vision")).toBe(true);
-  });
+	it("antigravity request.contents image -> vision", () => {
+		const r = detectRequiredCapabilities({
+			request: {
+				contents: [{ role: "user", parts: [{ inlineData: { mimeType: "image/jpeg", data: "x" } }] }],
+			},
+		})
+		expect(r.has("vision")).toBe(true)
+	})
 
-  it("web_search tool does NOT add search (detection is deliberately off)", () => {
-    // combo.js: "search: temporarily disabled in auto-switch (feature not wired
-    // yet)". Tools are not scanned at all today, so a web_search tool must not
-    // narrow the model pool. If that capability is ever wired up, this test
-    // should be flipped to expect true in the same commit.
-    const r = detectRequiredCapabilities({ messages: [{ role: "user", content: "q" }], tools: [
-      { type: "web_search" },
-    ] });
-    expect(r.has("search")).toBe(false);
-    // A tool present in body.tools adds the "tools" capability requirement.
-    expect(r.size).toBe(1);
-  });
+	it("web_search tool does NOT add search (detection is deliberately off)", () => {
+		// combo.js: "search: temporarily disabled in auto-switch (feature not wired
+		// yet)". Tools are not scanned at all today, so a web_search tool must not
+		// narrow the model pool. If that capability is ever wired up, this test
+		// should be flipped to expect true in the same commit.
+		const r = detectRequiredCapabilities({
+			messages: [{ role: "user", content: "q" }],
+			tools: [{ type: "web_search" }],
+		})
+		expect(r.has("search")).toBe(false)
+		// A tool present in body.tools adds the "tools" capability requirement.
+		expect(r.size).toBe(1)
+	})
 
-  it("responses input_image -> vision", () => {
-    const r = detectRequiredCapabilities({ input: [{ role: "user", content: [
-      { type: "input_image", image_url: "x" },
-    ] }] });
-    expect(r.has("vision")).toBe(true);
-  });
-});
+	it("responses input_image -> vision", () => {
+		const r = detectRequiredCapabilities({
+			input: [{ role: "user", content: [{ type: "input_image", image_url: "x" }] }],
+		})
+		expect(r.has("vision")).toBe(true)
+	})
+})
 
 describe("reorderByCapabilities", () => {
-  it("no required -> unchanged", () => {
-    const models = ["a/x", "b/y"];
-    expect(reorderByCapabilities(models, new Set())).toBe(models);
-  });
+	it("no required -> unchanged", () => {
+		const models = ["a/x", "b/y"]
+		expect(reorderByCapabilities(models, new Set())).toBe(models)
+	})
 
-  it("floats vision-capable model to front, keeps fallback", () => {
-    // deepseek-chat = no vision; claude-sonnet = vision
-    const models = ["deepseek/deepseek-chat", "anthropic/claude-sonnet-4.6"];
-    const out = reorderByCapabilities(models, new Set(["vision"]));
-    expect(out[0]).toBe("anthropic/claude-sonnet-4.6");
-    expect(out).toContain("deepseek/deepseek-chat"); // not dropped
-    expect(out).toHaveLength(2);
-  });
+	it("floats vision-capable model to front, keeps fallback", () => {
+		// deepseek-chat = no vision; claude-sonnet = vision
+		const models = ["deepseek/deepseek-chat", "anthropic/claude-sonnet-4.6"]
+		const out = reorderByCapabilities(models, new Set(["vision"]))
+		expect(out[0]).toBe("anthropic/claude-sonnet-4.6")
+		expect(out).toContain("deepseek/deepseek-chat") // not dropped
+		expect(out).toHaveLength(2)
+	})
 
-  it("keeps order when no model matches", () => {
-    // "keeps order" is about the sequence, not array identity: the sort path
-    // returns a new array, so comparing by reference is testing the wrong thing.
-    const models = ["deepseek/deepseek-chat", "deepseek/deepseek-reasoner"];
-    const out = reorderByCapabilities(models, new Set(["vision"]));
-    expect(out).toEqual(models);
-  });
+	it("keeps order when no model matches", () => {
+		// "keeps order" is about the sequence, not array identity: the sort path
+		// returns a new array, so comparing by reference is testing the wrong thing.
+		const models = ["deepseek/deepseek-chat", "deepseek/deepseek-reasoner"]
+		const out = reorderByCapabilities(models, new Set(["vision"]))
+		expect(out).toEqual(models)
+	})
 
-  it("returns the same array when there is nothing to reorder", () => {
-    // The documented early-return path does short-circuit on identity.
-    const models = ["deepseek/deepseek-chat", "deepseek/deepseek-reasoner"];
-    expect(reorderByCapabilities(models, new Set())).toBe(models);
-    expect(reorderByCapabilities(models, null)).toBe(models);
-  });
+	it("returns the same array when there is nothing to reorder", () => {
+		// The documented early-return path does short-circuit on identity.
+		const models = ["deepseek/deepseek-chat", "deepseek/deepseek-reasoner"]
+		expect(reorderByCapabilities(models, new Set())).toBe(models)
+		expect(reorderByCapabilities(models, null)).toBe(models)
+	})
 
-  it("single model -> unchanged", () => {
-    const models = ["a/x"];
-    expect(reorderByCapabilities(models, new Set(["vision"]))).toBe(models);
-  });
-});
+	it("single model -> unchanged", () => {
+		const models = ["a/x"]
+		expect(reorderByCapabilities(models, new Set(["vision"]))).toBe(models)
+	})
+})

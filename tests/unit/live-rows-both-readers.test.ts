@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
+import { describe, expect, it } from "vitest"
 
 /**
  * The live rows reach the dashboard from TWO independent readers, and the client
@@ -19,39 +19,39 @@ import { fileURLToPath } from "node:url";
  * Both readers must resolve the alias, or one of them keeps undoing the other.
  */
 
-const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
-const repo = readFileSync(join(REPO_ROOT, "src/lib/db/repos/usageRepo.ts"), "utf8");
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..")
+const repo = readFileSync(join(REPO_ROOT, "src/lib/db/repos/usageRepo.ts"), "utf8")
 
 /** Every `SELECT ... FROM usageHistory` that yields live rows (has both model and status). */
 function recentRowQueries(source: string): string[] {
-  return source
-    .split("\n")
-    .filter(
-      (l) =>
-        l.includes("FROM usageHistory") &&
-        l.includes("SELECT") &&
-        l.includes("model") &&
-        l.includes("status") &&
-        l.includes("tokens"),
-    );
+	return source
+		.split("\n")
+		.filter(
+			(l) =>
+				l.includes("FROM usageHistory") &&
+				l.includes("SELECT") &&
+				l.includes("model") &&
+				l.includes("status") &&
+				l.includes("tokens"),
+		)
 }
 
 describe("every live-row reader resolves the alias", () => {
-  it("selects meta wherever recent rows are read for display", () => {
-    const queries = recentRowQueries(repo);
-    expect(queries.length).toBeGreaterThanOrEqual(2);
-    for (const q of queries) {
-      expect(q).toContain("meta");
-    }
-  });
+	it("selects meta wherever recent rows are read for display", () => {
+		const queries = recentRowQueries(repo)
+		expect(queries.length).toBeGreaterThanOrEqual(2)
+		for (const q of queries) {
+			expect(q).toContain("meta")
+		}
+	})
 
-  it("maps the resolved model in the stats reader too, not just the ring", () => {
-    // The ring reader already did this; the stats reader is the regression.
-    expect(repo).toContain("const label = labelForRow(r.model, r.meta);");
-    expect(repo).toContain("model: label.display,");
-  });
+	it("maps the resolved model in the stats reader too, not just the ring", () => {
+		// The ring reader already did this; the stats reader is the regression.
+		expect(repo).toContain("const label = labelForRow(r.model, r.meta);")
+		expect(repo).toContain("model: label.display,")
+	})
 
-  it("keeps the alias as a qualifier in the stats reader", () => {
-    expect(repo).toContain("requestedModel: label.alias,");
-  });
-});
+	it("keeps the alias as a qualifier in the stats reader", () => {
+		expect(repo).toContain("requestedModel: label.alias,")
+	})
+})

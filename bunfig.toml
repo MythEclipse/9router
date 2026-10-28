@@ -1,0 +1,6 @@
+# Turbopack resolves `next` from the project directory upward and refuses a
+# package that lives outside the workspace root it detects. bun's default is
+# per-package node_modules; `hoist` puts every workspace dependency in the root
+# node_modules so apps/web/node_modules/next no longer symlinks out of the tree.
+[install]
+linker = "hoisted"

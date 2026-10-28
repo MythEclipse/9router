@@ -1,0 +1,61 @@
+$schema: "https://moonrepo.dev/schemas/project.json"
+
+id: "web"
+language: "typescript"
+stack: "frontend"
+layer: "application"
+
+project:
+  name: "9router-web"
+  description: "Dashboard + gateway host"
+
+tasks:
+  typecheck:
+    command: "node ../../node_modules/typescript/bin/tsc --noEmit"
+    inputs:
+      - "src/**/*"
+      - "open-sse/**/*"
+      - "tsconfig.json"
+    options:
+      runInCI: true
+
+  lint:
+    command: "bunx biome check --no-errors-on-unmatched ."
+    inputs:
+      - "src/**/*"
+      - "open-sse/**/*"
+      - "biome.json"
+    options:
+      runInCI: true
+
+  dev:
+    command: "bun --bun next dev --port 20128 --hostname 127.0.0.1"
+    options:
+      cache: false
+      persistent: true
+
+  # Build only runs after typecheck. A cold `moon run web:build` must produce
+  # .next from a tree with no prior dist — never trust a warm cache for this.
+  build:
+    command: "bun --bun next build"
+    deps:
+      - "~:typecheck"
+    inputs:
+      - "src/**/*"
+      - "open-sse/**/*"
+      - "public/**/*"
+      - "next.config.mjs"
+      - "postcss.config.mjs"
+      - "tsconfig.json"
+    outputs:
+      - ".next"
+    options:
+      runInCI: true
+
+  start:
+    command: "bun custom-server.js --port 20127"
+    deps:
+      - "~:build"
+    options:
+      cache: false
+      persistent: true

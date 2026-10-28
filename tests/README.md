@@ -26,14 +26,15 @@ npx vitest run --reporter=verbose --config ./vitest.config.js
 
 ## Test Files
 
-| File | What it tests |
-|------|--------------|
-| `unit/embeddingsCore.test.js` | `open-sse/handlers/embeddingsCore.js` - core logic: body builder, URL router, headers, handler flow |
-| `unit/embeddings.cloud.test.js` | `cloud/src/handlers/embeddings.js` - cloud worker handler: auth, validation, rate limits, CORS |
+| File                            | What it tests                                                                                       |
+| ------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `unit/embeddingsCore.test.js`   | `open-sse/handlers/embeddingsCore.js` - core logic: body builder, URL router, headers, handler flow |
+| `unit/embeddings.cloud.test.js` | `cloud/src/handlers/embeddings.js` - cloud worker handler: auth, validation, rate limits, CORS      |
 
 ## Coverage Summary (59 tests)
 
 ### `embeddingsCore.test.js` (36 tests)
+
 - `buildEmbeddingsBody`: single string, array, encoding_format, default float
 - `buildEmbeddingsUrl`: openai, openrouter, openai-compatible-*, unsupported providers
 - `buildEmbeddingsHeaders`: per-provider header sets, fallback to accessToken
@@ -43,6 +44,7 @@ npx vitest run --reporter=verbose --config ./vitest.config.js
 - `handleEmbeddingsCore` token refresh: 401 retry, graceful fallback
 
 ### `embeddings.cloud.test.js` (23 tests)
+
 - CORS OPTIONS: 200 response, empty body, correct headers
 - Authentication: missing key, bad format, old-format key, wrong key value, valid key
 - Body validation: invalid JSON, missing model, missing input, bad model

@@ -45,9 +45,7 @@
     }
   },
   "antigravity": {
-    "baseUrls": [
-      "https://daily-cloudcode-pa.googleapis.com"
-    ],
+    "baseUrls": ["https://daily-cloudcode-pa.googleapis.com"],
     "format": "antigravity",
     "headers": {
       "User-Agent": "antigravity/ide/2.22.0 darwin/arm64"
@@ -220,9 +218,7 @@
       "combined": true,
       "header": "Authorization",
       "scheme": "bearer",
-      "hooks": [
-        "clineHeaders"
-      ]
+      "hooks": ["clineHeaders"]
     },
     "format": "openai"
   },
@@ -239,9 +235,7 @@
       "combined": true,
       "header": "Authorization",
       "scheme": "bearer",
-      "hooks": [
-        "clineHeaders"
-      ]
+      "hooks": ["clineHeaders"]
     },
     "format": "openai",
     "tokenUrl": "https://api.cline.bot/api/v1/auth/token"
@@ -371,10 +365,7 @@
       "scope": "all"
     },
     "quirks": {
-      "claudeSupportedToolTypes": [
-        "web_search_20250305",
-        "web_search_20260209"
-      ]
+      "claudeSupportedToolTypes": ["web_search_20250305", "web_search_20260209"]
     },
     "format": "openai",
     "transports": [
@@ -650,9 +641,7 @@
       "combined": true,
       "header": "Authorization",
       "scheme": "bearer",
-      "hooks": [
-        "kilocodeOrg"
-      ]
+      "hooks": ["kilocodeOrg"]
     },
     "format": "openai"
   },
@@ -683,9 +672,7 @@
       "combined": true,
       "header": "x-api-key",
       "scheme": "raw",
-      "hooks": [
-        "kimiHeaders"
-      ]
+      "hooks": ["kimiHeaders"]
     },
     "transports": [
       {
@@ -695,9 +682,7 @@
           "combined": true,
           "header": "Authorization",
           "scheme": "bearer",
-          "hooks": [
-            "kimiHeaders"
-          ]
+          "hooks": ["kimiHeaders"]
         }
       },
       {
@@ -712,9 +697,7 @@
           "combined": true,
           "header": "x-api-key",
           "scheme": "raw",
-          "hooks": [
-            "kimiHeaders"
-          ]
+          "hooks": ["kimiHeaders"]
         }
       },
       {
@@ -724,9 +707,7 @@
           "combined": true,
           "header": "Authorization",
           "scheme": "bearer",
-          "hooks": [
-            "kimiHeaders"
-          ]
+          "hooks": ["kimiHeaders"]
         }
       }
     ]
@@ -891,9 +872,7 @@
       "header": "Authorization",
       "scheme": "bearer",
       "anthropicVersion": true,
-      "hooks": [
-        "minimaxHeaders"
-      ]
+      "hooks": ["minimaxHeaders"]
     },
     "clientId": "mcode-public",
     "tokenUrl": "https://account.minimax.cn/oauth2/token"
@@ -911,9 +890,7 @@
       "header": "Authorization",
       "scheme": "bearer",
       "anthropicVersion": true,
-      "hooks": [
-        "minimaxHeaders"
-      ]
+      "hooks": ["minimaxHeaders"]
     },
     "clientId": "mcode-public",
     "tokenUrl": "https://account.minimax.io/oauth2/token"
@@ -939,9 +916,7 @@
       "combined": true,
       "header": "Authorization",
       "scheme": "bearer",
-      "hooks": [
-        "museHeaders"
-      ]
+      "hooks": ["museHeaders"]
     },
     "format": "openai",
     "clientId": "1031625952748946",
@@ -954,9 +929,7 @@
           "combined": true,
           "header": "Authorization",
           "scheme": "bearer",
-          "hooks": [
-            "museHeaders"
-          ]
+          "hooks": ["museHeaders"]
         }
       },
       {
@@ -966,9 +939,7 @@
           "combined": true,
           "header": "Authorization",
           "scheme": "bearer",
-          "hooks": [
-            "museHeaders"
-          ]
+          "hooks": ["museHeaders"]
         }
       }
     ]

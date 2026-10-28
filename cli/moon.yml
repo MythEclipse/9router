@@ -1,0 +1,30 @@
+$schema: "https://moonrepo.dev/schemas/project.json"
+
+id: "cli"
+language: "typescript"
+stack: "backend"
+layer: "tool"
+
+project:
+  name: "9router-cli"
+  description: "npm launcher ('9router') — installs/starts the server, manages the tray"
+
+tasks:
+  build:
+    command: "bun run build"
+    inputs:
+      - "cli.ts"
+      - "src/**/*"
+      - "hooks/**/*"
+      - "scripts/**/*"
+    outputs:
+      - "cli.js"
+      - "hooks"
+    options:
+      runInCI: true
+  pack:
+    command: "bun run pack:cli"
+    deps:
+      - "~:build"
+    options:
+      cache: false

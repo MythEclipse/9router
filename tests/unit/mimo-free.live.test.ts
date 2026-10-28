@@ -3,72 +3,72 @@
  * Root cause: upstream gates on Chrome-like User-Agent. Without UA → 403 "Illegal access".
  * Hits real endpoints - no mocks. Free provider, safe to call.
  */
-import { describe, it, expect } from "vitest";
-import { proxyAwareFetch } from "../../open-sse/utils/proxyFetch.js";
-import { __test__ } from "../../open-sse/executors/mimo-free.js";
+import { describe, expect, it } from "vitest"
+import { __test__ } from "../../open-sse/executors/mimo-free.js"
+import { proxyAwareFetch } from "../../open-sse/utils/proxyFetch.js"
 
-const { BOOTSTRAP_URL, CHAT_URL, generateFingerprint, MIMO_SYSTEM_MARKER } = __test__;
+const { BOOTSTRAP_URL, CHAT_URL, generateFingerprint, MIMO_SYSTEM_MARKER } = __test__
 
 const CHROME_UA =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
 async function bootstrapWith(ua) {
-  const headers = { "Content-Type": "application/json" };
-  if (ua) headers["User-Agent"] = ua;
-  const r = await proxyAwareFetch(BOOTSTRAP_URL, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ client: generateFingerprint() }),
-  });
-  const data = await r.json();
-  return { status: r.status, jwt: data.jwt };
+	const headers = { "Content-Type": "application/json" }
+	if (ua) headers["User-Agent"] = ua
+	const r = await proxyAwareFetch(BOOTSTRAP_URL, {
+		method: "POST",
+		headers,
+		body: JSON.stringify({ client: generateFingerprint() }),
+	})
+	const data = await r.json()
+	return { status: r.status, jwt: data.jwt }
 }
 
 async function chatWith(jwt, ua) {
-  const headers = {
-    "Content-Type": "application/json",
-    "X-Mimo-Source": "mimocode-cli-free",
-    Authorization: `Bearer ${jwt}`,
-    Accept: "application/json",
-  };
-  if (ua) headers["User-Agent"] = ua;
-  const body = {
-    model: "mimo-auto",
-    messages: [
-      { role: "system", content: MIMO_SYSTEM_MARKER },
-      { role: "user", content: "hi" },
-    ],
-    stream: false,
-  };
-  return proxyAwareFetch(CHAT_URL, { method: "POST", headers, body: JSON.stringify(body) });
+	const headers = {
+		"Content-Type": "application/json",
+		"X-Mimo-Source": "mimocode-cli-free",
+		Authorization: `Bearer ${jwt}`,
+		Accept: "application/json",
+	}
+	if (ua) headers["User-Agent"] = ua
+	const body = {
+		model: "mimo-auto",
+		messages: [
+			{ role: "system", content: MIMO_SYSTEM_MARKER },
+			{ role: "user", content: "hi" },
+		],
+		stream: false,
+	}
+	return proxyAwareFetch(CHAT_URL, { method: "POST", headers, body: JSON.stringify(body) })
 }
 
 describe("MiMo Free bootstrap (live)", () => {
-  it("bootstrap returns 200 with JWT", async () => {
-    const { status, jwt } = await bootstrapWith(CHROME_UA);
-    expect(status).toBe(200);
-    expect(jwt).toBeTruthy();
-  });
-});
+	it("bootstrap returns 200 with JWT", async () => {
+		const { status, jwt } = await bootstrapWith(CHROME_UA)
+		expect(status).toBe(200)
+		expect(jwt).toBeTruthy()
+	})
+})
 
 describe("MiMo Free anti-abuse gate (live)", () => {
-  // Issue #1933 was "502 MiMo bootstrap failed: 403 Illegal access" — the
-  // upstream gates on a Chrome-like User-Agent. That gate is what this test
-  // guards: a request carrying CHROME_UA must get past it. Asserting the
-  // anti-abuse verdict rather than a bare 200 keeps that guard meaningful even
-  // when the upstream's model catalogue moves under us.
-  //
-  // As of 2026-10-12 the upstream answers 400 "Unsupported model mimo-auto" to
-  // every id this provider knows (mimo-auto, mimo-v2.5, mimo), so the live 200
-  // case cannot pass until MiMo publishes a supported id and the registry is
-  // updated. See the `mimo-free` known-fail entry.
-  it("chat WITH Chrome User-Agent passes the anti-abuse gate", async () => {
-    const { jwt } = await bootstrapWith(CHROME_UA);
-    const r = await chatWith(jwt, CHROME_UA);
+	// Issue #1933 was "502 MiMo bootstrap failed: 403 Illegal access" — the
+	// upstream gates on a Chrome-like User-Agent. That gate is what this test
+	// guards: a request carrying CHROME_UA must get past it. Asserting the
+	// anti-abuse verdict rather than a bare 200 keeps that guard meaningful even
+	// when the upstream's model catalogue moves under us.
+	//
+	// As of 2026-10-12 the upstream answers 400 "Unsupported model mimo-auto" to
+	// every id this provider knows (mimo-auto, mimo-v2.5, mimo), so the live 200
+	// case cannot pass until MiMo publishes a supported id and the registry is
+	// updated. See the `mimo-free` known-fail entry.
+	it("chat WITH Chrome User-Agent passes the anti-abuse gate", async () => {
+		const { jwt } = await bootstrapWith(CHROME_UA)
+		const r = await chatWith(jwt, CHROME_UA)
 
-    expect(r.status).not.toBe(403);
-    const body = await r.text();
-    expect(body).not.toContain("Illegal access");
-    expect(body).not.toContain("illegal_access");
-  });
-});
+		expect(r.status).not.toBe(403)
+		const body = await r.text()
+		expect(body).not.toContain("Illegal access")
+		expect(body).not.toContain("illegal_access")
+	})
+})

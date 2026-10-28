@@ -1,291 +1,459 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest"
+import { getModelsByProviderId } from "../../open-sse/config/providerModels.js"
+import { CodexExecutor } from "../../open-sse/executors/codex.js"
+import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js"
+import { getPricingForModel } from "../../open-sse/providers/pricing.js"
+import { getThinkingLevels } from "../../open-sse/providers/thinkingLevels.js"
+import * as proxyFetchModule from "../../open-sse/utils/proxyFetch.js"
 
-import { CodexExecutor } from "../../open-sse/executors/codex.js";
-import { getModelsByProviderId } from "../../open-sse/config/providerModels.js";
-import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js";
-import { getPricingForModel } from "../../open-sse/providers/pricing.js";
-import { getThinkingLevels } from "../../open-sse/providers/thinkingLevels.js";
-import * as proxyFetchModule from "../../open-sse/utils/proxyFetch.js";
-
-const credentials = { connectionId: "fixture", accessToken: "fixture-token" };
-afterEach(() => vi.restoreAllMocks());
+const credentials = { connectionId: "fixture", accessToken: "fixture-token" }
+afterEach(() => vi.restoreAllMocks())
 
 describe("Codex GPT-6 Sol/Luna transport", () => {
-  it.each(["gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna"])("lists %s with Codex capabilities", (model) => {
-    const entry = getModelsByProviderId("codex").find((item) => item.id === model);
-    expect(entry?.responsesLite).toBe(true);
-    expect(entry?.thinkingLevels).toEqual(["low", "medium", "high", "xhigh", "max"]);
-    // gpt-6* publishes the real 1.05M window via the `*gpt-6*` rule (89ffac5a),
-    // but the explicit per-model entries win for the 6.0-series ids that still
-    // list 272000. Everything else in the capability shape is unchanged.
-    expect(getCapabilitiesForModel("codex", model)).toMatchObject({
-      vision: true,
-      reasoning: true,
-      search: true,
-      thinkingFormat: "openai",
-      maxOutput: 128000,
-    });
-    expect(getCapabilitiesForModel("codex", model).contextWindow).toBe(
-      model === "gpt-6.1-sol" ? 1050000 : 272000,
-    );
-    expect(getThinkingLevels("codex", model)).toEqual(["low", "medium", "high", "xhigh", "max"]);
-    expect(getThinkingLevels("codex", `${model}(high)`)).toEqual(entry.thinkingLevels);
-  });
+	it.each(["gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna"])(
+		"lists %s with Codex capabilities",
+		(model) => {
+			const entry = getModelsByProviderId("codex").find((item) => item.id === model)
+			expect(entry?.responsesLite).toBe(true)
+			expect(entry?.thinkingLevels).toEqual(["low", "medium", "high", "xhigh", "max"])
+			// gpt-6* publishes the real 1.05M window via the `*gpt-6*` rule (89ffac5a),
+			// but the explicit per-model entries win for the 6.0-series ids that still
+			// list 272000. Everything else in the capability shape is unchanged.
+			expect(getCapabilitiesForModel("codex", model)).toMatchObject({
+				vision: true,
+				reasoning: true,
+				search: true,
+				thinkingFormat: "openai",
+				maxOutput: 128000,
+			})
+			expect(getCapabilitiesForModel("codex", model).contextWindow).toBe(
+				model === "gpt-6.1-sol" ? 1050000 : 272000,
+			)
+			expect(getThinkingLevels("codex", model)).toEqual(["low", "medium", "high", "xhigh", "max"])
+			expect(getThinkingLevels("codex", `${model}(high)`)).toEqual(entry.thinkingLevels)
+		},
+	)
 
-  it("uses official OpenAI Standard pricing for GPT-6", () => {
-    expect(getPricingForModel("codex", "gpt-6-astra")).toMatchObject({ input: 10, cached: 1, cache_creation: 12.5, output: 50 });
-    expect(getPricingForModel("codex", "gpt-6-sol")).toMatchObject({ input: 2, cached: 0.2, cache_creation: 2.5, output: 10 });
-    expect(getPricingForModel("codex", "gpt-6-luna")).toMatchObject({ input: 0.1, cached: 0.01, cache_creation: 0.125, output: 0.5 });
-  });
+	it("uses official OpenAI Standard pricing for GPT-6", () => {
+		expect(getPricingForModel("codex", "gpt-6-astra")).toMatchObject({
+			input: 10,
+			cached: 1,
+			cache_creation: 12.5,
+			output: 50,
+		})
+		expect(getPricingForModel("codex", "gpt-6-sol")).toMatchObject({
+			input: 2,
+			cached: 0.2,
+			cache_creation: 2.5,
+			output: 10,
+		})
+		expect(getPricingForModel("codex", "gpt-6-luna")).toMatchObject({
+			input: 0.1,
+			cached: 0.01,
+			cache_creation: 0.125,
+			output: 0.5,
+		})
+	})
 
-  it("keeps a native Responses Lite request intact", () => {
-    const executor = new CodexExecutor();
-    const input = [
-      { type: "additional_tools", role: "developer", tools: [{ type: "function", name: "run", parameters: { type: "object", properties: {} } }] },
-      { type: "message", id: "msg_native", role: "developer", content: [{ type: "input_text", text: "Native instructions" }] },
-      { type: "message", role: "user", content: [{ type: "input_text", text: "hello" }] },
-    ];
-    const body = executor.transformRequest("gpt-6-luna", {
-      model: "gpt-6-luna", input: structuredClone(input), instructions: "", tools: null, parallel_tool_calls: false,
-      reasoning: { effort: "high", context: "all_turns" },
-    }, true, credentials);
-    const headers = executor.buildHeaders(credentials, true, null, "gpt-6-luna");
+	it("keeps a native Responses Lite request intact", () => {
+		const executor = new CodexExecutor()
+		const input = [
+			{
+				type: "additional_tools",
+				role: "developer",
+				tools: [{ type: "function", name: "run", parameters: { type: "object", properties: {} } }],
+			},
+			{
+				type: "message",
+				id: "msg_native",
+				role: "developer",
+				content: [{ type: "input_text", text: "Native instructions" }],
+			},
+			{ type: "message", role: "user", content: [{ type: "input_text", text: "hello" }] },
+		]
+		const body = executor.transformRequest(
+			"gpt-6-luna",
+			{
+				model: "gpt-6-luna",
+				input: structuredClone(input),
+				instructions: "",
+				tools: null,
+				parallel_tool_calls: false,
+				reasoning: { effort: "high", context: "all_turns" },
+			},
+			true,
+			credentials,
+		)
+		const headers = executor.buildHeaders(credentials, true, null, "gpt-6-luna")
 
-    expect(headers["x-openai-internal-codex-responses-lite"]).toBe("true");
-    expect(body.instructions).toBe("");
-    expect(body.tools).toBeNull();
-    expect(body.parallel_tool_calls).toBe(false);
-    expect(body.input).toEqual(input);
-    expect(body.reasoning).toEqual({ effort: "high", context: "all_turns" });
-  });
+		expect(headers["x-openai-internal-codex-responses-lite"]).toBe("true")
+		expect(body.instructions).toBe("")
+		expect(body.tools).toBeNull()
+		expect(body.parallel_tool_calls).toBe(false)
+		expect(body.input).toEqual(input)
+		expect(body.reasoning).toEqual({ effort: "high", context: "all_turns" })
+	})
 
-  it.each(["gpt-6-sol", "gpt-6-luna"])("keeps hosted web_search available on %s", async (model) => {
-    const fetchMock = vi.spyOn(proxyFetchModule, "proxyAwareFetch").mockResolvedValue({
-      ok: true, status: 200, headers: new Map(),
-    });
-    await new CodexExecutor().execute({
-      model,
-      body: {
-        model, input: "Search the web", tools: [
-          { type: "function", name: "run", parameters: { type: "object", properties: {} } },
-          { type: "web_search" },
-        ], tool_choice: "none",
-      },
-      stream: true, credentials,
-    });
-    const [, options] = fetchMock.mock.calls[0];
-    const body = JSON.parse(options.body);
-    expect(options.headers["x-openai-internal-codex-responses-lite"]).toBeUndefined();
-    expect(body.tools).toEqual([
-      { type: "function", name: "run", parameters: { type: "object", properties: {} } },
-      { type: "web_search" },
-    ]);
-    expect(body.input.some(item => item.type === "additional_tools")).toBe(false);
-    expect(body.tool_choice).toBe("none");
-  });
+	it.each(["gpt-6-sol", "gpt-6-luna"])("keeps hosted web_search available on %s", async (model) => {
+		const fetchMock = vi.spyOn(proxyFetchModule, "proxyAwareFetch").mockResolvedValue({
+			ok: true,
+			status: 200,
+			headers: new Map(),
+		})
+		await new CodexExecutor().execute({
+			model,
+			body: {
+				model,
+				input: "Search the web",
+				tools: [
+					{ type: "function", name: "run", parameters: { type: "object", properties: {} } },
+					{ type: "web_search" },
+				],
+				tool_choice: "none",
+			},
+			stream: true,
+			credentials,
+		})
+		const [, options] = fetchMock.mock.calls[0]
+		const body = JSON.parse(options.body)
+		expect(options.headers["x-openai-internal-codex-responses-lite"]).toBeUndefined()
+		expect(body.tools).toEqual([
+			{ type: "function", name: "run", parameters: { type: "object", properties: {} } },
+			{ type: "web_search" },
+		])
+		expect(body.input.some((item) => item.type === "additional_tools")).toBe(false)
+		expect(body.tool_choice).toBe("none")
+	})
 
-  it.each(["gpt-6-sol", "gpt-6-luna"])("registers auto-injected hosted search on %s", async (model) => {
-    const fetchMock = vi.spyOn(proxyFetchModule, "proxyAwareFetch").mockResolvedValue({
-      ok: true, status: 200, headers: new Map(),
-    });
-    await new CodexExecutor().execute({
-      model,
-      body: { model, input: "Search the web", _autoCodexWebSearch: true },
-      stream: true, credentials,
-    });
-    const [, options] = fetchMock.mock.calls[0];
-    const body = JSON.parse(options.body);
-    expect(options.headers["x-openai-internal-codex-responses-lite"]).toBeUndefined();
-    expect(body.tools).toEqual([{ type: "web_search" }]);
-    expect(body.input.some(item => item.type === "additional_tools")).toBe(false);
-  });
+	it.each(["gpt-6-sol", "gpt-6-luna"])(
+		"registers auto-injected hosted search on %s",
+		async (model) => {
+			const fetchMock = vi.spyOn(proxyFetchModule, "proxyAwareFetch").mockResolvedValue({
+				ok: true,
+				status: 200,
+				headers: new Map(),
+			})
+			await new CodexExecutor().execute({
+				model,
+				body: { model, input: "Search the web", _autoCodexWebSearch: true },
+				stream: true,
+				credentials,
+			})
+			const [, options] = fetchMock.mock.calls[0]
+			const body = JSON.parse(options.body)
+			expect(options.headers["x-openai-internal-codex-responses-lite"]).toBeUndefined()
+			expect(body.tools).toEqual([{ type: "web_search" }])
+			expect(body.input.some((item) => item.type === "additional_tools")).toBe(false)
+		},
+	)
 
-  it.each(["gpt-6.1-sol", "gpt-6-luna", "gpt-6-astra"])("keeps tool-free search-history compaction compatible on %s", async (model) => {
-    const fetchMock = vi.spyOn(proxyFetchModule, "proxyAwareFetch").mockResolvedValue({
-      ok: true, status: 200, headers: new Map(),
-    });
-    const history = [
-      { type: "web_search_call", id: "ws_fixture", status: "completed", action: { type: "search", query: "fixture" } },
-      { type: "reasoning", encrypted_content: "synthetic-fixture", summary: [] },
-      { type: "message", role: "user", content: [{ type: "input_text", text: "Summarize for continuation." }] },
-    ];
-    await new CodexExecutor().execute({
-      model,
-      body: { model, input: structuredClone(history), tools: [], reasoning: null, instructions: "Compact the conversation." },
-      stream: true, credentials,
-    });
-    const [, options] = fetchMock.mock.calls[0];
-    const body = JSON.parse(options.body);
-    expect(options.headers["x-openai-internal-codex-responses-lite"]).toBeUndefined();
-    expect(body.tools).toEqual([{ type: "web_search" }]);
-    expect(body.tool_choice).toBe("none");
-    expect(body.input).toEqual(history);
-    expect(body.instructions).toBe("Compact the conversation.");
-  });
+	it.each(["gpt-6.1-sol", "gpt-6-luna", "gpt-6-astra"])(
+		"keeps tool-free search-history compaction compatible on %s",
+		async (model) => {
+			const fetchMock = vi.spyOn(proxyFetchModule, "proxyAwareFetch").mockResolvedValue({
+				ok: true,
+				status: 200,
+				headers: new Map(),
+			})
+			const history = [
+				{
+					type: "web_search_call",
+					id: "ws_fixture",
+					status: "completed",
+					action: { type: "search", query: "fixture" },
+				},
+				{ type: "reasoning", encrypted_content: "synthetic-fixture", summary: [] },
+				{
+					type: "message",
+					role: "user",
+					content: [{ type: "input_text", text: "Summarize for continuation." }],
+				},
+			]
+			await new CodexExecutor().execute({
+				model,
+				body: {
+					model,
+					input: structuredClone(history),
+					tools: [],
+					reasoning: null,
+					instructions: "Compact the conversation.",
+				},
+				stream: true,
+				credentials,
+			})
+			const [, options] = fetchMock.mock.calls[0]
+			const body = JSON.parse(options.body)
+			expect(options.headers["x-openai-internal-codex-responses-lite"]).toBeUndefined()
+			expect(body.tools).toEqual([{ type: "web_search" }])
+			expect(body.tool_choice).toBe("none")
+			expect(body.input).toEqual(history)
+			expect(body.instructions).toBe("Compact the conversation.")
+		},
+	)
 
-  it("migrates a retained Lite prefix when compacting hosted-search history", async () => {
-    const fetchMock = vi.spyOn(proxyFetchModule, "proxyAwareFetch").mockResolvedValue({
-      ok: true, status: 200, headers: new Map(),
-    });
-    const tool = { type: "function", name: "run", parameters: { type: "object", properties: {} } };
-    const instruction = { type: "message", role: "developer", content: [{ type: "input_text", text: "Keep these instructions." }] };
-    const search = { type: "web_search_call", id: "ws_fixture", status: "completed" };
-    await new CodexExecutor().execute({
-      model: "gpt-6.1-sol",
-      body: { model: "gpt-6.1-sol", tools: [], instructions: "", input: [
-        { type: "additional_tools", role: "developer", tools: [tool] },
-        instruction, search,
-      ] },
-      stream: true, credentials,
-    });
-    const [, options] = fetchMock.mock.calls[0];
-    const body = JSON.parse(options.body);
-    expect(options.headers["x-openai-internal-codex-responses-lite"]).toBeUndefined();
-    expect(body.input).toEqual([instruction, search]);
-    expect(body.instructions).toBe("");
-    expect(body.tools).toEqual([{ type: "web_search" }, tool]);
-    expect(body.tool_choice).toBe("none");
-  });
+	it("migrates a retained Lite prefix when compacting hosted-search history", async () => {
+		const fetchMock = vi.spyOn(proxyFetchModule, "proxyAwareFetch").mockResolvedValue({
+			ok: true,
+			status: 200,
+			headers: new Map(),
+		})
+		const tool = { type: "function", name: "run", parameters: { type: "object", properties: {} } }
+		const instruction = {
+			type: "message",
+			role: "developer",
+			content: [{ type: "input_text", text: "Keep these instructions." }],
+		}
+		const search = { type: "web_search_call", id: "ws_fixture", status: "completed" }
+		await new CodexExecutor().execute({
+			model: "gpt-6.1-sol",
+			body: {
+				model: "gpt-6.1-sol",
+				tools: [],
+				instructions: "",
+				input: [{ type: "additional_tools", role: "developer", tools: [tool] }, instruction, search],
+			},
+			stream: true,
+			credentials,
+		})
+		const [, options] = fetchMock.mock.calls[0]
+		const body = JSON.parse(options.body)
+		expect(options.headers["x-openai-internal-codex-responses-lite"]).toBeUndefined()
+		expect(body.input).toEqual([instruction, search])
+		expect(body.instructions).toBe("")
+		expect(body.tools).toEqual([{ type: "web_search" }, tool])
+		expect(body.tool_choice).toBe("none")
+	})
 
-  it("does not add a search declaration to tool-free history without hosted search", () => {
-    const body = new CodexExecutor().transformRequest("gpt-6.1-sol", {
-      model: "gpt-6.1-sol", input: "Summarize for continuation.", tools: [], reasoning: null,
-    }, true, credentials);
-    expect(body.tools).toBeNull();
-    expect(body.input[0]).toEqual({ type: "additional_tools", role: "developer", tools: [] });
-    expect(body.tool_choice).not.toBe("none");
-  });
+	it("does not add a search declaration to tool-free history without hosted search", () => {
+		const body = new CodexExecutor().transformRequest(
+			"gpt-6.1-sol",
+			{
+				model: "gpt-6.1-sol",
+				input: "Summarize for continuation.",
+				tools: [],
+				reasoning: null,
+			},
+			true,
+			credentials,
+		)
+		expect(body.tools).toBeNull()
+		expect(body.input[0]).toEqual({ type: "additional_tools", role: "developer", tools: [] })
+		expect(body.tool_choice).not.toBe("none")
+	})
 
-  it("preserves active tools and caller tool choice when replaying hosted search", () => {
-    const tool = { type: "function", name: "run", parameters: { type: "object", properties: {} } };
-    const body = new CodexExecutor().transformRequest("gpt-6.1-sol", {
-      model: "gpt-6.1-sol", input: [{ type: "web_search_call", id: "ws_fixture", status: "completed" }],
-      tools: [tool], tool_choice: "auto",
-    }, true, credentials);
-    expect(body.input[0].tools).toEqual([tool]);
-    expect(body.tool_choice).toBe("auto");
-  });
+	it("preserves active tools and caller tool choice when replaying hosted search", () => {
+		const tool = { type: "function", name: "run", parameters: { type: "object", properties: {} } }
+		const body = new CodexExecutor().transformRequest(
+			"gpt-6.1-sol",
+			{
+				model: "gpt-6.1-sol",
+				input: [{ type: "web_search_call", id: "ws_fixture", status: "completed" }],
+				tools: [tool],
+				tool_choice: "auto",
+			},
+			true,
+			credentials,
+		)
+		expect(body.input[0].tools).toEqual([tool])
+		expect(body.tool_choice).toBe("auto")
+	})
 
-  it("moves hosted search out of a native Lite prefix", async () => {
-    const fetchMock = vi.spyOn(proxyFetchModule, "proxyAwareFetch").mockResolvedValue({
-      ok: true, status: 200, headers: new Map(),
-    });
-    const tool = { type: "function", name: "run", parameters: { type: "object", properties: {} } };
-    await new CodexExecutor().execute({
-      model: "gpt-6-sol",
-      body: { model: "gpt-6-sol", input: [
-        { type: "additional_tools", role: "developer", tools: [tool, { type: "web_search" }] },
-        { type: "message", role: "user", content: [{ type: "input_text", text: "search" }] },
-      ], tools: null, tool_choice: "none" },
-      stream: true, credentials,
-    });
-    const [, options] = fetchMock.mock.calls[0];
-    const body = JSON.parse(options.body);
-    expect(options.headers["x-openai-internal-codex-responses-lite"]).toBeUndefined();
-    expect(body.tools).toEqual([tool, { type: "web_search" }]);
-    expect(body.input.some(item => item.type === "additional_tools")).toBe(false);
-    expect(body.tool_choice).toBe("none");
-  });
+	it("moves hosted search out of a native Lite prefix", async () => {
+		const fetchMock = vi.spyOn(proxyFetchModule, "proxyAwareFetch").mockResolvedValue({
+			ok: true,
+			status: 200,
+			headers: new Map(),
+		})
+		const tool = { type: "function", name: "run", parameters: { type: "object", properties: {} } }
+		await new CodexExecutor().execute({
+			model: "gpt-6-sol",
+			body: {
+				model: "gpt-6-sol",
+				input: [
+					{ type: "additional_tools", role: "developer", tools: [tool, { type: "web_search" }] },
+					{ type: "message", role: "user", content: [{ type: "input_text", text: "search" }] },
+				],
+				tools: null,
+				tool_choice: "none",
+			},
+			stream: true,
+			credentials,
+		})
+		const [, options] = fetchMock.mock.calls[0]
+		const body = JSON.parse(options.body)
+		expect(options.headers["x-openai-internal-codex-responses-lite"]).toBeUndefined()
+		expect(body.tools).toEqual([tool, { type: "web_search" }])
+		expect(body.input.some((item) => item.type === "additional_tools")).toBe(false)
+		expect(body.tool_choice).toBe("none")
+	})
 
-  it("preserves native Lite developer instructions when switching for hosted search", async () => {
-    const fetchMock = vi.spyOn(proxyFetchModule, "proxyAwareFetch").mockResolvedValue({ ok: true, status: 200, headers: new Map() });
-    const instruction = { type: "message", role: "developer", content: [{ type: "input_text", text: "Only answer in French" }] };
-    await new CodexExecutor().execute({
-      model: "gpt-6-sol", body: { model: "gpt-6-sol", input: [
-        { type: "additional_tools", role: "developer", tools: [{ type: "web_search" }] },
-        instruction,
-        { type: "message", role: "user", content: [{ type: "input_text", text: "search" }] },
-      ], instructions: "", tools: null }, stream: true, credentials,
-    });
-    const [, options] = fetchMock.mock.calls[0];
-    const body = JSON.parse(options.body);
-    expect(body.input).toContainEqual(instruction);
-    expect(body.instructions).toBe("");
-    expect(body.tools).toEqual([{ type: "web_search" }]);
-  });
+	it("preserves native Lite developer instructions when switching for hosted search", async () => {
+		const fetchMock = vi
+			.spyOn(proxyFetchModule, "proxyAwareFetch")
+			.mockResolvedValue({ ok: true, status: 200, headers: new Map() })
+		const instruction = {
+			type: "message",
+			role: "developer",
+			content: [{ type: "input_text", text: "Only answer in French" }],
+		}
+		await new CodexExecutor().execute({
+			model: "gpt-6-sol",
+			body: {
+				model: "gpt-6-sol",
+				input: [
+					{ type: "additional_tools", role: "developer", tools: [{ type: "web_search" }] },
+					instruction,
+					{ type: "message", role: "user", content: [{ type: "input_text", text: "search" }] },
+				],
+				instructions: "",
+				tools: null,
+			},
+			stream: true,
+			credentials,
+		})
+		const [, options] = fetchMock.mock.calls[0]
+		const body = JSON.parse(options.body)
+		expect(body.input).toContainEqual(instruction)
+		expect(body.instructions).toBe("")
+		expect(body.tools).toEqual([{ type: "web_search" }])
+	})
 
-  it("does not duplicate tools when hosted search appears in both tool locations", async () => {
-    const fetchMock = vi.spyOn(proxyFetchModule, "proxyAwareFetch").mockResolvedValue({ ok: true, status: 200, headers: new Map() });
-    const tool = { type: "function", name: "run", parameters: { type: "object", properties: {} } };
-    await new CodexExecutor().execute({
-      model: "gpt-6-sol", body: { model: "gpt-6-sol", input: [
-        { type: "additional_tools", role: "developer", tools: [tool, { type: "web_search" }] },
-        { type: "additional_tools", role: "developer", tools: [tool] },
-        { type: "message", role: "user", content: [{ type: "input_text", text: "search" }] },
-      ], tools: [tool, { type: "web_search" }] }, stream: true, credentials,
-    });
-    const [, options] = fetchMock.mock.calls[0];
-    const body = JSON.parse(options.body);
-    expect(options.headers["x-openai-internal-codex-responses-lite"]).toBeUndefined();
-    expect(body.tools).toEqual([tool, { type: "web_search" }]);
-    expect(body.input.some(item => item.type === "additional_tools")).toBe(false);
-  });
+	it("does not duplicate tools when hosted search appears in both tool locations", async () => {
+		const fetchMock = vi
+			.spyOn(proxyFetchModule, "proxyAwareFetch")
+			.mockResolvedValue({ ok: true, status: 200, headers: new Map() })
+		const tool = { type: "function", name: "run", parameters: { type: "object", properties: {} } }
+		await new CodexExecutor().execute({
+			model: "gpt-6-sol",
+			body: {
+				model: "gpt-6-sol",
+				input: [
+					{ type: "additional_tools", role: "developer", tools: [tool, { type: "web_search" }] },
+					{ type: "additional_tools", role: "developer", tools: [tool] },
+					{ type: "message", role: "user", content: [{ type: "input_text", text: "search" }] },
+				],
+				tools: [tool, { type: "web_search" }],
+			},
+			stream: true,
+			credentials,
+		})
+		const [, options] = fetchMock.mock.calls[0]
+		const body = JSON.parse(options.body)
+		expect(options.headers["x-openai-internal-codex-responses-lite"]).toBeUndefined()
+		expect(body.tools).toEqual([tool, { type: "web_search" }])
+		expect(body.input.some((item) => item.type === "additional_tools")).toBe(false)
+	})
 
-  it("converts an ordinary Responses request to the Lite shape", () => {
-    const executor = new CodexExecutor();
-    const tool = { type: "function", name: "run", parameters: { type: "object", properties: {} } };
-    const body = executor.transformRequest("gpt-6-sol", {
-      model: "gpt-6-sol", input: "hello", instructions: "Do the task", tools: [tool],
-    }, true, credentials);
+	it("converts an ordinary Responses request to the Lite shape", () => {
+		const executor = new CodexExecutor()
+		const tool = { type: "function", name: "run", parameters: { type: "object", properties: {} } }
+		const body = executor.transformRequest(
+			"gpt-6-sol",
+			{
+				model: "gpt-6-sol",
+				input: "hello",
+				instructions: "Do the task",
+				tools: [tool],
+			},
+			true,
+			credentials,
+		)
 
-    expect(body.instructions).toBe("");
-    expect(body.tools).toBeNull();
-    expect(body.parallel_tool_calls).toBe(false);
-    expect(body.reasoning).toEqual({ effort: "medium", context: "all_turns" });
-    expect(body.input[0]).toEqual({ type: "additional_tools", role: "developer", tools: [tool] });
-    expect(body.input[1]).toEqual({ type: "message", role: "developer", content: [{ type: "input_text", text: "Do the task" }] });
-    expect(executor.buildHeaders(credentials, true, null, "gpt-6-sol")["x-openai-internal-codex-responses-lite"]).toBe("true");
-  });
+		expect(body.instructions).toBe("")
+		expect(body.tools).toBeNull()
+		expect(body.parallel_tool_calls).toBe(false)
+		expect(body.reasoning).toEqual({ effort: "medium", context: "all_turns" })
+		expect(body.input[0]).toEqual({ type: "additional_tools", role: "developer", tools: [tool] })
+		expect(body.input[1]).toEqual({
+			type: "message",
+			role: "developer",
+			content: [{ type: "input_text", text: "Do the task" }],
+		})
+		expect(
+			executor.buildHeaders(credentials, true, null, "gpt-6-sol")[
+				"x-openai-internal-codex-responses-lite"
+			],
+		).toBe("true")
+	})
 
-  it("clamps unsupported GPT-6 reasoning values to Codex's lowest supported level", () => {
-    const body = new CodexExecutor().transformRequest("gpt-6-luna", {
-      model: "gpt-6-luna", input: "hello", reasoning: { effort: "none" },
-    }, true, credentials);
+	it("clamps unsupported GPT-6 reasoning values to Codex's lowest supported level", () => {
+		const body = new CodexExecutor().transformRequest(
+			"gpt-6-luna",
+			{
+				model: "gpt-6-luna",
+				input: "hello",
+				reasoning: { effort: "none" },
+			},
+			true,
+			credentials,
+		)
 
-    expect(body.reasoning.effort).toBe("low");
-    expect(body.reasoning.context).toBe("all_turns");
-  });
+		expect(body.reasoning.effort).toBe("low")
+		expect(body.reasoning.context).toBe("all_turns")
+	})
 
-  it("maps GPT-6.1 Sol's Codex-only ultra effort to max", () => {
-    const body = new CodexExecutor().transformRequest("gpt-6.1-sol", {
-      model: "gpt-6.1-sol", input: "hello", reasoning: { effort: "ultra" },
-    }, true, credentials);
+	it("maps GPT-6.1 Sol's Codex-only ultra effort to max", () => {
+		const body = new CodexExecutor().transformRequest(
+			"gpt-6.1-sol",
+			{
+				model: "gpt-6.1-sol",
+				input: "hello",
+				reasoning: { effort: "ultra" },
+			},
+			true,
+			credentials,
+		)
 
-    expect(body.reasoning).toEqual({ effort: "max", context: "all_turns" });
-  });
+		expect(body.reasoning).toEqual({ effort: "max", context: "all_turns" })
+	})
 
-  it("sends the Lite shape and header in the actual outbound request", async () => {
-    const fetchMock = vi.spyOn(proxyFetchModule, "proxyAwareFetch").mockResolvedValue({
-      ok: true, status: 200, headers: new Map(),
-    });
-    await new CodexExecutor().execute({
-      model: "gpt-6-luna",
-      body: { model: "gpt-6-luna", input: "hello", instructions: "Do the task" },
-      stream: true,
-      credentials,
-    });
+	it("sends the Lite shape and header in the actual outbound request", async () => {
+		const fetchMock = vi.spyOn(proxyFetchModule, "proxyAwareFetch").mockResolvedValue({
+			ok: true,
+			status: 200,
+			headers: new Map(),
+		})
+		await new CodexExecutor().execute({
+			model: "gpt-6-luna",
+			body: { model: "gpt-6-luna", input: "hello", instructions: "Do the task" },
+			stream: true,
+			credentials,
+		})
 
-    const [url, options] = fetchMock.mock.calls[0];
-    const body = JSON.parse(options.body);
-    expect(url).toBe("https://chatgpt.com/backend-api/codex/responses");
-    expect(options.headers["x-openai-internal-codex-responses-lite"]).toBe("true");
-    expect(options.headers.version).toBe("0.159.0");
-    expect(options.headers["User-Agent"]).toBe("codex_cli_rs/0.159.0");
-    expect(body.model).toBe("gpt-6-luna");
-    expect(body.instructions).toBe("");
-    expect(body.input[0].type).toBe("additional_tools");
-    expect(body.reasoning.context).toBe("all_turns");
-  });
+		const [url, options] = fetchMock.mock.calls[0]
+		const body = JSON.parse(options.body)
+		expect(url).toBe("https://chatgpt.com/backend-api/codex/responses")
+		expect(options.headers["x-openai-internal-codex-responses-lite"]).toBe("true")
+		expect(options.headers.version).toBe("0.159.0")
+		expect(options.headers["User-Agent"]).toBe("codex_cli_rs/0.159.0")
+		expect(body.model).toBe("gpt-6-luna")
+		expect(body.instructions).toBe("")
+		expect(body.input[0].type).toBe("additional_tools")
+		expect(body.reasoning.context).toBe("all_turns")
+	})
 
-  it("keeps the legacy transport for other models", () => {
-    const executor = new CodexExecutor();
-    const body = executor.transformRequest("gpt-5.6-terra", { model: "gpt-5.6-terra", input: "hello" }, true, credentials);
+	it("keeps the legacy transport for other models", () => {
+		const executor = new CodexExecutor()
+		const body = executor.transformRequest(
+			"gpt-5.6-terra",
+			{ model: "gpt-5.6-terra", input: "hello" },
+			true,
+			credentials,
+		)
 
-    expect(body.instructions).toBeTruthy();
-    expect(body.input[0].type).not.toBe("additional_tools");
-    expect(body.reasoning.context).toBeUndefined();
-    expect(executor.buildHeaders(credentials, true, null, "gpt-5.6-terra")["x-openai-internal-codex-responses-lite"]).toBeUndefined();
-    expect(getThinkingLevels("codex", "gpt-6-astra")).toContain("none");
-    expect(executor.buildHeaders(credentials, true, null, "gpt-6-astra")["x-openai-internal-codex-responses-lite"]).toBeUndefined();
-  });
-});
+		expect(body.instructions).toBeTruthy()
+		expect(body.input[0].type).not.toBe("additional_tools")
+		expect(body.reasoning.context).toBeUndefined()
+		expect(
+			executor.buildHeaders(credentials, true, null, "gpt-5.6-terra")[
+				"x-openai-internal-codex-responses-lite"
+			],
+		).toBeUndefined()
+		expect(getThinkingLevels("codex", "gpt-6-astra")).toContain("none")
+		expect(
+			executor.buildHeaders(credentials, true, null, "gpt-6-astra")[
+				"x-openai-internal-codex-responses-lite"
+			],
+		).toBeUndefined()
+	})
+})

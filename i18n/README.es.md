@@ -1,17 +1,17 @@
 <div align="center">
   <img src="../images/9router.png?1" alt="Panel de control de 9Router" width="800"/>
-  
-  # 9Router - Enrutador de IA GRATUITO y ahorrador de tokens
-  
-  **Nunca dejes de programar. Ahorra entre 20-40% de tokens con RTK + reserva automática hacia modelos de IA GRATUITOS y económicos.**
-  
-  **Conecta todas tus herramientas de código con IA (Claude Code, Cursor, Antigravity, Copilot, Codex, Gemini, OpenCode, Cline, OpenClaw...) a más de 40 proveedores de IA y más de 100 modelos.**
-  
-  [![npm](https://img.shields.io/npm/v/9router.svg)](https://www.npmjs.com/package/9router)
-  [![Downloads](https://img.shields.io/npm/dm/9router.svg)](https://www.npmjs.com/package/9router)
-  [![Docker Pulls](https://img.shields.io/docker/pulls/decolua/9router.svg?logo=docker&label=Docker%20pulls)](https://hub.docker.com/r/decolua/9router)
-  [![GHCR](https://img.shields.io/badge/GHCR-decolua%2F9router-blue?logo=github)](https://github.com/decolua/9router/pkgs/container/9router)
-  [![License](https://img.shields.io/npm/l/9router.svg)](https://github.com/decolua/9router/blob/main/LICENSE)
+
+# 9Router - Enrutador de IA GRATUITO y ahorrador de tokens
+
+**Nunca dejes de programar. Ahorra entre 20-40% de tokens con RTK + reserva automática hacia modelos de IA GRATUITOS y económicos.**
+
+**Conecta todas tus herramientas de código con IA (Claude Code, Cursor, Antigravity, Copilot, Codex, Gemini, OpenCode, Cline, OpenClaw...) a más de 40 proveedores de IA y más de 100 modelos.**
+
+[![npm](https://img.shields.io/npm/v/9router.svg)](https://www.npmjs.com/package/9router)
+[![Downloads](https://img.shields.io/npm/dm/9router.svg)](https://www.npmjs.com/package/9router)
+[![Docker Pulls](https://img.shields.io/docker/pulls/decolua/9router.svg?logo=docker&label=Docker%20pulls)](https://hub.docker.com/r/decolua/9router)
+[![GHCR](https://img.shields.io/badge/GHCR-decolua%2F9router-blue?logo=github)](https://github.com/decolua/9router/pkgs/container/9router)
+[![License](https://img.shields.io/npm/l/9router.svg)](https://github.com/decolua/9router/blob/main/LICENSE)
 
 <a href="https://trendshift.io/repositories/22628" target="_blank"><img src="https://trendshift.io/api/badge/repositories/22628" alt="decolua%2F9router | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
@@ -148,7 +148,7 @@ URLs por defecto:
       <b>🇺🇸 English</b><br/>
       <sub>9Router + Claude Code FREE Setup<br/>by <a href="https://www.youtube.com/@BuildAIWithHamid">Build AI With Hamid</a></sub>
     </td>
-    
+
   </tr>
   <tr>
   <td align="center" width="320">
@@ -172,7 +172,7 @@ URLs por defecto:
       <b>🇺🇸 English</b><br/>
       <sub>Claude CLI Free Setup with 9Router 🚀<br/>by <a href="https://www.youtube.com/@CodeVerseSoban">CodeVerse Soban</a></sub>
     </td>
-    
+
   </tr>
   <tr>
   <td align="center" width="320">
@@ -196,9 +196,9 @@ URLs por defecto:
       <b>🇮🇩 Indonesia</b><br/>
       <sub>Koding 24 Jam Anti Rate Limit! Hemat Token AI 65% | Tutorial Quick Setup 9Router 🚀<br/>by <a href="https://www.youtube.com/@krisswuh">Krisswuh</a></sub>
     </td>
-    
+
   </tr>
-  
+
   <tr>
   <td align="center" width="320">
       <a href="https://www.youtube.com/watch?v=TXGv4eofe1I">
@@ -431,22 +431,22 @@ URLs por defecto:
 
 ## 💡 Características principales
 
-| Característica                                                                           | Qué hace                                                                                       | Por qué importa                                         |
-| ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| 🚀 **Ahorrador de tokens RTK** ([RTK](https://github.com/rtk-ai/rtk) ⭐40K)                | Comprime las salidas de las herramientas (`git diff`, `grep`, `ls`, `tree`...) antes de enviarlas al LLM | Ahorra **20-40% de tokens de entrada** por solicitud    |
-| 🧠 **Ahorrador de tokens Headroom** ([Headroom](https://github.com/chopratejas/headroom)) | Proxy externo opcional `/v1/compress` antes del enrutamiento al proveedor                      | Ahorra más tokens de contexto sin cambiar los clientes  |
-| 🪨 **Modo cavernícola** ([Caveman](https://github.com/JuliusBrussee/caveman) ⭐52K)        | Inyecta un prompt de lenguaje cavernícola → el LLM responde de forma concisa, se conserva el contenido técnico | Ahorra **hasta un 65% de tokens de salida**  |
-| 🐴 **Ponytail** ([Ponytail](https://github.com/DietrichGebert/ponytail))                  | Inyecta un prompt de "dev sénior perezoso" → el LLM escribe código mínimo, primero YAGNI (Lite/Full/Ultra) | **Menos tokens de salida, menos refactorización**        |
-| 🎯 **Reserva inteligente de 3 niveles**                                                  | Enrutado automático: Suscripción → Económico → Gratuito                                        | Nunca dejes de programar, cero tiempos de inactividad   |
-| 📊 **Seguimiento de cuota en tiempo real**                                               | Recuento de tokens en vivo + cuenta atrás de restablecimiento                                  | Maximiza el valor de tu suscripción                     |
-| 🔄 **Traducción de formatos**                                                            | OpenAI ↔ Claude ↔ Gemini ↔ Cursor ↔ Kiro ↔ Vertex                                             | Funciona con cualquier herramienta CLI                  |
-| 👥 **Compatibilidad con varias cuentas**                                                 | Varias cuentas por proveedor                                                                   | Balance de carga + redundancia                          |
-| 🔄 **Renovación automática de tokens**                                                   | Los tokens OAuth se renuevan automáticamente                                                   | Sin necesidad de volver a iniciar sesión                |
-| 🎨 **Combos personalizados**                                                             | Crea combinaciones de modelos ilimitadas                                                       | Adapta la reserva a tus necesidades                     |
-| 📝 **Registro de solicitudes**                                                           | Modo de depuración con registros completos de solicitudes/respuestas                           | Soluciona problemas fácilmente                          |
-| 💾 **Sincronización en la nube**                                                         | Sincroniza la configuración entre dispositivos                                                 | La misma configuración en todas partes                  |
-| 📊 **Analítica de uso**                                                                  | Realiza el seguimiento de tokens, costes y tendencias a lo largo del tiempo                     | Optimiza el gasto                                       |
-| 🌐 **Implementa en cualquier lugar**                                                     | Localhost, VPS, Docker, Cloudflare Workers                                                     | Opciones de implementación flexibles                    |
+| Característica                                                                            | Qué hace                                                                                                       | Por qué importa                                        |
+| ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| 🚀 **Ahorrador de tokens RTK** ([RTK](https://github.com/rtk-ai/rtk) ⭐40K)               | Comprime las salidas de las herramientas (`git diff`, `grep`, `ls`, `tree`...) antes de enviarlas al LLM       | Ahorra **20-40% de tokens de entrada** por solicitud   |
+| 🧠 **Ahorrador de tokens Headroom** ([Headroom](https://github.com/chopratejas/headroom)) | Proxy externo opcional `/v1/compress` antes del enrutamiento al proveedor                                      | Ahorra más tokens de contexto sin cambiar los clientes |
+| 🪨 **Modo cavernícola** ([Caveman](https://github.com/JuliusBrussee/caveman) ⭐52K)       | Inyecta un prompt de lenguaje cavernícola → el LLM responde de forma concisa, se conserva el contenido técnico | Ahorra **hasta un 65% de tokens de salida**            |
+| 🐴 **Ponytail** ([Ponytail](https://github.com/DietrichGebert/ponytail))                  | Inyecta un prompt de "dev sénior perezoso" → el LLM escribe código mínimo, primero YAGNI (Lite/Full/Ultra)     | **Menos tokens de salida, menos refactorización**      |
+| 🎯 **Reserva inteligente de 3 niveles**                                                   | Enrutado automático: Suscripción → Económico → Gratuito                                                        | Nunca dejes de programar, cero tiempos de inactividad  |
+| 📊 **Seguimiento de cuota en tiempo real**                                                | Recuento de tokens en vivo + cuenta atrás de restablecimiento                                                  | Maximiza el valor de tu suscripción                    |
+| 🔄 **Traducción de formatos**                                                             | OpenAI ↔ Claude ↔ Gemini ↔ Cursor ↔ Kiro ↔ Vertex                                                              | Funciona con cualquier herramienta CLI                 |
+| 👥 **Compatibilidad con varias cuentas**                                                  | Varias cuentas por proveedor                                                                                   | Balance de carga + redundancia                         |
+| 🔄 **Renovación automática de tokens**                                                    | Los tokens OAuth se renuevan automáticamente                                                                   | Sin necesidad de volver a iniciar sesión               |
+| 🎨 **Combos personalizados**                                                              | Crea combinaciones de modelos ilimitadas                                                                       | Adapta la reserva a tus necesidades                    |
+| 📝 **Registro de solicitudes**                                                            | Modo de depuración con registros completos de solicitudes/respuestas                                           | Soluciona problemas fácilmente                         |
+| 💾 **Sincronización en la nube**                                                          | Sincroniza la configuración entre dispositivos                                                                 | La misma configuración en todas partes                 |
+| 📊 **Analítica de uso**                                                                   | Realiza el seguimiento de tokens, costes y tendencias a lo largo del tiempo                                    | Optimiza el gasto                                      |
+| 🌐 **Implementa en cualquier lugar**                                                      | Localhost, VPS, Docker, Cloudflare Workers                                                                     | Opciones de implementación flexibles                   |
 
 <details>
 <summary><b>📖 Detalles de las características</b></summary>
@@ -610,19 +610,19 @@ Traducción fluida entre formatos:
 
 ## 💰 Precios de un vistazo
 
-| Nivel                 | Proveedor              | Coste          | Restablecimiento de cuota | Mejor para                                  |
-| --------------------- | ---------------------- | -------------- | ------------------------- | ------------------------------------------- |
-| **🚀 AHORRO DE TOKENS** | **RTK (integrado)**    | **GRATUITO**   | Siempre activo            | **Ahorra 20-40% de tokens en CADA solicitud** |
-| **💳 SUSCRIPCIÓN**    | Claude Code (Pro/Max)  | $20-200/mes    | 5 h + semanal             | Ya suscrito                                 |
-|                       | Codex (Plus/Pro)       | $20-200/mes    | 5 h + semanal             | Usuarios de OpenAI                          |
-|                       | GitHub Copilot         | $10-19/mes     | Mensual                   | Usuarios de GitHub                          |
-|                       | Cursor IDE             | $20/mes        | Mensual                   | Usuarios de Cursor                          |
-| **💰 ECONÓMICO**      | GLM-5.1 / GLM-4.7      | $0.6/1M        | Diario 10:00              | Respaldo económico                          |
-|                       | MiniMax M2.7           | $0.2/1M        | Ventana de 5 horas        | La opción más barata                        |
-|                       | Kimi K2.5              | $9/mes fijos   | 10M tokens/mes            | Coste predecible                            |
-| **🆓 GRATUITO**       | Kiro AI                | $0             | Ilimitado                 | Claude 4.5 + GLM-5 + MiniMax gratis         |
-|                       | OpenCode Free          | $0             | Ilimitado                 | Sin autenticación, modelos automáticos      |
-|                       | Vertex AI              | $300 de crédito | Cuentas GCP nuevas       | Gemini 3 Pro + DeepSeek + GLM-5             |
+| Nivel                   | Proveedor             | Coste           | Restablecimiento de cuota | Mejor para                                    |
+| ----------------------- | --------------------- | --------------- | ------------------------- | --------------------------------------------- |
+| **🚀 AHORRO DE TOKENS** | **RTK (integrado)**   | **GRATUITO**    | Siempre activo            | **Ahorra 20-40% de tokens en CADA solicitud** |
+| **💳 SUSCRIPCIÓN**      | Claude Code (Pro/Max) | $20-200/mes     | 5 h + semanal             | Ya suscrito                                   |
+|                         | Codex (Plus/Pro)      | $20-200/mes     | 5 h + semanal             | Usuarios de OpenAI                            |
+|                         | GitHub Copilot        | $10-19/mes      | Mensual                   | Usuarios de GitHub                            |
+|                         | Cursor IDE            | $20/mes         | Mensual                   | Usuarios de Cursor                            |
+| **💰 ECONÓMICO**        | GLM-5.1 / GLM-4.7     | $0.6/1M         | Diario 10:00              | Respaldo económico                            |
+|                         | MiniMax M2.7          | $0.2/1M         | Ventana de 5 horas        | La opción más barata                          |
+|                         | Kimi K2.5             | $9/mes fijos    | 10M tokens/mes            | Coste predecible                              |
+| **🆓 GRATUITO**         | Kiro AI               | $0              | Ilimitado                 | Claude 4.5 + GLM-5 + MiniMax gratis           |
+|                         | OpenCode Free         | $0              | Ilimitado                 | Sin autenticación, modelos automáticos        |
+|                         | Vertex AI             | $300 de crédito | Cuentas GCP nuevas        | Gemini 3 Pro + DeepSeek + GLM-5               |
 
 **💡 Consejo profesional:** Combo RTK + Kiro AI + OpenCode Free = **$0 de coste + 20-40% de ahorro de tokens**!
 
@@ -1202,25 +1202,25 @@ docker pull decolua/9router:latest   # actualiza a la última versión
 
 ### Variables de entorno
 
-| Variable                                             | Por defecto                                | Descripción                                                                          |
-| ---------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------ |
+| Variable                                             | Por defecto                                        | Descripción                                                                                                     |
+| ---------------------------------------------------- | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `JWT_SECRET`                                         | Generado automáticamente (`~/.9router/jwt-secret`) | Secreto de firma JWT para la cookie de autenticación del panel (sobreescríbelo para compartir entre instancias) |
-| `INITIAL_PASSWORD`                                   | `123456`                                   | Contraseña del primer inicio de sesión cuando no existe un hash guardado             |
-| `DATA_DIR`                                           | `~/.9router`                               | Ubicación principal de datos de la app (SQLite en `$DATA_DIR/db/data.sqlite`)        |
-| `PORT`                                               | por defecto del framework                  | Puerto del servicio (`20128` en los ejemplos)                                        |
-| `HOSTNAME`                                           | por defecto del framework                  | Host de enlace (Docker usa `0.0.0.0` por defecto)                                    |
-| `NODE_ENV`                                           | por defecto del runtime                    | Establece `production` para el despliegue                                            |
-| `BASE_URL`                                           | `http://localhost:20128`                   | URL base interna del lado del servidor usada por los trabajos de sincronización en la nube |
-| `CLOUD_URL`                                          | `https://9router.com`                      | URL base del endpoint de sincronización en la nube del lado del servidor             |
-| `NEXT_PUBLIC_BASE_URL`                               | `http://localhost:3000`                    | URL base pública/compatible con versiones anteriores (prefiere `BASE_URL` para el runtime del servidor) |
-| `NEXT_PUBLIC_CLOUD_URL`                              | `https://9router.com`                      | URL de nube pública/compatible (prefiere `CLOUD_URL` para el runtime del servidor)   |
-| `API_KEY_SECRET`                                     | `endpoint-proxy-api-key-secret`            | Secreto HMAC para las claves API generadas                                           |
-| `MACHINE_ID_SALT`                                    | `endpoint-proxy-salt`                      | Sal para el hash estable del ID de máquina                                           |
-| `ENABLE_REQUEST_LOGS`                                | `false`                                    | Habilita los registros de solicitudes/respuestas en `logs/`                          |
-| `AUTH_COOKIE_SECURE`                                 | `false`                                    | Fuerza la cookie `Secure` de autenticación (establece `true` detrás de un proxy HTTPS inverso) |
-| `REQUIRE_API_KEY`                                    | `false`                                    | Aplica clave API Bearer en las rutas `/v1/*` (recomendado para despliegues expuestos a Internet) |
-| `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY` | vacío                                      | Proxy saliente opcional para las llamadas a proveedores externos                     |
-| `SEARXNG_URL`                                        | `http://localhost:8888/search`             | Endpoint del proveedor de búsqueda web SearXNG integrado sin autenticación           |
+| `INITIAL_PASSWORD`                                   | `123456`                                           | Contraseña del primer inicio de sesión cuando no existe un hash guardado                                        |
+| `DATA_DIR`                                           | `~/.9router`                                       | Ubicación principal de datos de la app (SQLite en `$DATA_DIR/db/data.sqlite`)                                   |
+| `PORT`                                               | por defecto del framework                          | Puerto del servicio (`20128` en los ejemplos)                                                                   |
+| `HOSTNAME`                                           | por defecto del framework                          | Host de enlace (Docker usa `0.0.0.0` por defecto)                                                               |
+| `NODE_ENV`                                           | por defecto del runtime                            | Establece `production` para el despliegue                                                                       |
+| `BASE_URL`                                           | `http://localhost:20128`                           | URL base interna del lado del servidor usada por los trabajos de sincronización en la nube                      |
+| `CLOUD_URL`                                          | `https://9router.com`                              | URL base del endpoint de sincronización en la nube del lado del servidor                                        |
+| `NEXT_PUBLIC_BASE_URL`                               | `http://localhost:3000`                            | URL base pública/compatible con versiones anteriores (prefiere `BASE_URL` para el runtime del servidor)         |
+| `NEXT_PUBLIC_CLOUD_URL`                              | `https://9router.com`                              | URL de nube pública/compatible (prefiere `CLOUD_URL` para el runtime del servidor)                              |
+| `API_KEY_SECRET`                                     | `endpoint-proxy-api-key-secret`                    | Secreto HMAC para las claves API generadas                                                                      |
+| `MACHINE_ID_SALT`                                    | `endpoint-proxy-salt`                              | Sal para el hash estable del ID de máquina                                                                      |
+| `ENABLE_REQUEST_LOGS`                                | `false`                                            | Habilita los registros de solicitudes/respuestas en `logs/`                                                     |
+| `AUTH_COOKIE_SECURE`                                 | `false`                                            | Fuerza la cookie `Secure` de autenticación (establece `true` detrás de un proxy HTTPS inverso)                  |
+| `REQUIRE_API_KEY`                                    | `false`                                            | Aplica clave API Bearer en las rutas `/v1/*` (recomendado para despliegues expuestos a Internet)                |
+| `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY` | vacío                                              | Proxy saliente opcional para las llamadas a proveedores externos                                                |
+| `SEARXNG_URL`                                        | `http://localhost:8888/search`                     | Endpoint del proveedor de búsqueda web SearXNG integrado sin autenticación                                      |
 
 Notas:
 
@@ -1442,4 +1442,3 @@ Licencia MIT - consulta [LICENSE](LICENSE) para más detalles.
 <div align="center">
   <sub>Hecho con ❤️ para desarrolladores que programan 24/7</sub>
 </div>
-

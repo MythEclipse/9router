@@ -125,3 +125,24 @@ tsc_out.txt
 tsconfig.tsbuildinfo
 eslint.tmp.mjs
 .codebuddy-tools/
+# Kana stack migration helper scripts (one-shot codemods, not shipped)
+.codebuddy-tools/
+
+# moon + planning state (local)
+/.moon/cache/
+.planning/
+
+# Build output of workspace members (root-anchored patterns above do not follow
+# the apps/* move, so re-anchor them here).
+apps/*/.next/
+apps/*/.next-dev/
+apps/*/.next-cli-build/
+apps/*/out/
+apps/*/dist/
+apps/web/next-env.d.ts
+apps/web/.next/standalone/
+
+# Workspace-member dependencies (bun links per-package node_modules)
+apps/*/node_modules/
+cli/node_modules/
+packages/*/node_modules/

@@ -8,157 +8,160 @@
  *    sent to upstream contains base64 data, not remote URLs
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 // Mock DNS so the SSRF guard treats example.com as public.
 // image.js resolves with { all: true } (DNS pinning, c7d07448) and expects an array.
 vi.mock("node:dns/promises", () => ({
-  lookup: async (_host, opts) => (opts?.all ? [{ address: "93.184.216.34", family: 4 }] : { address: "93.184.216.34", family: 4 }),
-}));
+	lookup: async (_host, opts) =>
+		opts?.all ? [{ address: "93.184.216.34", family: 4 }] : { address: "93.184.216.34", family: 4 },
+}))
 
-import { CodexExecutor } from "../../open-sse/executors/codex.js";
-import * as proxyFetchModule from "../../open-sse/utils/proxyFetch.js";
+import { CodexExecutor } from "../../open-sse/executors/codex.js"
+import * as proxyFetchModule from "../../open-sse/utils/proxyFetch.js"
 
-const IMAGE_1MB_BYTES = 1024 * 1024;
-const REMOTE_URL = "https://example.com/big.jpg";
-const DATA_URI = "data:image/png;base64,iVBORw0KGgo=";
+const IMAGE_1MB_BYTES = 1024 * 1024
+const REMOTE_URL = "https://example.com/big.jpg"
+const DATA_URI = "data:image/png;base64,iVBORw0KGgo="
 // JPEG magic bytes (FF D8 FF) so magic-byte verification passes.
-const JPEG_MAGIC = [0xff, 0xd8, 0xff];
+const JPEG_MAGIC = [0xff, 0xd8, 0xff]
 
 function makeImageBuffer(sizeBytes) {
-  const buf = new Uint8Array(sizeBytes);
-  for (let i = 0; i < JPEG_MAGIC.length; i++) buf[i] = JPEG_MAGIC[i];
-  for (let i = JPEG_MAGIC.length; i < sizeBytes; i++) buf[i] = i & 0xff;
-  return buf;
+	const buf = new Uint8Array(sizeBytes)
+	for (let i = 0; i < JPEG_MAGIC.length; i++) buf[i] = JPEG_MAGIC[i]
+	for (let i = JPEG_MAGIC.length; i < sizeBytes; i++) buf[i] = i & 0xff
+	return buf
 }
 
 // Mock a streaming Response body (getReader) as the hardened fetcher expects.
 function mockImageFetch(sizeBytes) {
-  const bytes = makeImageBuffer(sizeBytes);
-  return {
-    ok: true,
-    body: {
-      getReader() {
-        let sent = false;
-        return {
-          read: async () => sent ? { done: true } : (sent = true, { done: false, value: bytes }),
-          cancel: async () => {},
-        };
-      },
-    },
-  };
+	const bytes = makeImageBuffer(sizeBytes)
+	return {
+		ok: true,
+		body: {
+			getReader() {
+				let sent = false
+				return {
+					read: async () => (sent ? { done: true } : ((sent = true), { done: false, value: bytes })),
+					cancel: async () => {},
+				}
+			},
+		},
+	}
 }
 
 describe("CodexExecutor image handling", () => {
-  let originalFetch;
+	let originalFetch
 
-  beforeEach(() => {
-    originalFetch = global.fetch;
-  });
+	beforeEach(() => {
+		originalFetch = global.fetch
+	})
 
-  afterEach(() => {
-    global.fetch = originalFetch;
-    vi.restoreAllMocks();
-  });
+	afterEach(() => {
+		global.fetch = originalFetch
+		vi.restoreAllMocks()
+	})
 
-  it("fetches 1MB remote image and inlines it as base64 data URI", async () => {
-    global.fetch = vi.fn(async () => mockImageFetch(IMAGE_1MB_BYTES));
+	it("fetches 1MB remote image and inlines it as base64 data URI", async () => {
+		global.fetch = vi.fn(async () => mockImageFetch(IMAGE_1MB_BYTES))
 
-    const executor = new CodexExecutor();
-    const body = {
-      input: [
-        {
-          role: "user",
-          content: [
-            { type: "input_text", text: "describe this" },
-            { type: "image_url", image_url: { url: REMOTE_URL, detail: "high" } },
-          ],
-        },
-      ],
-    };
+		const executor = new CodexExecutor()
+		const body = {
+			input: [
+				{
+					role: "user",
+					content: [
+						{ type: "input_text", text: "describe this" },
+						{ type: "image_url", image_url: { url: REMOTE_URL, detail: "high" } },
+					],
+				},
+			],
+		}
 
-    await executor.prefetchImages(body);
+		await executor.prefetchImages(body)
 
-    const imgBlock = body.input[0].content.find((c) => c.type === "input_image");
-    expect(imgBlock, "input_image block must be present after prefetch").toBeDefined();
-    expect(imgBlock.image_url.startsWith("data:image/jpeg;base64,")).toBe(true);
-    expect(imgBlock.detail).toBe("high");
+		const imgBlock = body.input[0].content.find((c) => c.type === "input_image")
+		expect(imgBlock, "input_image block must be present after prefetch").toBeDefined()
+		expect(imgBlock.image_url.startsWith("data:image/jpeg;base64,")).toBe(true)
+		expect(imgBlock.detail).toBe("high")
 
-    const base64Payload = imgBlock.image_url.split(",")[1];
-    const decodedLen = Buffer.from(base64Payload, "base64").length;
-    expect(decodedLen).toBe(IMAGE_1MB_BYTES);
-    expect(global.fetch).toHaveBeenCalledTimes(1);
-  });
+		const base64Payload = imgBlock.image_url.split(",")[1]
+		const decodedLen = Buffer.from(base64Payload, "base64").length
+		expect(decodedLen).toBe(IMAGE_1MB_BYTES)
+		expect(global.fetch).toHaveBeenCalledTimes(1)
+	})
 
-  it("passes through existing data URIs without calling fetch", async () => {
-    global.fetch = vi.fn();
+	it("passes through existing data URIs without calling fetch", async () => {
+		global.fetch = vi.fn()
 
-    const executor = new CodexExecutor();
-    const body = {
-      input: [
-        {
-          role: "user",
-          content: [{ type: "image_url", image_url: { url: DATA_URI } }],
-        },
-      ],
-    };
+		const executor = new CodexExecutor()
+		const body = {
+			input: [
+				{
+					role: "user",
+					content: [{ type: "image_url", image_url: { url: DATA_URI } }],
+				},
+			],
+		}
 
-    await executor.prefetchImages(body);
+		await executor.prefetchImages(body)
 
-    const imgBlock = body.input[0].content.find((c) => c.type === "input_image");
-    expect(imgBlock.image_url).toBe(DATA_URI);
-    expect(global.fetch).not.toHaveBeenCalled();
-  });
+		const imgBlock = body.input[0].content.find((c) => c.type === "input_image")
+		expect(imgBlock.image_url).toBe(DATA_URI)
+		expect(global.fetch).not.toHaveBeenCalled()
+	})
 
-  it("falls back to original URL when remote fetch fails", async () => {
-    global.fetch = vi.fn(async () => { throw new Error("network down"); });
+	it("falls back to original URL when remote fetch fails", async () => {
+		global.fetch = vi.fn(async () => {
+			throw new Error("network down")
+		})
 
-    const executor = new CodexExecutor();
-    const body = {
-      input: [
-        {
-          role: "user",
-          content: [{ type: "image_url", image_url: { url: REMOTE_URL } }],
-        },
-      ],
-    };
+		const executor = new CodexExecutor()
+		const body = {
+			input: [
+				{
+					role: "user",
+					content: [{ type: "image_url", image_url: { url: REMOTE_URL } }],
+				},
+			],
+		}
 
-    await executor.prefetchImages(body);
+		await executor.prefetchImages(body)
 
-    const imgBlock = body.input[0].content.find((c) => c.type === "input_image");
-    expect(imgBlock.image_url).toBe(REMOTE_URL);
-  });
+		const imgBlock = body.input[0].content.find((c) => c.type === "input_image")
+		expect(imgBlock.image_url).toBe(REMOTE_URL)
+	})
 
-  it("execute() prefetches images before sending to upstream", async () => {
-    global.fetch = vi.fn(async () => mockImageFetch(IMAGE_1MB_BYTES));
+	it("execute() prefetches images before sending to upstream", async () => {
+		global.fetch = vi.fn(async () => mockImageFetch(IMAGE_1MB_BYTES))
 
-    let capturedBodyString = null;
-    vi.spyOn(proxyFetchModule, "proxyAwareFetch").mockImplementation(async (url, init) => {
-      capturedBodyString = init.body;
-      return { ok: true, status: 200, headers: new Map() };
-    });
+		let capturedBodyString = null
+		vi.spyOn(proxyFetchModule, "proxyAwareFetch").mockImplementation(async (_url, init) => {
+			capturedBodyString = init.body
+			return { ok: true, status: 200, headers: new Map() }
+		})
 
-    const executor = new CodexExecutor();
-    const body = {
-      input: [
-        {
-          role: "user",
-          content: [{ type: "image_url", image_url: { url: REMOTE_URL } }],
-        },
-      ],
-    };
+		const executor = new CodexExecutor()
+		const body = {
+			input: [
+				{
+					role: "user",
+					content: [{ type: "image_url", image_url: { url: REMOTE_URL } }],
+				},
+			],
+		}
 
-    await executor.execute({
-      model: "gpt-5.3-codex",
-      body,
-      stream: true,
-      credentials: { accessToken: "test" },
-    });
+		await executor.execute({
+			model: "gpt-5.3-codex",
+			body,
+			stream: true,
+			credentials: { accessToken: "test" },
+		})
 
-    expect(capturedBodyString).toBeTypeOf("string");
-    expect(capturedBodyString).not.toBe("{}");
-    const parsed = JSON.parse(capturedBodyString);
-    const imgBlock = parsed.input[0].content.find((c) => c.type === "input_image");
-    expect(imgBlock.image_url.startsWith("data:image/jpeg;base64,")).toBe(true);
-  });
-});
+		expect(capturedBodyString).toBeTypeOf("string")
+		expect(capturedBodyString).not.toBe("{}")
+		const parsed = JSON.parse(capturedBodyString)
+		const imgBlock = parsed.input[0].content.find((c) => c.type === "input_image")
+		expect(imgBlock.image_url.startsWith("data:image/jpeg;base64,")).toBe(true)
+	})
+})

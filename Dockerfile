@@ -18,7 +18,11 @@ ARG NPM_REGISTRY
 
 RUN apk add --no-cache python3 make g++ linux-headers
 
-COPY package.json ./
+# Every workspace manifest must land BEFORE install, or bun sees a lockfile that
+# does not match the manifest set and --frozen-lockfile aborts.
+COPY package.json bunfig.toml ./
+COPY apps/web/package.json ./apps/web/package.json
+COPY cli/package.json ./cli/package.json
 # Install opencode-ai CLI globally so the runner image has the opencode binary.
 # The bun image ships no npm, so this rides on bun's global installer; the
 # package layout it produces differs from npm's, hence the fallback probe below
@@ -62,21 +66,23 @@ ENV HOSTNAME=0.0.0.0
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV DATA_DIR=/app/data
 
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/custom-server.js ./custom-server.js
-COPY --from=builder /app/open-sse ./open-sse
+# The Next app now builds under apps/web, so every runtime artifact is copied
+# FROM there and flattened into /app — the layout custom-server.js expects.
+COPY --from=builder /app/apps/web/public ./public
+COPY --from=builder /app/apps/web/.next/static ./.next/static
+COPY --from=builder /app/apps/web/.next/standalone/apps/web ./
+COPY --from=builder /app/apps/web/custom-server.js ./custom-server.js
+COPY --from=builder /app/apps/web/open-sse ./open-sse
 # Next file tracing can omit sibling files; MITM runs server.js as a separate process.
-COPY --from=builder /app/src/mitm ./src/mitm
+COPY --from=builder /app/apps/web/src/mitm ./src/mitm
 # The auth guard runs outside the bundle: custom-server.js imports src/ and
 # scripts/ by path, and the loader in scripts/auth-guard-hooks.mjs maps the "@/"
 # alias back onto ./src. File tracing only follows static imports, so none of it
 # reached the image: getGuardModule() resolved nothing, and before fail-closed
 # handling every request was served with no authorization at all - a fresh deploy
 # opened straight onto the dashboard with no login form.
-COPY --from=builder /app/scripts ./scripts
-COPY --from=builder /app/src ./src
+COPY --from=builder /app/apps/web/scripts ./scripts
+COPY --from=builder /app/apps/web/src ./src
 # The guard imports that src/ tree directly, so Node resolves those bare
 # specifiers against ./node_modules instead of through webpack. jose (JWT
 # sign/verify), uuid and bcryptjs are reached by dashboardSession and the repos

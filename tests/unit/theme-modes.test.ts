@@ -11,91 +11,95 @@
  * import time.
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
-let classes;
-let store;
+let classes
+let store
 
 function stubDom() {
-  classes = new Set();
-  const classList = {
-    add: (c) => classes.add(c),
-    remove: (c) => classes.delete(c),
-    toggle: (c, on) => (on ? classes.add(c) : classes.delete(c)),
-    contains: (c) => classes.has(c),
-  };
-  const mem = {};
-  vi.stubGlobal("window", globalThis);
-  vi.stubGlobal("document", { documentElement: { classList } });
-  vi.stubGlobal("localStorage", {
-    getItem: (k) => (k in mem ? mem[k] : null),
-    setItem: (k, v) => { mem[k] = String(v); },
-    removeItem: (k) => { delete mem[k]; },
-  });
+	classes = new Set()
+	const classList = {
+		add: (c) => classes.add(c),
+		remove: (c) => classes.delete(c),
+		toggle: (c, on) => (on ? classes.add(c) : classes.delete(c)),
+		contains: (c) => classes.has(c),
+	}
+	const mem = {}
+	vi.stubGlobal("window", globalThis)
+	vi.stubGlobal("document", { documentElement: { classList } })
+	vi.stubGlobal("localStorage", {
+		getItem: (k) => (k in mem ? mem[k] : null),
+		setItem: (k, v) => {
+			mem[k] = String(v)
+		},
+		removeItem: (k) => {
+			delete mem[k]
+		},
+	})
 }
 
 describe("theme mode contract", () => {
-  beforeEach(async () => {
-    vi.resetModules();
-    stubDom();
-    const mod = await import("../../src/store/themeStore.js");
-    store = mod.default;
-    // Tests drive the store directly, so allow theme changes.
-    store.getState().setServerTheme("glass", true);
-    globalThis.__THEME_IDS__ = mod.THEME_IDS;
-  });
+	beforeEach(async () => {
+		vi.resetModules()
+		stubDom()
+		const mod = await import("../../src/store/themeStore.js")
+		store = mod.default
+		// Tests drive the store directly, so allow theme changes.
+		store.getState().setServerTheme("glass", true)
+		globalThis.__THEME_IDS__ = mod.THEME_IDS
+	})
 
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
+	afterEach(() => {
+		vi.unstubAllGlobals()
+	})
 
-  it("only knows Dark and Glass", () => {
-    expect(globalThis.__THEME_IDS__).toEqual(["glass", "dark"]);
-  });
+	it("only knows Dark and Glass", () => {
+		expect(globalThis.__THEME_IDS__).toEqual(["glass", "dark"])
+	})
 
-  it("applies dark as plain .dark and glass as .dark.glass", () => {
-    const setTheme = store.getState().setTheme;
+	it("applies dark as plain .dark and glass as .dark.glass", () => {
+		const setTheme = store.getState().setTheme
 
-    setTheme("glass");
-    expect(classes.has("dark")).toBe(true);
-    expect(classes.has("glass")).toBe(true);
+		setTheme("glass")
+		expect(classes.has("dark")).toBe(true)
+		expect(classes.has("glass")).toBe(true)
 
-    setTheme("dark");
-    expect(classes.has("dark")).toBe(true);
-    expect(classes.has("glass")).toBe(false);
-  });
+		setTheme("dark")
+		expect(classes.has("dark")).toBe(true)
+		expect(classes.has("glass")).toBe(false)
+	})
 
-  it("degrades an unknown persisted value to the glass default", () => {
-    const setTheme = store.getState().setTheme;
+	it("degrades an unknown persisted value to the glass default", () => {
+		const setTheme = store.getState().setTheme
 
-    setTheme("light");
-    expect(store.getState().theme).toBe("glass");
-    expect(classes.has("glass")).toBe(true);
-    expect(classes.has("dark")).toBe(true);
-  });
+		setTheme("light")
+		expect(store.getState().theme).toBe("glass")
+		expect(classes.has("glass")).toBe(true)
+		expect(classes.has("dark")).toBe(true)
+	})
 
-  it("toggles between the two modes starting from the glass default", () => {
-    const { toggleTheme } = store.getState();
+	it("toggles between the two modes starting from the glass default", () => {
+		const { toggleTheme } = store.getState()
 
-    expect(store.getState().theme).toBe("glass");
+		expect(store.getState().theme).toBe("glass")
 
-    toggleTheme();
-    expect(store.getState().theme).toBe("dark");
-    expect(classes.has("glass")).toBe(false);
+		toggleTheme()
+		expect(store.getState().theme).toBe("dark")
+		expect(classes.has("glass")).toBe(false)
 
-    toggleTheme();
-    expect(store.getState().theme).toBe("glass");
-    expect(classes.has("glass")).toBe(true);
-  });
+		toggleTheme()
+		expect(store.getState().theme).toBe("glass")
+		expect(classes.has("glass")).toBe(true)
+	})
 
-  it("re-applies the persisted mode on init (page reload path)", () => {
-    store.getState().setTheme("glass");
+	it("re-applies the persisted mode on init (page reload path)", () => {
+		store.getState().setTheme("glass")
 
-    // Simulate reload: classes wiped, theme persists via normalize default.
-    classes.clear();
-    store.getState().setTheme(store.getState().theme);
+		// Simulate reload: classes wiped, theme persists via normalize default.
+		classes.clear()
+		store.getState().setTheme(store.getState().theme)
 
-    expect(classes.has("dark")).toBe(true);
-    expect(classes.has("glass")).toBe(true);
-  });
-});
+		expect(classes.has("dark")).toBe(true)
+		expect(classes.has("glass")).toBe(true)
+	})
+})

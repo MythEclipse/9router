@@ -2,22 +2,22 @@
 
 <div align="center">
   <img src="../images/9router.png?1" alt="แดชบอร์ด 9Router" width="800"/>
-  
-  # 9Router - Free AI Router
-  
-  **ไม่ต้องหยุดเขียนโค้ด ประหยัดโทเค็น 20-40% ด้วย RTK + สลับอัตโนมัติไปยังโมเดล AI ฟรีและราคาถูก**
-  
-  **ผู้ให้บริการ AI ฟรีสำหรับ OpenClaw**
-  
+
+# 9Router - Free AI Router
+
+**ไม่ต้องหยุดเขียนโค้ด ประหยัดโทเค็น 20-40% ด้วย RTK + สลับอัตโนมัติไปยังโมเดล AI ฟรีและราคาถูก**
+
+**ผู้ให้บริการ AI ฟรีสำหรับ OpenClaw**
+
   <p align="center">
     <img src="../public/providers/openclaw.png" alt="OpenClaw" width="80"/>
   </p>
-  
-  [![npm](https://img.shields.io/npm/v/9router.svg)](https://www.npmjs.com/package/9router)
-  [![Downloads](https://img.shields.io/npm/dm/9router.svg)](https://www.npmjs.com/package/9router)
-  [![License](https://img.shields.io/npm/l/9router.svg)](https://github.com/decolua/9router/blob/main/LICENSE)
-  
-  [🚀 เริ่มต้นใช้งาน](#-quick-start) • [💡 ฟีเจอร์](#-key-features) • [📖 การตั้งค่า](#-setup-guide) • [🌐 เว็บไซต์](https://9router.com)
+
+[![npm](https://img.shields.io/npm/v/9router.svg)](https://www.npmjs.com/package/9router)
+[![Downloads](https://img.shields.io/npm/dm/9router.svg)](https://www.npmjs.com/package/9router)
+[![License](https://img.shields.io/npm/l/9router.svg)](https://github.com/decolua/9router/blob/main/LICENSE)
+
+[🚀 เริ่มต้นใช้งาน](#-quick-start) • [💡 ฟีเจอร์](#-key-features) • [📖 การตั้งค่า](#-setup-guide) • [🌐 เว็บไซต์](https://9router.com)
 </div>
 
 ---
@@ -328,22 +328,22 @@ URL ค่าเริ่มต้น:
 
 ## 💡 ฟีเจอร์หลัก
 
-| ฟีเจอร์ | ทำอะไร | ทำไมถึงสำคัญ |
-|---------|--------------|----------------|
-| 🚀 **RTK Token Saver** ([RTK](https://github.com/rtk-ai/rtk) ⭐40K) | บีบอัดผลลัพธ์จากเครื่องมือ (`git diff`, `grep`, `ls`, `tree`...) ก่อนส่งให้ LLM | ประหยัด **โทเค็น input 20-40%** ต่อคำขอ |
-| 🧠 **Headroom Token Saver** ([Headroom](https://github.com/chopratejas/headroom)) | พร็อกซี `/v1/compress` ภายนอกก่อนเลือกผู้ให้บริการ | ประหยัดโทเค็นบริบทมากขึ้นโดยไม่ต้องเปลี่ยน client |
-| 🪨 **Caveman Mode** ([Caveman](https://github.com/JuliusBrussee/caveman) ⭐52K) | ฉีด caveman-speak prompt → LLM ตอบสั้นกระชับ เนื้อหาทางเทคนิคยังครบถ้วน | ประหยัด **โทเค็น output สูงสุด 65%** |
-| 🐴 **Ponytail** ([Ponytail](https://github.com/DietrichGebert/ponytail)) | ฉีด prompt "lazy senior dev" → LLM เขียนโค้ดน้อยที่สุด YAGNI-first (Lite/Full/Ultra) | **โทเค็น output น้อยลง, ไม่ต้อง refactor มาก** |
-| 🎯 **Smart 3-Tier Fallback** | เลือกเส้นทางอัตโนมัติ: สมาชิก → ถูก → ฟรี | ไม่ต้องหยุดเขียนโค้ด, ไม่มีเวลาหยุดทำงาน |
-| 📊 **ติดตามโควตาแบบ Real-Time** | นับโทเค็นแบบ live + นับถอยหลังรีเซ็ต | เพิ่มประสิทธิภาพมูลค่าสมาชิก |
-| 🔄 **แปลงรูปแบบ** | OpenAI ↔ Claude ↔ Gemini ↔ Cursor ↔ Kiro ↔ Vertex | ใช้ได้กับเครื่องมือ CLI ทุกประเภท |
-| 👥 **รองรับหลายบัญชี** | หลายบัญชีต่อผู้ให้บริการ | Load balancing + สำรองข้อมูล |
-| 🔄 **รีเฟรชโทเค็นอัตโนมัติ** | OAuth token รีเฟรชอัตโนมัติ | ไม่ต้องล็อกอินซ้ำด้วยตนเอง |
-| 🎨 **Combo กำหนดเอง** | สร้างการผสมผสานโมเดลไม่จำกัด | ปรับแต่ง fallback ตามความต้องการ |
-| 📝 **บันทึก Request** | โหมด debug พร้อม log request/response ครบถ้วน | แก้ไขปัญหาได้ง่าย |
-| 💾 **ซิงค์คลาวด์** | ซิงค์การตั้งค่าระหว่างอุปกรณ์ | การตั้งค่าเดียวกันทุกที่ |
-| 📊 **วิเคราะห์การใช้งาน** | ติดตามโทเค็น, ค่าใช้จ่าย, แนวโน้มตามเวลา | ปรับแต่งค่าใช้จ่าย |
-| 🌐 **Deploy ได้ทุกที่** | Localhost, VPS, Docker, Cloudflare Workers | ตัวเลือก deploy ที่ยืดหยุ่น |
+| ฟีเจอร์                                                                             | ทำอะไร                                                                        | ทำไมถึงสำคัญ                                 |
+| --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------ |
+| 🚀 **RTK Token Saver** ([RTK](https://github.com/rtk-ai/rtk) ⭐40K)               | บีบอัดผลลัพธ์จากเครื่องมือ (`git diff`, `grep`, `ls`, `tree`...) ก่อนส่งให้ LLM         | ประหยัด **โทเค็น input 20-40%** ต่อคำขอ       |
+| 🧠 **Headroom Token Saver** ([Headroom](https://github.com/chopratejas/headroom)) | พร็อกซี `/v1/compress` ภายนอกก่อนเลือกผู้ให้บริการ                                    | ประหยัดโทเค็นบริบทมากขึ้นโดยไม่ต้องเปลี่ยน client   |
+| 🪨 **Caveman Mode** ([Caveman](https://github.com/JuliusBrussee/caveman) ⭐52K)   | ฉีด caveman-speak prompt → LLM ตอบสั้นกระชับ เนื้อหาทางเทคนิคยังครบถ้วน                | ประหยัด **โทเค็น output สูงสุด 65%**           |
+| 🐴 **Ponytail** ([Ponytail](https://github.com/DietrichGebert/ponytail))          | ฉีด prompt "lazy senior dev" → LLM เขียนโค้ดน้อยที่สุด YAGNI-first (Lite/Full/Ultra) | **โทเค็น output น้อยลง, ไม่ต้อง refactor มาก** |
+| 🎯 **Smart 3-Tier Fallback**                                                      | เลือกเส้นทางอัตโนมัติ: สมาชิก → ถูก → ฟรี                                             | ไม่ต้องหยุดเขียนโค้ด, ไม่มีเวลาหยุดทำงาน           |
+| 📊 **ติดตามโควตาแบบ Real-Time**                                                    | นับโทเค็นแบบ live + นับถอยหลังรีเซ็ต                                                | เพิ่มประสิทธิภาพมูลค่าสมาชิก                      |
+| 🔄 **แปลงรูปแบบ**                                                                  | OpenAI ↔ Claude ↔ Gemini ↔ Cursor ↔ Kiro ↔ Vertex                             | ใช้ได้กับเครื่องมือ CLI ทุกประเภท                 |
+| 👥 **รองรับหลายบัญชี**                                                               | หลายบัญชีต่อผู้ให้บริการ                                                             | Load balancing + สำรองข้อมูล                 |
+| 🔄 **รีเฟรชโทเค็นอัตโนมัติ**                                                           | OAuth token รีเฟรชอัตโนมัติ                                                       | ไม่ต้องล็อกอินซ้ำด้วยตนเอง                       |
+| 🎨 **Combo กำหนดเอง**                                                             | สร้างการผสมผสานโมเดลไม่จำกัด                                                     | ปรับแต่ง fallback ตามความต้องการ              |
+| 📝 **บันทึก Request**                                                               | โหมด debug พร้อม log request/response ครบถ้วน                                   | แก้ไขปัญหาได้ง่าย                              |
+| 💾 **ซิงค์คลาวด์**                                                                   | ซิงค์การตั้งค่าระหว่างอุปกรณ์                                                         | การตั้งค่าเดียวกันทุกที่                           |
+| 📊 **วิเคราะห์การใช้งาน**                                                            | ติดตามโทเค็น, ค่าใช้จ่าย, แนวโน้มตามเวลา                                            | ปรับแต่งค่าใช้จ่าย                              |
+| 🌐 **Deploy ได้ทุกที่**                                                               | Localhost, VPS, Docker, Cloudflare Workers                                    | ตัวเลือก deploy ที่ยืดหยุ่น                       |
 
 <details>
 <summary><b>📖 รายละเอียดฟีเจอร์</b></summary>
@@ -391,7 +391,7 @@ http://host.docker.internal:8787
 
 ### 🐴 Ponytail (Lazy Senior Dev)
 
-Ponytail ฉีด prompt *"lazy senior dev"* เข้าไปในทุกคำขอ ทำให้ LLM เขียนโค้ดน้อยที่สุดแบบ YAGNI-first — ลบมากกว่าเพิ่ม, stdlib มากกว่า dep ใหม่, one-liner มากกว่า abstraction
+Ponytail ฉีด prompt _"lazy senior dev"_ เข้าไปในทุกคำขอ ทำให้ LLM เขียนโค้ดน้อยที่สุดแบบ YAGNI-first — ลบมากกว่าเพิ่ม, stdlib มากกว่า dep ใหม่, one-liner มากกว่า abstraction
 
 - **Lite** — สร้างตามที่ขอ, บอกชื่อทางเลือกที่ lazy กว่า
 - **Full** — บังคับ YAGNI ladder: stdlib → native → existing deps → one-liner → minimal code
@@ -484,17 +484,17 @@ Combo: "my-coding-stack"
 
 ## 💰 สรุปราคา
 
-| ประเภท | ผู้ให้บริการ | ค่าใช้จ่าย | รีเซ็ตโควตา | ดีที่สุดสำหรับ |
-|------|----------|------|-------------|----------|
-| **💳 สมาชิก** | Claude Code (Pro) | $20/เดือน | 5 ชม. + รายสัปดาห์ | มีสมาชิกอยู่แล้ว |
-| | Codex (Plus/Pro) | $20-200/เดือน | 5 ชม. + รายสัปดาห์ | ผู้ใช้ OpenAI |
-| | GitHub Copilot | $10-19/เดือน | รายเดือน | ผู้ใช้ GitHub |
-| **💰 ราคาถูก** | GLM-4.7 | $0.6/1M | ทุกวัน 10:00 AM | สำรองงบ |
-| | MiniMax M2.1 | $0.2/1M | 5 ชั่วโมง | ถูกที่สุด |
-| | Kimi K2 | $9/เดือน คงที่ | 10M โทเค็น/เดือน | ค่าใช้จ่ายที่คาดเดาได้ |
-| **🆓 ฟรี** | Kiro | $0 | ไม่จำกัด | Claude ฟรี |
-| | OpenCode Free | $0 | ไม่จำกัด | ไม่ต้องยืนยันตัวตน |
-| | Vertex AI | $0 | $300 เครดิตฟรี | Gemini 3 Pro |
+| ประเภท        | ผู้ให้บริการ          | ค่าใช้จ่าย      | รีเซ็ตโควตา        | ดีที่สุดสำหรับ        |
+| ------------- | ----------------- | ------------ | ---------------- | ---------------- |
+| **💳 สมาชิก**  | Claude Code (Pro) | $20/เดือน     | 5 ชม. + รายสัปดาห์ | มีสมาชิกอยู่แล้ว      |
+|               | Codex (Plus/Pro)  | $20-200/เดือน | 5 ชม. + รายสัปดาห์ | ผู้ใช้ OpenAI       |
+|               | GitHub Copilot    | $10-19/เดือน  | รายเดือน          | ผู้ใช้ GitHub       |
+| **💰 ราคาถูก** | GLM-4.7           | $0.6/1M      | ทุกวัน 10:00 AM    | สำรองงบ          |
+|               | MiniMax M2.1      | $0.2/1M      | 5 ชั่วโมง          | ถูกที่สุด            |
+|               | Kimi K2           | $9/เดือน คงที่  | 10M โทเค็น/เดือน   | ค่าใช้จ่ายที่คาดเดาได้ |
+| **🆓 ฟรี**     | Kiro              | $0           | ไม่จำกัด           | Claude ฟรี        |
+|               | OpenCode Free     | $0           | ไม่จำกัด           | ไม่ต้องยืนยันตัวตน    |
+|               | Vertex AI         | $0           | $300 เครดิตฟรี     | Gemini 3 Pro     |
 
 **💡 เคล็ดลับ:** เริ่มจาก combo Kiro (Claude ฟรีไม่จำกัด) + OpenCode Free (ไม่ต้องยืนยันตัวตน) = ค่าใช้จ่าย $0!
 
@@ -602,17 +602,21 @@ Combo: "openclaw-free"
 **กลยุทธ์ Free First:**
 
 1. **เริ่มจาก combo ฟรี 100%:**
+
    ```
    1. kr/claude-sonnet-4.5 (Claude ฟรีไม่จำกัด)
    2. oc/* (OpenCode Free ไม่ต้องยืนยันตัวตน)
    3. vertex/gemini-3.1-pro-preview ($300 เครดิตฟรี)
    ```
+
    **ค่าใช้จ่าย: $0/เดือน**
 
 2. **เพิ่มสำรองราคาถูก** เมื่อจำเป็นเท่านั้น:
+
    ```
    4. glm/glm-5.1 ($0.6/1M โทเค็น)
    ```
+
    **ค่าใช้จ่ายเพิ่มเติม:** จ่ายเฉพาะที่ใช้
 
 3. **ใช้ผู้ให้บริการสมาชิก** ก็ต่อเมื่อมีอยู่แล้ว:

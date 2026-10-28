@@ -1,19 +1,19 @@
 <div align="center">
   <img src="../images/9router.png?1" alt="9Router Dashboard" width="800"/>
 
-  # 9Router - 無料 AI ルーター
+# 9Router - 無料 AI ルーター
 
-  **コーディングを止めない。スマートフォールバックで無料＆格安AIモデルに自動ルーティング。**
+**コーディングを止めない。スマートフォールバックで無料＆格安AIモデルに自動ルーティング。**
 
-  **すべてのAIコーディングツール（Claude Code、Cursor、Antigravity、Copilot、Codex、Gemini、OpenCode、Cline、OpenClaw...）を40以上のAIプロバイダーと100以上のモデルに接続。**
+**すべてのAIコーディングツール（Claude Code、Cursor、Antigravity、Copilot、Codex、Gemini、OpenCode、Cline、OpenClaw...）を40以上のAIプロバイダーと100以上のモデルに接続。**
 
-  [![npm](https://img.shields.io/npm/v/9router.svg)](https://www.npmjs.com/package/9router)
-  [![Downloads](https://img.shields.io/npm/dm/9router.svg)](https://www.npmjs.com/package/9router)
-  [![License](https://img.shields.io/npm/l/9router.svg)](https://github.com/decolua/9router/blob/main/LICENSE)
+[![npm](https://img.shields.io/npm/v/9router.svg)](https://www.npmjs.com/package/9router)
+[![Downloads](https://img.shields.io/npm/dm/9router.svg)](https://www.npmjs.com/package/9router)
+[![License](https://img.shields.io/npm/l/9router.svg)](https://github.com/decolua/9router/blob/main/LICENSE)
 
-  [🚀 クイックスタート](#-クイックスタート) • [💡 機能](#-主な機能) • [📖 セットアップ](#-セットアップガイド) • [🌐 ウェブサイト](https://9router.com)
+[🚀 クイックスタート](#-クイックスタート) • [💡 機能](#-主な機能) • [📖 セットアップ](#-セットアップガイド) • [🌐 ウェブサイト](https://9router.com)
 
-  [🇻🇳 Tiếng Việt](./README.vi.md) • [🇨🇳 中文](./README.zh-CN.md) • [🇯🇵 日本語](./README.ja-JP.md)
+[🇻🇳 Tiếng Việt](./README.vi.md) • [🇨🇳 中文](./README.zh-CN.md) • [🇯🇵 日本語](./README.ja-JP.md)
 </div>
 
 ---
@@ -347,18 +347,18 @@ PORT=20128 HOSTNAME=0.0.0.0 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run 
 
 ## 💡 主な機能
 
-| 機能 | 概要 | メリット |
-|------|------|----------|
+| 機能                               | 概要                                               | メリット                                   |
+| ---------------------------------- | -------------------------------------------------- | ------------------------------------------ |
 | 🎯 **スマート3段階フォールバック** | 自動ルーティング: サブスクリプション → 格安 → 無料 | コーディングが止まらない、ダウンタイムゼロ |
-| 📊 **リアルタイムクオータ追跡** | ライブトークン数 + リセットカウントダウン | サブスクリプション価値の最大化 |
-| 🔄 **フォーマット変換** | OpenAI ↔ Claude ↔ Gemini シームレス対応 | あらゆるCLIツールで動作 |
-| 👥 **マルチアカウント対応** | プロバイダーごとに複数アカウント | 負荷分散 + 冗長性 |
-| 🔄 **自動トークンリフレッシュ** | OAuthトークンの自動更新 | 手動再ログイン不要 |
-| 🎨 **カスタムコンボ** | 無制限のモデル組み合わせ作成 | ニーズに合わせたフォールバック |
-| 📝 **リクエストログ** | リクエスト/レスポンスの完全ログ | 問題の簡単なトラブルシューティング |
-| 💾 **クラウド同期** | デバイス間で設定を同期 | どこでも同じセットアップ |
-| 📊 **使用状況分析** | トークン、コスト、トレンドの追跡 | 支出の最適化 |
-| 🌐 **どこでもデプロイ** | Localhost、VPS、Docker、Cloudflare Workers | 柔軟なデプロイオプション |
+| 📊 **リアルタイムクオータ追跡**    | ライブトークン数 + リセットカウントダウン          | サブスクリプション価値の最大化             |
+| 🔄 **フォーマット変換**            | OpenAI ↔ Claude ↔ Gemini シームレス対応            | あらゆるCLIツールで動作                    |
+| 👥 **マルチアカウント対応**        | プロバイダーごとに複数アカウント                   | 負荷分散 + 冗長性                          |
+| 🔄 **自動トークンリフレッシュ**    | OAuthトークンの自動更新                            | 手動再ログイン不要                         |
+| 🎨 **カスタムコンボ**              | 無制限のモデル組み合わせ作成                       | ニーズに合わせたフォールバック             |
+| 📝 **リクエストログ**              | リクエスト/レスポンスの完全ログ                    | 問題の簡単なトラブルシューティング         |
+| 💾 **クラウド同期**                | デバイス間で設定を同期                             | どこでも同じセットアップ                   |
+| 📊 **使用状況分析**                | トークン、コスト、トレンドの追跡                   | 支出の最適化                               |
+| 🌐 **どこでもデプロイ**            | Localhost、VPS、Docker、Cloudflare Workers         | 柔軟なデプロイオプション                   |
 
 <details>
 <summary><b>📖 機能詳細</b></summary>
@@ -461,18 +461,18 @@ PORT=20128 HOSTNAME=0.0.0.0 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run 
 
 ## 💰 料金の概要
 
-| ティア | プロバイダー | コスト | クオータリセット | 最適な用途 |
-|--------|-------------|--------|-----------------|------------|
-| **💳 サブスクリプション** | Claude Code (Pro) | $20/月 | 5時間 + 週次 | 既存のサブスク利用者 |
-| | Codex (Plus/Pro) | $20-200/月 | 5時間 + 週次 | OpenAIユーザー |
-| | Gemini CLI | **無料** | 月18万回 + 日1千回 | 全員！ |
-| | GitHub Copilot | $10-19/月 | 月次 | GitHubユーザー |
-| **💰 格安** | GLM-4.7 | $0.6/1M | 毎日午前10時 | 予算バックアップ |
-| | MiniMax M2.1 | $0.2/1M | 5時間ローリング | 最安オプション |
-| | Kimi K2 | $9/月固定 | 月1000万トークン | 予測可能なコスト |
-| **🆓 無料** | iFlow | $0 | 無制限 | 8モデル無料 |
-| | Qwen | $0 | 無制限 | 3モデル無料 |
-| | Kiro | $0 | 無制限 | Claude無料 |
+| ティア                    | プロバイダー      | コスト     | クオータリセット   | 最適な用途           |
+| ------------------------- | ----------------- | ---------- | ------------------ | -------------------- |
+| **💳 サブスクリプション** | Claude Code (Pro) | $20/月     | 5時間 + 週次       | 既存のサブスク利用者 |
+|                           | Codex (Plus/Pro)  | $20-200/月 | 5時間 + 週次       | OpenAIユーザー       |
+|                           | Gemini CLI        | **無料**   | 月18万回 + 日1千回 | 全員！               |
+|                           | GitHub Copilot    | $10-19/月  | 月次               | GitHubユーザー       |
+| **💰 格安**               | GLM-4.7           | $0.6/1M    | 毎日午前10時       | 予算バックアップ     |
+|                           | MiniMax M2.1      | $0.2/1M    | 5時間ローリング    | 最安オプション       |
+|                           | Kimi K2           | $9/月固定  | 月1000万トークン   | 予測可能なコスト     |
+| **🆓 無料**               | iFlow             | $0         | 無制限             | 8モデル無料          |
+|                           | Qwen              | $0         | 無制限             | 3モデル無料          |
+|                           | Kiro              | $0         | 無制限             | Claude無料           |
 
 **💡 プロのヒント:** Gemini CLI（月18万回無料）+ iFlow（無制限無料）のコンボで $0 のコスト！
 
@@ -632,17 +632,21 @@ vs. $20 + 制限に引っかかる = フラストレーション
 **無料優先戦略：**
 
 1. **100%無料コンボから始める：**
+
    ```
    1. gc/gemini-3-flash (Googleから月18万回無料)
    2. if/kimi-k2-thinking (iFlowから無制限無料)
    3. qw/qwen3-coder-plus (Qwenから無制限無料)
    ```
+
    **コスト: $0/月**
 
 2. **必要な場合のみ格安バックアップを追加：**
+
    ```
    4. glm/glm-4.7 ($0.6/100万トークン)
    ```
+
    **追加コスト: 実際に使用した分だけ支払い**
 
 3. **サブスクリプションプロバイダーは最後に使用：**
@@ -1014,24 +1018,24 @@ docker stop 9router && docker rm 9router
 
 ### 環境変数
 
-| 変数 | デフォルト | 説明 |
-|------|-----------|------|
-| `JWT_SECRET` | 自動生成（`~/.9router/jwt-secret`） | ダッシュボード認証クッキーのJWT署名シークレット（複数インスタンス間で共有する場合に設定） |
-| `INITIAL_PASSWORD` | `123456` | 保存されたハッシュがない場合の初回ログインパスワード |
-| `DATA_DIR` | `~/.9router` | メインアプリのデータベース格納場所（`db.json`） |
-| `PORT` | フレームワークデフォルト | サービスポート（例では`20128`） |
-| `HOSTNAME` | フレームワークデフォルト | バインドホスト（Dockerデフォルトは`0.0.0.0`） |
-| `NODE_ENV` | ランタイムデフォルト | デプロイ時は`production`に設定 |
-| `BASE_URL` | `http://localhost:20128` | クラウド同期ジョブで使用されるサーバーサイド内部ベースURL |
-| `CLOUD_URL` | `https://9router.com` | サーバーサイドのクラウド同期エンドポイントベースURL |
-| `NEXT_PUBLIC_BASE_URL` | `http://localhost:3000` | 後方互換/公開ベースURL（サーバーランタイムには`BASE_URL`を推奨） |
-| `NEXT_PUBLIC_CLOUD_URL` | `https://9router.com` | 後方互換/公開クラウドURL（サーバーランタイムには`CLOUD_URL`を推奨） |
-| `API_KEY_SECRET` | `endpoint-proxy-api-key-secret` | 生成されたAPIキーのHMACシークレット |
-| `MACHINE_ID_SALT` | `endpoint-proxy-salt` | 安定したマシンIDハッシュのソルト |
-| `ENABLE_REQUEST_LOGS` | `false` | `logs/` 配下のリクエスト/レスポンスログを有効化 |
-| `AUTH_COOKIE_SECURE` | `false` | 認証クッキーに`Secure`を強制（HTTPSリバースプロキシの背後では`true`に設定） |
-| `REQUIRE_API_KEY` | `false` | `/v1/*` ルートでBearer APIキーを必須にする（インターネット公開デプロイで推奨） |
-| `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY` | 空 | アップストリームプロバイダー呼び出し用のオプショナルアウトバウンドプロキシ |
+| 変数                                                 | デフォルト                          | 説明                                                                                      |
+| ---------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------- |
+| `JWT_SECRET`                                         | 自動生成（`~/.9router/jwt-secret`） | ダッシュボード認証クッキーのJWT署名シークレット（複数インスタンス間で共有する場合に設定） |
+| `INITIAL_PASSWORD`                                   | `123456`                            | 保存されたハッシュがない場合の初回ログインパスワード                                      |
+| `DATA_DIR`                                           | `~/.9router`                        | メインアプリのデータベース格納場所（`db.json`）                                           |
+| `PORT`                                               | フレームワークデフォルト            | サービスポート（例では`20128`）                                                           |
+| `HOSTNAME`                                           | フレームワークデフォルト            | バインドホスト（Dockerデフォルトは`0.0.0.0`）                                             |
+| `NODE_ENV`                                           | ランタイムデフォルト                | デプロイ時は`production`に設定                                                            |
+| `BASE_URL`                                           | `http://localhost:20128`            | クラウド同期ジョブで使用されるサーバーサイド内部ベースURL                                 |
+| `CLOUD_URL`                                          | `https://9router.com`               | サーバーサイドのクラウド同期エンドポイントベースURL                                       |
+| `NEXT_PUBLIC_BASE_URL`                               | `http://localhost:3000`             | 後方互換/公開ベースURL（サーバーランタイムには`BASE_URL`を推奨）                          |
+| `NEXT_PUBLIC_CLOUD_URL`                              | `https://9router.com`               | 後方互換/公開クラウドURL（サーバーランタイムには`CLOUD_URL`を推奨）                       |
+| `API_KEY_SECRET`                                     | `endpoint-proxy-api-key-secret`     | 生成されたAPIキーのHMACシークレット                                                       |
+| `MACHINE_ID_SALT`                                    | `endpoint-proxy-salt`               | 安定したマシンIDハッシュのソルト                                                          |
+| `ENABLE_REQUEST_LOGS`                                | `false`                             | `logs/` 配下のリクエスト/レスポンスログを有効化                                           |
+| `AUTH_COOKIE_SECURE`                                 | `false`                             | 認証クッキーに`Secure`を強制（HTTPSリバースプロキシの背後では`true`に設定）               |
+| `REQUIRE_API_KEY`                                    | `false`                             | `/v1/*` ルートでBearer APIキーを必須にする（インターネット公開デプロイで推奨）            |
+| `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY` | 空                                  | アップストリームプロバイダー呼び出し用のオプショナルアウトバウンドプロキシ                |
 
 注意事項：
 - 小文字のプロキシ変数もサポート: `http_proxy`, `https_proxy`, `all_proxy`, `no_proxy`

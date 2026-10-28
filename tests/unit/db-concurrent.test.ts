@@ -1,229 +1,264 @@
 // Concurrency stress test - simulate many parallel saveRequestUsage / saveRequestDetail
 // to verify atomic counter, no data loss, no race conditions.
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import fs from "node:fs"
+import os from "node:os"
+import path from "node:path"
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 
 // saveRequestUsage drops an identical entry saved in the same millisecond as a
 // duplicate write (0d216689). Parallel *distinct* requests get distinct timestamps.
-const BASE_TS = Date.now();
-const tsFor = (i) => new Date(BASE_TS - i).toISOString();
+const BASE_TS = Date.now()
+const tsFor = (i) => new Date(BASE_TS - i).toISOString()
 
-const originalDataDir = process.env.DATA_DIR;
-let tempDir;
-let db;
+const originalDataDir = process.env.DATA_DIR
+let tempDir
+let db
 
 beforeAll(async () => {
-  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "9router-concurrent-"));
-  process.env.DATA_DIR = tempDir;
-  vi.resetModules();
-  db = await import("@/lib/db/index.js");
-  await db.initDb();
-});
+	tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "9router-concurrent-"))
+	process.env.DATA_DIR = tempDir
+	vi.resetModules()
+	db = await import("@/lib/db/index.js")
+	await db.initDb()
+})
 
 afterAll(() => {
-  if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true });
-  if (originalDataDir === undefined) delete process.env.DATA_DIR;
-  else process.env.DATA_DIR = originalDataDir;
-});
+	if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true })
+	if (originalDataDir === undefined) delete process.env.DATA_DIR
+	else process.env.DATA_DIR = originalDataDir
+})
 
 describe("DB Concurrency - atomic safety", () => {
-  it("100 parallel saveRequestUsage → no count loss", async () => {
-    // Each write must be distinguishable: saveRequestUsage() dedupes entries
-    // matching on (timestamp, provider, model, connectionId, apiKey, tokens) —
-    // 100 byte-identical calls in one millisecond are one request by design
-    // (0d216689), so this would collapse to a single row.
-    const N = 100;
-    const promises = [];
-    for (let i = 0; i < N; i++) {
-      promises.push(db.saveRequestUsage({
-        timestamp: tsFor(i),
-        provider: "openai", model: "gpt-4", connectionId: "c1",
-        tokens: { prompt_tokens: 10 + i, completion_tokens: 5 },
-        endpoint: "/v1/chat", status: "ok",
-      }));
-    }
-    await Promise.all(promises);
+	it("100 parallel saveRequestUsage → no count loss", async () => {
+		// Each write must be distinguishable: saveRequestUsage() dedupes entries
+		// matching on (timestamp, provider, model, connectionId, apiKey, tokens) —
+		// 100 byte-identical calls in one millisecond are one request by design
+		// (0d216689), so this would collapse to a single row.
+		const N = 100
+		const promises = []
+		for (let i = 0; i < N; i++) {
+			promises.push(
+				db.saveRequestUsage({
+					timestamp: tsFor(i),
+					provider: "openai",
+					model: "gpt-4",
+					connectionId: "c1",
+					tokens: { prompt_tokens: 10 + i, completion_tokens: 5 },
+					endpoint: "/v1/chat",
+					status: "ok",
+				}),
+			)
+		}
+		await Promise.all(promises)
 
-    const stats = await db.getUsageStats("24h");
-    expect(stats.totalRequests).toBe(N);
-    expect(stats.byProvider.openai.requests).toBe(N);
-    expect(stats.byProvider.openai.promptTokens).toBe(
-      Array.from({ length: N }, (_, i) => 10 + i).reduce((a, b) => a + b, 0)
-    );
+		const stats = await db.getUsageStats("24h")
+		expect(stats.totalRequests).toBe(N)
+		expect(stats.byProvider.openai.requests).toBe(N)
+		expect(stats.byProvider.openai.promptTokens).toBe(
+			Array.from({ length: N }, (_, i) => 10 + i).reduce((a, b) => a + b, 0),
+		)
 
-    const hist = await db.getUsageHistory({ provider: "openai" });
-    expect(hist.length).toBe(N);
-  });
+		const hist = await db.getUsageHistory({ provider: "openai" })
+		expect(hist.length).toBe(N)
+	})
 
-  it("saveRequestUsage dedupes byte-identical retries but keeps distinct writes", async () => {
-    const entry = {
-      provider: "openai", model: "gpt-4-dedupe", connectionId: "c-dedupe",
-      tokens: { prompt_tokens: 7, completion_tokens: 3 },
-      endpoint: "/v1/chat", status: "ok",
-    };
+	it("saveRequestUsage dedupes byte-identical retries but keeps distinct writes", async () => {
+		const entry = {
+			provider: "openai",
+			model: "gpt-4-dedupe",
+			connectionId: "c-dedupe",
+			tokens: { prompt_tokens: 7, completion_tokens: 3 },
+			endpoint: "/v1/chat",
+			status: "ok",
+		}
 
-    // The dedupe key is (timestamp, provider, model, connectionId, apiKey,
-    // tokens). Fixing the timestamp makes the write byte-identical, which is
-    // exactly the retry case: one logical request, one row.
-    const frozen = "2026-01-01T00:00:00.000Z";
-    await db.saveRequestUsage({ ...entry, timestamp: frozen });
-    await db.saveRequestUsage({ ...entry, timestamp: frozen });
-    await db.saveRequestUsage({ ...entry, timestamp: frozen });
+		// The dedupe key is (timestamp, provider, model, connectionId, apiKey,
+		// tokens). Fixing the timestamp makes the write byte-identical, which is
+		// exactly the retry case: one logical request, one row.
+		const frozen = "2026-01-01T00:00:00.000Z"
+		await db.saveRequestUsage({ ...entry, timestamp: frozen })
+		await db.saveRequestUsage({ ...entry, timestamp: frozen })
+		await db.saveRequestUsage({ ...entry, timestamp: frozen })
 
-    // "all": the frozen timestamp sits outside the 24h window.
-    const stats = await db.getUsageStats("all");
-    expect(stats.byModel["gpt-4-dedupe (openai)"].requests).toBe(1);
+		// "all": the frozen timestamp sits outside the 24h window.
+		const stats = await db.getUsageStats("all")
+		expect(stats.byModel["gpt-4-dedupe (openai)"].requests).toBe(1)
 
-    // A different timestamp or different tokens is a different request.
-    await db.saveRequestUsage({
-      ...entry, timestamp: frozen, tokens: { prompt_tokens: 8, completion_tokens: 3 },
-    });
-    await db.saveRequestUsage({ ...entry, timestamp: "2026-01-01T00:00:00.001Z" });
-    const after = await db.getUsageStats("all");
-    expect(after.byModel["gpt-4-dedupe (openai)"].requests).toBe(3);
-  });
+		// A different timestamp or different tokens is a different request.
+		await db.saveRequestUsage({
+			...entry,
+			timestamp: frozen,
+			tokens: { prompt_tokens: 8, completion_tokens: 3 },
+		})
+		await db.saveRequestUsage({ ...entry, timestamp: "2026-01-01T00:00:00.001Z" })
+		const after = await db.getUsageStats("all")
+		expect(after.byModel["gpt-4-dedupe (openai)"].requests).toBe(3)
+	})
 
-  it("200 parallel saveRequestDetail → all flushed", async () => {
-    await db.updateSettings({ enableObservability: true, observabilityBatchSize: 10 });
+	it("200 parallel saveRequestDetail → all flushed", async () => {
+		await db.updateSettings({ enableObservability: true, observabilityBatchSize: 10 })
 
-    const N = 200;
-    const promises = [];
-    for (let i = 0; i < N; i++) {
-      promises.push(db.saveRequestDetail({
-        id: `det-${i}`, provider: "openai", model: "gpt-4",
-        connectionId: "c1", status: "ok",
-        tokens: { prompt_tokens: 1 }, request: { i }, response: { ok: true },
-      }));
-    }
-    await Promise.all(promises);
+		const N = 200
+		const promises = []
+		for (let i = 0; i < N; i++) {
+			promises.push(
+				db.saveRequestDetail({
+					id: `det-${i}`,
+					provider: "openai",
+					model: "gpt-4",
+					connectionId: "c1",
+					status: "ok",
+					tokens: { prompt_tokens: 1 },
+					request: { i },
+					response: { ok: true },
+				}),
+			)
+		}
+		await Promise.all(promises)
 
-    // Wait for any timer-based flush
-    await new Promise((r) => setTimeout(r, 6000));
+		// Wait for any timer-based flush
+		await new Promise((r) => setTimeout(r, 6000))
 
-    const list = await db.getRequestDetails({ provider: "openai", pageSize: 500 });
-    expect(list.pagination.totalItems).toBeGreaterThanOrEqual(N);
-  }, 15000);
+		const list = await db.getRequestDetails({ provider: "openai", pageSize: 500 })
+		expect(list.pagination.totalItems).toBeGreaterThanOrEqual(N)
+	}, 15000)
 
-  it("mixed concurrent: usage + details + connections + aliases", async () => {
-    const ops = [];
-    for (let i = 0; i < 50; i++) {
-      ops.push(db.saveRequestUsage({
-        timestamp: tsFor(1000 + i),
-        provider: "anthropic", model: `m-${i % 3}`, connectionId: "c2",
-        // distinct token counts keep the dedupe from merging concurrent writes
-        tokens: { prompt_tokens: 20 + i }, status: "ok",
-      }));
-      ops.push(db.setModelAlias(`a-${i}`, `target-${i}`));
-      ops.push(db.disableModels("openai", [`d-${i}`]));
-    }
-    await Promise.all(ops);
+	it("mixed concurrent: usage + details + connections + aliases", async () => {
+		const ops = []
+		for (let i = 0; i < 50; i++) {
+			ops.push(
+				db.saveRequestUsage({
+					timestamp: tsFor(1000 + i),
+					provider: "anthropic",
+					model: `m-${i % 3}`,
+					connectionId: "c2",
+					// distinct token counts keep the dedupe from merging concurrent writes
+					tokens: { prompt_tokens: 20 + i },
+					status: "ok",
+				}),
+			)
+			ops.push(db.setModelAlias(`a-${i}`, `target-${i}`))
+			ops.push(db.disableModels("openai", [`d-${i}`]))
+		}
+		await Promise.all(ops)
 
-    const aliases = await db.getModelAliases();
-    expect(Object.keys(aliases).filter((k) => k.startsWith("a-")).length).toBe(50);
+		const aliases = await db.getModelAliases()
+		expect(Object.keys(aliases).filter((k) => k.startsWith("a-")).length).toBe(50)
 
-    const disabled = await db.getDisabledByProvider("openai");
-    expect(disabled.length).toBeGreaterThanOrEqual(50);
+		const disabled = await db.getDisabledByProvider("openai")
+		expect(disabled.length).toBeGreaterThanOrEqual(50)
 
-    const stats = await db.getUsageStats("24h");
-    expect(stats.byProvider.anthropic.requests).toBe(50);
-  }, 30000);
+		const stats = await db.getUsageStats("24h")
+		expect(stats.byProvider.anthropic.requests).toBe(50)
+	}, 30000)
 
-  it("updateSettings parallel → no merge loss", async () => {
-    const N = 50;
-    await db.updateSettings({ counter: 0 });
-    const promises = [];
-    for (let i = 0; i < N; i++) {
-      promises.push(db.updateSettings({ [`field${i}`]: `v${i}` }));
-    }
-    await Promise.all(promises);
-    const s = await db.getSettings();
-    for (let i = 0; i < N; i++) {
-      expect(s[`field${i}`]).toBe(`v${i}`); // all updates preserved
-    }
-  });
+	it("updateSettings parallel → no merge loss", async () => {
+		const N = 50
+		await db.updateSettings({ counter: 0 })
+		const promises = []
+		for (let i = 0; i < N; i++) {
+			promises.push(db.updateSettings({ [`field${i}`]: `v${i}` }))
+		}
+		await Promise.all(promises)
+		const s = await db.getSettings()
+		for (let i = 0; i < N; i++) {
+			expect(s[`field${i}`]).toBe(`v${i}`) // all updates preserved
+		}
+	})
 
-  it("OAuth refresh race: parallel updateProviderConnection on same id", async () => {
-    const conn = await db.createProviderConnection({
-      provider: "oauth-test", authType: "oauth", email: "x@y.com",
-      accessToken: "initial", refreshToken: "rt-initial",
-    });
+	it("OAuth refresh race: parallel updateProviderConnection on same id", async () => {
+		const conn = await db.createProviderConnection({
+			provider: "oauth-test",
+			authType: "oauth",
+			email: "x@y.com",
+			accessToken: "initial",
+			refreshToken: "rt-initial",
+		})
 
-    // 20 parallel updates each with a unique field
-    const N = 20;
-    const promises = [];
-    for (let i = 0; i < N; i++) {
-      promises.push(db.updateProviderConnection(conn.id, { [`marker${i}`]: i }));
-    }
-    await Promise.all(promises);
+		// 20 parallel updates each with a unique field
+		const N = 20
+		const promises = []
+		for (let i = 0; i < N; i++) {
+			promises.push(db.updateProviderConnection(conn.id, { [`marker${i}`]: i }))
+		}
+		await Promise.all(promises)
 
-    const after = await db.getProviderConnectionById(conn.id);
-    for (let i = 0; i < N; i++) {
-      expect(after[`marker${i}`]).toBe(i); // no field lost
-    }
-    expect(after.refreshToken).toBe("rt-initial"); // base preserved
-  });
+		const after = await db.getProviderConnectionById(conn.id)
+		for (let i = 0; i < N; i++) {
+			expect(after[`marker${i}`]).toBe(i) // no field lost
+		}
+		expect(after.refreshToken).toBe("rt-initial") // base preserved
+	})
 
-  it("addCustomModel race: parallel duplicate adds → only 1 inserted", async () => {
-    const N = 30;
-    const promises = [];
-    for (let i = 0; i < N; i++) {
-      promises.push(db.addCustomModel({ providerAlias: "racep", id: "racemodel", type: "llm", name: "r" }));
-    }
-    const results = await Promise.all(promises);
-    const trueCount = results.filter((r) => r === true).length;
-    expect(trueCount).toBe(1); // exactly one wins
-    const all = await db.getCustomModels();
-    expect(all.filter((m) => m.providerAlias === "racep" && m.id === "racemodel").length).toBe(1);
-  });
+	it("addCustomModel race: parallel duplicate adds → only 1 inserted", async () => {
+		const N = 30
+		const promises = []
+		for (let i = 0; i < N; i++) {
+			promises.push(
+				db.addCustomModel({ providerAlias: "racep", id: "racemodel", type: "llm", name: "r" }),
+			)
+		}
+		const results = await Promise.all(promises)
+		const trueCount = results.filter((r) => r === true).length
+		expect(trueCount).toBe(1) // exactly one wins
+		const all = await db.getCustomModels()
+		expect(all.filter((m) => m.providerAlias === "racep" && m.id === "racemodel").length).toBe(1)
+	})
 
-  it("updatePricing race: parallel adds different models → all merged", async () => {
-    const N = 30;
-    const promises = [];
-    for (let i = 0; i < N; i++) {
-      promises.push(db.updatePricing({ "race-prov": { [`m${i}`]: { input: i, output: i * 2 } } }));
-    }
-    await Promise.all(promises);
-    const p = await db.getPricing();
-    for (let i = 0; i < N; i++) {
-      expect(p["race-prov"][`m${i}`]).toEqual({ input: i, output: i * 2 });
-    }
-  });
+	it("updatePricing race: parallel adds different models → all merged", async () => {
+		const N = 30
+		const promises = []
+		for (let i = 0; i < N; i++) {
+			promises.push(db.updatePricing({ "race-prov": { [`m${i}`]: { input: i, output: i * 2 } } }))
+		}
+		await Promise.all(promises)
+		const p = await db.getPricing()
+		for (let i = 0; i < N; i++) {
+			expect(p["race-prov"][`m${i}`]).toEqual({ input: i, output: i * 2 })
+		}
+	})
 
-  it("daily summary aggregates correctly under parallel writes", async () => {
-    const N = 50;
-    const promises = [];
-    for (let i = 0; i < N; i++) {
-      // distinct per-iteration tokens: identical concurrent writes are deduped
-      // into one request by design, which would not test aggregation at all
-      promises.push(db.saveRequestUsage({
-        timestamp: tsFor(2000 + i),
-        provider: "google", model: "gemini-pro", connectionId: "cG",
-        tokens: { prompt_tokens: 100 + i, completion_tokens: 50 },
-        status: "ok",
-      }));
-    }
-    await Promise.all(promises);
+	it("daily summary aggregates correctly under parallel writes", async () => {
+		const N = 50
+		const promises = []
+		for (let i = 0; i < N; i++) {
+			// distinct per-iteration tokens: identical concurrent writes are deduped
+			// into one request by design, which would not test aggregation at all
+			promises.push(
+				db.saveRequestUsage({
+					timestamp: tsFor(2000 + i),
+					provider: "google",
+					model: "gemini-pro",
+					connectionId: "cG",
+					tokens: { prompt_tokens: 100 + i, completion_tokens: 50 },
+					status: "ok",
+				}),
+			)
+		}
+		await Promise.all(promises)
 
-    const stats = await db.getUsageStats("7d");
-    const g = stats.byProvider.google;
-    expect(g).toBeDefined();
-    expect(g.requests).toBe(N);
-    expect(g.promptTokens).toBe(
-      Array.from({ length: N }, (_, i) => 100 + i).reduce((a, b) => a + b, 0)
-    );
-    expect(g.completionTokens).toBe(N * 50);
-  });
+		const stats = await db.getUsageStats("7d")
+		const g = stats.byProvider.google
+		expect(g).toBeDefined()
+		expect(g.requests).toBe(N)
+		expect(g.promptTokens).toBe(
+			Array.from({ length: N }, (_, i) => 100 + i).reduce((a, b) => a + b, 0),
+		)
+		expect(g.completionTokens).toBe(N * 50)
+	})
 
-  it("records an identical write saved twice in parallel only once", async () => {
-    const entry = () => ({
-      timestamp: tsFor(3000), provider: "mistral", model: "dup-model", connectionId: "cD",
-      tokens: { prompt_tokens: 7, completion_tokens: 3 }, status: "ok",
-    });
-    await Promise.all([db.saveRequestUsage(entry()), db.saveRequestUsage(entry())]);
+	it("records an identical write saved twice in parallel only once", async () => {
+		const entry = () => ({
+			timestamp: tsFor(3000),
+			provider: "mistral",
+			model: "dup-model",
+			connectionId: "cD",
+			tokens: { prompt_tokens: 7, completion_tokens: 3 },
+			status: "ok",
+		})
+		await Promise.all([db.saveRequestUsage(entry()), db.saveRequestUsage(entry())])
 
-    const stats = await db.getUsageStats("24h");
-    expect(stats.byProvider.mistral.requests).toBe(1);
-  });
-});
+		const stats = await db.getUsageStats("24h")
+		expect(stats.byProvider.mistral.requests).toBe(1)
+	})
+})

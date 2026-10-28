@@ -1,86 +1,98 @@
 // A5 (cases #7/#9/#10): lock hardcode->config no-op values.
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest"
+import { DEFAULT_MAX_TOKENS, DEFAULT_MIN_TOKENS } from "../../open-sse/config/runtimeConfig.js"
+import { OpenCodeExecutor } from "../../open-sse/executors/opencode.js"
+import antigravity from "../../open-sse/providers/registry/antigravity.js"
+import mimocode from "../../open-sse/providers/registry/mimocode.js"
+import opencode from "../../open-sse/providers/registry/opencode.js"
 import {
-  OPENAI_COMPAT_BASE,
-  ANTHROPIC_COMPAT_BASE,
-  ANTHROPIC_API_VERSION,
-} from "../../open-sse/providers/shared.js";
-import { DEFAULT_MAX_TOKENS, DEFAULT_MIN_TOKENS } from "../../open-sse/config/runtimeConfig.js";
-import mimocode from "../../open-sse/providers/registry/mimocode.js";
-import opencode from "../../open-sse/providers/registry/opencode.js";
-import antigravity from "../../open-sse/providers/registry/antigravity.js";
-import { OpenCodeExecutor } from "../../open-sse/executors/opencode.js";
+	ANTHROPIC_API_VERSION,
+	ANTHROPIC_COMPAT_BASE,
+	OPENAI_COMPAT_BASE,
+} from "../../open-sse/providers/shared.js"
 
 describe("compat base URLs / version", () => {
-  it("OPENAI_COMPAT_BASE", () => {
-    expect(OPENAI_COMPAT_BASE).toBe("https://api.openai.com/v1");
-  });
-  it("ANTHROPIC_COMPAT_BASE", () => {
-    expect(ANTHROPIC_COMPAT_BASE).toBe("https://api.anthropic.com/v1");
-  });
-  it("ANTHROPIC_API_VERSION", () => {
-    expect(ANTHROPIC_API_VERSION).toBe("2023-06-01");
-  });
-});
+	it("OPENAI_COMPAT_BASE", () => {
+		expect(OPENAI_COMPAT_BASE).toBe("https://api.openai.com/v1")
+	})
+	it("ANTHROPIC_COMPAT_BASE", () => {
+		expect(ANTHROPIC_COMPAT_BASE).toBe("https://api.anthropic.com/v1")
+	})
+	it("ANTHROPIC_API_VERSION", () => {
+		expect(ANTHROPIC_API_VERSION).toBe("2023-06-01")
+	})
+})
 
 describe("default token limits", () => {
-  it("max/min", () => {
-    expect(DEFAULT_MAX_TOKENS).toBe(64000);
-    expect(DEFAULT_MIN_TOKENS).toBe(32000);
-  });
-});
+	it("max/min", () => {
+		expect(DEFAULT_MAX_TOKENS).toBe(64000)
+		expect(DEFAULT_MIN_TOKENS).toBe(32000)
+	})
+})
 
 describe("provider baseUrl const (full path, no trailing slash)", () => {
-  it("mimocode full path", () => {
-    expect(mimocode.transport.baseUrl).toBe("https://api.xiaomimimo.com/api/free-ai/openai/chat");
-  });
-  it("opencode no trailing slash", () => {
-    expect(opencode.transport.baseUrl).toBe("https://opencode.ai");
-  });
-});
+	it("mimocode full path", () => {
+		expect(mimocode.transport.baseUrl).toBe("https://api.xiaomimimo.com/api/free-ai/openai/chat")
+	})
+	it("opencode no trailing slash", () => {
+		expect(opencode.transport.baseUrl).toBe("https://opencode.ai")
+	})
+})
 
 describe("antigravity retry", () => {
-  it("429 attempts = 6", () => {
-    expect(antigravity.transport.retry["429"].attempts).toBe(6);
-  });
-  it("503 attempts = 3", () => {
-    expect(antigravity.transport.retry["503"].attempts).toBe(3);
-  });
-});
+	it("429 attempts = 6", () => {
+		expect(antigravity.transport.retry["429"].attempts).toBe(6)
+	})
+	it("503 attempts = 3", () => {
+		expect(antigravity.transport.retry["503"].attempts).toBe(3)
+	})
+})
 
 describe("OpenCode Free endpoint routing", () => {
-  const MUSE = "muse-spark-1.2";
+	const MUSE = "muse-spark-1.2"
 
-  it("declares no Responses format on the transport and lists no Muse model", () => {
-    expect(opencode.transport.format).toBeUndefined();
-    // The -contributor-free Muse ids were removed from upstream; the registry
-    // no longer carries them.
-    expect(opencode.models.some((m) => m.id.startsWith("muse-"))).toBe(false);
-  });
+	it("declares no Responses format on the transport and lists no Muse model", () => {
+		expect(opencode.transport.format).toBeUndefined()
+		// The -contributor-free Muse ids were removed from upstream; the registry
+		// no longer carries them.
+		expect(opencode.models.some((m) => m.id.startsWith("muse-"))).toBe(false)
+	})
 
-  it("routes Muse Spark to /responses and every other model to /chat/completions", () => {
-    const executor = new OpenCodeExecutor();
-    expect(executor.buildUrl(MUSE)).toBe("https://opencode.ai/inference/openai/v1/responses");
-    expect(executor.buildUrl(`${MUSE}(xhigh)`)).toBe("https://opencode.ai/inference/openai/v1/responses");
-    expect(executor.buildUrl("muse-spark-1.3")).toBe("https://opencode.ai/inference/openai/v1/responses");
-    expect(executor.buildUrl("muse-spark-1.4")).toBe("https://opencode.ai/inference/openai/v1/responses");
-    expect(executor.buildUrl("muse-spark-2.0(xhigh)")).toBe("https://opencode.ai/inference/openai/v1/responses");
-    expect(executor.buildUrl("big-pickle")).toBe("https://opencode.ai/inference/openai/v1/chat/completions");
-    expect(executor.buildUrl("hy3-free")).toBe("https://opencode.ai/inference/openai/v1/chat/completions");
-  });
+	it("routes Muse Spark to /responses and every other model to /chat/completions", () => {
+		const executor = new OpenCodeExecutor()
+		expect(executor.buildUrl(MUSE)).toBe("https://opencode.ai/inference/openai/v1/responses")
+		expect(executor.buildUrl(`${MUSE}(xhigh)`)).toBe(
+			"https://opencode.ai/inference/openai/v1/responses",
+		)
+		expect(executor.buildUrl("muse-spark-1.3")).toBe(
+			"https://opencode.ai/inference/openai/v1/responses",
+		)
+		expect(executor.buildUrl("muse-spark-1.4")).toBe(
+			"https://opencode.ai/inference/openai/v1/responses",
+		)
+		expect(executor.buildUrl("muse-spark-2.0(xhigh)")).toBe(
+			"https://opencode.ai/inference/openai/v1/responses",
+		)
+		expect(executor.buildUrl("big-pickle")).toBe(
+			"https://opencode.ai/inference/openai/v1/chat/completions",
+		)
+		expect(executor.buildUrl("hy3-free")).toBe(
+			"https://opencode.ai/inference/openai/v1/chat/completions",
+		)
+	})
 
-  it("normalizes Chat token/thinking fields only for the Responses model", () => {
-    const executor = new OpenCodeExecutor();
-    const muse = { max_tokens: 4096, reasoning_effort: "high" };
-    executor.transformRequest(MUSE, muse, true, {});
-    expect(muse.max_output_tokens).toBe(4096);
-    expect(muse.max_tokens).toBeUndefined();
-    expect(muse.reasoning).toEqual({ effort: "high", summary: "auto" });
+	it("normalizes Chat token/thinking fields only for the Responses model", () => {
+		const executor = new OpenCodeExecutor()
+		const muse = { max_tokens: 4096, reasoning_effort: "high" }
+		executor.transformRequest(MUSE, muse, true, {})
+		expect(muse.max_output_tokens).toBe(4096)
+		expect(muse.max_tokens).toBeUndefined()
+		expect(muse.reasoning).toEqual({ effort: "high", summary: "auto" })
 
-    const chat = { max_tokens: 4096, reasoning_effort: "high" };
-    executor.transformRequest("big-pickle", chat, true, {});
-    expect(chat.max_tokens).toBe(4096);
-    expect(chat.max_output_tokens).toBeUndefined();
-    expect(chat.reasoning_effort).toBe("high");
-  });
-});
+		const chat = { max_tokens: 4096, reasoning_effort: "high" }
+		executor.transformRequest("big-pickle", chat, true, {})
+		expect(chat.max_tokens).toBe(4096)
+		expect(chat.max_output_tokens).toBeUndefined()
+		expect(chat.reasoning_effort).toBe("high")
+	})
+})

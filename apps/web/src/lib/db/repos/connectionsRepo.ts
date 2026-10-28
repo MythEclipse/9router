@@ -1,0 +1,513 @@
+import { v4 as uuidv4 } from "uuid"
+import { getAdapter } from "../driver.ts"
+import { parseJson, stringifyJson } from "../helpers/jsonCol.ts"
+import type { DbRow, ResolvedDbAdapter } from "../types.ts"
+import { getCombos } from "./combosRepo.ts"
+
+const OPTIONAL_FIELDS = [
+	"displayName",
+	"email",
+	"globalPriority",
+	"defaultModel",
+	"accessToken",
+	"refreshToken",
+	"expiresAt",
+	"tokenType",
+	"scope",
+	"projectId",
+	"apiKey",
+	"testStatus",
+	"lastTested",
+	"lastError",
+	"lastErrorAt",
+	"rateLimitedUntil",
+	"expiresIn",
+	"errorCode",
+	"consecutiveUseCount",
+	"idToken",
+	"lastRefreshAt",
+]
+
+const MODEL_LOCK_PREFIX = "modelLock_"
+
+function resetHealthStateOnActivation(
+	existing: ProviderConnectionRecord | null,
+	patch: Record<string, unknown>,
+) {
+	if (patch?.testStatus !== "active") return patch
+
+	const normalized = {
+		...patch,
+		testStatus: "active",
+		lastError: Object.hasOwn(patch, "lastError") ? patch.lastError : null,
+		lastErrorAt: Object.hasOwn(patch, "lastErrorAt") ? patch.lastErrorAt : null,
+		errorCode: null,
+		rateLimitedUntil: null,
+		backoffLevel: 0,
+	}
+
+	for (const key of Object.keys(existing || {})) {
+		if (key.startsWith(MODEL_LOCK_PREFIX)) normalized[key] = null
+	}
+
+	return normalized
+}
+
+/** A provider connection as the app sees it (data columns spread over the row). */
+export interface ProviderConnectionRecord {
+	id: string
+	provider: string
+	authType: string | null
+	name: string | null
+	email: string | null
+	priority: number | null
+	isActive: boolean
+	createdAt: string
+	updatedAt: string
+	/** Provider-specific OAuth/API details, stored as JSON in the `data` column. */
+	providerSpecificData?: Record<string, unknown> | null
+	[key: string]: unknown
+}
+
+/** Raw providerConnections row. */
+interface ProviderConnectionRow extends DbRow {
+	id: string
+	provider: string
+	authType?: string | null
+	name?: string | null
+	email?: string | null
+	priority?: number | null
+	isActive?: number | boolean | null
+	data?: string | null
+	createdAt: string
+	updatedAt: string
+}
+
+function rowToConn(row: ProviderConnectionRow): ProviderConnectionRecord {
+	const extra = parseJson<Record<string, unknown>>(row.data, {})
+	return {
+		...extra,
+		id: row.id,
+		provider: row.provider,
+		authType: row.authType,
+		name: row.name,
+		email: row.email,
+		priority: row.priority,
+		isActive: row.isActive === 1 || row.isActive === true,
+		createdAt: row.createdAt,
+		updatedAt: row.updatedAt,
+	}
+}
+
+function connToRow(c: ProviderConnectionRecord) {
+	const { id, provider, authType, name, email, priority, isActive, createdAt, updatedAt, ...rest } =
+		c
+	return {
+		id,
+		provider,
+		authType,
+		name: name ?? null,
+		email: email ?? null,
+		priority: priority ?? null,
+		isActive: isActive === false ? 0 : 1,
+		data: stringifyJson(rest),
+		createdAt,
+		updatedAt,
+	}
+}
+
+function upsert(db: ResolvedDbAdapter, c: ProviderConnectionRecord): void {
+	const r = connToRow(c)
+	db.run(
+		`INSERT INTO providerConnections(id, provider, authType, name, email, priority, isActive, data, createdAt, updatedAt)
+     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       provider=excluded.provider, authType=excluded.authType, name=excluded.name,
+       email=excluded.email, priority=excluded.priority, isActive=excluded.isActive,
+       data=excluded.data, updatedAt=excluded.updatedAt`,
+		[
+			r.id,
+			r.provider,
+			r.authType,
+			r.name,
+			r.email,
+			r.priority,
+			r.isActive,
+			r.data,
+			r.createdAt,
+			r.updatedAt,
+		],
+	)
+}
+
+function deriveConnectionName(
+	data: Record<string, unknown>,
+	fallbackName: string | null | undefined,
+): string | null {
+	if (data.provider === "github") {
+		return (
+			((data.providerSpecificData as Record<string, unknown> | undefined)?.githubLogin as
+				| string
+				| undefined) ||
+			((data.providerSpecificData as Record<string, unknown> | undefined)?.githubEmail as
+				| string
+				| undefined) ||
+			(data.email as string | undefined) ||
+			((data.providerSpecificData as Record<string, unknown> | undefined)?.githubName as
+				| string
+				| undefined) ||
+			fallbackName ||
+			null
+		)
+	}
+	return fallbackName
+}
+
+export async function getProviderConnections(
+	filter: { provider?: string; isActive?: boolean } = {},
+): Promise<ProviderConnectionRecord[]> {
+	const db = await getAdapter()
+	const where: string[] = []
+	const params: unknown[] = []
+	if (filter.provider) {
+		where.push("provider = ?")
+		params.push(filter.provider)
+	}
+	if (filter.isActive !== undefined) {
+		where.push("isActive = ?")
+		params.push(filter.isActive ? 1 : 0)
+	}
+	const sql = `SELECT * FROM providerConnections${where.length ? ` WHERE ${where.join(" AND ")}` : ""}`
+	const rows = db.all<ProviderConnectionRow>(sql, params)
+	const list = rows.map(rowToConn)
+	list.sort((a, b) => (a.priority || 999) - (b.priority || 999))
+	return list
+}
+
+export async function getProviderConnectionById(
+	id: string,
+): Promise<ProviderConnectionRecord | null> {
+	const db = await getAdapter()
+	const row = db.get<ProviderConnectionRow>(`SELECT * FROM providerConnections WHERE id = ?`, [id])
+	return row ? rowToConn(row) : null
+}
+
+// Internal sync reorder - must be called INSIDE a transaction.
+//
+// Normalizes priorities to a contiguous 1..N after a DELETE or an explicit
+// reorder, so gaps don't accumulate over time.
+//
+// Deliberately NOT called on insert: a new connection already gets
+// MAX(priority)+1, which sorts after every existing row, so the order is
+// identical with or without the rewrite. Skipping it there is what makes
+// import O(1) per key instead of O(pool) - see createProviderConnection.
+function reorderInTx(db: ResolvedDbAdapter, providerId: string): void {
+	const list = db
+		.all<ProviderConnectionRow>(`SELECT * FROM providerConnections WHERE provider = ?`, [providerId])
+		.map(rowToConn)
+	list.sort((a, b) => {
+		const pDiff = (a.priority || 0) - (b.priority || 0)
+		if (pDiff !== 0) return pDiff
+		return Number(new Date(b.updatedAt || 0)) - Number(new Date(a.updatedAt || 0))
+	})
+	list.forEach((c, i) => {
+		const want = i + 1
+		if ((c.priority || 0) !== want) {
+			db.run(`UPDATE providerConnections SET priority = ? WHERE id = ?`, [want, c.id])
+		}
+	})
+}
+
+/** Input accepted by createProviderConnection: a partial connection plus flags. */
+export type CreateConnectionInput = Partial<ProviderConnectionRecord> & {
+	allowOverwrite?: boolean
+} & Record<string, unknown>
+
+export async function createProviderConnection(
+	data: CreateConnectionInput,
+): Promise<ProviderConnectionRecord | null> {
+	const db = await getAdapter()
+	const now = new Date().toISOString()
+	let result
+
+	db.transaction(() => {
+		// apikey connections are deduped by name and need only the current max
+		// priority, so query for those directly instead of loading the whole pool
+		// (O(pool) per key - the other half of the import cost in #4311). The oauth
+		// branch below still scans, because its identity rules compare fields
+		// inside providerSpecificData and have no single-column equivalent.
+		const isApikey = data.authType === "apikey" && !!data.name
+		const all = isApikey
+			? db
+					.all(`SELECT * FROM providerConnections WHERE provider = ? AND authType = ? AND name = ?`, [
+						data.provider,
+						"apikey",
+						data.name,
+					])
+					.map(rowToConn)
+			: db.all(`SELECT * FROM providerConnections WHERE provider = ?`, [data.provider]).map(rowToConn)
+		const poolSize = isApikey
+			? (db.get<{ n: number }>(`SELECT COUNT(*) AS n FROM providerConnections WHERE provider = ?`, [
+					data.provider,
+				])?.n ?? all.length)
+			: all.length
+
+		let existing = null
+		if (data.authType === "oauth" && data.email) {
+			const incomingUsername = data.providerSpecificData?.username
+			const incomingWs = data.providerSpecificData?.chatgptAccountId
+			existing = all.find((c) => {
+				if (c.authType !== "oauth" || c.email !== data.email) return false
+
+				// Codex/OpenAI can issue multiple OAuth grants for the same email.
+				// Refresh tokens are rotated single-use; collapsing a new login onto an
+				// existing bare-email row overwrites the first account's token pair and
+				// makes it look "invalid" after adding a second account. Only update an
+				// existing Codex row when both rows expose the same ChatGPT account ID.
+				if (data.provider === "codex") {
+					const existingWs = c.providerSpecificData?.chatgptAccountId
+					return !!incomingWs && !!existingWs && incomingWs === existingWs
+				}
+
+				// Workspace providers use workspace ID when both sides have it
+				const existingWs = c.providerSpecificData?.chatgptAccountId
+				if (incomingWs && existingWs) return incomingWs === existingWs
+				if (incomingWs && !existingWs) return false
+				if (!incomingWs && existingWs) return false
+				// Non-workspace providers: match on (email + username) so cross-IdP
+				// accounts don't overwrite each other. Require username on both sides
+				// - if only one side has it, treat as a distinct identity rather than
+				// collapsing onto the bare-email fallback (which would re-introduce
+				// the cross-IdP overwrite).
+				const existingUsername = c.providerSpecificData?.username
+				if (incomingUsername && existingUsername) {
+					return incomingUsername === existingUsername
+				}
+				if (incomingUsername || existingUsername) return false
+				return true
+			})
+		} else if (data.authType === "apikey" && data.name) {
+			existing = all.find((c) => c.authType === "apikey" && c.name === data.name)
+		}
+		// access_token: never dedup - user manages duplicates manually
+
+		if (existing) {
+			// Name collision on an apikey connection used to silently replace the
+			// stored apiKey, so a script that reused names ("Key 1", "Key 2", …)
+			// destroyed existing pool entries with no 409 and no warning. Callers that
+			// genuinely mean "update this one" pass allowOverwrite; everyone else gets
+			// a typed error naming the row that would have been replaced. #4311
+			if (data.allowOverwrite === false) {
+				throw Object.assign(
+					new Error(
+						`A connection named "${existing.name}" already exists for provider "${data.provider}". ` +
+							`Pass allowOverwrite: true to replace it.`,
+					),
+					{
+						code: "PROVIDER_NAME_CONFLICT",
+						existingId: existing.id,
+						existingName: existing.name,
+					},
+				)
+			}
+			const normalized = resetHealthStateOnActivation(existing, data)
+			const merged = { ...existing, ...normalized, updatedAt: now }
+			upsert(db, merged)
+			result = merged
+			return
+		}
+
+		let connectionName: string | null = data.name || null
+		if (!connectionName && (data.authType === "oauth" || data.authType === "access_token")) {
+			connectionName = deriveConnectionName(data, String(data.email || `Account ${poolSize + 1}`))
+		}
+		let connectionPriority = data.priority
+		if (!connectionPriority) {
+			// MAX(priority)+1 in SQL rather than a reduce over the loaded pool: the
+			// apikey path no longer has the whole pool in memory, and the aggregate
+			// is served by the index instead of a row scan. #4311
+			const maxRow = db.get<{ m: number | null }>(
+				`SELECT MAX(priority) AS m FROM providerConnections WHERE provider = ?`,
+				[data.provider],
+			)
+			connectionPriority = (maxRow?.m || 0) + 1
+		}
+
+		const conn: ProviderConnectionRecord = {
+			id: uuidv4(),
+			provider: String(data.provider),
+			authType: data.authType || "oauth",
+			name: connectionName,
+			email: data.email ?? null,
+			priority: connectionPriority,
+			isActive: data.isActive !== undefined ? data.isActive : true,
+			createdAt: now,
+			updatedAt: now,
+		}
+		for (const f of OPTIONAL_FIELDS) {
+			if (data[f] !== undefined && data[f] !== null) conn[f] = data[f]
+		}
+		if (data.providerSpecificData && Object.keys(data.providerSpecificData).length > 0) {
+			conn.providerSpecificData = data.providerSpecificData
+		}
+		if (data.email !== undefined) conn.email = data.email
+
+		upsert(db, conn)
+		// No reorderInTx here. `conn.priority` is already MAX(priority)+1, so the
+		// row sorts last and the resulting order is what reorderInTx would have
+		// produced anyway. The rewrite cost ~2N statements per insert - O(pool) -
+		// which made a 5k-key import O(n*m): ~25M statements at a 5k pool, and it
+		// serialized every parallel writer on the same transaction. #4311
+		result = conn
+	})
+
+	return result
+}
+
+// Critical: OAuth refresh token race - atomic merge inside transaction
+export async function updateProviderConnection(
+	id: string,
+	data: Partial<ProviderConnectionRecord> & Record<string, unknown>,
+): Promise<ProviderConnectionRecord | null> {
+	const db = await getAdapter()
+	let result: ProviderConnectionRecord | null = null
+	db.transaction(() => {
+		const row = db.get<ProviderConnectionRow>(`SELECT * FROM providerConnections WHERE id = ?`, [id])
+		if (!row) {
+			result = null
+			return
+		}
+		const existing = rowToConn(row)
+		const normalized = resetHealthStateOnActivation(existing, data)
+		const merged: ProviderConnectionRecord = {
+			...existing,
+			...normalized,
+			updatedAt: new Date().toISOString(),
+		}
+		upsert(db, merged)
+		if (data.priority !== undefined) reorderInTx(db, existing.provider)
+		result = merged
+	})
+	return result
+}
+
+export async function deleteProviderConnection(id: string): Promise<boolean> {
+	const db = await getAdapter()
+	// Get provider before deleting
+	const row = db.get<{ provider: string }>(`SELECT provider FROM providerConnections WHERE id = ?`, [
+		id,
+	])
+	if (!row) return false
+	const provider = row.provider
+
+	let ok = false
+	db.transaction(() => {
+		const deleted = db.run(`DELETE FROM providerConnections WHERE id = ?`, [id])
+		reorderInTx(db, provider)
+		ok = deleted.changes > 0
+	})
+
+	// Cascade: clean up orphaned models in combos that reference this provider
+	if (ok) {
+		const combos = (await getCombos()) || []
+		for (const combo of combos) {
+			if (!combo.models || !Array.isArray(combo.models)) continue
+			const originalLength = combo.models.length
+			// Filter out models from the deleted provider
+			// getCombos() returns combos to the caller as-is, so the stored model
+			// strings are the raw ones; the filter only needs the synchronous shape.
+			const filtered = combo.models.filter((modelStr: string) => {
+				const info = getModelInfoCoreSync(modelStr)
+				return info?.provider !== provider
+			})
+			if (filtered.length !== originalLength) {
+				// Update combo with filtered models
+				if (filtered.length === 0) {
+					// Combo became empty - delete it to avoid 500 on use
+					db.run(`DELETE FROM combos WHERE name = ?`, [combo.name])
+				} else {
+					db.run(`UPDATE combos SET models = ?, updatedAt = datetime('now') WHERE name = ?`, [
+						stringifyJson(filtered),
+						combo.name,
+					])
+				}
+			}
+		}
+	}
+
+	return ok
+}
+
+export async function deleteProviderConnectionsByProvider(providerId) {
+	const db = await getAdapter()
+	const before = db.get(`SELECT COUNT(*) AS n FROM providerConnections WHERE provider = ?`, [
+		providerId,
+	])
+	db.run(`DELETE FROM providerConnections WHERE provider = ?`, [providerId])
+	return before?.n || 0
+}
+
+export async function reorderProviderConnections(providerId) {
+	const db = await getAdapter()
+	db.transaction(() => reorderInTx(db, providerId))
+}
+
+/**
+ * The provider half of `getModelInfoCore` without alias resolution: a stored
+ * combo model string is `provider/model` or `provider:model`, and only the
+ * provider part decides whether the combo entry is orphaned.
+ */
+function getModelInfoCoreSync(modelStr: string): { provider: string | null } | null {
+	if (!modelStr || typeof modelStr !== "string") return null
+	const separator = modelStr.includes("/") ? "/" : modelStr.includes(":") ? ":" : null
+	if (!separator) return null
+	return { provider: modelStr.split(separator)[0] || null }
+}
+
+export async function cleanupProviderConnections() {
+	const db = await getAdapter()
+	const fieldsToCheck = [
+		"displayName",
+		"email",
+		"globalPriority",
+		"defaultModel",
+		"accessToken",
+		"refreshToken",
+		"expiresAt",
+		"tokenType",
+		"scope",
+		"projectId",
+		"apiKey",
+		"testStatus",
+		"lastTested",
+		"lastError",
+		"lastErrorAt",
+		"rateLimitedUntil",
+		"expiresIn",
+		"consecutiveUseCount",
+	]
+	let cleaned = 0
+	db.transaction(() => {
+		const rows = db.all<ProviderConnectionRow>(`SELECT * FROM providerConnections`)
+		for (const row of rows) {
+			const conn = rowToConn(row)
+			let dirty = false
+			for (const f of fieldsToCheck) {
+				if (conn[f] === null || conn[f] === undefined) {
+					if (f in conn) {
+						delete conn[f]
+						cleaned++
+						dirty = true
+					}
+				}
+			}
+			if (conn.providerSpecificData && Object.keys(conn.providerSpecificData).length === 0) {
+				delete conn.providerSpecificData
+				cleaned++
+				dirty = true
+			}
+			if (dirty) upsert(db, conn)
+		}
+	})
+	return cleaned
+}

@@ -70,22 +70,22 @@ The 9Router image does not bundle Python or Headroom. To use Headroom in Docker,
 
 ```yaml
 services:
-  9router:
-    image: decolua/9router:latest
-    ports:
-      - "20128:20128"
-    volumes:
-      - "$HOME/.9router:/app/data"
-    environment:
-      DATA_DIR: /app/data
-      HEADROOM_URL: http://headroom:8787
-    depends_on:
-      - headroom
+ 9router:
+  image: decolua/9router:latest
+  ports:
+   - "20128:20128"
+  volumes:
+   - "$HOME/.9router:/app/data"
+  environment:
+   DATA_DIR: /app/data
+   HEADROOM_URL: http://headroom:8787
+  depends_on:
+   - headroom
 
-  headroom:
-    image: ghcr.io/chopratejas/headroom:latest
-    ports:
-      - "8787:8787"
+ headroom:
+  image: ghcr.io/chopratejas/headroom:latest
+  ports:
+   - "8787:8787"
 ```
 
 In the dashboard, open `Endpoint` → `Token Saver` → `Headroom`, confirm the URL is `http://headroom:8787`, recheck status, then enable Headroom.

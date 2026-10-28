@@ -1,0 +1,480 @@
+import crypto from "node:crypto"
+import { PROVIDERS } from "../config/providers.ts"
+import { MEMORY_CONFIG } from "../config/runtimeConfig.ts"
+import { isMuseSparkModel } from "../providers/models/helpers.ts"
+import { ANTHROPIC_API_VERSION } from "../providers/shared.ts"
+import { getThinkingLevels } from "../providers/thinkingLevels.ts"
+import { OpencodeTlsUnavailableError, opencodeTlsFetch } from "../services/opencodeTlsClient.ts"
+import { normalizeResponsesInput } from "../translator/formats/responsesApi.ts"
+import { applyAgentHarness, loadAgentHarness } from "../utils/opencodeAgentHarness.ts"
+import { applyFingerprintTools } from "../utils/opencodeFingerprint.ts"
+import { injectReasoningContent } from "../utils/reasoningContentInjector.ts"
+import { normalizeResponsesTools, sanitizeResponsesItems } from "../utils/responsesTools.ts"
+import { resolveSessionId } from "../utils/sessionManager.ts"
+import { BaseExecutor } from "./base.ts"
+
+// Upstream UA shape: "opencode/<version> ai-sdk/provider-utils/<v> runtime/bun/<v>".
+// OpenCode's older "opencode/<channel>/<version>/<client>" form and the
+// "opencode/1.18.x" form are both rejected with 403 FreeTierError since
+// 2026-10-14. Shape as of the 1.19.x CLI (reverse-engineered 2026-10-23 via
+// mitmproxy); it pairs with x-opencode-client: cli, x-opencode-project, and a
+// per-message x-opencode-request: msg_<...>. This executor has to keep
+// mirroring whatever the current CLI sends: a stale UA is how the free tier
+// tells a relay apart from the real client (upstream #5107).
+const OPENCODE_UA = "opencode/latest/2.1.4/cli"
+const OPENCODE_CLIENT = "cli"
+
+/** Per-process project id, sha1-shaped like the CLI's own install id. */
+let projectHashCache = ""
+function projectHash(): string {
+	if (!projectHashCache) {
+		const seed = crypto.randomBytes(32).toString("hex")
+		projectHashCache = crypto.createHash("sha1").update(seed).digest("hex")
+	}
+	return projectHashCache
+}
+
+/** Fresh W3C + B3 trace context, regenerated for every request. */
+function randomTraceContext(): { b3: string; traceparent: string } {
+	const traceId = crypto.randomBytes(16).toString("hex")
+	const spanId = crypto.randomBytes(8).toString("hex")
+	return {
+		b3: `${traceId}-${spanId}-1-${crypto.randomBytes(8).toString("hex")}`,
+		traceparent: `00-${traceId}-${spanId}-01`,
+	}
+}
+const MAX_SESSION_LENGTH = 256
+const SESSION_HEADER = "x-opencode-session"
+const SESSION_FIELD = "_opencodeSession"
+export const OPENCODE_SESSION_RE = /^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/
+const BASE62_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+const translatedOpencodeSessions = new Map()
+const MAX_TRANSLATED_SESSIONS = 5000
+
+function hasValidOpencodeVersion(ua) {
+	// Only the real current CLI shape passes through: the older channel shape
+	// ("opencode/<channel>/<major>.<minor>.<patch>/<client>") was the previous
+	// generation and now reads as a stale relay UA, so anything that is not the
+	// current "opencode/<version> ai-sdk/provider-utils/<v> runtime/bun/<v>"
+	// form is replaced with the current UA (reverse-engineered 2026-10-23 via
+	// mitmproxy against CLI 1.19.4). Anything else (curl, python, a pinned UA)
+	// is not the CLI.
+	return /^opencode\/\d+\.\d+\.\d+ ai-sdk\/provider-utils\/[\d.]+ runtime\/bun\/[\d.]+$/i.test(
+		String(ua || ""),
+	)
+}
+const MESSAGES_MODELS = new Set(["union-alpha"])
+
+let lastTimestamp = 0
+let counter = 0
+
+function unstableRandom() {
+	const bytes = crypto.randomBytes(14)
+	let randomPart = ""
+	for (let i = 0; i < 14; i++) {
+		randomPart += BASE62_CHARS[bytes[i] % 62]
+	}
+	return randomPart
+}
+
+// Session prefix = 12 hex of ~(timeMs * 0x1000 + counter), low 48 bits, like the CLI.
+// Upstream decodes it and rejects a non-small counter with 403 FreeTierError
+// (live probes: counter 0–16 pass, >=100 fail), so the counter must stay real.
+// Since Oct 2026 the free quota is tracked per session id, not only per IP:
+// rotating to a fresh minted session after a FreeUsageLimitError resets the
+// quota window (upstream issue #5107), while the stable session keeps working
+// for the happy path.
+const SESSION_PREFIX_MASK = (1n << 48n) - 1n
+
+function descendingTimeHex(time, counterValue) {
+	return (~(BigInt(time) * 0x1000n + BigInt(counterValue)) & SESSION_PREFIX_MASK)
+		.toString(16)
+		.padStart(12, "0")
+}
+
+export function generateSessionId(timestamp = Date.now()) {
+	if (timestamp !== lastTimestamp) {
+		lastTimestamp = timestamp
+		counter = 0
+	}
+	counter++
+	return `ses_${descendingTimeHex(timestamp, counter)}${unstableRandom()}`
+}
+
+export function generateRequestId(timestamp = Date.now()) {
+	if (timestamp !== lastTimestamp) {
+		lastTimestamp = timestamp
+		counter = 0
+	}
+	counter++
+	const value = BigInt(timestamp) * 0x1000n + BigInt(counter)
+	const time = Array.from({ length: 6 }, (_, index) =>
+		Number((value >> BigInt(40 - 8 * index)) & 0xffn)
+			.toString(16)
+			.padStart(2, "0"),
+	).join("")
+	return `msg_${time}${unstableRandom()}`
+}
+
+export function translateSessionId(sessionId, clientTool = "") {
+	if (typeof sessionId === "string" && OPENCODE_SESSION_RE.test(sessionId.trim())) {
+		return sessionId.trim()
+	}
+	const key = `${clientTool || "generic"}\0${sessionId || ""}`
+	const existing = translatedOpencodeSessions.get(key)
+	if (existing) {
+		existing.lastUsed = Date.now()
+		return existing.sessionId
+	}
+	const translated = `ses_${descendingTimeHex(Date.now(), 1)}${unstableRandom()}`
+	if (translatedOpencodeSessions.size >= MAX_TRANSLATED_SESSIONS) {
+		translatedOpencodeSessions.delete(translatedOpencodeSessions.keys().next().value)
+	}
+	translatedOpencodeSessions.set(key, { sessionId: translated, lastUsed: Date.now() })
+	return translated
+}
+
+function normalizeSession(value) {
+	if (typeof value !== "string") return null
+	const normalized = value.trim()
+	if (!normalized || normalized.length > MAX_SESSION_LENGTH) return null
+	return normalized
+}
+
+function nativeSession(headers) {
+	if (!headers || typeof headers !== "object") return null
+	for (const [key, value] of Object.entries(headers)) {
+		if (key.toLowerCase() === SESSION_HEADER) {
+			const normalized = normalizeSession(value)
+			if (normalized && OPENCODE_SESSION_RE.test(normalized)) return normalized
+		}
+	}
+	return null
+}
+
+// Upstream free-tier quota is accounted per session. Minting a fresh
+// x-opencode-session on every request burns through it and surfaces as
+// 429 FreeUsageLimitError with growing reset-after delays, while the real
+// CLI reuses one long-lived canonical session per conversation. Mirror
+// that: one stable canonical session per downstream identity, evicted
+// after MEMORY_CONFIG.sessionTtlMs like the other session stores.
+const stableOpencodeSessions = new Map()
+const MAX_STABLE_SESSIONS = 1000
+const stableSessionCleanup = setInterval(() => {
+	const now = Date.now()
+	for (const [key, entry] of stableOpencodeSessions) {
+		if (now - entry.lastUsed > MEMORY_CONFIG.sessionTtlMs) {
+			stableOpencodeSessions.delete(key)
+		}
+	}
+	for (const [key, entry] of translatedOpencodeSessions) {
+		if (now - entry.lastUsed > MEMORY_CONFIG.sessionTtlMs) {
+			translatedOpencodeSessions.delete(key)
+		}
+	}
+}, MEMORY_CONFIG.sessionCleanupIntervalMs)
+if (stableSessionCleanup.unref) stableSessionCleanup.unref()
+
+function identityKey(credentials) {
+	const connectionId = credentials?.connectionId || credentials?.id
+	if (connectionId) return `opencode:conn:${String(connectionId).slice(0, 128)}`
+	const raw = credentials?.rawHeaders || {}
+	const auth = raw.authorization || raw.Authorization || raw["x-api-key"] || raw["X-Api-Key"] || ""
+	if (auth) {
+		const digest = crypto.createHash("sha256").update(String(auth)).digest("hex").slice(0, 32)
+		return `opencode:auth:${digest}`
+	}
+	return "opencode:default"
+}
+
+export function stableSessionId(credentials) {
+	const key = identityKey(credentials)
+	const existing = stableOpencodeSessions.get(key)
+	if (existing) {
+		existing.lastUsed = Date.now()
+		stableOpencodeSessions.delete(key)
+		stableOpencodeSessions.set(key, existing)
+		return existing.sessionId
+	}
+	const sessionId = generateSessionId()
+	if (stableOpencodeSessions.size >= MAX_STABLE_SESSIONS) {
+		stableOpencodeSessions.delete(stableOpencodeSessions.keys().next().value)
+	}
+	stableOpencodeSessions.set(key, { sessionId, lastUsed: Date.now() })
+	return sessionId
+}
+
+// Burn the stable session for this identity: the next request mints a fresh
+// canonical session, which upstream treats as a new quota window. Called only
+// after a FreeUsageLimitError — a fresh session per request would burn the
+// quota faster, so the stable one stays until it is actually exhausted.
+export function rotateOpencodeSession(credentials) {
+	const key = identityKey(credentials)
+	stableOpencodeSessions.delete(key)
+	return stableSessionId(credentials)
+}
+
+function bodyHasSessionHints(body) {
+	try {
+		if (!body || typeof body !== "object") return false
+		if (typeof body.session_id === "string" && body.session_id.trim()) return true
+		if (typeof body.conversation_id === "string" && body.conversation_id.trim()) return true
+		if (typeof body.prompt_cache_key === "string" && body.prompt_cache_key.trim()) return true
+		if (body.metadata && typeof body.metadata.user_id === "string" && body.metadata.user_id.trim())
+			return true
+		if (body.request && body.request.sessionId != null && String(body.request.sessionId) !== "")
+			return true
+		const arr = Array.isArray(body.messages)
+			? body.messages
+			: Array.isArray(body.input)
+				? body.input
+				: null
+		if (arr) {
+			let assistantText = ""
+			for (const msg of arr) {
+				if (msg?.role === "assistant") {
+					const content = msg.content
+					if (typeof content === "string") assistantText += content
+					else if (Array.isArray(content)) {
+						for (const part of content) assistantText += part?.text || part?.output || ""
+					}
+					if (assistantText.length >= 50) return true
+				}
+			}
+		}
+		return false
+	} catch {
+		return false
+	}
+}
+
+// Strip the thinking suffix "model(level)" so registry lookups hit the base id.
+function baseModelId(model) {
+	return String(model || "")
+		.replace(/\([^()]+\)\s*$/, "")
+		.trim()
+}
+
+// Muse Spark ids are the only family served by /inference/v1/responses; every
+// other model stays on /chat/completions.
+function isResponsesModel(model) {
+	return isMuseSparkModel(baseModelId(model))
+}
+
+function isMessagesModel(model) {
+	return MESSAGES_MODELS.has(baseModelId(model))
+}
+
+/** Fields a caller may hand `prepareRequestCredentials` to derive a session. */
+export interface OpencodeCredentialContext {
+	body?: Record<string, unknown> | null
+	credentials?: Record<string, unknown> | null
+	providerSessionId?: unknown
+	clientTool?: unknown
+}
+
+function resolveOpencodeSession(body, credentials, providerSessionId, clientTool) {
+	const headers = credentials?.rawHeaders || {}
+	const native = nativeSession(headers)
+	if (native) return native
+
+	let incoming = null
+	for (const [key, value] of Object.entries(headers)) {
+		if (key.toLowerCase() === SESSION_HEADER) {
+			incoming = normalizeSession(value)
+			break
+		}
+	}
+
+	const hinted = incoming || normalizeSession(providerSessionId)
+	if (hinted) return translateSessionId(hinted, clientTool)
+
+	if (credentials?.connectionId || bodyHasSessionHints(body)) {
+		let viaManager = null
+		try {
+			viaManager = resolveSessionId({
+				headers,
+				body,
+				connectionId: credentials?.connectionId,
+				scope: "opencode",
+			})
+		} catch {
+			viaManager = null
+		}
+		if (viaManager) return translateSessionId(viaManager, clientTool)
+	}
+
+	return stableSessionId(credentials)
+}
+
+function normalizeOpencodeReasoning(model, body) {
+	const current = body.reasoning
+	const currentReasoning =
+		current && typeof current === "object" && !Array.isArray(current) ? current : null
+	const requestedEffort =
+		typeof body.reasoning_effort === "string" ? body.reasoning_effort : currentReasoning?.effort
+	if (typeof requestedEffort !== "string") return
+
+	const cleanModel = baseModelId(model || body.model)
+	const supportedLevels = getThinkingLevels("opencode", cleanModel)
+	let effort = requestedEffort.toLowerCase().trim()
+	// "auto" adaptive is not a valid upstream effort — drop it entirely so the
+	// lane 400s instead of shipping a value the upstream rejects.
+	if (effort === "auto") {
+		delete body.reasoning_effort
+		return
+	}
+	if (
+		(effort === "max" || effort === "ultra") &&
+		supportedLevels?.length &&
+		!supportedLevels.includes(effort)
+	) {
+		if (effort === "ultra" && supportedLevels.includes("max")) effort = "max"
+		else if (supportedLevels.includes("xhigh")) effort = "xhigh"
+	}
+
+	body.reasoning = { ...currentReasoning, effort }
+	if (!body.reasoning.summary) body.reasoning.summary = "auto"
+	delete body.reasoning_effort
+}
+
+export class OpenCodeExecutor extends BaseExecutor {
+	harness: { preamble: string; tools: unknown[] } | null = null
+
+	constructor(provider = "opencode") {
+		super(provider, PROVIDERS[provider] || PROVIDERS.opencode)
+	}
+
+	prepareRequestCredentials({
+		body,
+		credentials,
+		providerSessionId,
+		clientTool,
+	}: OpencodeCredentialContext = {}) {
+		const sourceCredentials = credentials || {}
+		const session = resolveOpencodeSession(body, sourceCredentials, providerSessionId, clientTool)
+
+		return {
+			...sourceCredentials,
+			[SESSION_FIELD]: session,
+		}
+	}
+
+	transformRequest(model, body, _stream, _credentials) {
+		if (body && typeof body === "object" && model && !body.model) body.model = model
+		// Zen rejects non-streaming requests on free models with 403 FreeTierError;
+		// always stream upstream and let the handler layer aggregate for non-stream clients.
+		if (body && typeof body === "object") body.stream = true
+		// OpenCode Free rejects reasoning_effort "auto" — drop it so the lane never
+		// ships an adaptive value the upstream 400s on.
+		if (body && typeof body === "object" && body.reasoning_effort === "auto") {
+			delete body.reasoning_effort
+		}
+		if (isResponsesModel(model || body?.model) && body && typeof body === "object") {
+			// ponytail: chỉ model đã xác nhận auto-only; mở allowlist khi có bằng chứng.
+			if (
+				"tool_choice" in body &&
+				body.tool_choice !== "auto" &&
+				(this.config.quirks?.forceAutoToolChoiceModels as string[] | undefined)?.includes(
+					baseModelId(model),
+				)
+			) {
+				body.tool_choice = "auto"
+			}
+			const normalized = normalizeResponsesInput(body.input)
+			if (normalized) body.input = normalized
+			if (!Array.isArray(body.input) || body.input.length === 0) {
+				body.input = [{ type: "message", role: "user", content: [{ type: "input_text", text: "..." }] }]
+			}
+			// Responses API names the output cap max_output_tokens and takes thinking
+			// as reasoning:{effort,summary} — normalize the Chat fields at this boundary.
+			if (body.max_output_tokens === undefined) {
+				if (body.max_completion_tokens !== undefined)
+					body.max_output_tokens = body.max_completion_tokens
+				else if (body.max_tokens !== undefined) body.max_output_tokens = body.max_tokens
+			}
+			delete body.max_tokens
+			delete body.max_completion_tokens
+			normalizeOpencodeReasoning(model, body)
+			body.stream = true
+			body.store = false
+			normalizeResponsesTools(body)
+			sanitizeResponsesItems(body)
+			// Free-tier fingerprint tools are required even when an agent client
+			// already supplied tools. ZCode/Claude Code requests normally have
+			// non-empty tool arrays; skipping cloaking here triggers 403 FreeTierError.
+			applyFingerprintTools(body, true)
+			applyAgentHarness(body, this.harness, { flat: true })
+		} else if (body && typeof body === "object") {
+			applyFingerprintTools(body, false, { claude: isMessagesModel(model || body?.model) })
+			applyAgentHarness(body, this.harness)
+		}
+		return injectReasoningContent({ provider: this.provider, model, body })
+	}
+
+	async execute(args) {
+		const { model, body, stream, signal, log, proxyOptions = null } = args
+		const credentials = this.prepareRequestCredentials(args)
+		// Warm the harness cache before the sync transform runs; it resolves from
+		// cache on every request after the first.
+		this.harness = await loadAgentHarness()
+		return super.execute({
+			...args,
+			credentials,
+			// Forwarded, not dropped: this is what routes the request through a
+			// Vercel/Cloudflare/Netlify relay. Without it proxyAwareFetch sees no
+			// vercelRelayUrl and the opencode lane always dials upstream directly.
+			proxyOptions,
+			directFetch: async (url, options = {}) => {
+				try {
+					return await opencodeTlsFetch(url, options, { signal: options.signal })
+				} catch (error) {
+					if (!(error instanceof OpencodeTlsUnavailableError)) throw error
+					log?.warn?.("OPENCODE", `${error.message}; falling back to native fetch`)
+					return fetch(url, options)
+				}
+			},
+		})
+	}
+
+	// OpenCode v2 exposes the same models under the OpenAI-compatible prefix.
+	// The free-tier gate rejects /inference/v1 with 429 FreeUsageLimitError.
+	buildUrl(model) {
+		const base = this.config.baseUrl
+		if (isResponsesModel(model)) return `${base}/inference/openai/v1/responses`
+		if (isMessagesModel(model)) return `${base}/inference/openai/v1/messages`
+		return `${base}/inference/openai/v1/chat/completions`
+	}
+
+	buildHeaders(credentials, stream = true, url = "") {
+		const raw = credentials?.rawHeaders || {}
+		const lower = {}
+		for (const [k, v] of Object.entries(raw)) lower[k.toLowerCase()] = v
+
+		const downstreamUa = lower["user-agent"] || ""
+		const isOpencodeDownstream = hasValidOpencodeVersion(downstreamUa)
+
+		const session =
+			credentials?.[SESSION_FIELD] || this.prepareRequestCredentials({ credentials })[SESSION_FIELD]
+		const project = lower["x-opencode-project"] || projectHash()
+		const trace = randomTraceContext()
+
+		// Match the fetch-backed OpenCode route's session-affinity headers.
+		const headers = {
+			"Content-Type": "application/json",
+			Authorization: "Bearer public",
+			"User-Agent": isOpencodeDownstream ? downstreamUa : OPENCODE_UA,
+			"x-opencode-client": lower["x-opencode-client"] || OPENCODE_CLIENT,
+			"x-opencode-session": session,
+			"x-opencode-session-id": session,
+			"x-session-affinity": session,
+			"x-session-id": session,
+			"x-opencode-project": project,
+			b3: trace.b3,
+			traceparent: trace.traceparent,
+			Accept: stream ? "text/event-stream" : "*/*",
+		}
+		if (url.endsWith("/messages")) headers["anthropic-version"] = ANTHROPIC_API_VERSION
+		return headers
+	}
+}

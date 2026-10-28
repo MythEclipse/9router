@@ -13,26 +13,30 @@
 // Escape hatches:
 //   - RUN_REAL=1        → keep the real DATA_DIR so *.real.test.js can read it.
 //   - DATA_DIR=<path>   → respect an explicit override (CI / manual isolation).
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import fs from "node:fs"
+import os from "node:os"
+import path from "node:path"
 
-const RUN_REAL = process.env.RUN_REAL === "1";
-const explicit = process.env.DATA_DIR;
-const isSuiteTempDir = process.env.NINE_ROUTER_TEST_DATA_DIR === "1";
+const RUN_REAL = process.env.RUN_REAL === "1"
+const explicit = process.env.DATA_DIR
+const isSuiteTempDir = process.env.NINE_ROUTER_TEST_DATA_DIR === "1"
 
 if (!RUN_REAL && (!explicit || isSuiteTempDir)) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "9router-test-"));
-  process.env.DATA_DIR = dir;
-  process.env.NINE_ROUTER_TEST_DATA_DIR = "1";
-  const tempDirs = process.__9routerTestDataDirs || (process.__9routerTestDataDirs = new Set());
-  tempDirs.add(dir);
-  if (!process.__9routerTestDataCleanupRegistered) {
-    process.__9routerTestDataCleanupRegistered = true;
-    process.once("exit", () => {
-      for (const tempDir of tempDirs) {
-        try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch { /* best effort */ }
-      }
-    });
-  }
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "9router-test-"))
+	process.env.DATA_DIR = dir
+	process.env.NINE_ROUTER_TEST_DATA_DIR = "1"
+	const tempDirs = process.__9routerTestDataDirs || (process.__9routerTestDataDirs = new Set())
+	tempDirs.add(dir)
+	if (!process.__9routerTestDataCleanupRegistered) {
+		process.__9routerTestDataCleanupRegistered = true
+		process.once("exit", () => {
+			for (const tempDir of tempDirs) {
+				try {
+					fs.rmSync(tempDir, { recursive: true, force: true })
+				} catch {
+					/* best effort */
+				}
+			}
+		})
+	}
 }

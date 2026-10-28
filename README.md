@@ -1,17 +1,17 @@
 <div align="center">
   <img src="./images/9router.png?1" alt="9Router Dashboard" width="800"/>
-  
-  # 9Router - FREE AI Router & Token Saver
-  
-  **Never stop coding. Save 20-40% tokens with RTK + auto-fallback to FREE & cheap AI models.**
-  
-  **Connect All AI Code Tools (Claude Code, Cursor, Antigravity, Copilot, Codex, Gemini, OpenCode, Cline, OpenClaw...) to 40+ AI Providers & 100+ Models.**
-  
-  [![npm](https://img.shields.io/npm/v/9router.svg)](https://www.npmjs.com/package/9router)
-  [![Downloads](https://img.shields.io/npm/dm/9router.svg)](https://www.npmjs.com/package/9router)
-  [![Docker Pulls](https://img.shields.io/docker/pulls/decolua/9router.svg?logo=docker&label=Docker%20pulls)](https://hub.docker.com/r/decolua/9router)
-  [![GHCR](https://img.shields.io/badge/GHCR-decolua%2F9router-blue?logo=github)](https://github.com/decolua/9router/pkgs/container/9router)
-  [![License](https://img.shields.io/npm/l/9router.svg)](https://github.com/decolua/9router/blob/main/LICENSE)
+
+# 9Router - FREE AI Router & Token Saver
+
+**Never stop coding. Save 20-40% tokens with RTK + auto-fallback to FREE & cheap AI models.**
+
+**Connect All AI Code Tools (Claude Code, Cursor, Antigravity, Copilot, Codex, Gemini, OpenCode, Cline, OpenClaw...) to 40+ AI Providers & 100+ Models.**
+
+[![npm](https://img.shields.io/npm/v/9router.svg)](https://www.npmjs.com/package/9router)
+[![Downloads](https://img.shields.io/npm/dm/9router.svg)](https://www.npmjs.com/package/9router)
+[![Docker Pulls](https://img.shields.io/docker/pulls/decolua/9router.svg?logo=docker&label=Docker%20pulls)](https://hub.docker.com/r/decolua/9router)
+[![GHCR](https://img.shields.io/badge/GHCR-decolua%2F9router-blue?logo=github)](https://github.com/decolua/9router/pkgs/container/9router)
+[![License](https://img.shields.io/npm/l/9router.svg)](https://github.com/decolua/9router/blob/main/LICENSE)
 
 <a href="https://trendshift.io/repositories/22628" target="_blank"><img src="https://trendshift.io/api/badge/repositories/22628" alt="decolua%2F9router | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
@@ -496,11 +496,11 @@ faster-whisper, Speaches, Kokoro-FastAPI, openedai-speech, llama.cpp/llama-serve
 vLLM, Infinity, text-embeddings-inference, or anything else that speaks the OpenAI
 shape.
 
-| Provider | Endpoint used | Typical server |
-| --- | --- | --- |
-| **Self-hosted STT** | `/v1/audio/transcriptions` | whisper.cpp, faster-whisper |
-| **Self-hosted TTS** | `/v1/audio/speech` | Kokoro-FastAPI, openedai-speech |
-| **Self-hosted Embedding** | `/v1/embeddings` | llama-server, vLLM, Infinity |
+| Provider                  | Endpoint used              | Typical server                  |
+| ------------------------- | -------------------------- | ------------------------------- |
+| **Self-hosted STT**       | `/v1/audio/transcriptions` | whisper.cpp, faster-whisper     |
+| **Self-hosted TTS**       | `/v1/audio/speech`         | Kokoro-FastAPI, openedai-speech |
+| **Self-hosted Embedding** | `/v1/embeddings`           | llama-server, vLLM, Infinity    |
 
 Every other speech provider is a named cloud service with a fixed endpoint. These
 three read their address from **each connection**, so one provider can front
@@ -508,11 +508,11 @@ several machines and load-balance across them like any other.
 
 Set it on the connection as `providerSpecificData.baseUrl`:
 
-| Provider | Give it | Result |
-| --- | --- | --- |
-| Self-hosted STT | the full URL — `http://host:8080/v1/audio/transcriptions` | used as-is |
-| Self-hosted TTS | the server root — `http://host:8880` | `+ /v1/audio/speech` |
-| Self-hosted Embedding | the **OpenAI base**, `/v1` included — `http://host:8080/v1` | `+ /embeddings` |
+| Provider              | Give it                                                     | Result               |
+| --------------------- | ----------------------------------------------------------- | -------------------- |
+| Self-hosted STT       | the full URL — `http://host:8080/v1/audio/transcriptions`   | used as-is           |
+| Self-hosted TTS       | the server root — `http://host:8880`                        | `+ /v1/audio/speech` |
+| Self-hosted Embedding | the **OpenAI base**, `/v1` included — `http://host:8080/v1` | `+ /embeddings`      |
 
 > **Mind the `/v1` on embeddings.** The adapter appends `/embeddings`, so
 > `http://host:8080` resolves to `http://host:8080/embeddings` and misses the
@@ -714,19 +714,19 @@ Seamless translation between formats:
 
 ## 💰 Pricing at a Glance
 
-| Tier                | Provider              | Cost         | Quota Reset      | Best For                                |
-| ------------------- | --------------------- | ------------ | ---------------- | --------------------------------------- |
-| **🚀 TOKEN SAVER**  | **RTK (built-in)**    | **FREE**     | Always on        | **Save 20-40% tokens on EVERY request** |
-| **💳 SUBSCRIPTION** | Claude Code (Pro/Max) | $20-200/mo   | 5h + weekly      | Already subscribed                      |
-|                     | Codex (Plus/Pro)      | $20-200/mo   | 5h + weekly      | OpenAI users                            |
-|                     | GitHub Copilot        | $10-19/mo    | Monthly          | GitHub users                            |
-|                     | Cursor IDE            | $20/mo       | Monthly          | Cursor users                            |
-| **💰 CHEAP**        | GLM-5.1 / GLM-4.7     | $0.6/1M      | Daily 10AM       | Budget backup                           |
-|                     | MiniMax M2.7          | $0.2/1M      | 5-hour rolling   | Cheapest option                         |
-|                     | Kimi K2.5             | $9/mo flat   | 10M tokens/mo    | Predictable cost                        |
- | **🆓 FREE**         | Kiro AI               | $0           | 50 credits/mo    | Claude 4.5 + GLM-5 + MiniMax free (paid tiers above) |
- |                     | OpenCode Free         | $0           | Varies*          | No auth, auto-fetch models (list changes over time) |
- |                     | Vertex AI             | $300 credits | New GCP accounts | Gemini 3 Pro + DeepSeek + GLM-5 (use Vertex AI Studio endpoint for free credits) |
+| Tier                | Provider              | Cost         | Quota Reset      | Best For                                                                         |
+| ------------------- | --------------------- | ------------ | ---------------- | -------------------------------------------------------------------------------- |
+| **🚀 TOKEN SAVER**  | **RTK (built-in)**    | **FREE**     | Always on        | **Save 20-40% tokens on EVERY request**                                          |
+| **💳 SUBSCRIPTION** | Claude Code (Pro/Max) | $20-200/mo   | 5h + weekly      | Already subscribed                                                               |
+|                     | Codex (Plus/Pro)      | $20-200/mo   | 5h + weekly      | OpenAI users                                                                     |
+|                     | GitHub Copilot        | $10-19/mo    | Monthly          | GitHub users                                                                     |
+|                     | Cursor IDE            | $20/mo       | Monthly          | Cursor users                                                                     |
+| **💰 CHEAP**        | GLM-5.1 / GLM-4.7     | $0.6/1M      | Daily 10AM       | Budget backup                                                                    |
+|                     | MiniMax M2.7          | $0.2/1M      | 5-hour rolling   | Cheapest option                                                                  |
+|                     | Kimi K2.5             | $9/mo flat   | 10M tokens/mo    | Predictable cost                                                                 |
+| **🆓 FREE**         | Kiro AI               | $0           | 50 credits/mo    | Claude 4.5 + GLM-5 + MiniMax free (paid tiers above)                             |
+|                     | OpenCode Free         | $0           | Varies*          | No auth, auto-fetch models (list changes over time)                              |
+|                     | Vertex AI             | $300 credits | New GCP accounts | Gemini 3 Pro + DeepSeek + GLM-5 (use Vertex AI Studio endpoint for free credits) |
 
 **💡 Pro Tip:** RTK + Kiro AI + OpenCode Free combo = **$0 cost + 20-40% token savings**!
 

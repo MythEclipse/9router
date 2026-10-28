@@ -1,0 +1,12 @@
+$schema: "https://moonrepo.dev/schemas/workspace.json"
+
+# bun workspaces provide node_modules; moon only orders and caches the tasks.
+# Never add a pnpm-project field here — this repo is bun-only by decision.
+vcs:
+  defaultBranch: "master"
+
+projects:
+  - "apps/web"
+  - "apps/api"
+  - "packages/*"
+  - "cli"

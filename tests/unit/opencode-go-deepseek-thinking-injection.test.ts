@@ -10,87 +10,76 @@
  * Signed placeholders were also accepted live (2026-08-15, opencode.go /messages),
  * but unsigned mirrors the official deepseek provider behavior exactly.
  */
-import { describe, it, expect } from "vitest";
-import { prepareClaudeRequest } from "../../open-sse/translator/formats/claude.js";
+import { describe, expect, it } from "vitest"
+import { prepareClaudeRequest } from "../../open-sse/translator/formats/claude.js"
 
 function makeBody(model) {
-  return {
-    model,
-    max_tokens: 2048,
-    thinking: { type: "enabled", budget_tokens: 1024 },
-    messages: [
-      {
-        role: "assistant",
-        content: [
-          {
-            type: "tool_use",
-            id: "toolu_1",
-            name: "get_weather",
-            input: { city: "Paris" },
-          },
-        ],
-      },
-      {
-        role: "user",
-        content: [
-          { type: "tool_result", tool_use_id: "toolu_1", content: "18C" },
-        ],
-      },
-    ],
-  };
+	return {
+		model,
+		max_tokens: 2048,
+		thinking: { type: "enabled", budget_tokens: 1024 },
+		messages: [
+			{
+				role: "assistant",
+				content: [
+					{
+						type: "tool_use",
+						id: "toolu_1",
+						name: "get_weather",
+						input: { city: "Paris" },
+					},
+				],
+			},
+			{
+				role: "user",
+				content: [{ type: "tool_result", tool_use_id: "toolu_1", content: "18C" }],
+			},
+		],
+	}
 }
 
 function firstBlock(body) {
-  return body.messages[0].content[0];
+	return body.messages[0].content[0]
 }
 
 describe("prepareClaudeRequest — opencode-go DeepSeek thinking pass-back", () => {
-  it("injects an unsigned thinking placeholder on tool_use turns missing one", () => {
-    const out = prepareClaudeRequest(
-      makeBody("opencode-go/deepseek-v4-pro(max)"),
-      "opencode-go",
-    );
+	it("injects an unsigned thinking placeholder on tool_use turns missing one", () => {
+		const out = prepareClaudeRequest(makeBody("opencode-go/deepseek-v4-pro(max)"), "opencode-go")
 
-    const block = firstBlock(out);
-    expect(block.type).toBe("thinking");
-    expect(block.signature).toBeUndefined();
-    expect(out.messages[0].content).toHaveLength(2); // placeholder + tool_use
-  });
+		const block = firstBlock(out)
+		expect(block.type).toBe("thinking")
+		expect(block.signature).toBeUndefined()
+		expect(out.messages[0].content).toHaveLength(2) // placeholder + tool_use
+	})
 
-  it("keeps an existing thinking block verbatim (no re-sign, no duplicate)", () => {
-    const body = makeBody("opencode-go/deepseek-v4-flash");
-    const realThinking = {
-      type: "thinking",
-      thinking: "actual reasoning",
-      signature: "sig_from_upstream",
-    };
-    body.messages[0].content.unshift(realThinking);
+	it("keeps an existing thinking block verbatim (no re-sign, no duplicate)", () => {
+		const body = makeBody("opencode-go/deepseek-v4-flash")
+		const realThinking = {
+			type: "thinking",
+			thinking: "actual reasoning",
+			signature: "sig_from_upstream",
+		}
+		body.messages[0].content.unshift(realThinking)
 
-    const out = prepareClaudeRequest(body, "opencode-go");
+		const out = prepareClaudeRequest(body, "opencode-go")
 
-    const thinking = out.messages[0].content.filter(
-      (b) => b.type === "thinking",
-    );
-    expect(thinking).toHaveLength(1);
-    expect(thinking[0]).toEqual(realThinking);
-  });
+		const thinking = out.messages[0].content.filter((b) => b.type === "thinking")
+		expect(thinking).toHaveLength(1)
+		expect(thinking[0]).toEqual(realThinking)
+	})
 
-  it("leaves non-DeepSeek opencode-go models untouched (minimax rides /messages too)", () => {
-    const out = prepareClaudeRequest(
-      makeBody("opencode-go/minimax-m3"),
-      "opencode-go",
-    );
+	it("leaves non-DeepSeek opencode-go models untouched (minimax rides /messages too)", () => {
+		const out = prepareClaudeRequest(makeBody("opencode-go/minimax-m3"), "opencode-go")
 
-    expect(out.messages[0].content).toHaveLength(1); // tool_use only
-    expect(firstBlock(out).type).toBe("tool_use");
-  });
+		expect(out.messages[0].content).toHaveLength(1) // tool_use only
+		expect(firstBlock(out).type).toBe("tool_use")
+	})
 
-  it("official deepseek provider keeps injecting unsigned placeholders (regression)", () => {
-    const out = prepareClaudeRequest(makeBody("deepseek-v4-pro"), "deepseek");
+	it("official deepseek provider keeps injecting unsigned placeholders (regression)", () => {
+		const out = prepareClaudeRequest(makeBody("deepseek-v4-pro"), "deepseek")
 
-    const block = firstBlock(out);
-    expect(block.type).toBe("thinking");
-    expect(block.signature).toBeUndefined();
-  });
-
-});
+		const block = firstBlock(out)
+		expect(block.type).toBe("thinking")
+		expect(block.signature).toBeUndefined()
+	})
+})

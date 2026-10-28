@@ -1,47 +1,47 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
 // A key's row is memoised for the hot path, so the ONLY thing standing between
 // a revoked key and a self-service revival is this invalidation. Every one of
 // these asserts an observable behaviour (does the key still authenticate?),
 // not the cache's shape.
 describe("api key cache invalidation", () => {
-  beforeEach(async () => {
-    vi.resetModules();
-    delete global._dbAdapter;
-    const { invalidateApiKeyCache } = await import("@/lib/db/repos/apiKeysRepo.js");
-    invalidateApiKeyCache();
-  });
+	beforeEach(async () => {
+		vi.resetModules()
+		delete global._dbAdapter
+		const { invalidateApiKeyCache } = await import("@/lib/db/repos/apiKeysRepo.js")
+		invalidateApiKeyCache()
+	})
 
-  async function repos() {
-    return await import("@/lib/db/repos/apiKeysRepo.js");
-  }
+	async function repos() {
+		return await import("@/lib/db/repos/apiKeysRepo.js")
+	}
 
-  it("authenticates a freshly created key and drops it on deactivate", async () => {
-    const { createApiKey, validateApiKey, updateApiKey } = await repos();
+	it("authenticates a freshly created key and drops it on deactivate", async () => {
+		const { createApiKey, validateApiKey, updateApiKey } = await repos()
 
-    const created = await createApiKey(`cache-${Date.now()}`, "machine-1");
-    expect(await validateApiKey(created.key)).toBe(true);
+		const created = await createApiKey(`cache-${Date.now()}`, "machine-1")
+		expect(await validateApiKey(created.key)).toBe(true)
 
-    // Warm the cache, then deactivate through the repo.
-    expect(await validateApiKey(created.key)).toBe(true);
-    await updateApiKey(created.id, { isActive: false });
+		// Warm the cache, then deactivate through the repo.
+		expect(await validateApiKey(created.key)).toBe(true)
+		await updateApiKey(created.id, { isActive: false })
 
-    expect(await validateApiKey(created.key)).toBe("KEY_DISABLED");
-  });
+		expect(await validateApiKey(created.key)).toBe("KEY_DISABLED")
+	})
 
-  it("stops authenticating a deleted key even when it was already cached", async () => {
-    const { createApiKey, validateApiKey, deleteApiKey } = await repos();
+	it("stops authenticating a deleted key even when it was already cached", async () => {
+		const { createApiKey, validateApiKey, deleteApiKey } = await repos()
 
-    const created = await createApiKey(`cache-del-${Date.now()}`, "machine-1");
-    expect(await validateApiKey(created.key)).toBe(true);
+		const created = await createApiKey(`cache-del-${Date.now()}`, "machine-1")
+		expect(await validateApiKey(created.key)).toBe(true)
 
-    await deleteApiKey(created.id);
+		await deleteApiKey(created.id)
 
-    expect(await validateApiKey(created.key)).toBe(false);
-  });
+		expect(await validateApiKey(created.key)).toBe(false)
+	})
 
-  it("does not authorise an unknown key", async () => {
-    const { validateApiKey } = await repos();
-    expect(await validateApiKey("«redacted:sk-…»")).toBe(false);
-  });
-});
+	it("does not authorise an unknown key", async () => {
+		const { validateApiKey } = await repos()
+		expect(await validateApiKey("«redacted:sk-…»")).toBe(false)
+	})
+})

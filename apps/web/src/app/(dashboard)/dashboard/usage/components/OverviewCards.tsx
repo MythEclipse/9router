@@ -1,0 +1,157 @@
+"use client"
+import Badge from "@/shared/components/Badge"
+import Card from "@/shared/components/Card"
+import { formatCostCents, formatCount } from "@/shared/utils/chartFormat"
+import { Sparkline } from "./UsageChartsBits.tsx"
+
+const fmt = formatCount
+const fmtCost = formatCostCents
+
+/**
+ * Summary cards.
+ *
+ * Every card reserves the same vertical space for its label and its footnote
+ * slot. Without that, a label that wraps to two lines ("Total Input Tokens" on
+ * a narrow screen) pushes its number below the other four, and the cache-hit
+ * badge appearing or disappearing changes card height mid-render - the row
+ * visibly jumps. Fixed slots keep all five numbers on one baseline whatever
+ * the label length or period.
+ */
+interface TrendCardProps {
+	label: string
+	value: React.ReactNode
+	title?: string
+	icon?: string
+	tone?: string
+	footnote?: React.ReactNode
+	trend?: number[]
+}
+
+function TrendCard({ label, value, title, icon, tone = "", footnote, trend }: TrendCardProps) {
+	return (
+		<Card className="flex min-w-0 flex-col gap-2 p-3 sm:p-4 bg-surface border border-border-subtle hover:border-border transition-colors">
+			<div className="flex items-center justify-between gap-2">
+				<span className="text-text-muted text-[11px] font-semibold uppercase tracking-wider truncate">
+					{label}
+				</span>
+				{icon && (
+					<span className="material-symbols-outlined text-[16px] text-text-subtle select-none">
+						{icon}
+					</span>
+				)}
+			</div>
+
+			<div className="flex items-baseline justify-between gap-2">
+				<span
+					className={`truncate text-xl sm:text-2xl font-bold tracking-tight ${tone || "text-text-main"}`}
+					title={title}
+				>
+					{value}
+				</span>
+			</div>
+
+			{trend && Array.isArray(trend) && trend.length >= 2 ? (
+				<div className="w-full h-6 my-0.5">
+					<Sparkline values={trend} height={24} stroke={tone ? undefined : "var(--color-primary)"} />
+				</div>
+			) : (
+				<div className="w-full h-6 my-0.5 flex items-center">
+					<div className="w-full h-[1px] bg-border-subtle" />
+				</div>
+			)}
+
+			<div className="flex min-h-[1.25rem] items-center text-[10px] sm:text-[11px] text-text-muted mt-auto pt-1.5 border-t border-border-subtle">
+				{footnote || <span className="text-transparent select-none">-</span>}
+			</div>
+		</Card>
+	)
+}
+
+TrendCard.defaultProps = { title: "", icon: "", tone: "", footnote: null, trend: null }
+
+/** Aggregate usage totals shown on the overview cards. */
+interface UsageStatsTotals {
+	totalRequests?: number
+	totalPromptTokens?: number
+	totalCachedTokens?: number
+	totalCompletionTokens?: number
+	totalCost?: number
+}
+
+/** Per-metric sparkline series (one point per bucket). */
+interface UsageTrendTotals {
+	requests?: number[]
+	input?: number[]
+	cached?: number[]
+	output?: number[]
+	cost?: number[]
+}
+
+interface OverviewCardsProps {
+	stats: UsageStatsTotals
+	trends?: { totals?: UsageTrendTotals }
+}
+
+export default function OverviewCards({ stats, trends }: OverviewCardsProps) {
+	const cacheHitRate =
+		stats.totalPromptTokens > 0 ? ((stats.totalCachedTokens || 0) / stats.totalPromptTokens) * 100 : 0
+
+	const t = trends?.totals || {}
+
+	return (
+		<div className="grid min-w-0 grid-cols-1 gap-2.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 sm:gap-3">
+			<TrendCard
+				label="Total Requests"
+				value={fmt(stats.totalRequests)}
+				title={fmt(stats.totalRequests)}
+				icon="dns"
+				trend={t.requests}
+				footnote={<span>{stats.totalRequests ? "Global volume" : "Zero requests"}</span>}
+			/>
+			<TrendCard
+				label="Input Tokens"
+				value={fmt(stats.totalPromptTokens)}
+				title={fmt(stats.totalPromptTokens)}
+				icon="arrow_upward"
+				tone="text-text-main"
+				trend={t.input}
+				footnote={<span>Context payload</span>}
+			/>
+			<TrendCard
+				label="Cached Tokens"
+				value={fmt(stats.totalCachedTokens)}
+				title={fmt(stats.totalCachedTokens)}
+				icon="bolt"
+				tone="text-info"
+				trend={t.cached}
+				footnote={
+					cacheHitRate > 0 ? (
+						<Badge variant="info" size="sm" className="font-mono text-[10px]">
+							{cacheHitRate.toFixed(1)}% cache hit
+						</Badge>
+					) : (
+						<span className="text-text-muted/70">No cache reads</span>
+					)
+				}
+			/>
+			<TrendCard
+				label="Output Tokens"
+				value={fmt(stats.totalCompletionTokens)}
+				title={fmt(stats.totalCompletionTokens)}
+				icon="arrow_downward"
+				tone="text-success"
+				trend={t.output}
+				footnote={<span>Generated completion</span>}
+			/>
+			<TrendCard
+				label="Est. Cost"
+				value={`~${fmtCost(stats.totalCost)}`}
+				title={`~${fmtCost(stats.totalCost)}`}
+				icon="payments"
+				tone="text-warning"
+				trend={t.cost}
+				footnote={<span className="text-text-muted/70">Rate estimate, not billing</span>}
+			/>
+		</div>
+	)
+}

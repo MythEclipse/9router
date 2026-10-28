@@ -52,26 +52,54 @@
     "formatter": {
       "indentStyle": "space",
       "indentWidth": 2
+    },
+    "parser": {
+      "cssModules": false,
+      "tailwindDirectives": true
+    }
+  },
+  "html": {
+    "parser": {
+      "interpolation": true
     }
   },
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "correctness": {
-        "noUnusedImports": "warn",
-        "noUnusedVariables": "warn"
+        "noUnusedImports": "error",
+        "noUnusedVariables": "off",
+        "noUnusedFunctionParameters": "off",
+        "useParseIntRadix": "error",
+        "useExhaustiveDependencies": "off"
       },
       "suspicious": {
         "noExplicitAny": "off",
-        "noConsole": "off"
+        "noConsole": "off",
+        "noImplicitAnyLet": "off",
+        "noAssignInExpressions": "off",
+        "noArrayIndexKey": "off",
+        "noControlCharactersInRegex": "off",
+        "useIterableCallbackReturn": "off",
+        "noTemplateCurlyInString": "off"
       },
       "style": {
         "noNonNullAssertion": "off",
-        "useConst": "warn"
+        "useConst": "error",
+        "useTemplate": "off",
+        "useNodejsImportProtocol": "error"
       },
       "complexity": {
-        "noExcessiveCognitiveComplexity": "off"
+        "noExcessiveCognitiveComplexity": "off",
+        "useOptionalChain": "off",
+        "useLiteralKeys": "off",
+        "noUselessTernary": "off",
+        "noImportantStyles": "off",
+        "noCommaOperator": "off"
+      },
+      "security": {
+        "noDangerouslySetInnerHtml": "off"
       }
     }
   },

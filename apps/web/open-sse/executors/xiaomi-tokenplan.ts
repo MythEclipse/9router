@@ -1,0 +1,20 @@
+import { resolveXiaomiTokenplanBaseUrl } from "../config/providers.ts"
+import { DefaultExecutor } from "./default.ts"
+// import { getModelTargetFormat } from "../config/providerModels";
+// import { FORMATS } from "../translator/formats";
+
+export class XiaomiTokenplanExecutor extends DefaultExecutor {
+	constructor() {
+		super("xiaomi-tokenplan")
+	}
+
+	// Token Plan keys are region-specific. Route per sourceFormat-matched transport:
+	// claude → Anthropic /anthropic/v1/messages, openai → /chat/completions.
+	buildUrl(_model, _stream, _urlIndex = 0, credentials = null) {
+		const baseUrl = resolveXiaomiTokenplanBaseUrl(credentials)
+		if (credentials?.runtimeTransport?.format === "claude") {
+			return `${baseUrl.replace(/\/v1\/?$/, "")}/anthropic/v1/messages`
+		}
+		return `${baseUrl}/chat/completions`
+	}
+}

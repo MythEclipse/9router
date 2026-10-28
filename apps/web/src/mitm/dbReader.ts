@@ -1,0 +1,24 @@
+// CJS reader for MITM standalone process. Reads mitmAlias from JSON cache
+import fs from "node:fs"
+import path from "node:path"
+// at $DATA_DIR/mitm/aliases.json (synced by app from SQLite on startup + writes).
+// JSON-only: no SQLite native binding required in MITM bundle.
+import { DATA_DIR } from "./paths.ts"
+
+const CACHE_FILE = path.join(DATA_DIR, "mitm", "aliases.json")
+
+function readCache() {
+	try {
+		if (!fs.existsSync(CACHE_FILE)) return null
+		return JSON.parse(fs.readFileSync(CACHE_FILE, "utf-8"))
+	} catch {
+		return null
+	}
+}
+
+function getMitmAlias(toolName) {
+	const all = readCache()
+	return all?.[toolName] || null
+}
+
+export { getMitmAlias }

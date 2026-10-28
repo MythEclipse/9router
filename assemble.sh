@@ -16,8 +16,12 @@
 set -e
 cd /root/9router
 
-if [ ! -f .next/standalone/server.js ]; then
-  echo "assemble: .next/standalone/server.js missing - run 'npx next build' first" >&2
+# The Next app lives in the apps/web workspace member now, so the build output is
+# nested one level deeper and its standalone server lands at apps/web/server.js.
+cd apps/web
+
+if [ ! -f .next/standalone/apps/web/server.js ]; then
+  echo "assemble: .next/standalone/apps/web/server.js missing - run 'bun run build' first" >&2
   exit 1
 fi
 
@@ -34,7 +38,7 @@ cp -a public/.     .next/standalone/public/
 
 # files the unit reads from its working directory
 cp -a custom-server.js .next/standalone/custom-server.js
-cp -a CHANGELOG.md     .next/standalone/CHANGELOG.md
+cp -a ../../CHANGELOG.md .next/standalone/CHANGELOG.md
 cp -a package.json     .next/standalone/package.json
 
 # next ships its own copy of some runtime deps; the standalone bundle resolves
