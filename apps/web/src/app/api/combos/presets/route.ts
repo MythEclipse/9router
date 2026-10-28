@@ -8,7 +8,7 @@
  */
 import { NextResponse } from "next/server"
 import { getUseCases } from "@/lib/useCases"
-import { toResponse } from "../response"
+import { toResponse } from "../../response"
 
 export const dynamic = "force-dynamic"
 

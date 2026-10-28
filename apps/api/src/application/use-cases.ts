@@ -21,6 +21,7 @@ import {
 	makeUpdateCombo,
 } from "./combos/manage-combos.ts"
 import type { Dependencies } from "./dependencies.ts"
+import { makeClearErrorLogs, makeListErrorLogs } from "./error-logs/read-error-logs.ts"
 import { readLoginGate } from "./settings/login-gate.ts"
 
 export interface UseCases {
@@ -38,6 +39,8 @@ export interface UseCases {
 	readonly checkComboCycle: ReturnType<typeof makeCheckComboCycle>
 	readonly previewComboPresets: ReturnType<typeof makePreviewComboPresets>
 	readonly createComboPresets: ReturnType<typeof makeCreateComboPresets>
+	readonly listErrorLogs: ReturnType<typeof makeListErrorLogs>
+	readonly clearErrorLogs: ReturnType<typeof makeClearErrorLogs>
 }
 
 /** The combo use-cases share one dependency slice, so it is built once. */
@@ -68,5 +71,7 @@ export function buildUseCases(deps: Dependencies): UseCases {
 		checkComboCycle: makeCheckComboCycle(combos),
 		previewComboPresets: makePreviewComboPresets(combos),
 		createComboPresets: makeCreateComboPresets(combos),
+		listErrorLogs: makeListErrorLogs(deps.errorLogs),
+		clearErrorLogs: makeClearErrorLogs(deps.errorLogs),
 	}
 }

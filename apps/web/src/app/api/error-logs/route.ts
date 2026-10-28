@@ -1,24 +1,30 @@
+/**
+ * Stored diagnostics.
+ *
+ * Delegates: the page-size rule and the "did the delete actually happen" check
+ * are rules, so they live in `9router-api`. The `success` envelope stays
+ * because the dashboard reads that field.
+ */
 import { NextResponse } from "next/server"
-import { clearErrorLogs, getErrorLogs } from "@/lib/localDb"
+import { getUseCases } from "@/lib/useCases"
+import { toResponse } from "../response"
 
 export const dynamic = "force-dynamic"
 
-export async function GET(request) {
+export async function GET(request: Request) {
 	try {
 		const { searchParams } = new URL(request.url)
-		const limit = parseInt(searchParams.get("limit") || "200", 10)
-		const logs = await getErrorLogs(limit)
-		return NextResponse.json({ success: true, logs })
+		const page = await getUseCases().listErrorLogs(searchParams.get("limit") ?? undefined)
+		return NextResponse.json({ success: true, ...page })
 	} catch (error) {
-		return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+		return toResponse(error)
 	}
 }
 
 export async function DELETE() {
 	try {
-		await clearErrorLogs()
-		return NextResponse.json({ success: true })
+		return NextResponse.json({ success: true, ...(await getUseCases().clearErrorLogs()) })
 	} catch (error) {
-		return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+		return toResponse(error)
 	}
 }

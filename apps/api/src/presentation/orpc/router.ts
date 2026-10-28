@@ -13,6 +13,7 @@
 import { base } from "./base.ts"
 import { apiKeysRouter } from "./routers/api-keys.ts"
 import { combosRouter } from "./routers/combos.ts"
+import { errorLogsRouter } from "./routers/error-logs.ts"
 import { settingsRouter } from "./routers/settings.ts"
 import { systemRouter } from "./routers/system.ts"
 
@@ -21,6 +22,7 @@ export const appRouter = base.router({
 	settings: settingsRouter,
 	apiKeys: apiKeysRouter,
 	combos: combosRouter,
+	errorLogs: errorLogsRouter,
 })
 
 export type AppRouter = typeof appRouter

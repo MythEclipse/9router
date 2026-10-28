@@ -92,12 +92,29 @@ export interface ComboRotationPort {
 	reset(comboName: string): void
 }
 
+/** One stored diagnostic entry, as the dashboard renders it. */
+export interface ErrorLogEntry {
+	readonly id: number
+	readonly [key: string]: unknown
+}
+
+export interface ErrorLogPort {
+	/** Newest first, capped by the caller. */
+	list(limit: number): Promise<ErrorLogEntry[]>
+	/**
+	 * Returns false when the delete did not happen. The handler used to report
+	 * success regardless, so a failed clear looked like a successful one.
+	 */
+	clear(): Promise<boolean>
+}
+
 export interface Dependencies {
 	readonly apiKeys: IApiKeyRepository
 	readonly activity: IActivityRepository
 	readonly changelog: ChangelogSource
 	readonly settings: SettingsPort
 	readonly combos: ComboPort
+	readonly errorLogs: ErrorLogPort
 	readonly studios: StudioTargetPort
 	readonly comboRotation: ComboRotationPort
 	readonly comboPresets: ComboPresetPort

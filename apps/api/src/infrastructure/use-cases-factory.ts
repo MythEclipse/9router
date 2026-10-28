@@ -23,6 +23,7 @@ import {
 	createStudioTargetRepository,
 } from "./db/repositories/combo-repository.ts"
 import { createComboStrategyRepository } from "./db/repositories/combo-strategy-repository.ts"
+import { createErrorLogRepository } from "./db/repositories/error-log-repository.ts"
 import { createSettingsPort } from "./settings-port.ts"
 import { createUnavailablePresetPort } from "./unavailable-preset-port.ts"
 
@@ -62,6 +63,7 @@ export function createUseCases(
 		changelog: createChangelogSourceFromDisk(options.webAppDir ?? "apps/web"),
 		settings: createSettingsPort(),
 		combos: createComboRepository(),
+		errorLogs: createErrorLogRepository(),
 		studios: createStudioTargetRepository(),
 		comboPresets: options.comboPresets,
 		comboStrategies: createComboStrategyRepository(),
