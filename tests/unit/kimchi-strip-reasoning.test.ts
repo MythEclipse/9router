@@ -18,8 +18,8 @@
 
 import assert from "node:assert/strict"
 import { describe, it } from "vitest"
-import DefaultExecutor from "../../open-sse/executors/default.js"
-import KimchiExecutor, { stripReasoningContent } from "../../open-sse/executors/kimchi.js"
+import DefaultExecutor from "../../apps/web/open-sse/executors/default.js"
+import KimchiExecutor, { stripReasoningContent } from "../../apps/web/open-sse/executors/kimchi.js"
 
 describe("kimchi stripReasoningContent", () => {
 	it("removes long reasoning_content from assistant messages but keeps content", () => {

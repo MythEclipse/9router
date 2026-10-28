@@ -5,9 +5,9 @@ import https from "node:https"
 import { tmpdir } from "node:os"
 import { PassThrough } from "node:stream"
 import { afterEach, expect, it, vi } from "vitest"
-import { codexHttpFetch, transcribeCodex } from "../../open-sse/handlers/codexStt"
-import { convertAudio, readBounded } from "../../open-sse/handlers/codexSttAudio"
-import { proxyAwareFetch } from "../../open-sse/utils/proxyFetch"
+import { codexHttpFetch, transcribeCodex } from "../../apps/web/open-sse/handlers/codexStt"
+import { convertAudio, readBounded } from "../../apps/web/open-sse/handlers/codexSttAudio"
+import { proxyAwareFetch } from "../../apps/web/open-sse/utils/proxyFetch"
 
 function wav(seconds = 0.02) {
 	const pcm = Buffer.alloc(Math.floor(48000 * seconds) * 4)

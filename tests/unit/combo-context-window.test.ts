@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest"
-import { comboContextWindow, comboWindowSetting } from "../../open-sse/providers/capabilities.js"
+import {
+	comboContextWindow,
+	comboWindowSetting,
+} from "../../apps/web/open-sse/providers/capabilities.js"
 
 // A fallback chain does not serve the request with every seat, so the window it can
 // promise is the seat that ends up serving it — which is why the operator picks one

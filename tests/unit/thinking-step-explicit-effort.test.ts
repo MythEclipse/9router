@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest"
 import {
 	applyThinking,
 	captureThinking,
-} from "../../open-sse/translator/concerns/thinkingUnified.js"
-import { FORMATS } from "../../open-sse/translator/formats.js"
+} from "../../apps/web/open-sse/translator/concerns/thinkingUnified.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
 
 const model = "step-5-preview-free"
 const provider = "openai-compatible-step"

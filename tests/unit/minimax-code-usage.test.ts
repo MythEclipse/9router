@@ -7,9 +7,9 @@ import {
 	parseMembership,
 	parsePlanWindows,
 	signedAccountRequest,
-} from "../../open-sse/services/minimaxCodeUsage.js"
-import { parseQuotaData } from "../../src/app/(dashboard)/dashboard/usage/components/ProviderLimits/utils.js"
-import { FILTERS } from "../../src/app/api/providers/suggested-models/filters.js"
+} from "../../apps/web/open-sse/services/minimaxCodeUsage.js"
+import { parseQuotaData } from "../../apps/web/src/app/(dashboard)/dashboard/usage/components/ProviderLimits/utils.js"
+import { FILTERS } from "../../apps/web/src/app/api/providers/suggested-models/filters.js"
 
 describe("minimax-code signed account API", () => {
 	it("builds deterministic GET signing with mcode query params", () => {

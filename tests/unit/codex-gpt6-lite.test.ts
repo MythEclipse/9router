@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { getModelsByProviderId } from "../../open-sse/config/providerModels.js"
-import { CodexExecutor } from "../../open-sse/executors/codex.js"
-import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js"
-import { getPricingForModel } from "../../open-sse/providers/pricing.js"
-import { getThinkingLevels } from "../../open-sse/providers/thinkingLevels.js"
-import * as proxyFetchModule from "../../open-sse/utils/proxyFetch.js"
+import { getModelsByProviderId } from "../../apps/web/open-sse/config/providerModels.js"
+import { CodexExecutor } from "../../apps/web/open-sse/executors/codex.js"
+import { getCapabilitiesForModel } from "../../apps/web/open-sse/providers/capabilities.js"
+import { getPricingForModel } from "../../apps/web/open-sse/providers/pricing.js"
+import { getThinkingLevels } from "../../apps/web/open-sse/providers/thinkingLevels.js"
+import * as proxyFetchModule from "../../apps/web/open-sse/utils/proxyFetch.js"
 
 const credentials = { connectionId: "fixture", accessToken: "fixture-token" }
 afterEach(() => vi.restoreAllMocks())

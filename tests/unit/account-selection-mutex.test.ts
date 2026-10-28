@@ -16,7 +16,7 @@ import { describe, expect, it } from "vitest"
 // locks are independent, and any wall-clock comparison ends up measuring
 // scheduler noise. A deterministic gate on the critical section proves the same
 // property exactly, with no thresholds.
-const { acquireSelectionMutex } = await import("../../src/sse/services/auth.js")
+const { acquireSelectionMutex } = await import("../../apps/web/src/sse/services/auth.js")
 
 /** Run `fn` as `key`'s critical section, recording enter/exit order. */
 async function section(key, tag, events, fn) {
@@ -103,7 +103,7 @@ describe("account selection mutex", () => {
 		const fs = await import("node:fs")
 		const url = await import("node:url")
 		const src = fs.readFileSync(
-			url.fileURLToPath(new URL("../../src/sse/services/auth.ts", import.meta.url)),
+			url.fileURLToPath(new URL("../../apps/web/src/sse/services/auth.ts", import.meta.url)),
 			"utf8",
 		)
 

@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { PROVIDER_MODELS } from "../../open-sse/config/providerModels.js"
-import { buildTtsProviderModels, getTtsVoicesForModel } from "../../open-sse/config/ttsModels.js"
-import { handleTtsCore } from "../../open-sse/handlers/ttsCore.js"
-import { getTtsAdapter } from "../../open-sse/handlers/ttsProviders/index.js"
-import { AI_PROVIDERS } from "../../src/shared/constants/providers.js"
-import { TTS_PROVIDER_CONFIG } from "../../src/shared/constants/ttsProviders.js"
+import { PROVIDER_MODELS } from "../../apps/web/open-sse/config/providerModels.js"
+import {
+	buildTtsProviderModels,
+	getTtsVoicesForModel,
+} from "../../apps/web/open-sse/config/ttsModels.js"
+import { handleTtsCore } from "../../apps/web/open-sse/handlers/ttsCore.js"
+import { getTtsAdapter } from "../../apps/web/open-sse/handlers/ttsProviders/index.js"
+import { AI_PROVIDERS } from "../../apps/web/src/shared/constants/providers.js"
+import { TTS_PROVIDER_CONFIG } from "../../apps/web/src/shared/constants/ttsProviders.js"
 
 const originalFetch = global.fetch
 

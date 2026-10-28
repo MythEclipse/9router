@@ -4,7 +4,7 @@
 // the first error. A 400 "maximum context length" from one session therefore
 // looked like the same failure in unrelated sessions.
 import { describe, expect, it } from "vitest"
-import { checkFallbackError } from "../../open-sse/services/accountFallback.js"
+import { checkFallbackError } from "../../apps/web/open-sse/services/accountFallback.js"
 
 describe("checkFallbackError - request-scoped vs account-scoped failures", () => {
 	it("does not cool the account down for a 400 caused by the request", () => {

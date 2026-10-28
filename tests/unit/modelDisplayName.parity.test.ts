@@ -8,11 +8,11 @@ import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
-import * as cli from "../../cli/src/cli/utils/modelDisplayName.ts"
 import {
 	modelDisplayName as esmModelDisplayName,
 	resolveModelDisplayName as esmResolveModelDisplayName,
-} from "../../src/shared/utils/modelDisplayName.js"
+} from "../../apps/web/src/shared/utils/modelDisplayName.js"
+import * as cli from "../../cli/src/cli/utils/modelDisplayName.ts"
 
 /** Ids shaped like the ones 9router routes: combo aliases, provider-prefixed slugs, custom models. */
 const IDS = [

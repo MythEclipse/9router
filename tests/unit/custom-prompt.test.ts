@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
-import { injectCustomPrompt } from "../../open-sse/rtk/customPrompt.js"
-import { FORMATS } from "../../open-sse/translator/formats.js"
-import { ROLE } from "../../open-sse/translator/schema/roles.js"
+import { injectCustomPrompt } from "../../apps/web/open-sse/rtk/customPrompt.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
+import { ROLE } from "../../apps/web/open-sse/translator/schema/roles.js"
 
 const SEP = "\n\n"
 

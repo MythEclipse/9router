@@ -1,6 +1,6 @@
 import * as zlib from "node:zlib"
 import { describe, expect, it } from "vitest"
-import { parseJsonBody } from "../../src/shared/utils/parseJsonBody.js"
+import { parseJsonBody } from "../../apps/web/src/shared/utils/parseJsonBody.js"
 
 const value = { model: "gpt-test", input: "hello" }
 const json = JSON.stringify(value)

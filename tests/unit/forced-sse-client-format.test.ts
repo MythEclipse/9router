@@ -8,8 +8,8 @@
 // This test pins the contract: /v1/messages + stream:false => an Anthropic
 // `message` body (type/role/content/stop_reason/usage), never `choices`.
 import { describe, expect, it } from "vitest"
-import { handleForcedSSEToJson } from "../../open-sse/handlers/chatCore/sseToJsonHandler.js"
-import { FORMATS } from "../../open-sse/translator/formats.js"
+import { handleForcedSSEToJson } from "../../apps/web/open-sse/handlers/chatCore/sseToJsonHandler.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
 
 const OPENAI_SSE =
 	'data: {"id":"chatcmpl-forced1","object":"chat.completion.chunk","model":"big-pickle","choices":[{"index":0,"delta":{"role":"assistant","content":"PONG"},"finish_reason":null}]}\n\n' +

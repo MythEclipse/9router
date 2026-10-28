@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest"
-import { FORMATS } from "../../open-sse/translator/formats.js"
-import { buildAbortedResponsesTerminalBytes } from "../../open-sse/utils/responsesStreamHelpers.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
+import { buildAbortedResponsesTerminalBytes } from "../../apps/web/open-sse/utils/responsesStreamHelpers.js"
 import {
 	createDisconnectAwareStream,
 	createStreamController,
 	pipeWithDisconnect,
-} from "../../open-sse/utils/streamHandler.js"
-import { buildStreamErrorBytes } from "../../open-sse/utils/streamHelpers.js"
+} from "../../apps/web/open-sse/utils/streamHandler.js"
+import { buildStreamErrorBytes } from "../../apps/web/open-sse/utils/streamHelpers.js"
 
 // Minimal stream controller stub
 function makeController() {

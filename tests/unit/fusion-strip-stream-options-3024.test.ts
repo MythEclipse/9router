@@ -3,7 +3,7 @@
 // "stream_options should be set along with stream = true".
 
 import { describe, expect, it, vi } from "vitest"
-import { handleFusionChat } from "../../open-sse/services/combo.js"
+import { handleFusionChat } from "../../apps/web/open-sse/services/combo.js"
 
 // Minimal logger stub (combo.js calls log.info/warn).
 const log = { info: () => {}, warn: () => {}, error: () => {} }

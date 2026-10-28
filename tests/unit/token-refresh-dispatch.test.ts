@@ -1,7 +1,7 @@
 // Guards the refactored REFRESH_HANDLERS dispatch: null-guards + the two different defaults.
 import { describe, expect, it } from "vitest"
 
-const load = () => import("../../open-sse/services/tokenRefresh.js")
+const load = () => import("../../apps/web/open-sse/services/tokenRefresh.js")
 
 describe("tokenRefresh dispatch", () => {
 	it("getAccessToken returns null for missing/invalid refreshToken", async () => {

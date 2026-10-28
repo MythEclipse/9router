@@ -16,8 +16,8 @@
  */
 
 import { describe, expect, it } from "vitest"
-import imageAdapter from "../../open-sse/handlers/imageProviders/huggingface.js"
-import huggingface from "../../open-sse/providers/registry/huggingface.js"
+import imageAdapter from "../../apps/web/open-sse/handlers/imageProviders/huggingface.js"
+import huggingface from "../../apps/web/open-sse/providers/registry/huggingface.js"
 
 const DEAD_HOST = "api-inference.huggingface.co"
 const LIVE_ROUTER = "router.huggingface.co"

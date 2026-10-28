@@ -9,8 +9,8 @@
 // stream ended without a `message_delta`.
 import { describe, expect, it } from "vitest"
 
-import { initState } from "../../open-sse/translator/index.js"
-import { claudeToOpenAIResponse } from "../../open-sse/translator/response/claude-to-openai.js"
+import { initState } from "../../apps/web/open-sse/translator/index.js"
+import { claudeToOpenAIResponse } from "../../apps/web/open-sse/translator/response/claude-to-openai.js"
 
 const START_USAGE = {
 	input_tokens: 100,

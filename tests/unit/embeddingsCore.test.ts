@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 // ─── Mock the executors/index.js to avoid transitive uuid dependency ─────────
 // kiro.js (imported by executors/index.js) requires 'uuid' which isn't
 // installed in the test environment. We mock the whole executor layer.
-vi.mock("../../open-sse/executors/index.js", () => ({
+vi.mock("../../apps/web/open-sse/executors/index.js", () => ({
 	getExecutor: vi.fn(() => ({
 		refreshCredentials: vi.fn().mockResolvedValue(null),
 	})),
@@ -21,16 +21,16 @@ vi.mock("../../open-sse/executors/index.js", () => ({
 }))
 
 // Also mock tokenRefresh to avoid side effects
-vi.mock("../../open-sse/services/tokenRefresh.js", () => ({
+vi.mock("../../apps/web/open-sse/services/tokenRefresh.js", () => ({
 	refreshWithRetry: vi.fn().mockResolvedValue(null),
 }))
 
 // Mock proxyFetch to avoid proxy-agent imports in test env
-vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
+vi.mock("../../apps/web/open-sse/utils/proxyFetch.js", () => ({
 	default: vi.fn(),
 }))
 
-import { handleEmbeddingsCore } from "../../open-sse/handlers/embeddingsCore.js"
+import { handleEmbeddingsCore } from "../../apps/web/open-sse/handlers/embeddingsCore.js"
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

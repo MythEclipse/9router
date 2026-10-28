@@ -10,7 +10,10 @@
 // should reach the provider untouched.
 import { describe, expect, it } from "vitest"
 
-import { hasValidContent, prepareClaudeRequest } from "../../open-sse/translator/formats/claude.js"
+import {
+	hasValidContent,
+	prepareClaudeRequest,
+} from "../../apps/web/open-sse/translator/formats/claude.js"
 
 const uploadBlock = { type: "container_upload", file_id: "file_abc123" }
 

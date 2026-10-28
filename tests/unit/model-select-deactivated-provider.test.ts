@@ -42,7 +42,10 @@ describe("getDeactivatedProviderIds", () => {
 })
 
 describe("ModelSelectModal source verification for deactivated providers", () => {
-	const fileUrl = new URL("../../src/shared/components/ModelSelectModal.tsx", import.meta.url)
+	const fileUrl = new URL(
+		"../../apps/web/src/shared/components/ModelSelectModal.tsx",
+		import.meta.url,
+	)
 	const src = fs.readFileSync(fileUrl, "utf-8")
 
 	it("imports and uses getDeactivatedProviderIds", () => {

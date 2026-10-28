@@ -6,7 +6,7 @@ import {
 	DEFAULT_CAPABILITIES,
 	getCapabilitiesForModel,
 	setCatalogSource,
-} from "../../open-sse/providers/capabilities.js"
+} from "../../apps/web/open-sse/providers/capabilities.js"
 
 const MODEL = "gpt-5"
 

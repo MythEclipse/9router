@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest"
-import { getModelSupportedFormats, PROVIDER_MODELS } from "../../open-sse/config/providerModels.js"
-import { PROVIDERS } from "../../open-sse/config/providers.js"
-import { resolveTransport } from "../../open-sse/services/provider.js"
+import {
+	getModelSupportedFormats,
+	PROVIDER_MODELS,
+} from "../../apps/web/open-sse/config/providerModels.js"
+import { PROVIDERS } from "../../apps/web/open-sse/config/providers.js"
+import { resolveTransport } from "../../apps/web/open-sse/services/provider.js"
 
 // Chat-only models (no /messages, no /responses support on opencode-zen)
 const CHAT_ONLY = [

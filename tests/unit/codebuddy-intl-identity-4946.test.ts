@@ -2,8 +2,8 @@ import { readFileSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
-import { CodeBuddyIntlExecutor } from "../../open-sse/executors/codebuddy-intl"
-import registry from "../../open-sse/providers/registry/codebuddy-intl"
+import { CodeBuddyIntlExecutor } from "../../apps/web/open-sse/executors/codebuddy-intl"
+import registry from "../../apps/web/open-sse/providers/registry/codebuddy-intl"
 
 const here = dirname(fileURLToPath(import.meta.url))
 const root = resolve(here, "../..")

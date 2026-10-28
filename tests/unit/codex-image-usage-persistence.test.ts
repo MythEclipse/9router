@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
 	clearAccountError: vi.fn(),
 }))
 
-vi.mock("../../src/sse/services/auth.js", () => ({
+vi.mock("../../apps/web/src/sse/services/auth.js", () => ({
 	getProviderCredentials: async () => ({
 		accessToken: "provider-token",
 		connectionId: "connection-a",
@@ -23,30 +23,30 @@ vi.mock("@/lib/localDb", () => ({
 	getSettings: async () => ({ requireApiKey: false }),
 }))
 
-vi.mock("../../src/sse/services/model.js", () => ({
+vi.mock("../../apps/web/src/sse/services/model.js", () => ({
 	getModelInfo: async () => ({ provider: "codex", model: "gpt-5.6-sol-image" }),
 	getComboModels: async () => null,
 }))
 
-vi.mock("../../open-sse/handlers/imageGenerationCore.js", () => ({
+vi.mock("../../apps/web/open-sse/handlers/imageGenerationCore.js", () => ({
 	handleImageGenerationCore: mocks.handleImageGenerationCore,
 }))
 
-vi.mock("../../open-sse/utils/error.js", () => ({
+vi.mock("../../apps/web/open-sse/utils/error.js", () => ({
 	errorResponse: (status, message) => Response.json({ error: message }, { status }),
 	unavailableResponse: (status, message) => Response.json({ error: message }, { status }),
 }))
 
-vi.mock("../../src/sse/services/tokenRefresh.js", () => ({
+vi.mock("../../apps/web/src/sse/services/tokenRefresh.js", () => ({
 	updateProviderCredentials: vi.fn(),
 	checkAndRefreshToken: async (_provider, credentials) => credentials,
 }))
 
-vi.mock("../../open-sse/services/combo.js", () => ({
+vi.mock("../../apps/web/open-sse/services/combo.js", () => ({
 	handleComboChat: vi.fn(),
 }))
 
-vi.mock("../../src/sse/utils/logger.js", () => ({
+vi.mock("../../apps/web/src/sse/utils/logger.js", () => ({
 	request: vi.fn(),
 	debug: vi.fn(),
 	warn: vi.fn(),
@@ -59,7 +59,7 @@ vi.mock("@/lib/usageDb.js", () => ({
 	saveRequestUsage: mocks.saveRequestUsage,
 }))
 
-import { handleImageGeneration } from "../../src/sse/handlers/imageGeneration.js"
+import { handleImageGeneration } from "../../apps/web/src/sse/handlers/imageGeneration.js"
 
 describe("Codex image usage persistence", () => {
 	beforeEach(() => {

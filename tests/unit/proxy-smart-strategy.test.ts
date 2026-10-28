@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { shouldRotateProxy } from "../../open-sse/services/accountFallback.js"
-import { pickProxyPoolId } from "../../src/lib/network/connectionProxy.js"
+import { shouldRotateProxy } from "../../apps/web/open-sse/services/accountFallback.js"
+import { pickProxyPoolId } from "../../apps/web/src/lib/network/connectionProxy.js"
 import {
 	getProxyHealth,
 	markProxyHealthy,
 	markProxyUnhealthy,
 	resetProxyHealth,
-} from "../../src/lib/network/proxyHealth.js"
+} from "../../apps/web/src/lib/network/proxyHealth.js"
 
 describe("smart proxy rotation", () => {
 	beforeEach(() => {

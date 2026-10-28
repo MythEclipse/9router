@@ -34,8 +34,8 @@ vi.mock("@/lib/auth/dashboardSession", () => ({
 	getDashboardAuthSession: vi.fn(),
 }))
 
-const { proxy } = await import("../../src/dashboardGuard.js")
-const { getClientIp } = await import("../../src/lib/auth/loginLimiter.js")
+const { proxy } = await import("../../apps/web/src/dashboardGuard.js")
+const { getClientIp } = await import("../../apps/web/src/lib/auth/loginLimiter.js")
 
 const PEER_TOKEN = "peer-token-fixture"
 

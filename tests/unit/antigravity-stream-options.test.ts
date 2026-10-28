@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { AntigravityExecutor } from "../../open-sse/executors/antigravity.js"
+import { AntigravityExecutor } from "../../apps/web/open-sse/executors/antigravity.js"
 
 const credentials = {
 	projectId: "synthetic-project",

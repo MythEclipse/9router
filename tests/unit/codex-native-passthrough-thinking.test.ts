@@ -5,14 +5,14 @@ const { executeMock, forcedSSEToJsonMock } = vi.hoisted(() => ({
 	forcedSSEToJsonMock: vi.fn(),
 }))
 
-vi.mock("../../open-sse/executors/index.js", () => ({
+vi.mock("../../apps/web/open-sse/executors/index.js", () => ({
 	getExecutor: () => ({
 		noAuth: true,
 		execute: executeMock,
 	}),
 }))
 
-vi.mock("../../open-sse/utils/requestLogger.js", () => ({
+vi.mock("../../apps/web/open-sse/utils/requestLogger.js", () => ({
 	createRequestLogger: async () => ({
 		logClientRawRequest: vi.fn(),
 		logRawRequest: vi.fn(),
@@ -29,11 +29,11 @@ vi.mock("@/lib/usageDb.js", () => ({
 	saveRequestDetail: vi.fn(async () => {}),
 }))
 
-vi.mock("../../open-sse/handlers/chatCore/sseToJsonHandler.js", () => ({
+vi.mock("../../apps/web/open-sse/handlers/chatCore/sseToJsonHandler.js", () => ({
 	handleForcedSSEToJson: forcedSSEToJsonMock,
 }))
 
-const { handleChatCore } = await import("../../open-sse/handlers/chatCore.js")
+const { handleChatCore } = await import("../../apps/web/open-sse/handlers/chatCore.js")
 
 async function runNativeCodexRequest(model, reasoning) {
 	const body = {

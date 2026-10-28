@@ -6,12 +6,12 @@ const { fetchMock } = vi.hoisted(() => ({
 	fetchMock: vi.fn(),
 }))
 
-vi.mock("../../open-sse/utils/proxyFetch", () => ({
+vi.mock("../../apps/web/open-sse/utils/proxyFetch", () => ({
 	proxyAwareFetch: fetchMock,
 }))
 
-import { DefaultExecutor } from "../../open-sse/executors/default"
-import { getExecutor } from "../../open-sse/executors/index"
+import { DefaultExecutor } from "../../apps/web/open-sse/executors/default"
+import { getExecutor } from "../../apps/web/open-sse/executors/index"
 
 const TRANSPORTS = [
 	{
@@ -173,7 +173,7 @@ describe("OpenCode Go x-opencode-session", () => {
 describe("chatCore provider session forwarding", () => {
 	it("passes the original provider session and client tool on initial and retry execution", () => {
 		const source = readFileSync(
-			fileURLToPath(new URL("../../open-sse/handlers/chatCore.ts", import.meta.url)),
+			fileURLToPath(new URL("../../apps/web/open-sse/handlers/chatCore.ts", import.meta.url)),
 			"utf8",
 		)
 		const calls = [...source.matchAll(/executor\.execute\(\{([\s\S]*?)\}\)/g)].map(

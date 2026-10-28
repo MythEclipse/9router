@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest"
-import { buildAgentRunFrame, isAgentCapableRequest } from "../../open-sse/executors/cursor.js"
+import {
+	buildAgentRunFrame,
+	isAgentCapableRequest,
+} from "../../apps/web/open-sse/executors/cursor.js"
 import {
 	decodeAgentValue,
 	decodeMcpArgs,
@@ -11,7 +14,7 @@ import {
 	encodeMcpResultToolNotFound,
 	encodeMcpToolDefinition,
 	encodeMcpTools,
-} from "../../open-sse/utils/cursorProtobuf.js"
+} from "../../apps/web/open-sse/utils/cursorProtobuf.js"
 
 // AgentService (agent.v1) codec tests - validate the production implementation
 // in cursorProtobuf.js + the executor's frame builders. Pure round-trip, no network.

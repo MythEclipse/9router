@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js"
+import { getCapabilitiesForModel } from "../../apps/web/open-sse/providers/capabilities.js"
 
 describe("getCapabilitiesForModel", () => {
 	it("reports DeepSeek V4.1-Flash ids as vision-capable without dropping their thinking/context", () => {

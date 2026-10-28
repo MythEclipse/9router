@@ -4,8 +4,8 @@
 // The two key types are NOT interchangeable across hosts. Split into two providers
 // so each key type reaches its own host.
 import { describe, expect, it } from "vitest"
-import alicodeIntl from "../../open-sse/providers/registry/alicode-intl.js"
-import alimsIntl from "../../open-sse/providers/registry/alims-intl.js"
+import alicodeIntl from "../../apps/web/open-sse/providers/registry/alicode-intl.js"
+import alimsIntl from "../../apps/web/open-sse/providers/registry/alims-intl.js"
 
 describe("alicode-intl endpoint (Coding Plan keys)", () => {
 	it("routes to the coding-intl host for Coding Plan keys", () => {

@@ -5,7 +5,7 @@ import {
 	deleteProviderConnection,
 	getProviderConnections,
 	updateProviderConnection,
-} from "../../src/lib/db/index.js"
+} from "../../apps/web/src/lib/db/index.js"
 
 // #4311: POST /api/providers was O(pool) per insert. Inside one transaction it
 // read the whole pool AND renumbered every row's priority, so a 5k-key import

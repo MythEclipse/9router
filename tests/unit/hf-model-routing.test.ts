@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { parseModel } from "../../open-sse/services/model.js"
+import { parseModel } from "../../apps/web/open-sse/services/model.js"
 
 describe("HuggingFace model alias parsing", () => {
 	it("resolves hf alias to huggingface provider", () => {

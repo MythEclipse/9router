@@ -6,9 +6,9 @@ vi.mock("@/lib/usageDb.js", () => ({
 	saveRequestUsage: vi.fn(async () => {}),
 }))
 
-const { FORMATS } = await import("../../open-sse/translator/formats.js")
+const { FORMATS } = await import("../../apps/web/open-sse/translator/formats.js")
 const { handleForcedSSEToJson, parseSSEToOpenAIResponse } = await import(
-	"../../open-sse/handlers/chatCore/sseToJsonHandler.js"
+	"../../apps/web/open-sse/handlers/chatCore/sseToJsonHandler.js"
 )
 
 describe("Kiro non-streaming error propagation", () => {

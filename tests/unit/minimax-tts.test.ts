@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { handleTtsCore } from "../../open-sse/handlers/ttsCore.js"
+import { handleTtsCore } from "../../apps/web/open-sse/handlers/ttsCore.js"
 
 const originalFetch = global.fetch
 

@@ -3,12 +3,15 @@
  * Prior-turn reasoning (+ encrypted_content) must survive Chat Completions ↔ Responses.
  */
 import { describe, expect, it } from "vitest"
-import { _resetGrokCliTurnStore, GrokCliExecutor } from "../../open-sse/executors/grok-cli.js"
-import { translateRequest } from "../../open-sse/translator/index.js"
+import {
+	_resetGrokCliTurnStore,
+	GrokCliExecutor,
+} from "../../apps/web/open-sse/executors/grok-cli.js"
+import { translateRequest } from "../../apps/web/open-sse/translator/index.js"
 import {
 	openaiResponsesToOpenAIRequest,
 	openaiToOpenAIResponsesRequest,
-} from "../../open-sse/translator/request/openai-responses.js"
+} from "../../apps/web/open-sse/translator/request/openai-responses.js"
 
 describe("openai ↔ responses multi-turn reasoning", () => {
 	it("openai→responses re-emits reasoning item with summary + encrypted_content", () => {

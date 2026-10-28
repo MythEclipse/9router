@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { BACKOFF_CONFIG } from "../../open-sse/config/errorConfig.js"
-import { checkFallbackError } from "../../open-sse/services/accountFallback.js"
-import { handleComboChat } from "../../open-sse/services/combo.js"
+import { BACKOFF_CONFIG } from "../../apps/web/open-sse/config/errorConfig.js"
+import { checkFallbackError } from "../../apps/web/open-sse/services/accountFallback.js"
+import { handleComboChat } from "../../apps/web/open-sse/services/combo.js"
 
 const db = vi.hoisted(() => ({
 	getProviderConnections: vi.fn(),
@@ -14,7 +14,7 @@ vi.mock("@/lib/network/connectionProxy", () => ({
 }))
 vi.mock("@/sse/utils/logger.js", () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn() }))
 
-const { markAccountUnavailable } = await import("../../src/sse/services/auth.js")
+const { markAccountUnavailable } = await import("../../apps/web/src/sse/services/auth.js")
 
 beforeEach(() => {
 	vi.clearAllMocks()

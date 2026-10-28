@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 // Mock proxyAwareFetch before any imports that use it
-vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
+vi.mock("../../apps/web/open-sse/utils/proxyFetch.js", () => ({
 	proxyAwareFetch: vi.fn(),
 }))
 
@@ -9,8 +9,8 @@ import {
 	_clearWeeklyCache,
 	fetchAntigravityWeeklyQuota,
 	parseWeeklyQuotaSummary,
-} from "../../open-sse/services/usage/antigravity-weekly.js"
-import { proxyAwareFetch } from "../../open-sse/utils/proxyFetch.js"
+} from "../../apps/web/open-sse/services/usage/antigravity-weekly.js"
+import { proxyAwareFetch } from "../../apps/web/open-sse/utils/proxyFetch.js"
 
 // - Fixtures ----------------------------------------------
 const GEMINI_GROUP = {
@@ -345,7 +345,7 @@ describe("weekly quota isolation from existing quota", () => {
 			return { ok: false, status: 404 }
 		})
 
-		const { getAntigravityUsage } = await import("../../open-sse/services/usage/google.js")
+		const { getAntigravityUsage } = await import("../../apps/web/open-sse/services/usage/google.js")
 		const result = await getAntigravityUsage("token", {})
 
 		expect(result.quotas["gemini-3.8-flash-high"]).toMatchObject({
@@ -425,7 +425,7 @@ describe("weekly quota isolation from existing quota", () => {
 			return { ok: false, status: 404 }
 		})
 
-		const { getAntigravityUsage } = await import("../../open-sse/services/usage/google.js")
+		const { getAntigravityUsage } = await import("../../apps/web/open-sse/services/usage/google.js")
 		const result = await getAntigravityUsage("token", {})
 
 		// Per-model quotas should be absent (free-tier accounts skip model parsing)
@@ -505,7 +505,7 @@ describe("weekly quota isolation from existing quota", () => {
 			return { ok: true, status: 200, json: async () => ({}) }
 		})
 
-		const { getAntigravityUsage } = await import("../../open-sse/services/usage/google.js")
+		const { getAntigravityUsage } = await import("../../apps/web/open-sse/services/usage/google.js")
 		const result = await getAntigravityUsage("token-exhausted", null)
 
 		// Per-model quota should show exhausted

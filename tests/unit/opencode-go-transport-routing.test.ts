@@ -19,14 +19,14 @@ const { executeMock } = vi.hoisted(() => ({
 	executeMock: vi.fn(),
 }))
 
-vi.mock("../../open-sse/executors/index.js", () => ({
+vi.mock("../../apps/web/open-sse/executors/index.js", () => ({
 	getExecutor: () => ({
 		noAuth: true,
 		execute: executeMock,
 	}),
 }))
 
-vi.mock("../../open-sse/utils/requestLogger.js", () => ({
+vi.mock("../../apps/web/open-sse/utils/requestLogger.js", () => ({
 	createRequestLogger: async () => ({
 		logClientRawRequest: vi.fn(),
 		logRawRequest: vi.fn(),
@@ -37,7 +37,7 @@ vi.mock("../../open-sse/utils/requestLogger.js", () => ({
 	}),
 }))
 
-vi.mock("../../open-sse/utils/stream.js", () => ({
+vi.mock("../../apps/web/open-sse/utils/stream.js", () => ({
 	COLORS: { red: "", reset: "" },
 	createPassthroughStreamWithLogger: vi.fn(() => new TransformStream()),
 }))
@@ -55,7 +55,7 @@ vi.mock("@/lib/usageDb.js", () => ({
 
 // image.js imports Agent from "undici" (not installed in some dev envs); the
 // prefetch path is irrelevant to routing assertions.
-vi.mock("../../open-sse/translator/concerns/image.js", () => ({
+vi.mock("../../apps/web/open-sse/translator/concerns/image.js", () => ({
 	encodeDataUri: (mimeType, base64) => `data:${mimeType};base64,${base64}`,
 	parseDataUri: (url) => {
 		const m = /^data:([^;]+);base64,(.*)$/.exec(url)
@@ -64,7 +64,7 @@ vi.mock("../../open-sse/translator/concerns/image.js", () => ({
 	fetchImageAsBase64: async () => null,
 }))
 
-const { handleChatCore } = await import("../../open-sse/handlers/chatCore.js")
+const { handleChatCore } = await import("../../apps/web/open-sse/handlers/chatCore.js")
 
 const BASE = "https://opencode.ai/zen/go/v1"
 const ENDPOINTS = {

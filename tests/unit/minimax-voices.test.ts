@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-vi.mock("../../src/lib/localDb.js", () => ({
+vi.mock("../../apps/web/src/lib/localDb.js", () => ({
 	getProviderConnections: vi.fn(),
 }))
 
-import { GET } from "../../src/app/api/media-providers/tts/minimax/voices/route.js"
-import { getProviderConnections } from "../../src/lib/localDb.js"
+import { GET } from "../../apps/web/src/app/api/media-providers/tts/minimax/voices/route.js"
+import { getProviderConnections } from "../../apps/web/src/lib/localDb.js"
 
 const originalFetch = global.fetch
 

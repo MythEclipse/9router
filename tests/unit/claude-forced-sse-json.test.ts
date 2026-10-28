@@ -6,12 +6,12 @@ vi.mock("@/lib/usageDb.js", () => ({
 	saveRequestUsage: vi.fn(async () => {}),
 }))
 
-const { FORMATS } = await import("../../open-sse/translator/formats.js")
+const { FORMATS } = await import("../../apps/web/open-sse/translator/formats.js")
 const { handleForcedSSEToJson } = await import(
-	"../../open-sse/handlers/chatCore/sseToJsonHandler.js"
+	"../../apps/web/open-sse/handlers/chatCore/sseToJsonHandler.js"
 )
 const { translateNonStreamingResponse } = await import(
-	"../../open-sse/handlers/chatCore/nonStreamingHandler.js"
+	"../../apps/web/open-sse/handlers/chatCore/nonStreamingHandler.js"
 )
 
 function context(raw, sourceFormat, targetFormat) {

@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it, vi } from "vitest"
-import { GithubExecutor } from "../../open-sse/executors/github.js"
+import { GithubExecutor } from "../../apps/web/open-sse/executors/github.js"
 
 describe("GithubExecutor.supportsResponsesEndpoint", () => {
 	const exec = new GithubExecutor()

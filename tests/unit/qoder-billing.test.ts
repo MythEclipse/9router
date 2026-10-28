@@ -11,7 +11,7 @@
  */
 
 import { describe, expect, it } from "vitest"
-import { __test__ as qoderExecutorInternals } from "../../open-sse/executors/qoder.js"
+import { __test__ as qoderExecutorInternals } from "../../apps/web/open-sse/executors/qoder.js"
 
 describe("isBillingBlock", () => {
 	const { isBillingBlock } = qoderExecutorInternals

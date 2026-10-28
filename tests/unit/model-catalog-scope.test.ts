@@ -44,7 +44,7 @@ let build,
 
 beforeAll(async () => {
 	;({ build, syncModelCatalog, startModelCatalogSync } = await import(
-		"../../src/lib/modelCatalog/sync.js"
+		"../../apps/web/src/lib/modelCatalog/sync.js"
 	))
 	// the builder is exercised directly; a missing export must fail loudly here
 	// rather than skip every case below
@@ -52,9 +52,9 @@ beforeAll(async () => {
 	const { models, providers } = build(upstream, entries)
 	fs.writeFileSync(catalogFile, JSON.stringify({ v: 2, models, providers }))
 	;({ getCatalogModalities, invalidateCatalog } = await import(
-		"../../open-sse/providers/catalogOverride.js"
+		"../../apps/web/open-sse/providers/catalogOverride.js"
 	))
-	capabilities = await import("../../open-sse/providers/capabilities.js")
+	capabilities = await import("../../apps/web/open-sse/providers/capabilities.js")
 })
 
 afterAll(() => {
@@ -130,7 +130,7 @@ describe("model catalog", () => {
 			// The server bundles this module into more than one chunk and the startup
 			// hook only runs in one of them, so the slot has to be process-wide.
 			expect(globalThis.__9rCatalogSource).toBe(source)
-			const other = await import("../../open-sse/providers/capabilities.js?copy=2")
+			const other = await import("../../apps/web/open-sse/providers/capabilities.js?copy=2")
 			expect(other.getCapabilitiesForModel).not.toBe(capabilities.getCapabilitiesForModel)
 			// ...and that second copy resolves through the source it never installed
 			expect(other.getCapabilitiesForModel("gateway-a", "laguna-9-preview").vision).toBe(true)
@@ -145,7 +145,7 @@ describe("model catalog", () => {
 			getModalities: (provider) => (provider === "gateway-a" ? { vision: true } : null),
 			getLimits: () => null,
 		})
-		const other = await import("../../open-sse/providers/capabilities.js?copy=3")
+		const other = await import("../../apps/web/open-sse/providers/capabilities.js?copy=3")
 		try {
 			expect(other.getCapabilitiesForModel("gateway-a", "laguna-9-preview").vision).toBe(true)
 		} finally {

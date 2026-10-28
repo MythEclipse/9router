@@ -3,9 +3,9 @@ import {
 	getModelsByProviderId,
 	getModelType,
 	isValidModel,
-} from "../../open-sse/config/providerModels"
-import { handleImageGenerationCore } from "../../open-sse/handlers/imageGenerationCore"
-import { getModelInfoCore } from "../../open-sse/services/model"
+} from "../../apps/web/open-sse/config/providerModels"
+import { handleImageGenerationCore } from "../../apps/web/open-sse/handlers/imageGenerationCore"
+import { getModelInfoCore } from "../../apps/web/open-sse/services/model"
 
 // GPT-6 is the current Codex generation; the gpt-5.6-sol/luna/terra image aliases
 // were retired with their base models. Only gpt-6-sol exposes an image variant.

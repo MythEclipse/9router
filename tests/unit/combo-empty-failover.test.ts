@@ -7,10 +7,10 @@ import {
 	peekStreamForContent,
 	reconstructStream,
 	scanSSEBuffer,
-} from "../../open-sse/services/emptyFailover.js"
-import { looksLikeSseText } from "../../open-sse/transformer/jsonToStreamConverter.js"
-import { NO_RETRY_EMPTY_FINISH } from "../../open-sse/translator/schema/finishReasons.js"
-import { pipeWithDisconnect } from "../../open-sse/utils/streamHandler.js"
+} from "../../apps/web/open-sse/services/emptyFailover.js"
+import { looksLikeSseText } from "../../apps/web/open-sse/transformer/jsonToStreamConverter.js"
+import { NO_RETRY_EMPTY_FINISH } from "../../apps/web/open-sse/translator/schema/finishReasons.js"
+import { pipeWithDisconnect } from "../../apps/web/open-sse/utils/streamHandler.js"
 
 // The combo cases below build real streaming responses; keep request-detail writes off disk.
 vi.mock("@/lib/usageDb.js", () => ({
@@ -116,7 +116,7 @@ describe("SSE sniffing for Codex-style streams", () => {
 
 describe("combo fallback handles locked streams", () => {
 	it("skips a locked-stream model and tries the next one", async () => {
-		const { handleComboChat } = await import("../../open-sse/services/combo.js")
+		const { handleComboChat } = await import("../../apps/web/open-sse/services/combo.js")
 		const log = {
 			info: vi.fn(),
 			warn: vi.fn(),
@@ -177,7 +177,7 @@ describe("combo fallback handles locked streams", () => {
 	})
 
 	it("stops immediately when the client signal is already aborted", async () => {
-		const { handleComboChat } = await import("../../open-sse/services/combo.js")
+		const { handleComboChat } = await import("../../apps/web/open-sse/services/combo.js")
 		const controller = new AbortController()
 		controller.abort()
 		const signal = controller.signal
@@ -545,13 +545,13 @@ describe("inspectSSELine — OpenAI Responses client format", () => {
 // Combos through the real combo.js, each member's Response built by the real streaming
 // pipeline (upstream bytes → client-format transform), per client format.
 describe("combo fall-through per client format (real combo.js + streaming pipeline)", async () => {
-	const { createStreamController } = await import("../../open-sse/utils/streamHandler.js")
+	const { createStreamController } = await import("../../apps/web/open-sse/utils/streamHandler.js")
 	const { handleStreamingResponse, buildOnStreamComplete } = await import(
-		"../../open-sse/handlers/chatCore/streamingHandler.js"
+		"../../apps/web/open-sse/handlers/chatCore/streamingHandler.js"
 	)
-	const { handleComboChat } = await import("../../open-sse/services/combo.js")
-	const { initTranslators } = await import("../../open-sse/translator/index.js")
-	const { FORMATS } = await import("../../open-sse/translator/formats.js")
+	const { handleComboChat } = await import("../../apps/web/open-sse/services/combo.js")
+	const { initTranslators } = await import("../../apps/web/open-sse/translator/index.js")
+	const { FORMATS } = await import("../../apps/web/open-sse/translator/formats.js")
 	await initTranslators()
 
 	const LOG = {

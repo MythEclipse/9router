@@ -15,13 +15,13 @@
  */
 
 import { describe, expect, it } from "vitest"
-import { CommandCodeExecutor } from "../../open-sse/executors/commandcode.js"
-import { toOpenAIUsage } from "../../open-sse/translator/concerns/usage.js"
-import { openaiToCommandCodeRequest } from "../../open-sse/translator/request/openai-to-commandcode.js"
+import { CommandCodeExecutor } from "../../apps/web/open-sse/executors/commandcode.js"
+import { toOpenAIUsage } from "../../apps/web/open-sse/translator/concerns/usage.js"
+import { openaiToCommandCodeRequest } from "../../apps/web/open-sse/translator/request/openai-to-commandcode.js"
 import {
 	commandCodeThreadId,
 	isCommandCodeThreadId,
-} from "../../open-sse/utils/commandCodeSession.js"
+} from "../../apps/web/open-sse/utils/commandCodeSession.js"
 
 const MODEL = "deepseek/deepseek-v4.1-flash"
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/

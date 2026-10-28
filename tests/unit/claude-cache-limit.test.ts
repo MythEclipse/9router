@@ -2,7 +2,7 @@
 // markers as this turn allows, and shrinking the budget must never move a
 // breakpoint — only drop tail-most markers.
 import { describe, expect, it } from "vitest"
-import { anchorClaudeCache } from "../../open-sse/translator/formats/claude.js"
+import { anchorClaudeCache } from "../../apps/web/open-sse/translator/formats/claude.js"
 import {
 	applyClaudeCacheLimits,
 	CACHE_DEFAULT_MARKERS,
@@ -10,7 +10,7 @@ import {
 	cacheConfigFrom,
 	countCacheControlBlocks,
 	newCacheLimit,
-} from "../../open-sse/translator/formats/claudeCache.js"
+} from "../../apps/web/open-sse/translator/formats/claudeCache.js"
 
 const CC = { type: "ephemeral" }
 const text = (t, extra = {}) => ({ type: "text", text: t, ...extra })

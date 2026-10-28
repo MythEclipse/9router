@@ -4,8 +4,8 @@
  * Hits real endpoints - no mocks. Free provider, safe to call.
  */
 import { describe, expect, it } from "vitest"
-import { __test__ } from "../../open-sse/executors/mimo-free.js"
-import { proxyAwareFetch } from "../../open-sse/utils/proxyFetch.js"
+import { __test__ } from "../../apps/web/open-sse/executors/mimo-free.js"
+import { proxyAwareFetch } from "../../apps/web/open-sse/utils/proxyFetch.js"
 
 const { BOOTSTRAP_URL, CHAT_URL, generateFingerprint, MIMO_SYSTEM_MARKER } = __test__
 

@@ -24,13 +24,13 @@ beforeAll(async () => {
 	tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "9router-details-tab-"))
 	process.env.DATA_DIR = tempDir
 	vi.resetModules()
-	db = await import("@/lib/db/index.js")
+	db = await import("@9router/db")
 	await db.initDb()
 	// 3fab15ae moved the switch back to enableObservability (default false); the old
 	// enableObservability2 key is ignored, which left request details disabled here.
 	await db.updateSettings({ enableObservability: true, observabilityBatchSize: 1 })
 
-	const { getAdapter } = await import("@/lib/db/driver.js")
+	const { getAdapter } = await import("@9router/db/driver")
 	adapter = await getAdapter()
 })
 
@@ -147,7 +147,7 @@ function getInputTokens(tokens) {
 
 describe("backupDbLite - excludes requestDetails, keeps critical data", () => {
 	it("backup file omits requestDetails rows but keeps other tables", async () => {
-		const { backupDbLite } = await import("@/lib/db/backup.js")
+		const { backupDbLite } = await import("@9router/db/backup")
 		await saveDetail({
 			id: "bk-1",
 			provider: "openai",
@@ -263,6 +263,13 @@ describe("token helpers - render-time crash safety", () => {
 describe("API route contract - validation boundary", () => {
 	let GET
 	beforeAll(async () => {
+		// The route now resolves a dashboard session before it validates paging,
+		// and `cookies()` throws outside a Next request scope. Stub the request
+		// headers so these tests exercise the validation boundary they name
+		// instead of failing on the session lookup that runs before it.
+		vi.doMock("next/headers", () => ({
+			cookies: async () => ({ get: () => undefined }),
+		}))
 		;({ GET } = await import("@/app/api/usage/request-details/route.js"))
 	})
 

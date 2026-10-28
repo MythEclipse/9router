@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { OPENCODE_AGENT_PREAMBLE } from "../../open-sse/assets/opencodeAgentPreamble.js"
-import { OPENCODE_AGENT_TOOLS } from "../../open-sse/assets/opencodeAgentTools.js"
+import { OPENCODE_AGENT_PREAMBLE } from "../../apps/web/open-sse/assets/opencodeAgentPreamble.js"
+import { OPENCODE_AGENT_TOOLS } from "../../apps/web/open-sse/assets/opencodeAgentTools.js"
 import {
 	applyAgentHarness,
 	loadAgentHarness,
 	normalizeToolManifest,
 	resetAgentHarnessCache,
-} from "../../open-sse/utils/opencodeAgentHarness.js"
+} from "../../apps/web/open-sse/utils/opencodeAgentHarness.js"
 
 // Live probes: the free-tier gate admits a request only when it carries both the
 // CLI preamble and the CLI tool manifest. Either one alone is 429.

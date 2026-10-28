@@ -5,26 +5,29 @@ const { fetchMock, opencodeTlsFetchMock } = vi.hoisted(() => ({
 	opencodeTlsFetchMock: vi.fn(),
 }))
 
-vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
+vi.mock("../../apps/web/open-sse/utils/proxyFetch.js", () => ({
 	proxyAwareFetch: fetchMock,
 }))
-vi.mock("../../open-sse/services/opencodeTlsClient.js", () => ({
+vi.mock("../../apps/web/open-sse/services/opencodeTlsClient.js", () => ({
 	opencodeTlsFetch: opencodeTlsFetchMock,
 	OpencodeTlsUnavailableError: class OpencodeTlsUnavailableError extends Error {},
 }))
 
-import { getModelTargetFormat, isValidModel } from "../../open-sse/config/providerModels.js"
-import { getExecutor, hasSpecializedExecutor } from "../../open-sse/executors/index.js"
+import {
+	getModelTargetFormat,
+	isValidModel,
+} from "../../apps/web/open-sse/config/providerModels.js"
+import { getExecutor, hasSpecializedExecutor } from "../../apps/web/open-sse/executors/index.js"
 import {
 	generateSessionId,
 	OPENCODE_SESSION_RE,
 	stableSessionId,
 	translateSessionId,
-} from "../../open-sse/executors/opencode.js"
+} from "../../apps/web/open-sse/executors/opencode.js"
 import {
 	generateSessionId as generateZenSessionId,
 	translateSessionId as translateZenSessionId,
-} from "../../open-sse/executors/opencode-zen.js"
+} from "../../apps/web/open-sse/executors/opencode-zen.js"
 
 function makeCredentials(overrides = {}) {
 	return {
@@ -423,7 +426,7 @@ describe("OpenCode Stable Session Reuse (429 follow-up)", () => {
 	})
 
 	it("declares forceStream on the opencode transport so chatCore serves SSE upstream", async () => {
-		const { PROVIDERS } = await import("../../open-sse/config/providers.js")
+		const { PROVIDERS } = await import("../../apps/web/open-sse/config/providers.js")
 		expect(PROVIDERS.opencode?.forceStream).toBe(true)
 		expect(PROVIDERS.opencode?.retry?.[502]?.attempts).toBe(0)
 		expect(PROVIDERS.opencode?.retry?.[503]?.attempts).toBe(0)

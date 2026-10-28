@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
 	isResponsesEndpoint,
 	validateResponsesBody,
-} from "../../src/sse/protocol/responsesValidation.js"
+} from "../../apps/web/src/sse/protocol/responsesValidation.js"
 
 describe("isResponsesEndpoint", () => {
 	it("matches /v1/responses and subpaths only", () => {

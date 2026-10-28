@@ -10,18 +10,18 @@ import {
 	SERVER_TOOL_USE_ID_RE,
 	WEB_SEARCH_RESULT_BLOCK,
 	WEB_SEARCH_RESULT_ITEM,
-} from "../../open-sse/config/webSearchConstants.js"
+} from "../../apps/web/open-sse/config/webSearchConstants.js"
 import {
 	attachWebSearchToClaudeBody,
 	findWebSearchCall,
 	hasUpstreamSearch,
-} from "../../open-sse/handlers/webSearchBody.js"
+} from "../../apps/web/open-sse/handlers/webSearchBody.js"
 import {
 	buildSearchBlocks,
 	buildSearchErrorBlocks,
 	searchFailureNotice,
 	toResultContent,
-} from "../../open-sse/handlers/webSearchBridge.js"
+} from "../../apps/web/open-sse/handlers/webSearchBridge.js"
 
 const unifiedResult = (over = {}) => ({
 	title: "Doc page",

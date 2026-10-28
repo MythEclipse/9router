@@ -15,8 +15,8 @@
 // Reads the DeepSeek API key from the local 9router DB (connection id
 // a91b07f2-878a-45b0-beb5-56981409ab0c). Uses handleChatCore for the 9router half.
 import { describe, expect, it } from "vitest"
-import { handleChatCore } from "../../../open-sse/handlers/chatCore.js"
-import { openaiResponsesToOpenAIRequest } from "../../../open-sse/translator/request/openai-responses.js"
+import { handleChatCore } from "../../../apps/web/open-sse/handlers/chatCore.js"
+import { openaiResponsesToOpenAIRequest } from "../../../apps/web/open-sse/translator/request/openai-responses.js"
 
 const RUN_REAL = process.env.RUN_REAL === "1"
 const PROVIDER = "deepseek"

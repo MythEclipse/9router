@@ -6,9 +6,9 @@ vi.mock("@/lib/usageDb.js", () => ({
 	saveRequestUsage: vi.fn(async () => {}),
 }))
 
-const { stripContinuityFields } = await import("../../open-sse/handlers/chatCore.js")
+const { stripContinuityFields } = await import("../../apps/web/open-sse/handlers/chatCore.js")
 const { openaiResponsesToOpenAIRequest } = await import(
-	"../../open-sse/translator/request/openai-responses.js"
+	"../../apps/web/open-sse/translator/request/openai-responses.js"
 )
 
 // Multi-turn Codex-style Responses input: reasoning item carrying a

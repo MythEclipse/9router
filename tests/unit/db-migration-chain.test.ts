@@ -28,8 +28,8 @@ afterEach(() => {
 
 describe("Schema migrations", () => {
 	it("fresh DB → applies migrations & stamps schemaVersion", async () => {
-		const { getAdapter } = await import("@/lib/db/driver.js")
-		const { latestVersion } = await import("@/lib/db/migrations/index.js")
+		const { getAdapter } = await import("@9router/db/driver")
+		const { latestVersion } = await import("@9router/db/migrations")
 		const db = await getAdapter()
 		const row = db.get(`SELECT value FROM _meta WHERE key='schemaVersion'`)
 		expect(parseInt(row.value, 10)).toBe(latestVersion())
@@ -54,7 +54,7 @@ describe("Schema migrations", () => {
 
 	it("existing DB at older schemaVersion → re-applies pending migrations on restart", async () => {
 		// 1st boot
-		const { getAdapter } = await import("@/lib/db/driver.js")
+		const { getAdapter } = await import("@9router/db/driver")
 		const db = await getAdapter()
 		db.run(
 			`INSERT INTO settings(id, data) VALUES(1, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data`,
@@ -66,8 +66,8 @@ describe("Schema migrations", () => {
 		// 2nd boot: full reset to simulate process restart
 		delete global._dbAdapter
 		vi.resetModules()
-		const { getAdapter: getAdapter2 } = await import("@/lib/db/driver.js")
-		const { latestVersion } = await import("@/lib/db/migrations/index.js")
+		const { getAdapter: getAdapter2 } = await import("@9router/db/driver")
+		const { latestVersion } = await import("@9router/db/migrations")
 		const db2 = await getAdapter2()
 		const row = db2.get(`SELECT value FROM _meta WHERE key='schemaVersion'`)
 		expect(parseInt(row.value, 10)).toBe(latestVersion())
@@ -85,7 +85,7 @@ describe("Schema migrations", () => {
 		}
 		fs.writeFileSync(path.join(tempDir, "db.json"), JSON.stringify(legacy))
 
-		const { getAdapter } = await import("@/lib/db/driver.js")
+		const { getAdapter } = await import("@9router/db/driver")
 		const db = await getAdapter()
 
 		const settings = db.get(`SELECT data FROM settings WHERE id=1`)
@@ -100,7 +100,7 @@ describe("Schema migrations", () => {
 	})
 
 	it("auto-sync re-creates missing index when DB lacks it", async () => {
-		const { getAdapter } = await import("@/lib/db/driver.js")
+		const { getAdapter } = await import("@9router/db/driver")
 		const db = await getAdapter()
 		db.exec(`DROP INDEX IF EXISTS idx_pn_type`)
 		expect(db.all(`PRAGMA index_list(providerNodes)`).map((i) => i.name)).not.toContain("idx_pn_type")
@@ -108,7 +108,7 @@ describe("Schema migrations", () => {
 
 		delete global._dbAdapter
 		vi.resetModules()
-		const { getAdapter: getAdapter2 } = await import("@/lib/db/driver.js")
+		const { getAdapter: getAdapter2 } = await import("@9router/db/driver")
 		const db2 = await getAdapter2()
 		const idx = db2.all(`PRAGMA index_list(providerNodes)`).map((i) => i.name)
 		expect(idx).toContain("idx_pn_type")

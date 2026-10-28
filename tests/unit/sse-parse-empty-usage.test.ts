@@ -2,7 +2,7 @@
 // usage frames observed, using vitest (which resolves the @/ alias) instead
 // of raw node.
 import { describe, expect, it } from "vitest"
-import { parseSSEToOpenAIResponse } from "../../open-sse/handlers/chatCore/sseToJsonHandler.js"
+import { parseSSEToOpenAIResponse } from "../../apps/web/open-sse/handlers/chatCore/sseToJsonHandler.js"
 
 const usageOnlyChunk = {
 	id: "chatcmpl-mai-api-empty",

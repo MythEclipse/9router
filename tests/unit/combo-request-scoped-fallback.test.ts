@@ -10,8 +10,8 @@
 // and a provider rejecting `response_format`, neither of which any
 // model-scoped phrase list matches.
 import { describe, expect, it, vi } from "vitest"
-import { checkFallbackError } from "../../open-sse/services/accountFallback.js"
-import { handleComboChat } from "../../open-sse/services/combo.js"
+import { checkFallbackError } from "../../apps/web/open-sse/services/accountFallback.js"
+import { handleComboChat } from "../../apps/web/open-sse/services/combo.js"
 
 const silentLog = { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }
 

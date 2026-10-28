@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-vi.mock("../../open-sse/services/oauthCredentialManager", () => ({
+vi.mock("../../apps/web/open-sse/services/oauthCredentialManager", () => ({
 	refreshProviderCredentials: vi.fn(),
 }))
 
-import { parseGrokCliModels, resolveGrokCliModels } from "../../open-sse/services/grokCliModels"
-import { refreshProviderCredentials } from "../../open-sse/services/oauthCredentialManager"
+import {
+	parseGrokCliModels,
+	resolveGrokCliModels,
+} from "../../apps/web/open-sse/services/grokCliModels"
+import { refreshProviderCredentials } from "../../apps/web/open-sse/services/oauthCredentialManager"
 
 function jsonResponse(body, status = 200) {
 	return new Response(JSON.stringify(body), {

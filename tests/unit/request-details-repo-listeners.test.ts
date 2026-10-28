@@ -27,7 +27,7 @@ describe("requestDetailsRepo shutdown hooks", () => {
 
 		for (let i = 0; i < 15; i++) {
 			vi.resetModules()
-			await import("../../src/lib/db/repos/requestDetailsRepo")
+			await import("../../apps/web/src/lib/db/repos/requestDetailsRepo")
 		}
 
 		for (const event of EVENTS) {
@@ -41,7 +41,7 @@ describe("requestDetailsRepo shutdown hooks", () => {
 	it("keeps the process listener count well under Node's warning threshold", async () => {
 		for (let i = 0; i < 15; i++) {
 			vi.resetModules()
-			await import("../../src/lib/db/repos/requestDetailsRepo")
+			await import("../../apps/web/src/lib/db/repos/requestDetailsRepo")
 		}
 
 		for (const event of EVENTS) {

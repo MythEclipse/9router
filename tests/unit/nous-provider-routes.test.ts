@@ -1,6 +1,9 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest"
-import { parseModel } from "../../open-sse/services/model.js"
-import { NOUS_CHAT_COMPLETIONS_URL, NOUS_VALIDATION_MODEL } from "../../open-sse/services/nous.js"
+import { parseModel } from "../../apps/web/open-sse/services/model.js"
+import {
+	NOUS_CHAT_COMPLETIONS_URL,
+	NOUS_VALIDATION_MODEL,
+} from "../../apps/web/open-sse/services/nous.js"
 
 const mocks = vi.hoisted(() => ({
 	getProviderConnectionById: vi.fn(),
@@ -40,9 +43,15 @@ vi.mock("@/lib/network/proxyTest", () => ({
 }))
 
 const originalFetch = global.fetch
-const { POST: validateProvider } = await import("../../src/app/api/providers/validate/route.js")
-const { testSingleConnection } = await import("../../src/app/api/providers/[id]/test/testUtils.js")
-const { GET: listProviderModels } = await import("../../src/app/api/providers/[id]/models/route.js")
+const { POST: validateProvider } = await import(
+	"../../apps/web/src/app/api/providers/validate/route.js"
+)
+const { testSingleConnection } = await import(
+	"../../apps/web/src/app/api/providers/[id]/test/testUtils.js"
+)
+const { GET: listProviderModels } = await import(
+	"../../apps/web/src/app/api/providers/[id]/models/route.js"
+)
 
 const makeResponse = (status) =>
 	new Response(JSON.stringify({ status }), {

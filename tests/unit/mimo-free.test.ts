@@ -13,15 +13,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 // Mock proxyAwareFetch so bootstrapJwt never hits the network.
 const fetchMock = vi.fn()
-vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
+vi.mock("../../apps/web/open-sse/utils/proxyFetch.js", () => ({
 	proxyAwareFetch: (...args) => fetchMock(...args),
 }))
 
-import { PROVIDER_MODELS } from "../../open-sse/config/providerModels.js"
-import { PROVIDERS } from "../../open-sse/config/providers.js"
-import { getExecutor } from "../../open-sse/executors/index.js"
-import { __test__, MimoFreeExecutor } from "../../open-sse/executors/mimo-free.js"
-import { FREE_PROVIDERS } from "../../src/shared/constants/providers.js"
+import { PROVIDER_MODELS } from "../../apps/web/open-sse/config/providerModels.js"
+import { PROVIDERS } from "../../apps/web/open-sse/config/providers.js"
+import { getExecutor } from "../../apps/web/open-sse/executors/index.js"
+import { __test__, MimoFreeExecutor } from "../../apps/web/open-sse/executors/mimo-free.js"
+import { FREE_PROVIDERS } from "../../apps/web/src/shared/constants/providers.js"
 
 const {
 	generateFingerprint,

@@ -9,13 +9,13 @@
  */
 
 import { describe, expect, it } from "vitest"
-import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js"
-import qoderRegistry from "../../open-sse/providers/registry/qoder.js"
+import { getCapabilitiesForModel } from "../../apps/web/open-sse/providers/capabilities.js"
+import qoderRegistry from "../../apps/web/open-sse/providers/registry/qoder.js"
 import {
 	getQoderStaticModelConfig,
 	QODER_MODEL_MAP,
 	QODER_STATIC_MODEL_CONFIGS,
-} from "../../open-sse/shared/qoder/constants.js"
+} from "../../apps/web/open-sse/shared/qoder/constants.js"
 
 describe("Qoder static model configs", () => {
 	it("defines both frontier keys", () => {

@@ -19,7 +19,7 @@ import { describe, expect, it } from "vitest"
 // rather than importing it (avoids next/server bootstrap requirements).
 
 const src = fs.readFileSync(
-	path.resolve("../src/app/api/providers/[id]/test/testUtils.ts"),
+	path.resolve("../../apps/web/src/app/api/providers/[id]/test/testUtils.ts"),
 	"utf-8",
 )
 

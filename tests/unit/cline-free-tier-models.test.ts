@@ -52,7 +52,7 @@ afterEach(() => vi.unstubAllGlobals())
 
 describe("resolveClineModels free-tier merge", () => {
 	it("includes the cline-free/* models that /api/v1/models omits", async () => {
-		const { resolveClineModels } = await import("../../open-sse/services/clinepassModels.js")
+		const { resolveClineModels } = await import("../../apps/web/open-sse/services/clinepassModels.js")
 		const result = await resolveClineModels({ accessToken: "test-token" })
 		const ids = result.models.map((m) => m.id)
 		expect(ids).toContain("cline-free/muse-spark-1.3-contributor")
@@ -62,7 +62,7 @@ describe("resolveClineModels free-tier merge", () => {
 	})
 
 	it("keeps every /api/v1/models entry (feed is additive)", async () => {
-		const { resolveClineModels } = await import("../../open-sse/services/clinepassModels.js")
+		const { resolveClineModels } = await import("../../apps/web/open-sse/services/clinepassModels.js")
 		const result = await resolveClineModels({ accessToken: "test-token" })
 		const ids = result.models.map((m) => m.id)
 		expect(ids).toContain("meta/muse-spark-1.3-contributor")
@@ -70,14 +70,14 @@ describe("resolveClineModels free-tier merge", () => {
 	})
 
 	it("deduplicates ids present in both sources", async () => {
-		const { resolveClineModels } = await import("../../open-sse/services/clinepassModels.js")
+		const { resolveClineModels } = await import("../../apps/web/open-sse/services/clinepassModels.js")
 		const result = await resolveClineModels({ accessToken: "test-token" })
 		const ids = result.models.map((m) => m.id)
 		expect(ids.filter((id) => id === "stealth/space-bunny-alpha")).toHaveLength(1)
 	})
 
 	it("returns {id, name} for feed entries", async () => {
-		const { resolveClineModels } = await import("../../open-sse/services/clinepassModels.js")
+		const { resolveClineModels } = await import("../../apps/web/open-sse/services/clinepassModels.js")
 		const result = await resolveClineModels({ accessToken: "test-token" })
 		const entry = result.models.find((m) => m.id === "cline-free/muse-spark-1.3-contributor")
 		expect(entry.name).toBe("Muse Spark 1.3 Contributor")
@@ -88,13 +88,13 @@ describe("resolveClineModels free-tier merge", () => {
 			if (String(url) === MODELS_URL) return jsonResponse(MODELS_RESPONSE)
 			return { ok: false, status: 503, json: async () => ({}), text: async () => "" }
 		})
-		const { resolveClineModels } = await import("../../open-sse/services/clinepassModels.js")
+		const { resolveClineModels } = await import("../../apps/web/open-sse/services/clinepassModels.js")
 		const result = await resolveClineModels({ accessToken: "test-token" })
 		expect(result.models.map((m) => m.id)).toEqual(MODELS_RESPONSE.map((m) => m.id))
 	})
 
 	it("does not leak the cline-pass/ subscription tier into the cline list", async () => {
-		const { resolveClineModels } = await import("../../open-sse/services/clinepassModels.js")
+		const { resolveClineModels } = await import("../../apps/web/open-sse/services/clinepassModels.js")
 		const result = await resolveClineModels({ accessToken: "test-token" })
 		expect(result.models.map((m) => m.id)).not.toContain("cline-pass/glm-5.3")
 	})
@@ -102,7 +102,7 @@ describe("resolveClineModels free-tier merge", () => {
 
 describe("cline-free namespace pricing", () => {
 	it("bills cline-free/* at zero", async () => {
-		const { getPricingForModel } = await import("../../open-sse/providers/pricing.js")
+		const { getPricingForModel } = await import("../../apps/web/open-sse/providers/pricing.js")
 		const pricing = getPricingForModel("cline", "cline-free/deepseek-v4.1-flash")
 		expect(pricing).toMatchObject({
 			input: 0,
@@ -114,12 +114,12 @@ describe("cline-free namespace pricing", () => {
 	})
 
 	it("bills cline-free/* muse-spark at zero", async () => {
-		const { getPricingForModel } = await import("../../open-sse/providers/pricing.js")
+		const { getPricingForModel } = await import("../../apps/web/open-sse/providers/pricing.js")
 		expect(getPricingForModel("cline", "cline-free/muse-spark-1.3-contributor").input).toBe(0)
 	})
 
 	it("still bills the paid twin at its published rate", async () => {
-		const { getPricingForModel } = await import("../../open-sse/providers/pricing.js")
+		const { getPricingForModel } = await import("../../apps/web/open-sse/providers/pricing.js")
 		expect(getPricingForModel("cline", "deepseek/deepseek-v4.1-flash").input).toBe(0.14)
 		// Muse's published contributor rate (added with the Muse provider in 28809807);
 		// only the cline-free/* twin is zero-priced.
@@ -128,7 +128,7 @@ describe("cline-free namespace pricing", () => {
 
 	it("zero price survives cost calculation over a large usage", async () => {
 		const { getPricingForModel, calculateCostFromTokens } = await import(
-			"../../open-sse/providers/pricing.js"
+			"../../apps/web/open-sse/providers/pricing.js"
 		)
 		const pricing = getPricingForModel("cline", "cline-free/deepseek-v4.1-flash")
 		const cost = calculateCostFromTokens(

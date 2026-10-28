@@ -3,12 +3,12 @@ import { describe, expect, it } from "vitest"
 import {
 	fromOpenAIFinish,
 	toOpenAIFinish,
-} from "../../open-sse/translator/concerns/finishReason.js"
+} from "../../apps/web/open-sse/translator/concerns/finishReason.js"
 import {
 	CLAUDE_STOP,
 	GEMINI_FINISH,
 	OPENAI_FINISH,
-} from "../../open-sse/translator/schema/finishReasons.js"
+} from "../../apps/web/open-sse/translator/schema/finishReasons.js"
 
 describe("toOpenAIFinish - gemini", () => {
 	it.each([

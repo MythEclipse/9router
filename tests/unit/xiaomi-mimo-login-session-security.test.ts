@@ -5,7 +5,7 @@
  *  - upstream Set-Cookie is never replayed onto the app's own cookie jar
  */
 import { describe, expect, it } from "vitest"
-import { __test__ } from "../../src/lib/mimoLoginSession.js"
+import { __test__ } from "../../apps/web/src/lib/mimoLoginSession.js"
 
 const { STRIP_UPSTREAM_HEADERS, buildBrowserResponse } = __test__
 

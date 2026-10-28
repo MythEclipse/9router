@@ -11,23 +11,23 @@
 
 import crypto from "node:crypto"
 import { beforeEach, describe, expect, it } from "vitest"
-import { PROVIDER_MODELS } from "../../open-sse/config/providerModels.js"
-import { __test__ as qoderExecutorInternals } from "../../open-sse/executors/qoder.js"
+import { PROVIDER_MODELS } from "../../apps/web/open-sse/config/providerModels.js"
+import { __test__ as qoderExecutorInternals } from "../../apps/web/open-sse/executors/qoder.js"
 import {
 	buildMultipartFile,
 	clearQoderUploadCache,
 	rewriteQoderMessageAttachments,
-} from "../../open-sse/shared/qoder/attachments.js"
-import { qoderInferenceBase } from "../../open-sse/shared/qoder/constants.js"
-import { canonicalizeQoderUsage } from "../../open-sse/shared/qoder/sse.js"
-import { QoderService } from "../../src/lib/oauth/services/qoder.js"
+} from "../../apps/web/open-sse/shared/qoder/attachments.js"
+import { qoderInferenceBase } from "../../apps/web/open-sse/shared/qoder/constants.js"
+import { canonicalizeQoderUsage } from "../../apps/web/open-sse/shared/qoder/sse.js"
+import { QoderService } from "../../apps/web/src/lib/oauth/services/qoder.js"
 import {
 	QODER_CHAT_URL_ENCODED,
 	QODER_MODEL_LIST_URL,
 	QODER_MODEL_MAP,
-} from "../../src/lib/qoder/constants.js"
-import { buildCosyHeaders } from "../../src/lib/qoder/cosy.js"
-import { qoderEncodeBody } from "../../src/lib/qoder/encoding.js"
+} from "../../apps/web/src/lib/qoder/constants.js"
+import { buildCosyHeaders } from "../../apps/web/src/lib/qoder/cosy.js"
+import { qoderEncodeBody } from "../../apps/web/src/lib/qoder/encoding.js"
 
 // Convenience aliases - tests were originally written against module-level
 // helpers; the QoderService class wraps them so each test creates its own

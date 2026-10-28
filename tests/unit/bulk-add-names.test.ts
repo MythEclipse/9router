@@ -5,7 +5,7 @@
 // Fix: planBulkAdd gap-fills the smallest free "<base> <n>" against existing
 // names (and earlier entries in the same batch) so a name is never reused.
 import { describe, expect, it } from "vitest"
-import { planBulkAdd } from "../../src/shared/utils/bulkAdd.js"
+import { planBulkAdd } from "../../apps/web/src/shared/utils/bulkAdd.js"
 
 describe("planBulkAdd: auto-named gap-fill (the replace bug)", () => {
 	it("uses Key 1..N by paste index when nothing exists", () => {

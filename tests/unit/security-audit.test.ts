@@ -78,7 +78,7 @@ describe("AUDIT-003: Proxy URL validation", () => {
 
 	it("should accept valid http proxy URLs", async () => {
 		vi.resetModules()
-		const { applyOutboundProxyEnv } = await import("../../src/lib/network/outboundProxy")
+		const { applyOutboundProxyEnv } = await import("../../apps/web/src/lib/network/outboundProxy")
 		applyOutboundProxyEnv({
 			outboundProxyEnabled: true,
 			outboundProxyUrl: "http://proxy.example.com:8080",
@@ -90,7 +90,7 @@ describe("AUDIT-003: Proxy URL validation", () => {
 
 	it("should accept valid https proxy URLs", async () => {
 		vi.resetModules()
-		const { applyOutboundProxyEnv } = await import("../../src/lib/network/outboundProxy")
+		const { applyOutboundProxyEnv } = await import("../../apps/web/src/lib/network/outboundProxy")
 		applyOutboundProxyEnv({
 			outboundProxyEnabled: true,
 			outboundProxyUrl: "https://proxy.example.com:443",
@@ -107,7 +107,7 @@ describe("AUDIT-003: Proxy URL validation", () => {
 	// agree with the transport, so socks is now rejected at configuration time.
 	it("should reject socks proxy URLs the serving runtime cannot dial", async () => {
 		vi.resetModules()
-		const { applyOutboundProxyEnv } = await import("../../src/lib/network/outboundProxy")
+		const { applyOutboundProxyEnv } = await import("../../apps/web/src/lib/network/outboundProxy")
 		for (const url of [
 			"socks5://proxy.example.com:1080",
 			"socks4://proxy.example.com:1080",
@@ -123,7 +123,7 @@ describe("AUDIT-003: Proxy URL validation", () => {
 
 	it("should reject URLs with shell metacharacters (newline)", async () => {
 		vi.resetModules()
-		const { applyOutboundProxyEnv } = await import("../../src/lib/network/outboundProxy")
+		const { applyOutboundProxyEnv } = await import("../../apps/web/src/lib/network/outboundProxy")
 		applyOutboundProxyEnv({
 			outboundProxyEnabled: true,
 			outboundProxyUrl: "http://proxy.example.com:8080\nmalicious",
@@ -133,7 +133,7 @@ describe("AUDIT-003: Proxy URL validation", () => {
 
 	it("should reject URLs with shell metacharacters (backtick)", async () => {
 		vi.resetModules()
-		const { applyOutboundProxyEnv } = await import("../../src/lib/network/outboundProxy")
+		const { applyOutboundProxyEnv } = await import("../../apps/web/src/lib/network/outboundProxy")
 		applyOutboundProxyEnv({
 			outboundProxyEnabled: true,
 			outboundProxyUrl: "http://`whoami`.example.com:8080",
@@ -143,7 +143,7 @@ describe("AUDIT-003: Proxy URL validation", () => {
 
 	it("should reject URLs with shell metacharacters (dollar)", async () => {
 		vi.resetModules()
-		const { applyOutboundProxyEnv } = await import("../../src/lib/network/outboundProxy")
+		const { applyOutboundProxyEnv } = await import("../../apps/web/src/lib/network/outboundProxy")
 		applyOutboundProxyEnv({
 			outboundProxyEnabled: true,
 			outboundProxyUrl: "http://$(whoami).example.com:8080",
@@ -153,7 +153,7 @@ describe("AUDIT-003: Proxy URL validation", () => {
 
 	it("should reject non-allowed schemes (file://)", async () => {
 		vi.resetModules()
-		const { applyOutboundProxyEnv } = await import("../../src/lib/network/outboundProxy")
+		const { applyOutboundProxyEnv } = await import("../../apps/web/src/lib/network/outboundProxy")
 		applyOutboundProxyEnv({
 			outboundProxyEnabled: true,
 			outboundProxyUrl: "file:///etc/passwd",
@@ -163,7 +163,7 @@ describe("AUDIT-003: Proxy URL validation", () => {
 
 	it("should reject non-allowed schemes (javascript:)", async () => {
 		vi.resetModules()
-		const { applyOutboundProxyEnv } = await import("../../src/lib/network/outboundProxy")
+		const { applyOutboundProxyEnv } = await import("../../apps/web/src/lib/network/outboundProxy")
 		applyOutboundProxyEnv({
 			outboundProxyEnabled: true,
 			outboundProxyUrl: "javascript:alert(1)",

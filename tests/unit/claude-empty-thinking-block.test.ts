@@ -13,11 +13,11 @@
 // The signature must be a REAL E-form one: an invalid signature is dropped earlier
 // by the signature check, which would mask the text check under test.
 import { describe, expect, it } from "vitest"
-import { DEFAULT_THINKING_CLAUDE_SIGNATURE } from "../../open-sse/config/defaultThinkingSignature.js"
+import { DEFAULT_THINKING_CLAUDE_SIGNATURE } from "../../apps/web/open-sse/config/defaultThinkingSignature.js"
 import {
 	normalizeClaudePassthrough,
 	prepareClaudeRequest,
-} from "../../open-sse/translator/formats/claude.js"
+} from "../../apps/web/open-sse/translator/formats/claude.js"
 
 const assistant = (blocks) => ({ role: "assistant", content: blocks })
 const thinking = (text) => ({

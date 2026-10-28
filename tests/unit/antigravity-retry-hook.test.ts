@@ -1,7 +1,7 @@
 // Guards D3: antigravity 429/503 retry merged into base via computeRetryDelay hook.
 import { describe, expect, it } from "vitest"
-import { AntigravityExecutor } from "../../open-sse/executors/antigravity.js"
-import antigravity from "../../open-sse/providers/registry/antigravity.js"
+import { AntigravityExecutor } from "../../apps/web/open-sse/executors/antigravity.js"
+import antigravity from "../../apps/web/open-sse/providers/registry/antigravity.js"
 
 const MAX = 10000
 function res(status, headers = {}, body = null) {

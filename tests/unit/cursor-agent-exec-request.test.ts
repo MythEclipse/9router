@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest"
 
-import { CursorExecutor } from "../../open-sse/executors/cursor.js"
+import { CursorExecutor } from "../../apps/web/open-sse/executors/cursor.js"
 import {
 	decodeMessage,
 	encodeField,
 	wrapConnectRPCFrame,
-} from "../../open-sse/utils/cursorProtobuf.js"
+} from "../../apps/web/open-sse/utils/cursorProtobuf.js"
 
 const LEN = 2
 
@@ -340,7 +340,7 @@ describe("Cursor long-session empty-turn recovery", () => {
 	})
 
 	it("tailOnlyCursorMessages keeps system, drops bulk history, keeps the live turn", async () => {
-		const { tailOnlyCursorMessages } = await import("../../open-sse/executors/cursor.js")
+		const { tailOnlyCursorMessages } = await import("../../apps/web/open-sse/executors/cursor.js")
 		const messages = [
 			{ role: "system", content: "be helpful" },
 			...Array.from({ length: 90 }, (_, i) => ({ role: "user", content: `m${i}` })),

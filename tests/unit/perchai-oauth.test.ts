@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { normalizePerchExpiry } from "../../open-sse/shared/perchCredentials"
-import perchai from "../../src/lib/oauth/providers/perchai"
+import { normalizePerchExpiry } from "../../apps/web/open-sse/shared/perchCredentials"
+import perchai from "../../apps/web/src/lib/oauth/providers/perchai"
 
 describe("Perch AI OAuth", () => {
 	it("builds a PKCE authorization URL and supports provider selection", () => {

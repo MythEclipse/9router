@@ -6,10 +6,10 @@
 // filled in on the response path — the request-side ensureToolCallIds() never
 // sees it.
 import { describe, expect, it } from "vitest"
-import { FORMATS } from "../../open-sse/translator/formats.js"
-import { initState, translateResponse } from "../../open-sse/translator/index.js"
-import { createSSEStream } from "../../open-sse/utils/stream.js"
-import { ensureStreamToolCallIds } from "../../open-sse/utils/streamHelpers.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
+import { initState, translateResponse } from "../../apps/web/open-sse/translator/index.js"
+import { createSSEStream } from "../../apps/web/open-sse/utils/stream.js"
+import { ensureStreamToolCallIds } from "../../apps/web/open-sse/utils/streamHelpers.js"
 
 const chunk = (delta, extra = {}) => ({
 	id: "chatcmpl-abc12345",

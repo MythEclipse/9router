@@ -6,13 +6,13 @@ import { describe, expect, it, vi } from "vitest"
 describe("xai/token-refresh wrapper", () => {
 	it("refreshXaiToken module loads without throwing", async () => {
 		// Just verify the file imports cleanly. The actual wrapper is internal.
-		const mod = await import("../../open-sse/services/tokenRefresh.js")
+		const mod = await import("../../apps/web/open-sse/services/tokenRefresh.js")
 		expect(typeof mod.refreshTokenByProvider).toBe("function")
 		expect(typeof mod.formatProviderCredentials).toBe("function")
 	})
 
 	it("formatProviderCredentials returns Bearer-shape for xai", async () => {
-		const mod = await import("../../open-sse/services/tokenRefresh.js")
+		const mod = await import("../../apps/web/open-sse/services/tokenRefresh.js")
 		const out = mod.formatProviderCredentials(
 			"xai",
 			{ apiKey: "k", accessToken: "t", refreshToken: "r" },
@@ -22,14 +22,14 @@ describe("xai/token-refresh wrapper", () => {
 	})
 
 	it("refreshTokenByProvider returns null when refreshToken missing", async () => {
-		const mod = await import("../../open-sse/services/tokenRefresh.js")
+		const mod = await import("../../apps/web/open-sse/services/tokenRefresh.js")
 		const out = await mod.refreshTokenByProvider("xai", { refreshToken: "" }, null)
 		expect(out).toBeNull()
 	})
 
 	it("refreshTokenByProvider returns expiresIn for refreshed xai tokens", async () => {
 		vi.resetModules()
-		vi.doMock("../../src/lib/oauth/services/xai.js", () => ({
+		vi.doMock("../../apps/web/src/lib/oauth/services/xai.js", () => ({
 			XaiService: class {
 				async refreshAccessToken(refreshToken) {
 					return {
@@ -42,7 +42,7 @@ describe("xai/token-refresh wrapper", () => {
 			},
 		}))
 
-		const mod = await import("../../open-sse/services/tokenRefresh.js")
+		const mod = await import("../../apps/web/open-sse/services/tokenRefresh.js")
 		const out = await mod.refreshTokenByProvider("xai", { refreshToken: "old-refresh" }, null)
 
 		expect(out).toEqual({
@@ -53,7 +53,7 @@ describe("xai/token-refresh wrapper", () => {
 		})
 		expect(out).not.toHaveProperty("expiresAt")
 
-		vi.doUnmock("../../src/lib/oauth/services/xai.js")
+		vi.doUnmock("../../apps/web/src/lib/oauth/services/xai.js")
 		vi.resetModules()
 	})
 })

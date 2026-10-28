@@ -6,13 +6,13 @@ const { loadRuntimeDepMock, fetchMock, closeMock } = vi.hoisted(() => ({
 	closeMock: vi.fn(),
 }))
 
-vi.mock("../../open-sse/services/lazyRuntime.js", () => ({
+vi.mock("../../apps/web/open-sse/services/lazyRuntime.js", () => ({
 	loadRuntimeDep: loadRuntimeDepMock,
 }))
 
 async function importClient() {
 	vi.resetModules()
-	return import("../../open-sse/services/opencodeTlsClient.js")
+	return import("../../apps/web/open-sse/services/opencodeTlsClient.js")
 }
 
 beforeEach(() => {

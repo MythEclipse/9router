@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest"
-import { OpenCodeExecutor } from "../../open-sse/executors/opencode.js"
-import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js"
-import { getThinkingLevels } from "../../open-sse/providers/thinkingLevels.js"
-import { applyThinking } from "../../open-sse/translator/concerns/thinkingUnified.js"
-import { FORMATS } from "../../open-sse/translator/formats.js"
+import { OpenCodeExecutor } from "../../apps/web/open-sse/executors/opencode.js"
+import { getCapabilitiesForModel } from "../../apps/web/open-sse/providers/capabilities.js"
+import { getThinkingLevels } from "../../apps/web/open-sse/providers/thinkingLevels.js"
+import { applyThinking } from "../../apps/web/open-sse/translator/concerns/thinkingUnified.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
 import "../translator/registerAll.js"
-import { translateRequest } from "../../open-sse/translator/index.js"
+import { translateRequest } from "../../apps/web/open-sse/translator/index.js"
 
 // oc/deepseek-v4.1-flash-free (OpenCode Zen free lane) serves exactly low|high|max.
 // The generic *deepseek-v4.* declarations (medium/xhigh) do not apply, and the

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { applyModelAlias, calledModelName } from "../../open-sse/utils/modelAlias"
+import { applyModelAlias, calledModelName } from "../../apps/web/open-sse/utils/modelAlias"
 
 /**
  * A caller that asks for a combo (or a studio alias) must never learn which

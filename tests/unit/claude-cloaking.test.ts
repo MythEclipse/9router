@@ -7,12 +7,12 @@
  */
 
 import { describe, expect, it } from "vitest"
-import { CLAUDE_TOOL_SUFFIX } from "../../open-sse/config/appConstants.js"
+import { CLAUDE_TOOL_SUFFIX } from "../../apps/web/open-sse/config/appConstants.js"
 import {
 	applyCloaking,
 	cloakClaudeTools,
 	decloakStreamChunk,
-} from "../../open-sse/utils/claudeCloaking.js"
+} from "../../apps/web/open-sse/utils/claudeCloaking.js"
 
 it("advertises a Claude Code version accepted by Fable 5.1", () => {
 	const body = applyCloaking({ messages: [] }, "sk-ant-oat-test", "session-id")

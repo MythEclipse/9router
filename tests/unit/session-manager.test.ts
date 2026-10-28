@@ -6,7 +6,7 @@ import {
 	resolveContinuationId,
 	resolveSessionId,
 	resolveSessionIdentity,
-} from "../../open-sse/utils/sessionManager.js"
+} from "../../apps/web/open-sse/utils/sessionManager.js"
 
 // Assistant text must reach ASSISTANT_MIN_LEN (80) to use assistant anchor; else first user message.
 const longAssistant = "x".repeat(80)

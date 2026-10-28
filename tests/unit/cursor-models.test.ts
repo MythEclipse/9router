@@ -3,7 +3,7 @@ import {
 	clearCursorModelCache,
 	parseCursorUsableModels,
 	resolveCursorModels,
-} from "../../open-sse/services/cursorModels.js"
+} from "../../apps/web/open-sse/services/cursorModels.js"
 
 // GetUsableModels goes over node:http2 (agent.api5.cursor.sh is HTTP/2-only; fetch
 // cannot speak h2, see 6994cd1f). These tests used to mock global.fetch, which the

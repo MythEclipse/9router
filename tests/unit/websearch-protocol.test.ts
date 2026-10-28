@@ -11,8 +11,8 @@ import {
 	SERVER_TOOL_USE_ID_RE,
 	WEB_SEARCH_TOOL_NAME,
 	WEB_SEARCH_TOOL_TYPE,
-} from "../../open-sse/config/webSearchConstants.js"
-import { toResultItem } from "../../open-sse/handlers/webSearchBridge.js"
+} from "../../apps/web/open-sse/config/webSearchConstants.js"
+import { toResultItem } from "../../apps/web/open-sse/handlers/webSearchBridge.js"
 import {
 	createBridgeToolDefinition,
 	findWebSearchTool,
@@ -24,7 +24,7 @@ import {
 	LANE_PASSTHROUGH,
 	resolveWebSearchPlan,
 	upstreamRunsWebSearch,
-} from "../../open-sse/handlers/webSearchProtocol.js"
+} from "../../apps/web/open-sse/handlers/webSearchProtocol.js"
 
 const claudeSearchBody = (extra = {}) => ({
 	model: "claude-sonnet-4-6",

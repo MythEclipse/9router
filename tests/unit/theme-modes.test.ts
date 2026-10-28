@@ -42,7 +42,7 @@ describe("theme mode contract", () => {
 	beforeEach(async () => {
 		vi.resetModules()
 		stubDom()
-		const mod = await import("../../src/store/themeStore.js")
+		const mod = await import("../../apps/web/src/store/themeStore.js")
 		store = mod.default
 		// Tests drive the store directly, so allow theme changes.
 		store.getState().setServerTheme("glass", true)

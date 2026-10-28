@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { openaiToClaudeRequest } from "../../open-sse/translator/request/openai-to-claude.js"
+import { openaiToClaudeRequest } from "../../apps/web/open-sse/translator/request/openai-to-claude.js"
 
 describe("OpenAI image content in Claude tool results", () => {
 	it("converts tool-result image_url parts to Claude image blocks", () => {

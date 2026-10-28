@@ -7,7 +7,7 @@ const db = vi.hoisted(() => ({
 
 vi.mock("@/lib/localDb", () => db)
 
-const { POST } = await import("../../src/app/api/v1/responses/route.js")
+const { POST } = await import("../../apps/web/src/app/api/v1/responses/route.js")
 
 async function post(body) {
 	return POST(

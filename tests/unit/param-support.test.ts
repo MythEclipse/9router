@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { stripUnsupportedParams } from "../../open-sse/translator/concerns/paramSupport.js"
+import { stripUnsupportedParams } from "../../apps/web/open-sse/translator/concerns/paramSupport.js"
 
 describe("stripUnsupportedParams", () => {
 	it("flattens Cloudflare AI OpenAI content-part arrays", () => {

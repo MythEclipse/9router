@@ -43,16 +43,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const fetchMock = vi.fn()
 
-vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
+vi.mock("../../apps/web/open-sse/utils/proxyFetch.js", () => ({
 	proxyAwareFetch: (...args) => fetchMock(...args),
 }))
 
-const { KiroExecutor } = await import("../../open-sse/executors/kiro.js")
+const { KiroExecutor } = await import("../../apps/web/open-sse/executors/kiro.js")
 const { kiroToClaudeResponse, kiroToClaudeNonStreaming } = await import(
-	"../../open-sse/translator/response/kiro-to-claude.js"
+	"../../apps/web/open-sse/translator/response/kiro-to-claude.js"
 )
 const { validateKiroConversation, canonicalizeKiroConversation } = await import(
-	"../../open-sse/translator/concerns/kiroConversation.js"
+	"../../apps/web/open-sse/translator/concerns/kiroConversation.js"
 )
 
 const encoder = new TextEncoder()

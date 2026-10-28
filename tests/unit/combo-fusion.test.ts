@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 
-import { handleFusionChat } from "../../open-sse/services/combo.js"
+import { handleFusionChat } from "../../apps/web/open-sse/services/combo.js"
 
 const log = { info: () => {}, warn: () => {}, debug: () => {} }
 

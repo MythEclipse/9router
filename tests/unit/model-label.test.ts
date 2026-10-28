@@ -7,7 +7,7 @@ import {
 	labelForRow,
 	MODEL_NAME_COLUMNS,
 	resolvedModelOf,
-} from "../../src/lib/db/helpers/modelLabel"
+} from "../../apps/web/src/lib/db/helpers/modelLabel"
 
 /**
  * A usage row carries two names: `model` is what the caller asked for (a combo

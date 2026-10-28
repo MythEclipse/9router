@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { CodeBuddyExecutor } from "../../open-sse/executors/codebuddy-cn.js"
-import { CodeBuddyIntlExecutor } from "../../open-sse/executors/codebuddy-intl.js"
+import { CodeBuddyExecutor } from "../../apps/web/open-sse/executors/codebuddy-cn.js"
+import { CodeBuddyIntlExecutor } from "../../apps/web/open-sse/executors/codebuddy-intl.js"
 
 describe("CodeBuddy parseError", () => {
 	it("parses code 6004 frequency limit with timestamp into 429 and resetsAtMs on codebuddy-cn", () => {

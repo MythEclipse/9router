@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
 	aggregateComboCapabilities,
 	getCapabilitiesForModel,
-} from "../../open-sse/providers/capabilities.js"
+} from "../../apps/web/open-sse/providers/capabilities.js"
 
 // Resolving a combo's members needs the synced model catalog, which is server-only (it
 // reads a file), so the browser bundle falls back to the generic patterns. The dashboard

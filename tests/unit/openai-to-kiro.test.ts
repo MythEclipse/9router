@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from "vitest"
-import { openaiToKiroRequest } from "../../open-sse/translator/request/openai-to-kiro.js"
+import { openaiToKiroRequest } from "../../apps/web/open-sse/translator/request/openai-to-kiro.js"
 
 const contentOf = (result) => result.conversationState.currentMessage.userInputMessage.content
 // Kiro rejects a top-level systemPrompt (400 REQUEST_BODY_INVALID; 1892ed77), so the

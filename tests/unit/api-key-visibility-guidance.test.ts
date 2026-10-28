@@ -4,7 +4,10 @@ import { describe, expect, it } from "vitest"
 const oldGuidance = "This is the only time you will see this key. Store it securely."
 const guidance = "Store this key now, because it is shown only once."
 const source = readFileSync(
-	new URL("../../src/app/(dashboard)/dashboard/endpoint/EndpointPageClient.tsx", import.meta.url),
+	new URL(
+		"../../apps/web/src/app/(dashboard)/dashboard/endpoint/EndpointPageClient.tsx",
+		import.meta.url,
+	),
 	"utf-8",
 )
 

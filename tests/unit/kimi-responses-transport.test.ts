@@ -11,14 +11,14 @@ const { executeMock } = vi.hoisted(() => ({
 	executeMock: vi.fn(),
 }))
 
-vi.mock("../../open-sse/executors/index.js", () => ({
+vi.mock("../../apps/web/open-sse/executors/index.js", () => ({
 	getExecutor: () => ({
 		noAuth: true,
 		execute: executeMock,
 	}),
 }))
 
-vi.mock("../../open-sse/utils/requestLogger.js", () => ({
+vi.mock("../../apps/web/open-sse/utils/requestLogger.js", () => ({
 	createRequestLogger: async () => ({
 		logClientRawRequest: vi.fn(),
 		logRawRequest: vi.fn(),
@@ -29,7 +29,7 @@ vi.mock("../../open-sse/utils/requestLogger.js", () => ({
 	}),
 }))
 
-vi.mock("../../open-sse/utils/stream.js", () => ({
+vi.mock("../../apps/web/open-sse/utils/stream.js", () => ({
 	COLORS: { red: "", reset: "" },
 	createPassthroughStreamWithLogger: vi.fn(() => new TransformStream()),
 }))
@@ -47,7 +47,7 @@ vi.mock("@/lib/usageDb.js", () => ({
 
 // image.js imports Agent from "undici" (not installed in some dev envs); the
 // prefetch path is irrelevant to routing assertions.
-vi.mock("../../open-sse/translator/concerns/image.js", () => ({
+vi.mock("../../apps/web/open-sse/translator/concerns/image.js", () => ({
 	encodeDataUri: (mimeType, base64) => `data:${mimeType};base64,${base64}`,
 	parseDataUri: (url) => {
 		const m = /^data:([^;]+);base64,(.*)$/.exec(url)
@@ -56,12 +56,12 @@ vi.mock("../../open-sse/translator/concerns/image.js", () => ({
 	fetchImageAsBase64: async () => null,
 }))
 
-const { handleChatCore } = await import("../../open-sse/handlers/chatCore.js")
-const { DefaultExecutor } = await import("../../open-sse/executors/default.js")
+const { handleChatCore } = await import("../../apps/web/open-sse/handlers/chatCore.js")
+const { DefaultExecutor } = await import("../../apps/web/open-sse/executors/default.js")
 
-const { resolveTransport } = await import("../../open-sse/services/provider.js")
-const { PROVIDERS } = await import("../../open-sse/config/providers.js")
-const { getProviderModels } = await import("../../open-sse/config/providerModels.js")
+const { resolveTransport } = await import("../../apps/web/open-sse/services/provider.js")
+const { PROVIDERS } = await import("../../apps/web/open-sse/config/providers.js")
+const { getProviderModels } = await import("../../apps/web/open-sse/config/providerModels.js")
 
 // Everything below derives from the registry: no model id or host is hardcoded.
 const MODELS = getProviderModels("kimi").map((m) => m.id)

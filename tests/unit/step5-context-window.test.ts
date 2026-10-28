@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js"
+import { getCapabilitiesForModel } from "../../apps/web/open-sse/providers/capabilities.js"
 
 // #4941: every Step-5 route resolved to a 128k context window. The `*step-*`
 // pattern pinned contextWindow to 128000 — written when StepFun's line was

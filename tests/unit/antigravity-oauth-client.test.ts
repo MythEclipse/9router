@@ -12,21 +12,21 @@ const GOOGLE = {
 
 describe("antigravity oauth client (deduped)", () => {
 	it("shared source holds the canonical credentials", async () => {
-		const { ANTIGRAVITY_OAUTH_CLIENT } = await import("../../open-sse/providers/shared")
+		const { ANTIGRAVITY_OAUTH_CLIENT } = await import("../../apps/web/open-sse/providers/shared")
 		expect(ANTIGRAVITY_OAUTH_CLIENT).toEqual(EXPECTED)
 	})
 
 	it("registry transport keeps clientId/clientSecret", async () => {
-		const ag = (await import("../../open-sse/providers/registry/antigravity")).default
+		const ag = (await import("../../apps/web/open-sse/providers/registry/antigravity")).default
 		expect(ag.transport.clientId).toBe(EXPECTED.clientId)
 		expect(ag.transport.clientSecret).toBe(EXPECTED.clientSecret)
 	})
 
 	it("google client shared by gemini + gemini-cli", async () => {
-		const { GOOGLE_OAUTH_CLIENT } = await import("../../open-sse/providers/shared")
+		const { GOOGLE_OAUTH_CLIENT } = await import("../../apps/web/open-sse/providers/shared")
 		expect(GOOGLE_OAUTH_CLIENT).toEqual(GOOGLE)
-		const gemini = (await import("../../open-sse/providers/registry/gemini")).default
-		const gc = (await import("../../open-sse/providers/registry/gemini-cli")).default
+		const gemini = (await import("../../apps/web/open-sse/providers/registry/gemini")).default
+		const gc = (await import("../../apps/web/open-sse/providers/registry/gemini-cli")).default
 		expect(gemini.transport.clientSecret).toBe(GOOGLE.clientSecret)
 		expect(gc.transport.clientSecret).toBe(GOOGLE.clientSecret)
 	})
@@ -37,7 +37,7 @@ describe("antigravity oauth client (deduped)", () => {
 		const { fileURLToPath } = await import("node:url")
 		const { dirname, join } = await import("node:path")
 		const here = dirname(fileURLToPath(import.meta.url))
-		const src = readFileSync(join(here, "../../src/lib/oauth/constants/oauth.ts"), "utf8")
+		const src = readFileSync(join(here, "../../apps/web/src/lib/oauth/constants/oauth.ts"), "utf8")
 		// Import specifier stays extension-agnostic: the source tree is TypeScript now,
 		// so pinning ".js" (or ".ts") here makes the guard fail on a pure rename.
 		expect(src).toMatch(

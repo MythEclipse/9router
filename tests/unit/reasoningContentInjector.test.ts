@@ -10,9 +10,9 @@
  */
 
 import { describe, expect, it } from "vitest"
-import { DefaultExecutor } from "../../open-sse/executors/default.js"
-import { OpenCodeExecutor } from "../../open-sse/executors/opencode.js"
-import { injectReasoningContent } from "../../open-sse/utils/reasoningContentInjector.js"
+import { DefaultExecutor } from "../../apps/web/open-sse/executors/default.js"
+import { OpenCodeExecutor } from "../../apps/web/open-sse/executors/opencode.js"
+import { injectReasoningContent } from "../../apps/web/open-sse/utils/reasoningContentInjector.js"
 
 const assistantWithToolCall = {
 	role: "assistant",

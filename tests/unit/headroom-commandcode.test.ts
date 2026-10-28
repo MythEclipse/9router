@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { compressWithHeadroom } from "../../open-sse/rtk/headroom.js"
-import { openaiToCommandCodeRequest } from "../../open-sse/translator/request/openai-to-commandcode.js"
+import { compressWithHeadroom } from "../../apps/web/open-sse/rtk/headroom.js"
+import { openaiToCommandCodeRequest } from "../../apps/web/open-sse/translator/request/openai-to-commandcode.js"
 
 afterEach(() => vi.unstubAllGlobals())
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { getThinkingLevels } from "../../open-sse/providers/thinkingLevels.js"
+import { getThinkingLevels } from "../../apps/web/open-sse/providers/thinkingLevels.js"
 
 describe("getThinkingLevels", () => {
 	it.each([

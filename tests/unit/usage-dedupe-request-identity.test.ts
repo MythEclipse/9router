@@ -13,7 +13,7 @@
 // DATA_DIR on import), so per-case isolation by swapping env does NOT work here.
 // Each case therefore measures the delta in lifetime request count instead.
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import { getUsageStats, saveRequestUsage } from "../../src/lib/db/index.js"
+import { getUsageStats, saveRequestUsage } from "../../apps/web/src/lib/db/index.js"
 
 const originalDataDir = process.env.DATA_DIR
 

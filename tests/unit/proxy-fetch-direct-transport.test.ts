@@ -23,7 +23,7 @@ afterEach(() => {
 
 async function loadProxyFetch() {
 	vi.resetModules()
-	return import("../../open-sse/utils/proxyFetch.js")
+	return import("../../apps/web/open-sse/utils/proxyFetch.js")
 }
 
 describe("proxyAwareFetch directFetch (TLS transport) routing", () => {

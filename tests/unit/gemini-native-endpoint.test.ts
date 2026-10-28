@@ -28,8 +28,8 @@ vi.mock("@/lib/localDb", () => ({
 	getSettings: mocks.getSettings,
 }))
 
-const { GET } = await import("../../src/app/api/v1beta/models/route.js")
-const { POST } = await import("../../src/app/api/v1beta/models/[...path]/route.js")
+const { GET } = await import("../../apps/web/src/app/api/v1beta/models/route.js")
+const { POST } = await import("../../apps/web/src/app/api/v1beta/models/[...path]/route.js")
 
 function makeGeminiRequest(path, body, headers = {}, signal) {
 	return new Request(`https://router.test/v1beta/models/${path}`, {

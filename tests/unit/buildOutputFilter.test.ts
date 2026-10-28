@@ -1,9 +1,9 @@
 // Tests for PR #1175: build output filter + porcelain regex fix
 // Covers edge cases: porcelain workdir-only, cargo misdetection, false positives, compression
 import { describe, expect, it } from "vitest"
-import { autoDetectFilter } from "../../open-sse/rtk/autodetect.js"
-import { buildOutput } from "../../open-sse/rtk/filters/buildOutput.js"
-import { gitStatus } from "../../open-sse/rtk/filters/gitStatus.js"
+import { autoDetectFilter } from "../../apps/web/open-sse/rtk/autodetect.js"
+import { buildOutput } from "../../apps/web/open-sse/rtk/filters/buildOutput.js"
+import { gitStatus } from "../../apps/web/open-sse/rtk/filters/gitStatus.js"
 
 describe("PR #1175 - buildOutput filter detection", () => {
 	it("detects npm install output", () => {

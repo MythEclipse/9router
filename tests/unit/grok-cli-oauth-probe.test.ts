@@ -2,8 +2,8 @@
  * Grok CLI connection-test semantics: 402 spending-limit is soft success (auth OK).
  */
 import { describe, expect, it } from "vitest"
-import { PROVIDERS } from "../../open-sse/providers/index.js"
-import { classifyOAuthProbeResult } from "../../src/app/api/providers/[id]/test/testUtils.js"
+import { PROVIDERS } from "../../apps/web/open-sse/providers/index.js"
+import { classifyOAuthProbeResult } from "../../apps/web/src/app/api/providers/[id]/test/testUtils.js"
 
 const GROK_CLI_PROBE = {
 	url: PROVIDERS["grok-cli"]?.userUrl || "https://cli-chat-proxy.grok.com/v1/user",

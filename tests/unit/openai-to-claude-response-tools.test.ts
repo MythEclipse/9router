@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { openaiToClaudeResponse } from "../../open-sse/translator/response/openai-to-claude.js"
+import { openaiToClaudeResponse } from "../../apps/web/open-sse/translator/response/openai-to-claude.js"
 
 function createState() {
 	return { toolCalls: new Map(), nextBlockIndex: 0 }

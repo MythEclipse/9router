@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest"
 
-import { getModelUpstreamId } from "../../open-sse/config/providerModels.js"
-import { AntigravityExecutor } from "../../open-sse/executors/antigravity.js"
-import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js"
-import { getThinkingLevels } from "../../open-sse/providers/thinkingLevels.js"
+import { getModelUpstreamId } from "../../apps/web/open-sse/config/providerModels.js"
+import { AntigravityExecutor } from "../../apps/web/open-sse/executors/antigravity.js"
+import { getCapabilitiesForModel } from "../../apps/web/open-sse/providers/capabilities.js"
+import { getThinkingLevels } from "../../apps/web/open-sse/providers/thinkingLevels.js"
 import {
 	applyThinking,
 	stripThinkingSuffix,
-} from "../../open-sse/translator/concerns/thinkingUnified.js"
+} from "../../apps/web/open-sse/translator/concerns/thinkingUnified.js"
 
 describe("Gemini 4 Argon capabilities", () => {
 	it.each(["gemini", "vertex", "antigravity"])(

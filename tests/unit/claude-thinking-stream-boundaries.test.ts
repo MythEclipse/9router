@@ -12,10 +12,10 @@
 // which also fixes item ordering for every reasoning_content provider (DeepSeek,
 // GLM, Qwen, Kimi), not just Claude.
 import { describe, expect, it } from "vitest"
-import { createResponsesApiTransformStream } from "../../open-sse/transformer/responsesTransformer.js"
-import { FORMATS } from "../../open-sse/translator/formats.js"
-import { claudeToOpenAIResponse } from "../../open-sse/translator/response/claude-to-openai.js"
-import { createSSETransformStreamWithLogger } from "../../open-sse/utils/stream.js"
+import { createResponsesApiTransformStream } from "../../apps/web/open-sse/transformer/responsesTransformer.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
+import { claudeToOpenAIResponse } from "../../apps/web/open-sse/translator/response/claude-to-openai.js"
+import { createSSETransformStreamWithLogger } from "../../apps/web/open-sse/utils/stream.js"
 
 const THINKING = "391 factors as 17 times 23, so it's not prime."
 const ANSWER = "No - 391 = 17 × 23."

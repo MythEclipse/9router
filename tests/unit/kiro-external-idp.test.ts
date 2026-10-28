@@ -20,7 +20,7 @@ describe("Kiro external_idp (CLIProxyAPI) import and refresh", () => {
 	afterEach(() => {
 		vi.doUnmock("next/server")
 		vi.doUnmock("@/models")
-		vi.doUnmock("../../open-sse/utils/proxyFetch.js")
+		vi.doUnmock("../../apps/web/open-sse/utils/proxyFetch.js")
 		global.fetch = originalFetch
 	})
 
@@ -36,7 +36,7 @@ describe("Kiro external_idp (CLIProxyAPI) import and refresh", () => {
 		})
 		global.fetch = fetchMock
 
-		const { refreshKiroToken } = await import("../../open-sse/services/tokenRefresh.js")
+		const { refreshKiroToken } = await import("../../apps/web/open-sse/services/tokenRefresh.js")
 		const result = await refreshKiroToken("old-refresh-token", {
 			authMethod: "external_idp",
 			clientId: TEST_CLIENT_ID,
@@ -78,7 +78,7 @@ describe("Kiro external_idp (CLIProxyAPI) import and refresh", () => {
 	})
 
 	it("rejects external_idp refresh endpoints outside Microsoft login", async () => {
-		const { refreshKiroToken } = await import("../../open-sse/services/tokenRefresh.js")
+		const { refreshKiroToken } = await import("../../apps/web/open-sse/services/tokenRefresh.js")
 		const fetchMock = vi.fn()
 		global.fetch = fetchMock
 
@@ -94,7 +94,7 @@ describe("Kiro external_idp (CLIProxyAPI) import and refresh", () => {
 	})
 
 	it("adds CodeWhisperer external IdP headers and endpoint ordering", async () => {
-		const { KiroExecutor } = await import("../../open-sse/executors/kiro.js")
+		const { KiroExecutor } = await import("../../apps/web/open-sse/executors/kiro.js")
 		const executor = new KiroExecutor()
 		const credentials = {
 			accessToken: "microsoft-access-token",
@@ -115,7 +115,7 @@ describe("Kiro external_idp (CLIProxyAPI) import and refresh", () => {
 
 	it("sends TokenType for external_idp Kiro usage probes", async () => {
 		const calls = []
-		vi.doMock("../../open-sse/utils/proxyFetch.js", () => ({
+		vi.doMock("../../apps/web/open-sse/utils/proxyFetch.js", () => ({
 			proxyAwareFetch: vi.fn(async (url, init) => {
 				calls.push({ url, init })
 				return {
@@ -128,7 +128,7 @@ describe("Kiro external_idp (CLIProxyAPI) import and refresh", () => {
 			}),
 		}))
 
-		const { getKiroUsage } = await import("../../open-sse/services/usage/kiro.js")
+		const { getKiroUsage } = await import("../../apps/web/open-sse/services/usage/kiro.js")
 		const result = await getKiroUsage("microsoft-access-token", {
 			authMethod: "external_idp",
 			profileArn: "arn:aws:codewhisperer:us-east-1:123456789012:profile/ABC",
@@ -161,7 +161,7 @@ describe("Kiro external_idp (CLIProxyAPI) import and refresh", () => {
 			}),
 		}))
 
-		const { POST } = await import("../../src/app/api/oauth/kiro/import-cli-proxy/route.js")
+		const { POST } = await import("../../apps/web/src/app/api/oauth/kiro/import-cli-proxy/route.js")
 		const accessToken = makeJwt({
 			preferred_username: TEST_EMAIL,
 			exp: Math.floor(Date.now() / 1000) + 3600,

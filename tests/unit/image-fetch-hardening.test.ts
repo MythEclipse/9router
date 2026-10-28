@@ -11,7 +11,7 @@ vi.mock("node:dns/promises", () => ({
 	},
 }))
 
-import { fetchImageAsBase64 } from "../../open-sse/translator/concerns/image.js"
+import { fetchImageAsBase64 } from "../../apps/web/open-sse/translator/concerns/image.js"
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 

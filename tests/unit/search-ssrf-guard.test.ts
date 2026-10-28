@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { resolveBaseUrl } from "../../open-sse/handlers/search/callers.js"
+import { resolveBaseUrl } from "../../apps/web/open-sse/handlers/search/callers.js"
 
 const CONFIG = { id: "searxng", baseUrl: "https://searxng.example.com" }
 

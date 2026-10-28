@@ -6,10 +6,14 @@
 // deleteCombo already revoked orphan grants; the rename direction was missing.
 
 import { beforeEach, describe, expect, it } from "vitest"
-import { getAdapter } from "../../src/lib/db/driver.js"
-import { createApiKey } from "../../src/lib/db/repos/apiKeysRepo.js"
-import { createCombo, deleteCombo, updateCombo } from "../../src/lib/db/repos/combosRepo.js"
-import { normalizeAllowList } from "../../src/shared/utils/keyAccess.js"
+import { getAdapter } from "../../apps/web/src/lib/db/driver.js"
+import { createApiKey } from "../../apps/web/src/lib/db/repos/apiKeysRepo.js"
+import {
+	createCombo,
+	deleteCombo,
+	updateCombo,
+} from "../../apps/web/src/lib/db/repos/combosRepo.js"
+import { normalizeAllowList } from "../../apps/web/src/shared/utils/keyAccess.js"
 
 async function grantTo(keyId: string, allow: string[]) {
 	const db = await getAdapter()

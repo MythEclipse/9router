@@ -1,8 +1,8 @@
 // Real Codex CLI requests (OpenAI Responses API: { input:[], instructions }) → providers.
 import { describe, expect, it } from "vitest"
 import "./registerAll.js"
-import { FORMATS } from "../../open-sse/translator/formats.js"
-import { translateRequest } from "../../open-sse/translator/index.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
+import { translateRequest } from "../../apps/web/open-sse/translator/index.js"
 
 const R2O = (body) =>
 	translateRequest(FORMATS.OPENAI_RESPONSES, FORMATS.OPENAI, "m", body, true, null, null)

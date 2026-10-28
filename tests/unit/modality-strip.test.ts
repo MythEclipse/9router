@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { stripUnsupportedModalities } from "../../open-sse/translator/concerns/modality.js"
-import { FORMATS } from "../../open-sse/translator/formats.js"
+import { stripUnsupportedModalities } from "../../apps/web/open-sse/translator/concerns/modality.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
 
 const NO_VISION = { vision: false, audioInput: true, pdf: true }
 const NO_AUDIO = { vision: true, audioInput: false, pdf: true }

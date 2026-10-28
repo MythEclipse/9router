@@ -1,15 +1,18 @@
 // A5 (cases #7/#9/#10): lock hardcode->config no-op values.
 import { describe, expect, it } from "vitest"
-import { DEFAULT_MAX_TOKENS, DEFAULT_MIN_TOKENS } from "../../open-sse/config/runtimeConfig.js"
-import { OpenCodeExecutor } from "../../open-sse/executors/opencode.js"
-import antigravity from "../../open-sse/providers/registry/antigravity.js"
-import mimocode from "../../open-sse/providers/registry/mimocode.js"
-import opencode from "../../open-sse/providers/registry/opencode.js"
+import {
+	DEFAULT_MAX_TOKENS,
+	DEFAULT_MIN_TOKENS,
+} from "../../apps/web/open-sse/config/runtimeConfig.js"
+import { OpenCodeExecutor } from "../../apps/web/open-sse/executors/opencode.js"
+import antigravity from "../../apps/web/open-sse/providers/registry/antigravity.js"
+import mimocode from "../../apps/web/open-sse/providers/registry/mimocode.js"
+import opencode from "../../apps/web/open-sse/providers/registry/opencode.js"
 import {
 	ANTHROPIC_API_VERSION,
 	ANTHROPIC_COMPAT_BASE,
 	OPENAI_COMPAT_BASE,
-} from "../../open-sse/providers/shared.js"
+} from "../../apps/web/open-sse/providers/shared.js"
 
 describe("compat base URLs / version", () => {
 	it("OPENAI_COMPAT_BASE", () => {

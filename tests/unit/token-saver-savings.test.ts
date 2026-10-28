@@ -15,7 +15,7 @@ import {
 	measureRtkSavings,
 	priceSavedTokens,
 	recordTokenSavings,
-} from "../../open-sse/rtk/tokenSaverStats.js"
+} from "../../apps/web/open-sse/rtk/tokenSaverStats.js"
 
 function msgs(n, len = 100) {
 	return Array.from({ length: n }, (_, i) => ({

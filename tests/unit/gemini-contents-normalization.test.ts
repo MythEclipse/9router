@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest"
 import {
 	normalizeGeminiContents,
 	sanitizeFunctionResponsePayload,
-} from "../../open-sse/translator/formats/gemini.js"
-import { openaiToGeminiRequest } from "../../open-sse/translator/request/openai-to-gemini.js"
+} from "../../apps/web/open-sse/translator/formats/gemini.js"
+import { openaiToGeminiRequest } from "../../apps/web/open-sse/translator/request/openai-to-gemini.js"
 
 describe("normalizeGeminiContents terminal turn guards", () => {
 	it("appends user Continue turn when ending with model text turn", () => {

@@ -2,10 +2,10 @@ import { existsSync, readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
-import { DefaultExecutor } from "../../open-sse/executors/default"
-import { getExecutor } from "../../open-sse/executors/index"
-import { PROVIDERS } from "../../open-sse/providers/index"
-import REGISTRY from "../../open-sse/providers/registry/index"
+import { DefaultExecutor } from "../../apps/web/open-sse/executors/default"
+import { getExecutor } from "../../apps/web/open-sse/executors/index"
+import { PROVIDERS } from "../../apps/web/open-sse/providers/index"
+import REGISTRY from "../../apps/web/open-sse/providers/registry/index"
 
 /**
  * OpenAI-compatible aggregator providers. Each was verified by probing the

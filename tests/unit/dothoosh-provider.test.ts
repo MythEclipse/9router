@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest"
 import {
 	getModelSupportedFormats,
 	getModelTargetFormat,
-} from "../../open-sse/config/providerModels.js"
-import { DefaultExecutor } from "../../open-sse/executors/default.js"
-import { getExecutor } from "../../open-sse/executors/index.js"
-import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js"
-import { PROVIDER_MODELS, PROVIDERS } from "../../open-sse/providers/index.js"
-import REGISTRY from "../../open-sse/providers/registry/index.js"
-import { resolveTransport } from "../../open-sse/services/provider.js"
+} from "../../apps/web/open-sse/config/providerModels.js"
+import { DefaultExecutor } from "../../apps/web/open-sse/executors/default.js"
+import { getExecutor } from "../../apps/web/open-sse/executors/index.js"
+import { getCapabilitiesForModel } from "../../apps/web/open-sse/providers/capabilities.js"
+import { PROVIDER_MODELS, PROVIDERS } from "../../apps/web/open-sse/providers/index.js"
+import REGISTRY from "../../apps/web/open-sse/providers/registry/index.js"
+import { resolveTransport } from "../../apps/web/open-sse/services/provider.js"
 
 describe("DotHoosh provider", () => {
 	const entry = REGISTRY.find((e) => e.id === "dothoosh")

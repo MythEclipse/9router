@@ -30,7 +30,7 @@ afterEach(() => {
 
 describe("drop prd builder leftovers (migration 004)", () => {
 	it("appends to the chain after 003 and stamps a fresh DB at 4", async () => {
-		const { MIGRATIONS, latestVersion } = await import("@/lib/db/migrations/index.js")
+		const { MIGRATIONS, latestVersion } = await import("@9router/db/migrations")
 		// Pin only what this test owns: 004 exists, runs after 003, and the chain is
 		// contiguous. Later migrations (005+) legitimately append, so a hardcoded
 		// total turns this into a tripwire on every new migration.
@@ -40,7 +40,7 @@ describe("drop prd builder leftovers (migration 004)", () => {
 		expect(versions).toEqual(versions.map((_, i) => i + 1))
 		expect(latestVersion()).toBe(versions.length)
 
-		const { getAdapter } = await import("@/lib/db/driver.js")
+		const { getAdapter } = await import("@9router/db/driver")
 		const db = await getAdapter()
 		const row = db.get(`SELECT value FROM _meta WHERE key='schemaVersion'`)
 		// A fresh DB is stamped at the latest version, which must be >= 004.
@@ -48,7 +48,7 @@ describe("drop prd builder leftovers (migration 004)", () => {
 	})
 
 	it("purges PRD storage from an existing install and leaves other scopes alone", async () => {
-		const { getAdapter } = await import("@/lib/db/driver.js")
+		const { getAdapter } = await import("@9router/db/driver")
 		const db = await getAdapter()
 		// Simulate an install still carrying the feature's footprint, then rewind
 		// the stamp so the next boot re-applies only the pending migrations.
@@ -62,7 +62,7 @@ describe("drop prd builder leftovers (migration 004)", () => {
 
 		delete global._dbAdapter
 		vi.resetModules()
-		const { getAdapter: reboot } = await import("@/lib/db/driver.js")
+		const { getAdapter: reboot } = await import("@9router/db/driver")
 		const db2 = await reboot()
 
 		const tables = db2.all(`SELECT name FROM sqlite_master WHERE type='table'`).map((t) => t.name)

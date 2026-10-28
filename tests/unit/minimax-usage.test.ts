@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
+vi.mock("../../apps/web/open-sse/utils/proxyFetch.js", () => ({
 	proxyAwareFetch: vi.fn(),
 }))
 
-import { getUsageForProvider } from "../../open-sse/services/usage.js"
-import { proxyAwareFetch } from "../../open-sse/utils/proxyFetch.js"
+import { getUsageForProvider } from "../../apps/web/open-sse/services/usage.js"
+import { proxyAwareFetch } from "../../apps/web/open-sse/utils/proxyFetch.js"
 
 function usageResponse(modelRemains) {
 	return new Response(

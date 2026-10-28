@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
 	modelDisplayName,
 	resolveModelDisplayName,
-} from "../../src/shared/utils/modelDisplayName.js"
+} from "../../apps/web/src/shared/utils/modelDisplayName.js"
 
 describe("modelDisplayName", () => {
 	it("capitalizes brand tokens and keeps their canonical casing", () => {

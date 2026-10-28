@@ -12,8 +12,12 @@
 // residential pools (`proxy:<poolId>:<sid>`).
 import { beforeEach, describe, expect, it } from "vitest"
 
-const { markAccountUnavailable, clearAccountError } = await import("../../src/sse/services/auth.js")
-const { getProxyHealth, resetProxyHealth } = await import("../../src/lib/network/proxyHealth.js")
+const { markAccountUnavailable, clearAccountError } = await import(
+	"../../apps/web/src/sse/services/auth.js"
+)
+const { getProxyHealth, resetProxyHealth } = await import(
+	"../../apps/web/src/lib/network/proxyHealth.js"
+)
 
 describe("proxy-backed connections drive the proxy health store", () => {
 	beforeEach(() => {

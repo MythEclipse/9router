@@ -13,7 +13,7 @@ import {
 	getXiaomiMimoSessionStatus,
 	registerXiaomiMimoSession,
 	stopXiaomiMimoProxy,
-} from "../../src/lib/oauth/utils/server.js"
+} from "../../apps/web/src/lib/oauth/utils/server.js"
 
 const KEY = Buffer.from("x25519-private-key-material")
 

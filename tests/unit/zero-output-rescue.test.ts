@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { canonicalizeUsage, extractUsage } from "../../open-sse/utils/usageTracking.js"
+import { canonicalizeUsage, extractUsage } from "../../apps/web/open-sse/utils/usageTracking.js"
 
 describe("zero-output tokens rescue and usage canonicalization", () => {
 	it("folds reasoning_tokens into completion_tokens when upstream returns completion_tokens: 0", () => {

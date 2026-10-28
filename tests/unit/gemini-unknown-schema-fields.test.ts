@@ -17,7 +17,7 @@ import { describe, expect, it } from "vitest"
 import {
 	cleanJSONSchemaForAntigravity,
 	UNSUPPORTED_SCHEMA_CONSTRAINTS,
-} from "../../open-sse/translator/formats/gemini.js"
+} from "../../apps/web/open-sse/translator/formats/gemini.js"
 
 describe("UNSUPPORTED_SCHEMA_CONSTRAINTS includes non-standard annotation keywords (#4283)", () => {
 	it("includes errorMessage", () => {

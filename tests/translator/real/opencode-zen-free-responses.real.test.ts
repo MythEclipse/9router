@@ -19,9 +19,9 @@
 // (OPENCODE_ZEN_KEY overrides credential lookup; otherwise an opencode-zen
 // connection must be configured in 9router.)
 import { describe, expect, it } from "vitest"
-import { handleChatCore } from "../../../open-sse/handlers/chatCore.js"
-import { getProviderCredentials } from "../../../src/sse/services/auth.js"
-import { checkAndRefreshToken } from "../../../src/sse/services/tokenRefresh.js"
+import { handleChatCore } from "../../../apps/web/open-sse/handlers/chatCore.js"
+import { getProviderCredentials } from "../../../apps/web/src/sse/services/auth.js"
+import { checkAndRefreshToken } from "../../../apps/web/src/sse/services/tokenRefresh.js"
 
 const RUN_REAL = process.env.RUN_REAL === "1"
 const ENV_KEY = process.env.OPENCODE_ZEN_KEY || ""

@@ -1,9 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { getModelsByProviderId } from "../../open-sse/config/providerModels.js"
-import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js"
-import { PROVIDER_MODELS, PROVIDER_OAUTH, PROVIDERS } from "../../open-sse/providers/index.js"
-import REGISTRY from "../../open-sse/providers/registry/index.js"
-import { parseModel, resolveProviderAlias } from "../../open-sse/services/model.js"
+import { getModelsByProviderId } from "../../apps/web/open-sse/config/providerModels.js"
+import { getCapabilitiesForModel } from "../../apps/web/open-sse/providers/capabilities.js"
+import {
+	PROVIDER_MODELS,
+	PROVIDER_OAUTH,
+	PROVIDERS,
+} from "../../apps/web/open-sse/providers/index.js"
+import REGISTRY from "../../apps/web/open-sse/providers/registry/index.js"
+import { parseModel, resolveProviderAlias } from "../../apps/web/open-sse/services/model.js"
 import {
 	createNousApiKeyProbe,
 	getNousApiKeyValidationError,
@@ -18,10 +22,10 @@ import {
 	NOUS_VALIDATION_MODEL,
 	normalizeNousFreeModels,
 	normalizeNousModels,
-} from "../../open-sse/services/nous.js"
-import { refreshNousToken } from "../../open-sse/services/tokenRefresh.js"
-import { applyThinking } from "../../open-sse/translator/concerns/thinkingUnified.js"
-import nousOAuth from "../../src/lib/oauth/providers/nous.js"
+} from "../../apps/web/open-sse/services/nous.js"
+import { refreshNousToken } from "../../apps/web/open-sse/services/tokenRefresh.js"
+import { applyThinking } from "../../apps/web/open-sse/translator/concerns/thinkingUnified.js"
+import nousOAuth from "../../apps/web/src/lib/oauth/providers/nous.js"
 
 const originalFetch = global.fetch
 

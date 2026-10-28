@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { getProvidersByKind } from "@/shared/constants/providers"
-import { PROVIDER_MEDIA } from "../../open-sse/providers/index.js"
-import REGISTRY from "../../open-sse/providers/registry/index.js"
+import { PROVIDER_MEDIA } from "../../apps/web/open-sse/providers/index.js"
+import REGISTRY from "../../apps/web/open-sse/providers/registry/index.js"
 
 describe("v1m System One provider", () => {
 	const entry = REGISTRY.find((e) => e.id === "v1m")

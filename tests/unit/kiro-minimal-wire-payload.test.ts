@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { claudeToKiroRequest } from "../../open-sse/translator/request/claude-to-kiro.js"
-import { openaiToKiroRequest } from "../../open-sse/translator/request/openai-to-kiro.js"
+import { claudeToKiroRequest } from "../../apps/web/open-sse/translator/request/claude-to-kiro.js"
+import { openaiToKiroRequest } from "../../apps/web/open-sse/translator/request/openai-to-kiro.js"
 
 for (const [name, translate, body] of [
 	["OpenAI", openaiToKiroRequest, { messages: [{ role: "user", content: "hello" }] }],

@@ -3,8 +3,8 @@
 // Sau refactor chạy lại phải khớp y hệt (chunk/usage/thinking/tool/finish).
 import { describe, expect, it } from "vitest"
 import "./registerAll.js"
-import { FORMATS } from "../../open-sse/translator/formats.js"
-import { initState, translateResponse } from "../../open-sse/translator/index.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
+import { initState, translateResponse } from "../../apps/web/open-sse/translator/index.js"
 
 // Chuẩn hoá field động (Date.now trong created + id) để snapshot ổn định.
 function stripVolatile(chunks) {

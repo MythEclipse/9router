@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { handleComboChat } from "../../open-sse/services/combo.js"
+import { handleComboChat } from "../../apps/web/open-sse/services/combo.js"
 
 describe("combo credit fallback", () => {
 	it.each([

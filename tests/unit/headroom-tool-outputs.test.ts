@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { compressWithHeadroom } from "../../open-sse/rtk/headroom.js"
+import { compressWithHeadroom } from "../../apps/web/open-sse/rtk/headroom.js"
 
 afterEach(() => vi.unstubAllGlobals())
 

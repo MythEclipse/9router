@@ -5,7 +5,7 @@ import { it as test } from "vitest"
 import {
 	getClineAccessToken,
 	getClineAuthorizationHeader,
-} from "../../open-sse/shared/clineAuth.js"
+} from "../../apps/web/open-sse/shared/clineAuth.js"
 
 test("getClineAccessToken keeps an existing workos: prefix", () => {
 	const token = "workos:eyJhbGciOiJSUzI1NiJ9.eyJwYXAiJ9"

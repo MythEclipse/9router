@@ -6,7 +6,7 @@ import {
 	normalizeProviderId,
 	parseLogLine,
 	SYSTEM_GROUP_ID,
-} from "../../src/shared/utils/consoleLogGroups.js"
+} from "../../apps/web/src/shared/utils/consoleLogGroups.js"
 
 // The console page buckets lines per provider so a failing model is not buried
 // in a wall of text. These cases pin the two head shapes the logger actually

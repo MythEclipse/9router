@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest"
-import { BEDROCK } from "../../open-sse/config/awsConstants.js"
-import { getProviderModels, isValidModel } from "../../open-sse/config/providerModels.js"
-import { PROVIDERS } from "../../open-sse/config/providers.js"
-import { getExecutor, hasSpecializedExecutor } from "../../open-sse/executors/index.js"
-import { getModelInfoCore } from "../../open-sse/services/model.js"
-import { encodeEventFrame } from "../../open-sse/utils/awsEventStream.js"
+import { BEDROCK } from "../../apps/web/open-sse/config/awsConstants.js"
+import { getProviderModels, isValidModel } from "../../apps/web/open-sse/config/providerModels.js"
+import { PROVIDERS } from "../../apps/web/open-sse/config/providers.js"
+import { getExecutor, hasSpecializedExecutor } from "../../apps/web/open-sse/executors/index.js"
+import { getModelInfoCore } from "../../apps/web/open-sse/services/model.js"
+import { encodeEventFrame } from "../../apps/web/open-sse/utils/awsEventStream.js"
 
 const MODEL = "us.anthropic.claude-sonnet-4-20250514-v1:0"
 const PROFILE_CREDS = {

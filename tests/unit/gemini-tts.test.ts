@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { buildTtsProviderModels } from "../../open-sse/config/ttsModels.js"
-import { handleTtsCore } from "../../open-sse/handlers/ttsCore.js"
+import { buildTtsProviderModels } from "../../apps/web/open-sse/config/ttsModels.js"
+import { handleTtsCore } from "../../apps/web/open-sse/handlers/ttsCore.js"
 
 const originalFetch = global.fetch
 

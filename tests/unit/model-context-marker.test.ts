@@ -13,7 +13,7 @@
  */
 
 import { describe, expect, it } from "vitest"
-import { stripModelContextMarker } from "../../open-sse/utils/modelMarkers.js"
+import { stripModelContextMarker } from "../../apps/web/open-sse/utils/modelMarkers.js"
 
 describe("model context marker", () => {
 	it("strips the [1m] marker and reports it", () => {

@@ -465,7 +465,7 @@ describe("Custom-model transport persistence via POST /api/models/custom", () =>
 describe("App-layer custom transport resolution (stt.js)", () => {
 	it("T15: persisted custom gemini-live transport reaches WS dispatch through real handleStt", async () => {
 		const LOCALDB = "@/lib/localDb"
-		const AUTH = "../../src/sse/services/auth.js"
+		const AUTH = "../../apps/web/src/sse/services/auth.js"
 		try {
 			vi.resetModules()
 			vi.doMock(LOCALDB, () => ({
@@ -492,7 +492,7 @@ describe("App-layer custom transport resolution (stt.js)", () => {
 			}))
 			// getModelInfo stays REAL: "gemini/..." is a reserved-prefix passthrough,
 			// so the parse→route hop in the chain is exercised, not stubbed.
-			const { handleStt } = await import("../../src/sse/handlers/stt.js")
+			const { handleStt } = await import("../../apps/web/src/sse/handlers/stt.js")
 
 			stubWs()
 			const fetchCalls = stubFetch() // default handler throws: REST must not happen

@@ -7,7 +7,7 @@ import {
 	maxSlotsPerDay,
 	normalizePingSchedule,
 	PING_SCHEDULE_DEFAULTS,
-} from "../../src/shared/services/quotaPingSchedule.js"
+} from "../../apps/web/src/shared/services/quotaPingSchedule.js"
 
 const BRT = {
 	enabled: true,

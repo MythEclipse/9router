@@ -20,21 +20,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 // ─── Module mocks (hoisted before imports) ───────────────────────────────────
 
-vi.mock("../../open-sse/services/model.js", () => ({
+vi.mock("../../apps/web/open-sse/services/model.js", () => ({
 	getModelInfoCore: vi.fn(),
 }))
 
-vi.mock("../../open-sse/handlers/embeddingsCore.js", () => ({
+vi.mock("../../apps/web/open-sse/handlers/embeddingsCore.js", () => ({
 	handleEmbeddingsCore: vi.fn(),
 }))
 
-vi.mock("../../open-sse/utils/error.js", async (importOriginal) => {
+vi.mock("../../apps/web/open-sse/utils/error.js", async (importOriginal) => {
 	// Use real errorResponse implementation so response bodies are realistic
 	const actual = await importOriginal()
 	return actual
 })
 
-vi.mock("../../open-sse/services/accountFallback.js", async (importOriginal) => {
+vi.mock("../../apps/web/open-sse/services/accountFallback.js", async (importOriginal) => {
 	const actual = await importOriginal()
 	return actual
 })
@@ -58,11 +58,11 @@ vi.mock("../../cloud/src/services/storage.js", () => ({
 
 // ─── Imports (after mocks) ────────────────────────────────────────────────────
 
+import { handleEmbeddingsCore } from "../../apps/web/open-sse/handlers/embeddingsCore.js"
+import { getModelInfoCore } from "../../apps/web/open-sse/services/model.js"
 import { handleEmbeddings } from "../../cloud/src/handlers/embeddings.js"
 import { getMachineData, saveMachineData } from "../../cloud/src/services/storage.js"
 import { extractBearerToken, parseApiKey } from "../../cloud/src/utils/apiKey.js"
-import { handleEmbeddingsCore } from "../../open-sse/handlers/embeddingsCore.js"
-import { getModelInfoCore } from "../../open-sse/services/model.js"
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 

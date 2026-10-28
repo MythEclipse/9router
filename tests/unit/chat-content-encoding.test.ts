@@ -14,7 +14,7 @@ vi.mock("@/sse/services/auth.js", () => ({
 vi.mock("@/sse/services/model.js", () => ({ getModelInfo: vi.fn(), getComboModels: vi.fn() }))
 vi.mock("open-sse/handlers/chatCore.js", () => ({ handleChatCore: vi.fn() }))
 
-import { handleChat } from "../../src/sse/handlers/chat.js"
+import { handleChat } from "../../apps/web/src/sse/handlers/chat.js"
 
 describe("chat compressed JSON validation", () => {
 	const bodies = {

@@ -7,8 +7,8 @@ import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
-import { applyAntiSlop } from "../../open-sse/rtk/antislop"
-import { ANTISLOP_LEVEL_CHARS, ANTISLOP_PROMPTS } from "../../open-sse/rtk/antislopPrompt"
+import { applyAntiSlop } from "../../apps/web/open-sse/rtk/antislop"
+import { ANTISLOP_LEVEL_CHARS, ANTISLOP_PROMPTS } from "../../apps/web/open-sse/rtk/antislopPrompt"
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const { lite, full, ultra } = ANTISLOP_PROMPTS

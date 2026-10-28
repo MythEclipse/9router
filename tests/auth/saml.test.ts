@@ -6,7 +6,7 @@ import {
 	isSamlConfigured,
 	pickSamlDisplayName,
 	pickSamlEmail,
-} from "../../src/lib/auth/saml.js"
+} from "../../apps/web/src/lib/auth/saml.js"
 
 test("formatX509Certificate normalizes Base64 strings into PEM blocks", () => {
 	const rawBase64 = "MIIC1234567890123456789012345678901234567890123456789012345678901234567890"

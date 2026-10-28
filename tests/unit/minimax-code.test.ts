@@ -5,11 +5,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 // ── pure modules (no @/ or db deps) ─────────────────────────────────────────
-import { PROVIDER_OAUTH, PROVIDERS } from "../../open-sse/config/providers.js"
-import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js"
-import { getThinkingLevels } from "../../open-sse/providers/thinkingLevels.js"
-import { applyThinking } from "../../open-sse/translator/concerns/thinkingUnified.js"
-import { createMinimaxCodeProvider } from "../../src/lib/oauth/providers/minimax-code-shared.js"
+import { PROVIDER_OAUTH, PROVIDERS } from "../../apps/web/open-sse/config/providers.js"
+import { getCapabilitiesForModel } from "../../apps/web/open-sse/providers/capabilities.js"
+import { getThinkingLevels } from "../../apps/web/open-sse/providers/thinkingLevels.js"
+import { applyThinking } from "../../apps/web/open-sse/translator/concerns/thinkingUnified.js"
+import { createMinimaxCodeProvider } from "../../apps/web/src/lib/oauth/providers/minimax-code-shared.js"
 
 // ── executor under test (mock the heavy base + its refresh import) ──────────
 class StubBase {
@@ -20,21 +20,23 @@ class StubBase {
 		return { response: new Response("{}", { status: 200 }) }
 	}
 }
-vi.mock("../../open-sse/executors/default.js", () => ({
+vi.mock("../../apps/web/open-sse/executors/default.js", () => ({
 	DefaultExecutor: StubBase,
 }))
 const refreshMiniMaxMock = vi.hoisted(() => vi.fn())
-vi.mock("../../open-sse/services/tokenRefresh.js", () => ({
+vi.mock("../../apps/web/open-sse/services/tokenRefresh.js", () => ({
 	refreshMiniMaxCodeToken: refreshMiniMaxMock,
 }))
 
 const { MinimaxCodeExecutor, normalizeQuotaResponse } = await import(
-	"../../open-sse/executors/minimax-code.js"
+	"../../apps/web/open-sse/executors/minimax-code.js"
 )
-const { getExecutor } = await import("../../open-sse/executors/index.js")
+const { getExecutor } = await import("../../apps/web/open-sse/executors/index.js")
 // The real refresh handler (vi.importActual bypasses the mock above — it is
 // only in place to intercept the executor's import).
-const { refreshMiniMaxCodeToken } = await vi.importActual("../../open-sse/services/tokenRefresh.js")
+const { refreshMiniMaxCodeToken } = await vi.importActual(
+	"../../apps/web/open-sse/services/tokenRefresh.js",
+)
 
 describe("minimax-code registry wiring", () => {
 	it("declares claude transport with adaptive thinking and combined bearer auth", () => {

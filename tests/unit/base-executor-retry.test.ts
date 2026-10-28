@@ -3,11 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 // Mock the network layer so we can script upstream responses.
 const fetchMock = vi.fn()
-vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
+vi.mock("../../apps/web/open-sse/utils/proxyFetch.js", () => ({
 	proxyAwareFetch: (...args) => fetchMock(...args),
 }))
 
-const { BaseExecutor } = await import("../../open-sse/executors/base.js")
+const { BaseExecutor } = await import("../../apps/web/open-sse/executors/base.js")
 
 function res(status) {
 	return { status, headers: { get: () => "" } }

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest"
-import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js"
-import { MODEL_PRICING } from "../../open-sse/providers/pricing.js"
-import antigravityRegistry from "../../open-sse/providers/registry/antigravity.js"
-import geminiRegistry from "../../open-sse/providers/registry/gemini.js"
+import { getCapabilitiesForModel } from "../../apps/web/open-sse/providers/capabilities.js"
+import { MODEL_PRICING } from "../../apps/web/open-sse/providers/pricing.js"
+import antigravityRegistry from "../../apps/web/open-sse/providers/registry/antigravity.js"
+import geminiRegistry from "../../apps/web/open-sse/providers/registry/gemini.js"
 
 describe("Gemini 3.8 Flash Support & Config", () => {
 	it("registers gemini-3.8-flash tiered models in antigravity provider registry", () => {

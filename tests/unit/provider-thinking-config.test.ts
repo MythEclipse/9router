@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { normalizeThinkingConfig } from "../../open-sse/services/provider.js"
+import { normalizeThinkingConfig } from "../../apps/web/open-sse/services/provider.js"
 
 describe("normalizeThinkingConfig", () => {
 	it("keeps openai reasoning_effort on non-user turns", () => {

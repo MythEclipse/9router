@@ -20,7 +20,7 @@ import {
 	upsertEnvVar,
 	upsertModelBlock,
 	upsertStt9Router,
-} from "../../src/app/api/cli-tools/hermes-settings/hermesYaml.js"
+} from "../../apps/web/src/app/api/cli-tools/hermes-settings/hermesYaml.js"
 
 const BASE = "http://127.0.0.1:20128/v1"
 

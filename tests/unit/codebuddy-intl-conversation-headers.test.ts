@@ -3,7 +3,7 @@
 // "conversation id missing". The official IDE sends a conversation id derived
 // stably from the session key plus fresh per-request/per-message UUIDs.
 import { describe, expect, it } from "vitest"
-import { CodeBuddyIntlExecutor } from "../../open-sse/executors/codebuddy-intl.js"
+import { CodeBuddyIntlExecutor } from "../../apps/web/open-sse/executors/codebuddy-intl.js"
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 

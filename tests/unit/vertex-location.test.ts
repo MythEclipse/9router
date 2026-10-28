@@ -1,22 +1,22 @@
 import { describe, expect, it, vi } from "vitest"
 
 // Isolate URL construction from token minting and network dependencies.
-vi.mock("../../open-sse/executors/base.js", () => ({
+vi.mock("../../apps/web/open-sse/executors/base.js", () => ({
 	BaseExecutor: class {
 		constructor(provider) {
 			this.provider = provider
 		}
 	},
 }))
-vi.mock("../../open-sse/config/providers.js", () => ({ PROVIDERS: {} }))
-vi.mock("../../open-sse/services/tokenRefresh.js", () => ({
+vi.mock("../../apps/web/open-sse/config/providers.js", () => ({ PROVIDERS: {} }))
+vi.mock("../../apps/web/open-sse/services/tokenRefresh.js", () => ({
 	parseVertexSaJson: () => null,
 	refreshVertexToken: vi.fn(),
 	refreshGoogleToken: vi.fn(),
 }))
-vi.mock("../../open-sse/utils/proxyFetch.js", () => ({ proxyAwareFetch: vi.fn() }))
+vi.mock("../../apps/web/open-sse/utils/proxyFetch.js", () => ({ proxyAwareFetch: vi.fn() }))
 
-import { VertexExecutor } from "../../open-sse/executors/vertex.js"
+import { VertexExecutor } from "../../apps/web/open-sse/executors/vertex.js"
 
 describe("Vertex API-key locations", () => {
 	it.each([false, true])("uses the configured global location (stream=%s)", (stream) => {

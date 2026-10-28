@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
-import { buildKiroAdditionalModelRequestFieldsForModel } from "../../open-sse/config/kiroConstants.js"
-import { getThinkingLevels } from "../../open-sse/providers/thinkingLevels.js"
-import { applyThinking } from "../../open-sse/translator/concerns/thinkingUnified.js"
+import { buildKiroAdditionalModelRequestFieldsForModel } from "../../apps/web/open-sse/config/kiroConstants.js"
+import { getThinkingLevels } from "../../apps/web/open-sse/providers/thinkingLevels.js"
+import { applyThinking } from "../../apps/web/open-sse/translator/concerns/thinkingUnified.js"
 
 describe("getThinkingLevels for Kiro", () => {
 	it("does not advertise native intensity for legacy Kiro models", () => {

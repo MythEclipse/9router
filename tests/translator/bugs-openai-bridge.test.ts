@@ -2,8 +2,8 @@
 // Each test describes the EXPECTED-correct behavior. A FAIL is evidence of the bug (with source file:line).
 import { describe, expect, it } from "vitest"
 import "./registerAll.js"
-import { FORMATS } from "../../open-sse/translator/formats.js"
-import { translateRequest } from "../../open-sse/translator/index.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
+import { translateRequest } from "../../apps/web/open-sse/translator/index.js"
 
 const T = (src, tgt, body, provider = null) =>
 	translateRequest(src, tgt, "m", body, true, null, provider)

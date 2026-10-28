@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { applyUsageMultipliers } from "../../open-sse/utils/usageTracking.js"
-import { isOpencodeFreeModel, resolveModelTier } from "../../src/shared/utils/modelTier.js"
+import { applyUsageMultipliers } from "../../apps/web/open-sse/utils/usageTracking.js"
+import { isOpencodeFreeModel, resolveModelTier } from "../../apps/web/src/shared/utils/modelTier.js"
 
 describe("Model Tier Resolution", () => {
 	it("resolves free models correctly with FREE tag", () => {

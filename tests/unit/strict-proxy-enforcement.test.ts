@@ -20,8 +20,10 @@ vi.mock("@/models", () => ({
 }))
 
 const { getProxyPoolById } = await import("@/models")
-const { resolveConnectionProxyConfig } = await import("../../src/lib/network/connectionProxy.js")
-const { proxyAwareFetch } = await import("../../open-sse/utils/proxyFetch.js")
+const { resolveConnectionProxyConfig } = await import(
+	"../../apps/web/src/lib/network/connectionProxy.js"
+)
+const { proxyAwareFetch } = await import("../../apps/web/open-sse/utils/proxyFetch.js")
 
 describe("strict pool keeps strictProxy when the pool is unusable (#4333)", () => {
 	it("keeps strictProxy for an inactive strict pool", async () => {

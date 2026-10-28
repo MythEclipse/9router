@@ -13,12 +13,12 @@
  */
 
 import { describe, expect, it } from "vitest"
-import { PROVIDER_MODELS } from "../../open-sse/config/providerModels.js"
-import { getExecutor } from "../../open-sse/executors/index.js"
-import { MimoFreeExecutor } from "../../open-sse/executors/mimo-free.js"
-import { PROVIDER_MODELS as SHARED_MODELS } from "../../open-sse/providers/index.js"
-import REGISTRY from "../../open-sse/providers/registry/index.js"
-import { AI_PROVIDERS } from "../../src/shared/constants/providers.js"
+import { PROVIDER_MODELS } from "../../apps/web/open-sse/config/providerModels.js"
+import { getExecutor } from "../../apps/web/open-sse/executors/index.js"
+import { MimoFreeExecutor } from "../../apps/web/open-sse/executors/mimo-free.js"
+import { PROVIDER_MODELS as SHARED_MODELS } from "../../apps/web/open-sse/providers/index.js"
+import REGISTRY from "../../apps/web/open-sse/providers/registry/index.js"
+import { AI_PROVIDERS } from "../../apps/web/src/shared/constants/providers.js"
 
 describe("mimo free channel has a single registry entry", () => {
 	it("mimocode is registered exactly once", () => {

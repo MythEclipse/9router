@@ -19,10 +19,10 @@ import {
 	getModelTargetFormat,
 	getModelUpstreamId,
 	PROVIDER_ID_TO_ALIAS,
-} from "../../open-sse/config/providerModels.js"
-import { resolveTransport } from "../../open-sse/services/provider.js"
-import { applyThinking } from "../../open-sse/translator/concerns/thinkingUnified.js"
-import { FORMATS } from "../../open-sse/translator/formats.js"
+} from "../../apps/web/open-sse/config/providerModels.js"
+import { resolveTransport } from "../../apps/web/open-sse/services/provider.js"
+import { applyThinking } from "../../apps/web/open-sse/translator/concerns/thinkingUnified.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
 
 // Mirrors the transport selection in open-sse/handlers/chatCore.js so the
 // invariant (body wire === endpoint wire) can be asserted without the full

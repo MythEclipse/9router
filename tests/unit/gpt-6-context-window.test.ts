@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest"
 
-import { getCapabilitiesForModel, setCatalogSource } from "../../open-sse/providers/capabilities.js"
-import { build, PROVIDER_ALIASES } from "../../src/lib/modelCatalog/sync.js"
+import {
+	getCapabilitiesForModel,
+	setCatalogSource,
+} from "../../apps/web/open-sse/providers/capabilities.js"
+import { build, PROVIDER_ALIASES } from "../../apps/web/src/lib/modelCatalog/sync.js"
 
 // The gpt-6 family's API window is 1.05M. The pattern table published 272,000 for
 // it — Kiro's own truncation, copied into the global glob — so every other

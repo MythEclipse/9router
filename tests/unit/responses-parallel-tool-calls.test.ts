@@ -9,10 +9,10 @@ import {
 	clampResponsesCallId,
 	coerceResponsesOutput,
 	MAX_RESPONSES_CALL_ID_LEN,
-} from "../../open-sse/translator/formats/responsesApi.js"
-import { FORMATS } from "../../open-sse/translator/formats.js"
-import { initState, translateResponse } from "../../open-sse/translator/index.js"
-import { openaiResponsesToOpenAIResponse } from "../../open-sse/translator/response/openai-responses.js"
+} from "../../apps/web/open-sse/translator/formats/responsesApi.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
+import { initState, translateResponse } from "../../apps/web/open-sse/translator/index.js"
+import { openaiResponsesToOpenAIResponse } from "../../apps/web/open-sse/translator/response/openai-responses.js"
 
 const added = (id, call_id, name, type = "function_call") => ({
 	type: "response.output_item.added",

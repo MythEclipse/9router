@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { capabilitiesFromServiceKind } from "../../open-sse/providers/capabilities.js"
+import { capabilitiesFromServiceKind } from "../../apps/web/open-sse/providers/capabilities.js"
 
 describe("capabilitiesFromServiceKind", () => {
 	it("maps imageToText custom models to vision-capable runtime models", () => {

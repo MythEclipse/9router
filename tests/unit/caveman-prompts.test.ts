@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { CAVEMAN_LEVELS, CAVEMAN_PROMPTS } from "../../open-sse/rtk/cavemanPrompts.js"
+import { CAVEMAN_LEVELS, CAVEMAN_PROMPTS } from "../../apps/web/open-sse/rtk/cavemanPrompts.js"
 
 const LEVEL_KEYS = [
 	CAVEMAN_LEVELS.LITE,

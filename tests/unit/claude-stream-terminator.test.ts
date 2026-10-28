@@ -9,8 +9,8 @@
 // because only message_start ever went out. The translator must close the
 // message itself when the upstream body ends without a finish frame.
 import { describe, expect, it } from "vitest"
-import { FORMATS } from "../../open-sse/translator/formats.js"
-import { createSSEStream } from "../../open-sse/utils/stream.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
+import { createSSEStream } from "../../apps/web/open-sse/utils/stream.js"
 
 const enc = new TextEncoder()
 const dec = new TextDecoder()

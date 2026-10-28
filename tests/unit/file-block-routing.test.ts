@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest"
-import { convertOpenAIContentToParts } from "../../open-sse/translator/formats/gemini.js"
-import { openaiToClaudeRequest } from "../../open-sse/translator/request/openai-to-claude.js"
+import { convertOpenAIContentToParts } from "../../apps/web/open-sse/translator/formats/gemini.js"
+import { openaiToClaudeRequest } from "../../apps/web/open-sse/translator/request/openai-to-claude.js"
 import {
 	CLAUDE_BLOCK,
 	OPENAI_BLOCK,
 	VALID_OPENAI_CONTENT_TYPES,
-} from "../../open-sse/translator/schema/index.js"
+} from "../../apps/web/open-sse/translator/schema/index.js"
 
 const PDF_DATA = "data:application/pdf;base64,JVBERi0xLjE="
 const PNG_DATA = "data:image/png;base64,iVBORw0KGgo="

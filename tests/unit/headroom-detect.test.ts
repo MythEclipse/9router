@@ -26,7 +26,7 @@ import {
 	getHeadroomStatus,
 	getInstalledHeadroomExtras,
 	isLoopbackHeadroomUrl,
-} from "../../src/lib/headroom/detect.js"
+} from "../../apps/web/src/lib/headroom/detect.js"
 
 afterEach(() => {
 	vi.clearAllMocks()

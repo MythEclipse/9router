@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
 	consumeCodexRateLimitResetCredit: vi.fn(),
 }))
 
-vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
+vi.mock("../../apps/web/open-sse/utils/proxyFetch.js", () => ({
 	proxyAwareFetch: mocks.proxyAwareFetch,
 }))
 
@@ -60,7 +60,9 @@ describe("Codex reset credits", () => {
 			}),
 		})
 
-		const { getCodexRateLimitResetCredits } = await import("../../open-sse/services/usage/codex.js")
+		const { getCodexRateLimitResetCredits } = await import(
+			"../../apps/web/open-sse/services/usage/codex.js"
+		)
 		const result = await getCodexRateLimitResetCredits(
 			"token",
 			{ strictProxy: false },
@@ -102,7 +104,9 @@ describe("Codex reset credits", () => {
 			json: async () => ({ error: { message: "Reset credits are unavailable for this account" } }),
 		})
 
-		const { getCodexRateLimitResetCredits } = await import("../../open-sse/services/usage/codex.js")
+		const { getCodexRateLimitResetCredits } = await import(
+			"../../apps/web/open-sse/services/usage/codex.js"
+		)
 		await expect(getCodexRateLimitResetCredits("token")).rejects.toThrow(
 			"Reset credits are unavailable for this account",
 		)
@@ -137,7 +141,7 @@ describe("Codex reset credits", () => {
 		mocks.getCodexRateLimitResetCredits.mockResolvedValue(resetCredits)
 
 		const { GET } = await import(
-			"../../src/app/api/usage/[connectionId]/codex-reset-credits/route.js"
+			"../../apps/web/src/app/api/usage/[connectionId]/codex-reset-credits/route.js"
 		)
 		const response = await GET(new Request("http://localhost/api/usage/conn_1/codex-reset-credits"), {
 			params: Promise.resolve({ connectionId: "conn_1" }),
@@ -186,7 +190,7 @@ describe("Codex reset credits", () => {
 			.mockResolvedValueOnce(resetCredits)
 
 		const { GET } = await import(
-			"../../src/app/api/usage/[connectionId]/codex-reset-credits/route.js"
+			"../../apps/web/src/app/api/usage/[connectionId]/codex-reset-credits/route.js"
 		)
 		const response = await GET(new Request("http://localhost/api/usage/conn_1/codex-reset-credits"), {
 			params: Promise.resolve({ connectionId: "conn_1" }),
@@ -231,7 +235,7 @@ describe("Codex reset credits", () => {
 		})
 
 		const { POST } = await import(
-			"../../src/app/api/usage/[connectionId]/codex-reset-credits/route.js"
+			"../../apps/web/src/app/api/usage/[connectionId]/codex-reset-credits/route.js"
 		)
 		const response = await POST(
 			new Request("http://localhost/api/usage/conn_1/codex-reset-credits", { method: "POST" }),

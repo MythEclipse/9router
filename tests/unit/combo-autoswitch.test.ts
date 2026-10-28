@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest"
-import { detectRequiredCapabilities, reorderByCapabilities } from "../../open-sse/services/combo.js"
+import {
+	detectRequiredCapabilities,
+	reorderByCapabilities,
+} from "../../apps/web/open-sse/services/combo.js"
 
 describe("detectRequiredCapabilities", () => {
 	it("text-only -> empty", () => {

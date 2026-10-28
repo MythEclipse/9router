@@ -9,7 +9,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const { handleSearchCoreMock } = vi.hoisted(() => ({ handleSearchCoreMock: vi.fn() }))
-vi.mock("../../open-sse/handlers/search/index.js", () => ({
+vi.mock("../../apps/web/open-sse/handlers/search/index.js", () => ({
 	handleSearchCore: (...args) => handleSearchCoreMock(...args),
 }))
 
@@ -18,17 +18,17 @@ import {
 	WEB_SEARCH_RESULT_BLOCK,
 	WEB_SEARCH_TOOL_NAME,
 	WEB_SEARCH_TOOL_TYPE,
-} from "../../open-sse/config/webSearchConstants.js"
+} from "../../apps/web/open-sse/config/webSearchConstants.js"
 import {
 	attachWebSearchToClaudeBody,
 	findWebSearchCall,
-} from "../../open-sse/handlers/webSearchBody.js"
-import { resolveSearchProvider } from "../../open-sse/handlers/webSearchCredentials.js"
+} from "../../apps/web/open-sse/handlers/webSearchBody.js"
+import { resolveSearchProvider } from "../../apps/web/open-sse/handlers/webSearchCredentials.js"
 import {
 	installBridgeTool,
 	isClaudeTargetFormat,
 	resolveWebSearchPlan,
-} from "../../open-sse/handlers/webSearchProtocol.js"
+} from "../../apps/web/open-sse/handlers/webSearchProtocol.js"
 
 /** The body Claude Code actually sends when web search is on. */
 function claudeCodeRequest(overrides = {}) {

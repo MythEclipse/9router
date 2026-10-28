@@ -2,8 +2,11 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { PROVIDER_ID_TO_ALIAS, PROVIDER_MODELS } from "../../open-sse/config/providerModels.js"
-import { resolveProviderAlias } from "../../open-sse/services/model.js"
+import {
+	PROVIDER_ID_TO_ALIAS,
+	PROVIDER_MODELS,
+} from "../../apps/web/open-sse/config/providerModels.js"
+import { resolveProviderAlias } from "../../apps/web/open-sse/services/model.js"
 
 const here = dirname(fileURLToPath(import.meta.url))
 const snapPath = join(here, "alias-baseline.json")

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import { CursorExecutor } from "../../open-sse/executors/cursor.js"
-import { encodeField, wrapConnectRPCFrame } from "../../open-sse/utils/cursorProtobuf.js"
+import { CursorExecutor } from "../../apps/web/open-sse/executors/cursor.js"
+import { encodeField, wrapConnectRPCFrame } from "../../apps/web/open-sse/utils/cursorProtobuf.js"
 
 const LEN = 2
 

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import embeddingProvider from "../../open-sse/handlers/embeddingProviders/ollamaLocal.js"
-import ttsProvider from "../../open-sse/handlers/ttsProviders/ollamaLocal.js"
+import embeddingProvider from "../../apps/web/open-sse/handlers/embeddingProviders/ollamaLocal.js"
+import ttsProvider from "../../apps/web/open-sse/handlers/ttsProviders/ollamaLocal.js"
 
 afterEach(() => {
 	vi.restoreAllMocks()

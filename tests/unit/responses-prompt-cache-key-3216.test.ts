@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 const { openaiToOpenAIResponsesRequest, openaiResponsesToOpenAIRequest } = await import(
-	"../../open-sse/translator/request/openai-responses.js"
+	"../../apps/web/open-sse/translator/request/openai-responses.js"
 )
 
 const CHAT_BODY = (extra = {}) => ({

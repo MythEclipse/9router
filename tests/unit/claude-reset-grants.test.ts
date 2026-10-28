@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { parseClaudeResetGrants } from "../../open-sse/services/usage/claude.js"
+import { parseClaudeResetGrants } from "../../apps/web/open-sse/services/usage/claude.js"
 
 describe("parseClaudeResetGrants", () => {
 	it("sums usable grants and picks next_grant_id", () => {

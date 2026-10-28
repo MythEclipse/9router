@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
 	getCurrentCodexProviderBaseUrl,
 	getCurrentCodexProviderSettings,
-} from "../../src/app/(dashboard)/dashboard/cli-tools/components/codexConfig.js"
+} from "../../apps/web/src/app/(dashboard)/dashboard/cli-tools/components/codexConfig.js"
 
 describe("Codex current provider base URL", () => {
 	it("uses the base URL from the configured model provider, not an earlier provider", () => {

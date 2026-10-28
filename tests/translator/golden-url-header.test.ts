@@ -4,8 +4,8 @@
 
 import os from "node:os"
 import { describe, expect, it } from "vitest"
-import { PROVIDERS } from "../../open-sse/config/providers.js"
-import { DefaultExecutor } from "../../open-sse/executors/default.js"
+import { PROVIDERS } from "../../apps/web/open-sse/config/providers.js"
+import { DefaultExecutor } from "../../apps/web/open-sse/executors/default.js"
 import pkg from "../../package.json" with { type: "json" }
 
 // Credentials mẫu cố định (deterministic) - KHÔNG dùng Date.now/random.

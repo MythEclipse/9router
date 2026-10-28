@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import "../translator/registerAll.js"
-import { FORMATS } from "../../open-sse/translator/formats.js"
-import { initState, translateResponse } from "../../open-sse/translator/index.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
+import { initState, translateResponse } from "../../apps/web/open-sse/translator/index.js"
 
 const startTool = (index, id, name) => ({
 	type: "content_block_start",

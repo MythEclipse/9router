@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { AWS_CREDENTIAL_MODE } from "../../open-sse/config/awsConstants.js"
+import { AWS_CREDENTIAL_MODE } from "../../apps/web/open-sse/config/awsConstants.js"
 import {
 	clearAwsCredentialCache,
 	detectCredentialMode,
 	resolveAwsCredentials,
 	resolveRegion,
-} from "../../open-sse/shared/awsCredentials.js"
+} from "../../apps/web/open-sse/shared/awsCredentials.js"
 
 const STATIC_CONNECTION = {
 	apiKey: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",

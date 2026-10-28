@@ -1,11 +1,15 @@
 // Real Antigravity-MITM requests (Gemini-internal: { request: { contents, ... } }) → OpenAI.
 import { describe, expect, it } from "vitest"
 import "./registerAll.js"
-import { ANTIGRAVITY_DEFAULT_SYSTEM } from "../../open-sse/config/appConstants.js"
-import { AntigravityExecutor } from "../../open-sse/executors/antigravity.js"
-import { FORMATS } from "../../open-sse/translator/formats.js"
-import { initState, translateRequest, translateResponse } from "../../open-sse/translator/index.js"
-import { openaiToAntigravityRequest } from "../../open-sse/translator/request/openai-to-gemini.js"
+import { ANTIGRAVITY_DEFAULT_SYSTEM } from "../../apps/web/open-sse/config/appConstants.js"
+import { AntigravityExecutor } from "../../apps/web/open-sse/executors/antigravity.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
+import {
+	initState,
+	translateRequest,
+	translateResponse,
+} from "../../apps/web/open-sse/translator/index.js"
+import { openaiToAntigravityRequest } from "../../apps/web/open-sse/translator/request/openai-to-gemini.js"
 
 const AG2O = (req) =>
 	translateRequest(FORMATS.ANTIGRAVITY, FORMATS.OPENAI, "m", { request: req }, true, null, null)

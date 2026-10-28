@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { buildSystemoneUrl, handleSystemoneCore } from "../../open-sse/handlers/systemoneCore.js"
-import { PROVIDER_MEDIA } from "../../open-sse/providers/index.js"
-import REGISTRY from "../../open-sse/providers/registry/index.js"
+import {
+	buildSystemoneUrl,
+	handleSystemoneCore,
+} from "../../apps/web/open-sse/handlers/systemoneCore.js"
+import { PROVIDER_MEDIA } from "../../apps/web/open-sse/providers/index.js"
+import REGISTRY from "../../apps/web/open-sse/providers/registry/index.js"
 
 const localCfg = PROVIDER_MEDIA["ollama-local"]?.systemoneConfig
 

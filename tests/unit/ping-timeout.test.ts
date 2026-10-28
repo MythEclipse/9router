@@ -6,7 +6,7 @@ import {
 	SLOW_FALLBACK_PROVIDERS,
 	WEB_COOKIE_PROBE_TIMEOUT_MS,
 	WEB_COOKIE_PROVIDERS,
-} from "../../src/app/api/models/test/probeBudget.js"
+} from "../../apps/web/src/app/api/models/test/probeBudget.js"
 
 describe("model probe budget", () => {
 	it("treats every web-cookie provider as slow-probing", () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
-import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js"
-import { getThinkingLevels } from "../../open-sse/providers/thinkingLevels.js"
-import { applyThinking } from "../../open-sse/translator/concerns/thinkingUnified.js"
+import { getCapabilitiesForModel } from "../../apps/web/open-sse/providers/capabilities.js"
+import { getThinkingLevels } from "../../apps/web/open-sse/providers/thinkingLevels.js"
+import { applyThinking } from "../../apps/web/open-sse/translator/concerns/thinkingUnified.js"
 
 // 2026-10-18: glm-5.3-flash-free on OpenCode's own inference service answered
 //   400 [unknown_parameter] invalid request body: json: unknown field "thinking"

@@ -3,8 +3,8 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { OAUTH_ENDPOINTS } from "../../open-sse/config/appConstants.js"
-import { PROVIDERS } from "../../open-sse/config/providers.js"
+import { OAUTH_ENDPOINTS } from "../../apps/web/open-sse/config/appConstants.js"
+import { PROVIDERS } from "../../apps/web/open-sse/config/providers.js"
 
 const here = dirname(fileURLToPath(import.meta.url))
 const snapPath = join(here, "oauth-urls-baseline.json")

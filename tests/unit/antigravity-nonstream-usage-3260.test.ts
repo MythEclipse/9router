@@ -7,7 +7,7 @@ vi.mock("@/lib/usageDb.js", () => ({
 }))
 
 const { extractUsageFromResponse } = await import(
-	"../../open-sse/handlers/chatCore/requestDetail.js"
+	"../../apps/web/open-sse/handlers/chatCore/requestDetail.js"
 )
 
 const USAGE_METADATA = {

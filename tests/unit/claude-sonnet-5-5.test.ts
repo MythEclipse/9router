@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest"
 
-import { getModelsByProviderId } from "../../open-sse/config/providerModels.js"
-import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js"
-import { getPricingForModel } from "../../open-sse/providers/pricing.js"
-import { prepareClaudeRequest } from "../../open-sse/translator/formats/claude.js"
-import { FORMATS } from "../../open-sse/translator/formats.js"
-import { translateRequest } from "../../open-sse/translator/index.js"
+import { getModelsByProviderId } from "../../apps/web/open-sse/config/providerModels.js"
+import { getCapabilitiesForModel } from "../../apps/web/open-sse/providers/capabilities.js"
+import { getPricingForModel } from "../../apps/web/open-sse/providers/pricing.js"
+import { prepareClaudeRequest } from "../../apps/web/open-sse/translator/formats/claude.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
+import { translateRequest } from "../../apps/web/open-sse/translator/index.js"
 import "../translator/registerAll.js"
 
 // Sonnet 5.5 keeps Sonnet 5's API price ($2 / $10 per 1M) and the 5.x

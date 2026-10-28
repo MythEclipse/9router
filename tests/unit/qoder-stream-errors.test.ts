@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { __test__ } from "../../open-sse/executors/qoder.js"
+import { __test__ } from "../../apps/web/open-sse/executors/qoder.js"
 
 const { wrapQoderSSE } = __test__
 const duplicate = '{"code":"103","message":"Duplicate request"}'

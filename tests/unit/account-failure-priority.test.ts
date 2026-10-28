@@ -21,7 +21,7 @@ vi.mock("@/sse/utils/logger.js", () => ({
 	warn: vi.fn(),
 }))
 
-const { getProviderCredentials } = await import("../../src/sse/services/auth.js")
+const { getProviderCredentials } = await import("../../apps/web/src/sse/services/auth.js")
 
 beforeEach(() => {
 	vi.clearAllMocks()

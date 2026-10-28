@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
 	ANTIGRAVITY_IDE_VERSION,
 	applyAntigravityIdeVersionOverride,
-} from "../../src/mitm/antigravityIdeVersion.ts"
+} from "../../apps/web/src/mitm/antigravityIdeVersion.ts"
 
 const CURRENT_VERSION = "2.22.0"
 

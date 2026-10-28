@@ -8,10 +8,10 @@
 // Skips (console.warn + pass) when: no credential/model, auth/quota status (401/402/403/429),
 // or the model rejects a capability (e.g. image on a non-vision model).
 import { describe, expect, it } from "vitest"
-import { getModelsByProviderId } from "../../../open-sse/config/providerModels.js"
-import { handleChatCore } from "../../../open-sse/handlers/chatCore.js"
-import { getProviderCredentials } from "../../../src/sse/services/auth.js"
-import { checkAndRefreshToken } from "../../../src/sse/services/tokenRefresh.js"
+import { getModelsByProviderId } from "../../../apps/web/open-sse/config/providerModels.js"
+import { handleChatCore } from "../../../apps/web/open-sse/handlers/chatCore.js"
+import { getProviderCredentials } from "../../../apps/web/src/sse/services/auth.js"
+import { checkAndRefreshToken } from "../../../apps/web/src/sse/services/tokenRefresh.js"
 
 const RUN_REAL = process.env.RUN_REAL === "1"
 const TIMEOUT_MS = 90000

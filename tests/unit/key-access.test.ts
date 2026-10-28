@@ -30,10 +30,10 @@ vi.mock("@/sse/utils/logger.js", () => ({
 	error: vi.fn(),
 }))
 
-const engine = await import("../../src/sse/services/keyAccess.js")
-const helpers = await import("../../src/shared/utils/keyAccess.js")
+const engine = await import("../../apps/web/src/sse/services/keyAccess.js")
+const helpers = await import("../../apps/web/src/shared/utils/keyAccess.js")
 const { keyAccessDeniedMessage, KEY_ACCESS_MAX_ENTRIES } = await import(
-	"../../src/shared/constants/keyAccess.js"
+	"../../apps/web/src/shared/constants/keyAccess.js"
 )
 
 function key(id, access) {

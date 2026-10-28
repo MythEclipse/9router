@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
-import { createNodeSqliteAdapter } from "../../src/lib/db/adapters/nodeSqliteAdapter.js"
-import { buildCreateTableSql, TABLES } from "../../src/lib/db/schema.js"
+import { createNodeSqliteAdapter } from "../../apps/web/src/lib/db/adapters/nodeSqliteAdapter.js"
+import { buildCreateTableSql, TABLES } from "../../apps/web/src/lib/db/schema.js"
 
 const fx = vi.hoisted(() => ({ db: null, aliases: {} }))
 vi.mock("@/lib/db/driver.js", () => ({ getAdapter: async () => fx.db }))
@@ -8,7 +8,7 @@ vi.mock("@/lib/localDb", () => ({
 	getModelAliases: async () => fx.aliases,
 	getProviderNodes: async () => [],
 	getComboByName: async (name) => {
-		const repo = await import("../../src/lib/db/repos/combosRepo.js")
+		const repo = await import("../../apps/web/src/lib/db/repos/combosRepo.js")
 		return repo.getComboByName(name)
 	},
 }))
@@ -20,13 +20,13 @@ vi.mock("@/sse/utils/logger.js", () => ({
 }))
 
 const { createCombo, deleteCombo, getComboById } = await import(
-	"../../src/lib/db/repos/combosRepo.js"
+	"../../apps/web/src/lib/db/repos/combosRepo.js"
 )
 const { getApiKeyByKey, invalidateApiKeyCache } = await import(
-	"../../src/lib/db/repos/apiKeysRepo.js"
+	"../../apps/web/src/lib/db/repos/apiKeysRepo.js"
 )
 const { getKeyAccessContext, enforceKeyAccess, enforceKeyAccessProvider, filterModelsListForKey } =
-	await import("../../src/sse/services/keyAccess.js")
+	await import("../../apps/web/src/sse/services/keyAccess.js")
 
 beforeAll(async () => {
 	// Real SQLite and repository/access code, never the user's DATA_DIR.

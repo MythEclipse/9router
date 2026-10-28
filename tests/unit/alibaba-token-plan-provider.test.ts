@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { PROVIDER_MODELS, PROVIDERS } from "../../open-sse/providers/index.js"
-import REGISTRY from "../../open-sse/providers/registry/index.js"
+import { PROVIDER_MODELS, PROVIDERS } from "../../apps/web/open-sse/providers/index.js"
+import REGISTRY from "../../apps/web/open-sse/providers/registry/index.js"
 
 describe("Alibaba Token Plan provider", () => {
 	const entry = REGISTRY.find((e) => e.id === "alitp-intl")

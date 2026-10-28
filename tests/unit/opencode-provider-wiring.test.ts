@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { PROVIDERS } from "../../open-sse/config/providers.js"
-import { getExecutor, hasSpecializedExecutor } from "../../open-sse/executors/index.js"
+import { PROVIDERS } from "../../apps/web/open-sse/config/providers.js"
+import { getExecutor, hasSpecializedExecutor } from "../../apps/web/open-sse/executors/index.js"
 
 // End-to-end wiring check for the rebuilt opencode provider: registry entry,
 // executor resolution, endpoint routing and free-tier headers must all agree
@@ -18,7 +18,7 @@ describe("opencode provider wiring", () => {
 
 	it("exposes the free models on the opencode lane", async () => {
 		// Models are keyed by alias in PROVIDER_MODELS, not on the transport map.
-		const { PROVIDER_MODELS } = await import("../../open-sse/config/providerModels.js")
+		const { PROVIDER_MODELS } = await import("../../apps/web/open-sse/config/providerModels.js")
 		const models = (PROVIDER_MODELS as unknown as Record<string, Array<{ id: string }>>).oc1
 		expect(Array.isArray(models)).toBe(true)
 		expect(models.length).toBeGreaterThan(0)

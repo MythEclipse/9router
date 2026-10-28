@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-vi.mock("../../open-sse/translator/concerns/image.js", async (orig) => {
+vi.mock("../../apps/web/open-sse/translator/concerns/image.js", async (orig) => {
 	const actual = await orig()
 	return {
 		...actual,
@@ -11,9 +11,9 @@ vi.mock("../../open-sse/translator/concerns/image.js", async (orig) => {
 	}
 })
 
-import { fetchImageAsBase64 } from "../../open-sse/translator/concerns/image.js"
-import { prefetchRemoteImages } from "../../open-sse/translator/concerns/prefetch.js"
-import { FORMATS } from "../../open-sse/translator/formats.js"
+import { fetchImageAsBase64 } from "../../apps/web/open-sse/translator/concerns/image.js"
+import { prefetchRemoteImages } from "../../apps/web/open-sse/translator/concerns/prefetch.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
 
 beforeEach(() => {
 	fetchImageAsBase64.mockClear()

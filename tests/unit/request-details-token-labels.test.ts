@@ -111,7 +111,10 @@ describe("the component uses these helpers, not raw property reads", () => {
 		const { dirname, resolve } = await import("node:path")
 		const here = dirname(fileURLToPath(import.meta.url))
 		const source = readFileSync(
-			resolve(here, "../../src/app/(dashboard)/dashboard/usage/components/RequestDetailsTab.tsx"),
+			resolve(
+				here,
+				"../../apps/web/src/app/(dashboard)/dashboard/usage/components/RequestDetailsTab.tsx",
+			),
 			"utf8",
 		)
 		// A raw read bypasses the Anthropic fallback and prints 0 for those rows.

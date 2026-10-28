@@ -8,7 +8,7 @@ describe("xai/oauth service", () => {
 	})
 
 	it("validates discovered endpoints are https x.ai URLs", async () => {
-		const { validateOAuthEndpoint } = await import("../../src/lib/oauth/services/xai.js")
+		const { validateOAuthEndpoint } = await import("../../apps/web/src/lib/oauth/services/xai.js")
 
 		expect(
 			validateOAuthEndpoint("https://auth.x.ai/oauth2/authorize", "authorization_endpoint"),
@@ -30,7 +30,7 @@ describe("xai/oauth service", () => {
 			}),
 		})
 
-		const { discoverEndpoints } = await import("../../src/lib/oauth/services/xai.js")
+		const { discoverEndpoints } = await import("../../apps/web/src/lib/oauth/services/xai.js")
 		await expect(discoverEndpoints()).resolves.toEqual({
 			authorizeUrl: "https://auth.x.ai/oauth2/authorize",
 			tokenUrl: "https://auth.x.ai/oauth2/token",
@@ -42,7 +42,7 @@ describe("xai/oauth service", () => {
 	})
 
 	it("builds authorize URLs with CLIProxyAPI query extras", async () => {
-		const { XaiService } = await import("../../src/lib/oauth/services/xai.js")
+		const { XaiService } = await import("../../apps/web/src/lib/oauth/services/xai.js")
 		const authUrl = new XaiService().buildXaiAuthUrl(
 			"http://127.0.0.1:56121/callback",
 			"state-1",
@@ -72,7 +72,7 @@ describe("xai/oauth service", () => {
 			}),
 		})
 
-		const { generateAuthData } = await import("../../src/lib/oauth/providers.js")
+		const { generateAuthData } = await import("../../apps/web/src/lib/oauth/providers.js")
 		const data = await generateAuthData("xai", "http://127.0.0.1:56121/callback")
 		const parsed = new URL(data.authUrl)
 
@@ -103,7 +103,7 @@ describe("xai/oauth service", () => {
 				}),
 			})
 
-		const { exchangeTokens } = await import("../../src/lib/oauth/providers.js")
+		const { exchangeTokens } = await import("../../apps/web/src/lib/oauth/providers.js")
 		const tokens = await exchangeTokens(
 			"xai",
 			"auth-code",

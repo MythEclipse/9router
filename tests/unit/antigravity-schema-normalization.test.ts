@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { antigravityToOpenAIRequest } from "../../open-sse/translator/request/antigravity-to-openai.js"
+import { antigravityToOpenAIRequest } from "../../apps/web/open-sse/translator/request/antigravity-to-openai.js"
 
 function translate(parameters) {
 	return antigravityToOpenAIRequest(

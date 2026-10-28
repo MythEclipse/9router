@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
 	decodeGrokCreditsFrame,
 	probeFrameHeader,
-} from "../../open-sse/services/usage/grokCliQuotaFrame.js"
+} from "../../apps/web/open-sse/services/usage/grokCliQuotaFrame.js"
 
 /**
  * Minimal protobuf encoder for fixtures - real GetGrokCreditsConfig wire shape

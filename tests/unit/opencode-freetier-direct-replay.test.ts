@@ -32,7 +32,7 @@ vi.mock("undici", () => ({
 	ProxyAgent: class {},
 }))
 
-const { proxyAwareFetch } = await import("../../open-sse/utils/proxyFetch.js")
+const { proxyAwareFetch } = await import("../../apps/web/open-sse/utils/proxyFetch.js")
 
 function proxiedThenDirect({ proxiedResponse, directResponse }) {
 	fetchMock.mockImplementation(async (_url, opts = {}) =>

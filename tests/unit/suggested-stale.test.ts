@@ -27,14 +27,14 @@ describe("fetchSuggestedModels stale coverage", () => {
 	it("cleans the duplicated stale-map comment left by the patch script", async () => {
 		const fs = await import("node:fs")
 		const text = fs.readFileSync(
-			new URL("../../src/shared/utils/providerModelsFetcher.ts", import.meta.url),
+			new URL("../../apps/web/src/shared/utils/providerModelsFetcher.ts", import.meta.url),
 			"utf8",
 		)
 		expect(text.match(/key: fetcher\.url → last good/g)?.length ?? 0).toBeLessThanOrEqual(1)
 	})
 
 	it("serves the last good list when a refresh fails after success", async () => {
-		const mod = await import("../../src/shared/utils/providerModelsFetcher")
+		const mod = await import("../../apps/web/src/shared/utils/providerModelsFetcher")
 		const fetcher = { url: "https://example.invalid/models-a", type: "opencode-free" }
 
 		vi.stubGlobal(
@@ -69,7 +69,7 @@ describe("fetchSuggestedModels stale coverage", () => {
 	it("stale data survives when the upstream throws after a good fetch", async () => {
 		// Use a fresh module instance so no shared cache leaks between tests.
 		vi.resetModules()
-		const mod = await import("../../src/shared/utils/providerModelsFetcher")
+		const mod = await import("../../apps/web/src/shared/utils/providerModelsFetcher")
 		const fetcher = { url: "https://example.invalid/models-b", type: "opencode-free" }
 
 		vi.stubGlobal(
@@ -104,7 +104,7 @@ describe("fetchSuggestedModels stale coverage", () => {
 
 	it("a failed upstream with an error note keeps its fallback flagged stale", async () => {
 		vi.resetModules()
-		const mod = await import("../../src/shared/utils/providerModelsFetcher")
+		const mod = await import("../../apps/web/src/shared/utils/providerModelsFetcher")
 		const fetcher = { url: "https://example.invalid/models-c", type: "opencode-free" }
 		vi.stubGlobal(
 			"fetch",

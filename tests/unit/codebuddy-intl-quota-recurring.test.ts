@@ -6,7 +6,7 @@
 // "Expires in".
 import { describe, expect, it } from "vitest"
 
-import { parseQuotaData } from "../../src/app/(dashboard)/dashboard/usage/components/ProviderLimits/utils.js"
+import { parseQuotaData } from "../../apps/web/src/app/(dashboard)/dashboard/usage/components/ProviderLimits/utils.js"
 
 const quotas = {
 	Monthly: { used: 100, total: 1000, resetAt: "2026-11-01T00:00:00Z", recurring: true },

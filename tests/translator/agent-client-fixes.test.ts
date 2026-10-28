@@ -4,14 +4,14 @@
 // - the client's thinking `display` is kept on Claude-format upstreams
 import { describe, expect, it } from "vitest"
 import "./registerAll.js"
-import { selectAnthropicBeta } from "../../open-sse/providers/shared.js"
-import { applyThinking } from "../../open-sse/translator/concerns/thinkingUnified.js"
-import { hoistToolResultImages } from "../../open-sse/translator/formats/claude.js"
-import { FORMATS } from "../../open-sse/translator/formats.js"
-import { initState, translateRequest } from "../../open-sse/translator/index.js"
-import { openaiToCommandCodeRequest } from "../../open-sse/translator/request/openai-to-commandcode.js"
-import { kiroToClaudeResponse } from "../../open-sse/translator/response/kiro-to-claude.js"
-import { kiroToOpenAIResponse } from "../../open-sse/translator/response/kiro-to-openai.js"
+import { selectAnthropicBeta } from "../../apps/web/open-sse/providers/shared.js"
+import { applyThinking } from "../../apps/web/open-sse/translator/concerns/thinkingUnified.js"
+import { hoistToolResultImages } from "../../apps/web/open-sse/translator/formats/claude.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
+import { initState, translateRequest } from "../../apps/web/open-sse/translator/index.js"
+import { openaiToCommandCodeRequest } from "../../apps/web/open-sse/translator/request/openai-to-commandcode.js"
+import { kiroToClaudeResponse } from "../../apps/web/open-sse/translator/response/kiro-to-claude.js"
+import { kiroToOpenAIResponse } from "../../apps/web/open-sse/translator/response/kiro-to-openai.js"
 
 const PNG =
 	"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="

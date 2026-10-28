@@ -18,22 +18,22 @@ const { executeMock, translateRequestMock, handleNonStreamingResponseMock } = vi
 	handleNonStreamingResponseMock: vi.fn(async () => ({ success: true })),
 }))
 
-vi.mock("../../open-sse/executors/index.js", () => ({
+vi.mock("../../apps/web/open-sse/executors/index.js", () => ({
 	getExecutor: vi.fn(() => ({
 		execute: executeMock,
 		refreshCredentials: vi.fn().mockResolvedValue(null),
 	})),
 }))
 
-vi.mock("../../open-sse/translator/index.js", () => ({
+vi.mock("../../apps/web/open-sse/translator/index.js", () => ({
 	translateRequest: translateRequestMock,
 }))
 
-vi.mock("../../open-sse/handlers/chatCore/nonStreamingHandler.js", () => ({
+vi.mock("../../apps/web/open-sse/handlers/chatCore/nonStreamingHandler.js", () => ({
 	handleNonStreamingResponse: handleNonStreamingResponseMock,
 }))
 
-vi.mock("../../open-sse/utils/requestLogger.js", () => ({
+vi.mock("../../apps/web/open-sse/utils/requestLogger.js", () => ({
 	createRequestLogger: vi.fn(async () => ({
 		logClientRawRequest: vi.fn(),
 		logRawRequest: vi.fn(),
@@ -42,16 +42,16 @@ vi.mock("../../open-sse/utils/requestLogger.js", () => ({
 	})),
 }))
 
-vi.mock("../../open-sse/utils/clientDetector.js", () => ({
+vi.mock("../../apps/web/open-sse/utils/clientDetector.js", () => ({
 	detectClientTool: vi.fn(() => null),
 	isNativePassthrough: vi.fn(() => false),
 }))
 
-vi.mock("../../open-sse/utils/bypassHandler.js", () => ({
+vi.mock("../../apps/web/open-sse/utils/bypassHandler.js", () => ({
 	handleBypassRequest: vi.fn(() => null),
 }))
 
-vi.mock("../../open-sse/utils/streamHandler.js", () => ({
+vi.mock("../../apps/web/open-sse/utils/streamHandler.js", () => ({
 	createStreamController: vi.fn(() => ({
 		signal: undefined,
 		handleComplete: vi.fn(),
@@ -59,50 +59,50 @@ vi.mock("../../open-sse/utils/streamHandler.js", () => ({
 	})),
 }))
 
-vi.mock("../../open-sse/services/tokenRefresh.js", () => ({
+vi.mock("../../apps/web/open-sse/services/tokenRefresh.js", () => ({
 	refreshWithRetry: vi.fn(),
 }))
 
-vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
+vi.mock("../../apps/web/open-sse/utils/proxyFetch.js", () => ({
 	default: vi.fn(),
 	proxyAwareFetch: vi.fn(),
 }))
 
-vi.mock("../../open-sse/translator/formats/claude.js", () => ({
+vi.mock("../../apps/web/open-sse/translator/formats/claude.js", () => ({
 	normalizeClaudePassthrough: vi.fn(),
 	anchorClaudeCache: vi.fn(),
 }))
 
-vi.mock("../../open-sse/utils/toolDeduper.js", () => ({
+vi.mock("../../apps/web/open-sse/utils/toolDeduper.js", () => ({
 	dedupeTools: vi.fn((tools) => ({ tools, stripped: [] })),
 }))
 
-vi.mock("../../open-sse/rtk/caveman.js", () => ({ injectCaveman: vi.fn() }))
-vi.mock("../../open-sse/rtk/ponytail.js", () => ({ injectPonytail: vi.fn() }))
-vi.mock("../../open-sse/rtk/index.js", () => ({
+vi.mock("../../apps/web/open-sse/rtk/caveman.js", () => ({ injectCaveman: vi.fn() }))
+vi.mock("../../apps/web/open-sse/rtk/ponytail.js", () => ({ injectPonytail: vi.fn() }))
+vi.mock("../../apps/web/open-sse/rtk/index.js", () => ({
 	compressMessages: vi.fn(() => null),
 	formatRtkLog: vi.fn(() => ""),
 }))
-vi.mock("../../open-sse/rtk/headroom.js", () => ({
+vi.mock("../../apps/web/open-sse/rtk/headroom.js", () => ({
 	compressWithHeadroom: vi.fn(async () => null),
 	formatHeadroomLog: vi.fn(() => ""),
 	formatHeadroomSizeLog: vi.fn(() => ""),
 	isHeadroomPhantomSavings: vi.fn(() => false),
 }))
-vi.mock("../../open-sse/rtk/pxpipe.js", () => ({
+vi.mock("../../apps/web/open-sse/rtk/pxpipe.js", () => ({
 	compressWithPxpipe: vi.fn(async () => ({ body: null, summary: null })),
 }))
 
-vi.mock("../../open-sse/translator/concerns/prefetch.js", () => ({
+vi.mock("../../apps/web/open-sse/translator/concerns/prefetch.js", () => ({
 	prefetchRemoteImages: vi.fn(async () => 0),
 }))
 
-vi.mock("../../open-sse/handlers/chatCore/requestDetail.js", () => ({
+vi.mock("../../apps/web/open-sse/handlers/chatCore/requestDetail.js", () => ({
 	buildRequestDetail: vi.fn((detail) => detail),
 	extractRequestConfig: vi.fn((body, stream) => ({ body, stream })),
 }))
 
-vi.mock("../../open-sse/utils/error.js", () => ({
+vi.mock("../../apps/web/open-sse/utils/error.js", () => ({
 	createErrorResult: vi.fn((status, message) => ({ success: false, status, error: message })),
 	formatProviderError: vi.fn((error) => error.message),
 	parseUpstreamError: vi.fn(),
@@ -161,7 +161,7 @@ describe("MiniMax-M3 multi-transport routing", () => {
 			],
 		}
 
-		const { handleChatCore } = await import("../../open-sse/handlers/chatCore.js")
+		const { handleChatCore } = await import("../../apps/web/open-sse/handlers/chatCore.js")
 		await handleChatCore(makeOptions(body))
 
 		expect(translateRequestMock).toHaveBeenCalledWith(

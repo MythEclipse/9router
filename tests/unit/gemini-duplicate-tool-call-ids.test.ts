@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { openaiToGeminiRequest } from "../../open-sse/translator/request/openai-to-gemini.js"
+import { openaiToGeminiRequest } from "../../apps/web/open-sse/translator/request/openai-to-gemini.js"
 
 // #4532: Gemini validates that functionCall ids are unique across the WHOLE
 // conversation and rejects the entire request with 400 INVALID_ARGUMENT when one

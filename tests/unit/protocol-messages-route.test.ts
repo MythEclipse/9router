@@ -8,7 +8,7 @@ vi.mock("@/lib/localDb", () => db)
 
 // handleChat resolves settings before the model check. Mock the pieces the route
 // imports that would otherwise touch the real DB, then hit the real POST.
-const { POST } = await import("../../src/app/api/v1/messages/route.js")
+const { POST } = await import("../../apps/web/src/app/api/v1/messages/route.js")
 
 async function postMessages(body) {
 	return POST(
@@ -58,7 +58,7 @@ describe("POST /v1/messages — Anthropic protocol enforcement", () => {
 	})
 
 	it("keeps OpenAI endpoints on the OpenAI envelope", async () => {
-		const { POST: chatPost } = await import("../../src/app/api/v1/chat/completions/route.js")
+		const { POST: chatPost } = await import("../../apps/web/src/app/api/v1/chat/completions/route.js")
 		db.getSettings.mockResolvedValueOnce({ requireApiKey: true })
 		const res = await chatPost(
 			new Request("https://router.test/v1/chat/completions", {
@@ -74,7 +74,7 @@ describe("POST /v1/messages — Anthropic protocol enforcement", () => {
 	})
 
 	it("never applies Anthropic's max_tokens rule to /v1/chat/completions", async () => {
-		const { POST: chatPost } = await import("../../src/app/api/v1/chat/completions/route.js")
+		const { POST: chatPost } = await import("../../apps/web/src/app/api/v1/chat/completions/route.js")
 		db.getSettings.mockResolvedValueOnce({ requireApiKey: true })
 		const res = await chatPost(
 			new Request("https://router.test/v1/chat/completions", {

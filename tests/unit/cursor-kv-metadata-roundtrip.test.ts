@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest"
-import { encodeKvClientMessage } from "../../open-sse/executors/cursor.js"
+import { encodeKvClientMessage } from "../../apps/web/open-sse/executors/cursor.js"
 import {
 	decodeMessage,
 	encodeField,
 	parseConnectRPCFrame,
-} from "../../open-sse/utils/cursorProtobuf.js"
+} from "../../apps/web/open-sse/utils/cursorProtobuf.js"
 
 // KvServerMessage asks the client to get (field 2) or set (field 3) a blob.
 // The ack frame MUST echo the server's metadata (field 4) verbatim — dropping

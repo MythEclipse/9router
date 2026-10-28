@@ -8,13 +8,13 @@ vi.mock("@/lib/usageDb.js", () => ({
 	trackPendingRequest: vi.fn(),
 }))
 
-import { formatDoneLine } from "../../open-sse/handlers/chatCore/requestDetail.js"
-import { FORMATS } from "../../open-sse/translator/formats.js"
+import { formatDoneLine } from "../../apps/web/open-sse/handlers/chatCore/requestDetail.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
 import {
 	createPassthroughStreamWithLogger,
 	createSSETransformStreamWithLogger,
-} from "../../open-sse/utils/stream.js"
-import { canonicalizeUsage, mergeUsage } from "../../open-sse/utils/usageTracking.js"
+} from "../../apps/web/open-sse/utils/stream.js"
+import { canonicalizeUsage, mergeUsage } from "../../apps/web/open-sse/utils/usageTracking.js"
 
 const encoder = new TextEncoder()
 

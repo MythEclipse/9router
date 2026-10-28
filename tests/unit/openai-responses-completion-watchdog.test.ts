@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 
-import { FORMATS } from "../../open-sse/translator/formats.js"
-import { createSSETransformStreamWithLogger } from "../../open-sse/utils/stream.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
+import { createSSETransformStreamWithLogger } from "../../apps/web/open-sse/utils/stream.js"
 
 // A chat->responses stream defers response.completed when finish_reason arrives
 // without usage (PR #4476). If the upstream then stalls — no usage trailer, no

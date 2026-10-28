@@ -6,8 +6,8 @@
 // switches it to claude-adaptive, which emits exactly that pair. These tests drive the
 // real applyThinking() so a regression in the capability entry shows up as the old shape.
 import { describe, expect, it } from "vitest"
-import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js"
-import { applyThinking } from "../../open-sse/translator/concerns/thinkingUnified.js"
+import { getCapabilitiesForModel } from "../../apps/web/open-sse/providers/capabilities.js"
+import { applyThinking } from "../../apps/web/open-sse/translator/concerns/thinkingUnified.js"
 
 // A Claude-wire request asking for thinking on (what Claude Code sends).
 const claudeWireBody = () => ({

@@ -21,7 +21,7 @@ vi.mock("@/lib/network/connectionProxy", () => ({
 }))
 vi.mock("@/lib/network/proxyTest", () => ({ testProxyUrl: vi.fn() }))
 
-import { testSingleConnection } from "../../src/app/api/providers/[id]/test/testUtils.js"
+import { testSingleConnection } from "../../apps/web/src/app/api/providers/[id]/test/testUtils.js"
 
 describe("opencode Test button", () => {
 	beforeEach(() => {

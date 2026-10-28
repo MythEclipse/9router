@@ -24,8 +24,8 @@ vi.mock("@/lib/localDb", () => ({
 	},
 }))
 
-const { POST } = await import("../../src/app/api/combos/[id]/duplicate/route.js")
-const { nextCopyName } = await import("../../src/shared/utils/comboCopyName.js")
+const { POST } = await import("../../apps/web/src/app/api/combos/[id]/duplicate/route.js")
+const { nextCopyName } = await import("../../apps/web/src/shared/utils/comboCopyName.js")
 
 const post = (id: string) => POST({}, { params: Promise.resolve({ id }) })
 

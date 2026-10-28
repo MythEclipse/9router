@@ -9,7 +9,7 @@ import {
 	SERVER_TOOL_USE_BLOCK,
 	SERVER_TOOL_USE_ID_RE,
 	WEB_SEARCH_RESULT_BLOCK,
-} from "../../open-sse/config/webSearchConstants.js"
+} from "../../apps/web/open-sse/config/webSearchConstants.js"
 import {
 	buildStreamWebSearchInjection,
 	createWebSearchStreamState,
@@ -17,7 +17,7 @@ import {
 	normalizeToolUseId,
 	observeWebSearchFrame,
 	pendingSearchCalls,
-} from "../../open-sse/handlers/webSearchStream.js"
+} from "../../apps/web/open-sse/handlers/webSearchStream.js"
 
 /** Build an SSE stream from raw frame text. */
 function sseStream(chunks) {

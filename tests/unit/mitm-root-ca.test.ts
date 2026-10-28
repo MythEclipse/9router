@@ -8,7 +8,7 @@ async function loadRootCAWithDataDir(dataDir) {
 	process.env.DATA_DIR = dataDir
 	vi.resetModules()
 	try {
-		return await import("../../src/mitm/cert/rootCA.ts")
+		return await import("../../apps/web/src/mitm/cert/rootCA.ts")
 	} finally {
 		if (oldDataDir === undefined) delete process.env.DATA_DIR
 		else process.env.DATA_DIR = oldDataDir

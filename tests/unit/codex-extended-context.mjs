@@ -1,9 +1,9 @@
 import assert from "node:assert/strict"
-import { getModelUpstreamId } from "../../open-sse/config/providerModels.js"
-import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js"
-import codex from "../../open-sse/providers/registry/codex.js"
-import { checkFallbackError } from "../../open-sse/services/accountFallback.js"
-import { stripModelContextMarker } from "../../open-sse/utils/modelMarkers.js"
+import { getModelUpstreamId } from "../../apps/web/open-sse/config/providerModels.js"
+import { getCapabilitiesForModel } from "../../apps/web/open-sse/providers/capabilities.js"
+import codex from "../../apps/web/open-sse/providers/registry/codex.js"
+import { checkFallbackError } from "../../apps/web/open-sse/services/accountFallback.js"
+import { stripModelContextMarker } from "../../apps/web/open-sse/utils/modelMarkers.js"
 
 for (const id of [
 	"gpt-6-astra",

@@ -75,7 +75,7 @@ describe("resolveCliApiKey logic (#4399)", () => {
 
 describe("resolveApiKey.js source checks (#4399)", () => {
 	const src = fs.readFileSync(
-		new URL("../../src/app/api/cli-tools/resolveApiKey.ts", import.meta.url),
+		new URL("../../apps/web/src/app/api/cli-tools/resolveApiKey.ts", import.meta.url),
 		"utf-8",
 	)
 

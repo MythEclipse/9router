@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import "./registerAll.js"
-import { openaiToClaudeResponse } from "../../open-sse/translator/response/openai-to-claude.js"
+import { openaiToClaudeResponse } from "../../apps/web/open-sse/translator/response/openai-to-claude.js"
 
 describe("openaiToClaudeResponse — usage from chunk.usage (protocol compliance)", () => {
 	const state = () => ({ toolCalls: new Map(), toolArgBuffers: new Map(), messageStartSent: false })

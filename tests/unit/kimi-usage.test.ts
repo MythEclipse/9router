@@ -1,17 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
+vi.mock("../../apps/web/open-sse/utils/proxyFetch.js", () => ({
 	proxyAwareFetch: vi.fn(),
 }))
 
-import { PROVIDERS } from "../../open-sse/providers/index.js"
-import { getUsageForProvider } from "../../open-sse/services/usage.js"
-import { proxyAwareFetch } from "../../open-sse/utils/proxyFetch.js"
-import { parseQuotaData } from "../../src/app/(dashboard)/dashboard/usage/components/ProviderLimits/utils.js"
+import { PROVIDERS } from "../../apps/web/open-sse/providers/index.js"
+import { getUsageForProvider } from "../../apps/web/open-sse/services/usage.js"
+import { proxyAwareFetch } from "../../apps/web/open-sse/utils/proxyFetch.js"
+import { parseQuotaData } from "../../apps/web/src/app/(dashboard)/dashboard/usage/components/ProviderLimits/utils.js"
 import {
 	USAGE_APIKEY_PROVIDERS,
 	USAGE_SUPPORTED_PROVIDERS,
-} from "../../src/shared/constants/providers.js"
+} from "../../apps/web/src/shared/constants/providers.js"
 
 const KIMI_USAGE_URL = "https://api.kimi.com/coding/v1/usages"
 
@@ -226,7 +226,7 @@ describe("getUsageForProvider(kimi) auth selection", () => {
 	})
 
 	it("formatKimiUsageError distinguishes 401 vs 403 feature gate", async () => {
-		const { formatKimiUsageError } = await import("../../open-sse/services/usage/kimi.js")
+		const { formatKimiUsageError } = await import("../../apps/web/open-sse/services/usage/kimi.js")
 		expect(formatKimiUsageError(401, '{"code":"unauthenticated"}')).toMatch(/expired|re-authorize/i)
 		expect(
 			formatKimiUsageError(

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 
-import { CursorExecutor } from "../../open-sse/executors/cursor.js"
+import { CursorExecutor } from "../../apps/web/open-sse/executors/cursor.js"
 
 const credentials = {
 	accessToken: "test-token",

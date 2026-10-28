@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { compressWithPxpipe, formatPxpipeLog } from "../../open-sse/rtk/pxpipe.js"
+import { compressWithPxpipe, formatPxpipeLog } from "../../apps/web/open-sse/rtk/pxpipe.js"
 
 const bigText = "x".repeat(30000)
 const claudeBody = () => ({

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import { FORMATS } from "../../open-sse/translator/formats.js"
-import { createSSETransformStreamWithLogger } from "../../open-sse/utils/stream.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
+import { createSSETransformStreamWithLogger } from "../../apps/web/open-sse/utils/stream.js"
 
 // Codex compacts its history only from the token usage reported on `response.completed`
 // (sess.get_total_token_usage). Without it Codex never compacts and eventually sends a

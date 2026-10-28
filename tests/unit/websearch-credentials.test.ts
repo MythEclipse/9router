@@ -9,7 +9,7 @@ import {
 	resolveSearchCredentials,
 	resolveSearchProvider,
 	supportsSearch,
-} from "../../open-sse/handlers/webSearchCredentials.js"
+} from "../../apps/web/open-sse/handlers/webSearchCredentials.js"
 
 /** Helper: the raw lock-key string a positional call would have leaked. */
 const res_lockKeyString = () => "websearch:serper"

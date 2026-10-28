@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
-import { budgetToLevel } from "../../open-sse/translator/concerns/thinking.js"
-import { applyThinking } from "../../open-sse/translator/concerns/thinkingUnified.js"
-import { FORMATS } from "../../open-sse/translator/formats.js"
+import { budgetToLevel } from "../../apps/web/open-sse/translator/concerns/thinking.js"
+import { applyThinking } from "../../apps/web/open-sse/translator/concerns/thinkingUnified.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
 
 // Reverse map must be able to reach "max": LEVEL_TO_BUDGET.max = 128000 and
 // xhigh = 32768, so the xhigh/max threshold is their midpoint (80384).

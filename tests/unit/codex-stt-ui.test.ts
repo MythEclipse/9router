@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs"
 import { expect, it } from "vitest"
-import codex from "../../open-sse/providers/registry/codex"
+import codex from "../../apps/web/open-sse/providers/registry/codex"
 
 const root = new URL("../../", import.meta.url)
 it("documents OAuth reuse, ffmpeg limits and does not offer unsupported response formats", () => {

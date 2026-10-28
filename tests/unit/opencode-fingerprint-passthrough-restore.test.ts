@@ -11,8 +11,8 @@ import { describe, expect, it } from "vitest"
 import {
 	applyFingerprintTools,
 	restoreToolNames,
-} from "../../open-sse/utils/opencodeFingerprint.js"
-import { createPassthroughStreamWithLogger } from "../../open-sse/utils/stream.js"
+} from "../../apps/web/open-sse/utils/opencodeFingerprint.js"
+import { createPassthroughStreamWithLogger } from "../../apps/web/open-sse/utils/stream.js"
 
 // A caller tool named `read` whose schema differs from OpenCode's fingerprint
 // (the fingerprint uses path/offset/limit; this one uses filePath) — exactly

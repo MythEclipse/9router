@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest"
-import { getModelTargetFormat, PROVIDER_MODELS } from "../../open-sse/config/providerModels.js"
-import { OpenCodeExecutor } from "../../open-sse/executors/opencode.js"
-import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js"
-import { getThinkingLevels } from "../../open-sse/providers/thinkingLevels.js"
-import { FORMATS } from "../../open-sse/translator/formats.js"
+import {
+	getModelTargetFormat,
+	PROVIDER_MODELS,
+} from "../../apps/web/open-sse/config/providerModels.js"
+import { OpenCodeExecutor } from "../../apps/web/open-sse/executors/opencode.js"
+import { getCapabilitiesForModel } from "../../apps/web/open-sse/providers/capabilities.js"
+import { getThinkingLevels } from "../../apps/web/open-sse/providers/thinkingLevels.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
 import "../translator/registerAll.js"
-import { translateRequest } from "../../open-sse/translator/index.js"
+import { translateRequest } from "../../apps/web/open-sse/translator/index.js"
 
 const MODEL = "muse-spark-1.2"
 const PROVIDER = "opencode"

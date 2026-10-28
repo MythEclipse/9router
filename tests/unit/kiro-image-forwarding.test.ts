@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { intercept } from "../../src/mitm/handlers/kiro.ts"
+import { intercept } from "../../apps/web/src/mitm/handlers/kiro.ts"
 
 const MODEL = "offline-test-model"
 

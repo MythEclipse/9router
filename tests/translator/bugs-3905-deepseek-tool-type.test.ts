@@ -4,9 +4,9 @@
 // Anthropic-compatible endpoint, which answers HTTP 400 "unknown variant `custom`" -
 // must never receive tools[].type = "custom".
 import { describe, expect, it } from "vitest"
-import { PROVIDERS } from "../../open-sse/providers/index.js"
-import { shouldDefaultClaudeToolType } from "../../open-sse/translator/concerns/toolCall.js"
-import { FORMATS } from "../../open-sse/translator/formats.js"
+import { PROVIDERS } from "../../apps/web/open-sse/providers/index.js"
+import { shouldDefaultClaudeToolType } from "../../apps/web/open-sse/translator/concerns/toolCall.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
 
 const tools = [{ name: "get_weather", description: "weather", input_schema: { type: "object" } }]
 

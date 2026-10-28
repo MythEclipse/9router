@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest"
 
-import { getModelsByProviderId } from "../../open-sse/config/providerModels.js"
-import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js"
-import { getPricingForModel } from "../../open-sse/providers/pricing.js"
-import { getThinkingLevels } from "../../open-sse/providers/thinkingLevels.js"
-import { applyThinking } from "../../open-sse/translator/concerns/thinkingUnified.js"
-import { prepareClaudeRequest } from "../../open-sse/translator/formats/claude.js"
-import { FORMATS } from "../../open-sse/translator/formats.js"
-import { translateRequest } from "../../open-sse/translator/index.js"
+import { getModelsByProviderId } from "../../apps/web/open-sse/config/providerModels.js"
+import { getCapabilitiesForModel } from "../../apps/web/open-sse/providers/capabilities.js"
+import { getPricingForModel } from "../../apps/web/open-sse/providers/pricing.js"
+import { getThinkingLevels } from "../../apps/web/open-sse/providers/thinkingLevels.js"
+import { applyThinking } from "../../apps/web/open-sse/translator/concerns/thinkingUnified.js"
+import { prepareClaudeRequest } from "../../apps/web/open-sse/translator/formats/claude.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
+import { translateRequest } from "../../apps/web/open-sse/translator/index.js"
 import "../translator/registerAll.js"
 
 // Opus 5.5: $4 / $20 per 1M, cache read $0.20, 5m cache write $5.

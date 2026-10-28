@@ -6,14 +6,14 @@
  * tests pin the escalation policy and the payload fields the IDE writes.
  */
 import { describe, expect, it } from "vitest"
-import { routableQoderModels } from "../../open-sse/services/qoderModels.js"
+import { routableQoderModels } from "../../apps/web/open-sse/services/qoderModels.js"
 import {
 	applyQoderContextTier,
 	estimateQoderPromptTokens,
 	getQoderContextTiers,
 	parseTierTokenCount,
 	resolveQoderContextTier,
-} from "../../open-sse/shared/qoder/contextTier.js"
+} from "../../apps/web/open-sse/shared/qoder/contextTier.js"
 
 // Shape mirrors the live /algo/api/v2/model/list entry for qmodel_38max.
 const MODEL_CONFIG = {

@@ -15,7 +15,7 @@
  */
 
 import { beforeAll, describe, expect, it } from "vitest"
-import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js"
+import { getCapabilitiesForModel } from "../../apps/web/open-sse/providers/capabilities.js"
 
 // ── #4293 deepseek-v4-1-flash vision capability ───────────────────────────
 
@@ -52,7 +52,10 @@ import fs from "node:fs"
 describe("ModelSelectModal LIVE_CATALOG_PROVIDERS includes zed (#4244)", () => {
 	let src
 	beforeAll(() => {
-		const fileUrl = new URL("../../src/shared/components/ModelSelectModal.tsx", import.meta.url)
+		const fileUrl = new URL(
+			"../../apps/web/src/shared/components/ModelSelectModal.tsx",
+			import.meta.url,
+		)
 		src = fs.readFileSync(fileUrl, "utf-8")
 	})
 

@@ -4,7 +4,7 @@ import {
 	getGrokSubagentSlot,
 	parseGrokBuildConfig,
 	resetGrokBuildConfig,
-} from "../../src/lib/grokBuildConfig.js"
+} from "../../apps/web/src/lib/grokBuildConfig.js"
 
 const BASE_CONFIG = `[cli]
 installer = "internal"

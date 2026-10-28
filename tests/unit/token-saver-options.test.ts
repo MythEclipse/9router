@@ -13,7 +13,7 @@ import {
 	PRUNING_PRESETS,
 	pruneContextMessages,
 	resolvePruningLimit,
-} from "../../open-sse/rtk/contextPruning.js"
+} from "../../apps/web/open-sse/rtk/contextPruning.js"
 import {
 	checkSemanticCache,
 	getSemanticCacheStats,
@@ -21,7 +21,7 @@ import {
 	saveToSemanticCache,
 	setSemanticCacheMaxEntries,
 	setSemanticCacheTtlMs,
-} from "../../open-sse/rtk/semanticCache.js"
+} from "../../apps/web/open-sse/rtk/semanticCache.js"
 
 const bodyWith = (n, extra = 0) => ({
 	messages: [

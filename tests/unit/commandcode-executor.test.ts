@@ -3,8 +3,8 @@ import {
 	CommandCodeExecutor,
 	inspectAndWrapCommandCodeResponse,
 	parseCommandCodeError,
-} from "../../open-sse/executors/commandcode.js"
-import { handleComboChat } from "../../open-sse/services/combo.js"
+} from "../../apps/web/open-sse/executors/commandcode.js"
+import { handleComboChat } from "../../apps/web/open-sse/services/combo.js"
 
 function createNdjsonStream(lines) {
 	const encoder = new TextEncoder()

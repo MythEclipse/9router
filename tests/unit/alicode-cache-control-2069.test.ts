@@ -2,7 +2,7 @@
 // DashScope supports explicit cache_control: { type: "ephemeral" } in content blocks,
 // but the default filterToOpenAIFormat strips them. preserveCacheControl quirk opts-in.
 import { describe, expect, it } from "vitest"
-import { filterToOpenAIFormat } from "../../open-sse/translator/formats/openai.js"
+import { filterToOpenAIFormat } from "../../apps/web/open-sse/translator/formats/openai.js"
 
 const msgWithCache = [
 	{

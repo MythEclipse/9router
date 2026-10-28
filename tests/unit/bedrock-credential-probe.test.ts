@@ -1,13 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 // execute() fetches through proxyAwareFetch; capture what it actually sends to AWS.
-vi.mock("../../open-sse/utils/proxyFetch.js", async (importOriginal) => ({
+vi.mock("../../apps/web/open-sse/utils/proxyFetch.js", async (importOriginal) => ({
 	...(await importOriginal()),
 	proxyAwareFetch: vi.fn(),
 }))
 
-import { BedrockExecutor, probeBedrockCredentials } from "../../open-sse/executors/bedrock.js"
-import { proxyAwareFetch } from "../../open-sse/utils/proxyFetch.js"
+import {
+	BedrockExecutor,
+	probeBedrockCredentials,
+} from "../../apps/web/open-sse/executors/bedrock.js"
+import { proxyAwareFetch } from "../../apps/web/open-sse/utils/proxyFetch.js"
 
 const STATIC_CREDS = {
 	apiKey: "secret-access-key",

@@ -5,7 +5,7 @@ import {
 	getModelTargetFormat,
 	getModelType,
 	isValidModel,
-} from "../../open-sse/config/providerModels.js"
+} from "../../apps/web/open-sse/config/providerModels.js"
 
 describe("GitHub Copilot fallback catalog", () => {
 	it.each([

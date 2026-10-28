@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js"
+import { getCapabilitiesForModel } from "../../apps/web/open-sse/providers/capabilities.js"
 
 // #4544: GLM-5.3 advertised a 200k context. The `*glm-5.3*` pattern pinned
 // contextWindow to 200000 (inherited from the pre-5.2 era when z.ai's whole

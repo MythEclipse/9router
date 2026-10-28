@@ -4,7 +4,7 @@ import {
 	buildCursorPresetItems,
 	buildPresetItems,
 	isValidComboPresetName,
-} from "../../src/lib/comboPresets.js"
+} from "../../apps/web/src/lib/comboPresets.js"
 
 describe("combo presets", () => {
 	it("rejects combo names with slashes or invalid chars", () => {

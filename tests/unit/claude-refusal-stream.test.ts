@@ -4,7 +4,7 @@
 // Captured live on 2026-09-20 against claude-opus-5 via a Claude Code OAuth
 // connection: 9Router logged "Model succeeded · OUT 0" and the client saw nothing.
 import { describe, expect, it } from "vitest"
-import { claudeToOpenAIResponse } from "../../open-sse/translator/response/claude-to-openai.js"
+import { claudeToOpenAIResponse } from "../../apps/web/open-sse/translator/response/claude-to-openai.js"
 
 const EXPLANATION =
 	"This request was blocked as it seems to violate Anthropic's Terms of Service restrictions on reverse engineering or duplicating model outputs."

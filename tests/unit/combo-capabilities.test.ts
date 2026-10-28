@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
-import { aggregateComboCapabilities } from "../../open-sse/providers/capabilities"
+import { aggregateComboCapabilities } from "../../apps/web/open-sse/providers/capabilities"
 
 describe("aggregateComboCapabilities - null / empty", () => {
 	it("returns null for null", () => {

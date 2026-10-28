@@ -7,7 +7,10 @@
  */
 
 import { describe, expect, it } from "vitest"
-import { getModelsByProviderId, PROVIDER_MODELS } from "../../open-sse/config/providerModels.js"
+import {
+	getModelsByProviderId,
+	PROVIDER_MODELS,
+} from "../../apps/web/open-sse/config/providerModels.js"
 
 describe("MiniMax-M3 model registration", () => {
 	it("includes MiniMax-M3 in PROVIDER_MODELS.minimax", () => {

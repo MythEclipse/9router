@@ -61,7 +61,7 @@ describe("suggested-models route durability", () => {
 				{ status: 200, headers: { "content-type": "application/json" } },
 			),
 		)
-		const { GET } = await import("../../src/app/api/providers/suggested-models/route.js")
+		const { GET } = await import("../../apps/web/src/app/api/providers/suggested-models/route.js")
 		const res = await GET(request())
 		const body = await res.json()
 		expect(body.stale).toBeFalsy()
@@ -72,7 +72,7 @@ describe("suggested-models route durability", () => {
 	it("serves the synced copy flagged stale when upstream is unreachable", async () => {
 		syncedGet.mockResolvedValue(SYNCED)
 		undiciFetch.mockRejectedValue(new TypeError("fetch failed"))
-		const { GET } = await import("../../src/app/api/providers/suggested-models/route.js")
+		const { GET } = await import("../../apps/web/src/app/api/providers/suggested-models/route.js")
 		const res = await GET(request())
 		const body = await res.json()
 		expect(body.stale).toBe(true)
@@ -84,7 +84,7 @@ describe("suggested-models route durability", () => {
 	it("falls back to built-in models only when nothing was ever synced", async () => {
 		syncedGet.mockResolvedValue(null)
 		undiciFetch.mockRejectedValue(new TypeError("fetch failed"))
-		const { GET } = await import("../../src/app/api/providers/suggested-models/route.js")
+		const { GET } = await import("../../apps/web/src/app/api/providers/suggested-models/route.js")
 		const res = await GET(request())
 		const body = await res.json()
 		expect(body.stale).toBeFalsy()
@@ -100,7 +100,7 @@ describe("suggested-models route durability", () => {
 				headers: { "content-type": "application/json" },
 			}),
 		)
-		const { GET } = await import("../../src/app/api/providers/suggested-models/route.js")
+		const { GET } = await import("../../apps/web/src/app/api/providers/suggested-models/route.js")
 		const res = await GET(request())
 		const body = await res.json()
 		expect(body.stale).toBe(true)
@@ -108,7 +108,7 @@ describe("suggested-models route durability", () => {
 	})
 
 	it("rejects an unknown filter without touching the network", async () => {
-		const { GET } = await import("../../src/app/api/providers/suggested-models/route.js")
+		const { GET } = await import("../../apps/web/src/app/api/providers/suggested-models/route.js")
 		const res = await GET(
 			new Request("http://localhost/api/providers/suggested-models?url=x&type=nope"),
 		)

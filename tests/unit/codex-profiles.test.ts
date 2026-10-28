@@ -3,7 +3,7 @@ import {
 	buildCodexProfileToml,
 	deriveProfileNameFromModel,
 	parseCodexProfileModel,
-} from "../../src/app/(dashboard)/dashboard/cli-tools/components/codexConfig.js"
+} from "../../apps/web/src/app/(dashboard)/dashboard/cli-tools/components/codexConfig.js"
 
 describe("Codex profiles configuration", () => {
 	it("derives provider name as profile name and avoids conflicts", () => {

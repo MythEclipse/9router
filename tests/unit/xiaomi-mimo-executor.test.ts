@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { getExecutor } from "../../open-sse/executors/index.js"
-import { __test__, XiaomiMimoExecutor } from "../../open-sse/executors/xiaomi-mimo.js"
+import { getExecutor } from "../../apps/web/open-sse/executors/index.js"
+import { __test__, XiaomiMimoExecutor } from "../../apps/web/open-sse/executors/xiaomi-mimo.js"
 
 const { bareModel, COOKIE_KEY } = __test__
 

@@ -9,7 +9,7 @@
 //     matched either.
 import { describe, expect, it } from "vitest"
 
-const { shouldBypassByNoProxy } = await import("../../open-sse/utils/proxyFetch.js")
+const { shouldBypassByNoProxy } = await import("../../apps/web/open-sse/utils/proxyFetch.js")
 
 const HTTPS_URL = "https://api.example.com/v1/chat"
 const HTTP_URL = "http://api.example.com/v1/chat"

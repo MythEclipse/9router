@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-vi.mock("../../open-sse/shared/zedAuth.js", async (importOriginal) => {
+vi.mock("../../apps/web/open-sse/shared/zedAuth.js", async (importOriginal) => {
 	const actual = await importOriginal()
 	return {
 		...actual,
@@ -12,11 +12,11 @@ import {
 	formatZedPlanLabel,
 	parseZedAuthenticatedUserUsage,
 	parseZedUsageLimit,
-} from "../../open-sse/services/usage/zed.js"
-import { getUsageForProvider } from "../../open-sse/services/usage.js"
-import { fetchZedAuthenticatedUser } from "../../open-sse/shared/zedAuth.js"
-import { parseQuotaData } from "../../src/app/(dashboard)/dashboard/usage/components/ProviderLimits/utils.js"
-import { USAGE_SUPPORTED_PROVIDERS } from "../../src/shared/constants/providers.js"
+} from "../../apps/web/open-sse/services/usage/zed.js"
+import { getUsageForProvider } from "../../apps/web/open-sse/services/usage.js"
+import { fetchZedAuthenticatedUser } from "../../apps/web/open-sse/shared/zedAuth.js"
+import { parseQuotaData } from "../../apps/web/src/app/(dashboard)/dashboard/usage/components/ProviderLimits/utils.js"
+import { USAGE_SUPPORTED_PROVIDERS } from "../../apps/web/src/shared/constants/providers.js"
 
 describe("zed registry usage flags", () => {
 	it("is listed in USAGE_SUPPORTED_PROVIDERS", () => {

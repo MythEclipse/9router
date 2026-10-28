@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js"
-import { applyThinking } from "../../open-sse/translator/concerns/thinkingUnified.js"
+import { getCapabilitiesForModel } from "../../apps/web/open-sse/providers/capabilities.js"
+import { applyThinking } from "../../apps/web/open-sse/translator/concerns/thinkingUnified.js"
 
 // #4409: intermittent 400 code 1210 "Invalid API parameter" on GLM-5.3-Flash via
 // https://api.z.ai/api/anthropic/v1/messages, starting in v0.5.91.

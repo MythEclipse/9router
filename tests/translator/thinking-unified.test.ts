@@ -1,12 +1,12 @@
 // Unit tests for unified thinking normalization (thinkingUnified.js).
 // Covers extract, suffix parse, and per-provider apply per MATRIX (.docs/thinking/plan.md).
 import { describe, expect, it } from "vitest"
-import { extractReasoningText } from "../../open-sse/translator/concerns/reasoning"
+import { extractReasoningText } from "../../apps/web/open-sse/translator/concerns/reasoning"
 import {
 	applyThinking,
 	extractThinking,
 	parseSuffix,
-} from "../../open-sse/translator/concerns/thinkingUnified"
+} from "../../apps/web/open-sse/translator/concerns/thinkingUnified"
 
 const apply = (targetFormat, model, body, provider) => {
 	const b = JSON.parse(JSON.stringify(body))

@@ -8,7 +8,7 @@ let kimchiEntry
 
 describe("kimchi registry entry", () => {
 	before(async () => {
-		kimchiEntry = (await import("../../open-sse/providers/registry/kimchi.js")).default
+		kimchiEntry = (await import("../../apps/web/open-sse/providers/registry/kimchi.js")).default
 	})
 
 	// 6d96e24b moved kimchi into the freeTier category; it still signs in with OAuth

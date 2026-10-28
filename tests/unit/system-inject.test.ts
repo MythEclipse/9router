@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest"
-import { injectCaveman } from "../../open-sse/rtk/caveman.js"
-import { CAVEMAN_PROMPTS } from "../../open-sse/rtk/cavemanPrompts.js"
-import { injectPonytail } from "../../open-sse/rtk/ponytail.js"
-import { PONYTAIL_PROMPTS } from "../../open-sse/rtk/ponytailPrompt.js"
-import { injectSystemPrompt } from "../../open-sse/rtk/systemInject.js"
-import { FORMATS } from "../../open-sse/translator/formats.js"
+import { injectCaveman } from "../../apps/web/open-sse/rtk/caveman.js"
+import { CAVEMAN_PROMPTS } from "../../apps/web/open-sse/rtk/cavemanPrompts.js"
+import { injectPonytail } from "../../apps/web/open-sse/rtk/ponytail.js"
+import { PONYTAIL_PROMPTS } from "../../apps/web/open-sse/rtk/ponytailPrompt.js"
+import { injectSystemPrompt } from "../../apps/web/open-sse/rtk/systemInject.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
 import {
 	CLAUDE_BLOCK,
 	OPENAI_BLOCK,
 	RESPONSES_ITEM,
-} from "../../open-sse/translator/schema/blocks.js"
-import { ROLE } from "../../open-sse/translator/schema/roles.js"
+} from "../../apps/web/open-sse/translator/schema/blocks.js"
+import { ROLE } from "../../apps/web/open-sse/translator/schema/roles.js"
 
 const SEP = "\n\n"
 const P1 = "CAVEMAN_TEST_PROMPT_AAA"

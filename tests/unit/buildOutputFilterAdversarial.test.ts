@@ -1,14 +1,14 @@
 // Adversarial / edge-case tests for PR #1175
 // Goals: find corruption, boundary bugs, false positives, integration regressions
 import { describe, expect, it } from "vitest"
-import { safeApply } from "../../open-sse/rtk/applyFilter.js"
-import { autoDetectFilter } from "../../open-sse/rtk/autodetect.js"
-import { DETECT_WINDOW, MIN_COMPRESS_SIZE } from "../../open-sse/rtk/constants.js"
-import { buildOutput } from "../../open-sse/rtk/filters/buildOutput.js"
-import { gitDiff } from "../../open-sse/rtk/filters/gitDiff.js"
-import { gitLog } from "../../open-sse/rtk/filters/gitLog.js"
-import { gitStatus } from "../../open-sse/rtk/filters/gitStatus.js"
-import { compressMessages } from "../../open-sse/rtk/index.js"
+import { safeApply } from "../../apps/web/open-sse/rtk/applyFilter.js"
+import { autoDetectFilter } from "../../apps/web/open-sse/rtk/autodetect.js"
+import { DETECT_WINDOW, MIN_COMPRESS_SIZE } from "../../apps/web/open-sse/rtk/constants.js"
+import { buildOutput } from "../../apps/web/open-sse/rtk/filters/buildOutput.js"
+import { gitDiff } from "../../apps/web/open-sse/rtk/filters/gitDiff.js"
+import { gitLog } from "../../apps/web/open-sse/rtk/filters/gitLog.js"
+import { gitStatus } from "../../apps/web/open-sse/rtk/filters/gitStatus.js"
+import { compressMessages } from "../../apps/web/open-sse/rtk/index.js"
 
 // ============================================================
 // 1. PRIORITY / OVERLAPPING PATTERNS

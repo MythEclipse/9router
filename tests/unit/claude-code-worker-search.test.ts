@@ -31,7 +31,9 @@ vi.mock("open-sse/handlers/webSearchCredentials.js", () => ({
 	},
 }))
 
-const { POST } = await import("../../src/app/api/v1/code/sessions/[id]/worker/[worker]/route.js")
+const { POST } = await import(
+	"../../apps/web/src/app/api/v1/code/sessions/[id]/worker/[worker]/route.js"
+)
 
 const params = Promise.resolve({ id: "sess_abc", worker: "web-search" })
 

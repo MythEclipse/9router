@@ -1,6 +1,6 @@
 // A4 (case #10): malformed tool_calls args must not throw -> safeParseJSON returns {}.
 import { describe, expect, it } from "vitest"
-import { openaiToOllamaRequest } from "../../open-sse/translator/request/openai-to-ollama.js"
+import { openaiToOllamaRequest } from "../../apps/web/open-sse/translator/request/openai-to-ollama.js"
 
 function reqWith(args) {
 	return {

@@ -3,9 +3,9 @@
 // separator that the Unix-only colon check used to reject, so no compaction
 // happened for Windows `find`-style dumps. See fix(rtk/find).
 import { describe, expect, it } from "vitest"
-import { autoDetectFilter } from "../../open-sse/rtk/autodetect.js"
-import { find } from "../../open-sse/rtk/filters/find.js"
-import { grep } from "../../open-sse/rtk/filters/grep.js"
+import { autoDetectFilter } from "../../apps/web/open-sse/rtk/autodetect.js"
+import { find } from "../../apps/web/open-sse/rtk/filters/find.js"
+import { grep } from "../../apps/web/open-sse/rtk/filters/grep.js"
 
 const WIN_PATHS = [
 	"C:\\Users\\me\\project\\src\\a.js",

@@ -17,8 +17,8 @@ vi.mock("node:dns/promises", () => ({
 		opts?.all ? [{ address: "93.184.216.34", family: 4 }] : { address: "93.184.216.34", family: 4 },
 }))
 
-import { CodexExecutor } from "../../open-sse/executors/codex.js"
-import * as proxyFetchModule from "../../open-sse/utils/proxyFetch.js"
+import { CodexExecutor } from "../../apps/web/open-sse/executors/codex.js"
+import * as proxyFetchModule from "../../apps/web/open-sse/utils/proxyFetch.js"
 
 const IMAGE_1MB_BYTES = 1024 * 1024
 const REMOTE_URL = "https://example.com/big.jpg"

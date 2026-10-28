@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { escapeUri, signAwsRequest } from "../../open-sse/utils/awsSigv4.js"
+import { escapeUri, signAwsRequest } from "../../apps/web/open-sse/utils/awsSigv4.js"
 
 /**
  * The two pinned signatures below were cross-verified byte-for-byte against the `aws4`

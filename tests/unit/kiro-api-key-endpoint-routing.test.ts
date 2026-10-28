@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { KiroExecutor } from "../../open-sse/executors/kiro.js"
+import { KiroExecutor } from "../../apps/web/open-sse/executors/kiro.js"
 
 const RUNTIME = "https://runtime.us-east-1.kiro.dev/generateAssistantResponse"
 const CODEWHISPERER = "https://codewhisperer.us-east-1.amazonaws.com/generateAssistantResponse"

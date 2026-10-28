@@ -14,11 +14,11 @@ vi.mock("@/lib/localDb", () => db)
 vi.mock("@/lib/disabledModelsDb", () => ({
 	getDisabledModels: mocks.disabled,
 }))
-vi.mock("../../open-sse/services/kiroModels.js", () => ({
+vi.mock("../../apps/web/open-sse/services/kiroModels.js", () => ({
 	resolveKiroModels: mocks.live,
 }))
 
-import { buildModelsList } from "../../src/app/api/v1/models/route.js"
+import { buildModelsList } from "../../apps/web/src/app/api/v1/models/route.js"
 
 const connection = {
 	id: "fixture",

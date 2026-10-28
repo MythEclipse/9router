@@ -16,7 +16,7 @@ const proxyAwareFetch = vi.fn(async (url) => ({
 	text: async () => "{}",
 }))
 
-vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
+vi.mock("../../apps/web/open-sse/utils/proxyFetch.js", () => ({
 	proxyAwareFetch,
 }))
 
@@ -24,7 +24,7 @@ describe("Antigravity usage headers", () => {
 	beforeEach(() => proxyAwareFetch.mockClear())
 
 	it("uses the official IDE user agent and omits router-only source headers", async () => {
-		const { getAntigravityUsage } = await import("../../open-sse/services/usage/google.js")
+		const { getAntigravityUsage } = await import("../../apps/web/open-sse/services/usage/google.js")
 
 		await getAntigravityUsage("access-token", {})
 

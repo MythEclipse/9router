@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-vi.mock("../../open-sse/services/qoderModels.js", () => ({
+vi.mock("../../apps/web/open-sse/services/qoderModels.js", () => ({
 	getQoderModelConfig: vi.fn(async () => ({ key: "auto", max_output_tokens: 32 })),
 	resolveQoderModels: vi.fn(),
 	isQoderPat: () => false,
@@ -40,7 +40,7 @@ async function loadExecutor(fetchMock, useProxy = true) {
 	if (useProxy) vi.stubEnv("HTTPS_PROXY", "http://proxy.test:3128")
 	// Exercise the real proxyAwareFetch: it captures fetch when imported.
 	vi.stubGlobal("fetch", fetchMock)
-	const { QoderExecutor } = await import("../../open-sse/executors/qoder.js")
+	const { QoderExecutor } = await import("../../apps/web/open-sse/executors/qoder.js")
 	return new QoderExecutor()
 }
 

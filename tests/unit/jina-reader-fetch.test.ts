@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { handleFetchCore } from "../../open-sse/handlers/fetch/index.js"
+import { handleFetchCore } from "../../apps/web/open-sse/handlers/fetch/index.js"
 
 const originalFetch = global.fetch
 

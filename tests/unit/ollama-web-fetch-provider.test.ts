@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { AI_PROVIDERS, getProvidersByKind } from "@/shared/constants/providers.js"
-import { handleFetchCore } from "../../open-sse/handlers/fetch/index.js"
-import REGISTRY from "../../open-sse/providers/registry/index.js"
+import { handleFetchCore } from "../../apps/web/open-sse/handlers/fetch/index.js"
+import REGISTRY from "../../apps/web/open-sse/providers/registry/index.js"
 
 const CONFIG = {
 	baseUrl: "https://ollama.com/api/web_fetch",

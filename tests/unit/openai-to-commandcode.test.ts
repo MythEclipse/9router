@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, it } from "vitest"
-import { openaiToCommandCodeRequest } from "../../open-sse/translator/request/openai-to-commandcode.js"
+import { openaiToCommandCodeRequest } from "../../apps/web/open-sse/translator/request/openai-to-commandcode.js"
 
 const MODEL = "moonshotai/Kimi-K2.6"
 

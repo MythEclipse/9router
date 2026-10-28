@@ -25,9 +25,9 @@ vi.mock("@/lib/usageDb.js", () => ({
 	saveRequestUsage: vi.fn(async () => {}),
 }))
 
-const { pingModelByKind } = await import("../../src/app/api/models/test/ping.js")
+const { pingModelByKind } = await import("../../apps/web/src/app/api/models/test/ping.js")
 const { handleNonStreamingResponse } = await import(
-	"../../open-sse/handlers/chatCore/nonStreamingHandler.js"
+	"../../apps/web/open-sse/handlers/chatCore/nonStreamingHandler.js"
 )
 
 // The proxy adds a 2000-token headroom buffer to usage before returning it
@@ -235,7 +235,7 @@ describe("cline /api/v1/models aggregation (resolveClineModels vs resolveClinepa
 	})
 
 	it("resolveClineModels returns regular/free models without ClinePass duplicates", async () => {
-		const { resolveClineModels } = await import("../../open-sse/services/clinepassModels.js")
+		const { resolveClineModels } = await import("../../apps/web/open-sse/services/clinepassModels.js")
 		fetchMock.mockResolvedValue({
 			ok: true,
 			json: async () => API_RESPONSE,
@@ -250,7 +250,9 @@ describe("cline /api/v1/models aggregation (resolveClineModels vs resolveClinepa
 	})
 
 	it("resolveClinepassModels returns only cline-pass/ models", async () => {
-		const { resolveClinepassModels } = await import("../../open-sse/services/clinepassModels.js")
+		const { resolveClinepassModels } = await import(
+			"../../apps/web/open-sse/services/clinepassModels.js"
+		)
 		fetchMock.mockResolvedValue({
 			ok: true,
 			json: async () => API_RESPONSE,
@@ -265,7 +267,7 @@ describe("cline /api/v1/models aggregation (resolveClineModels vs resolveClinepa
 	})
 
 	it("resolveClineModels unwraps {success,data} envelope", async () => {
-		const { resolveClineModels } = await import("../../open-sse/services/clinepassModels.js")
+		const { resolveClineModels } = await import("../../apps/web/open-sse/services/clinepassModels.js")
 		fetchMock.mockResolvedValue({
 			ok: true,
 			json: async () => ({ success: true, data: API_RESPONSE }),
@@ -276,20 +278,20 @@ describe("cline /api/v1/models aggregation (resolveClineModels vs resolveClinepa
 	})
 
 	it("resolveClineModels returns null when no token", async () => {
-		const { resolveClineModels } = await import("../../open-sse/services/clinepassModels.js")
+		const { resolveClineModels } = await import("../../apps/web/open-sse/services/clinepassModels.js")
 		const result = await resolveClineModels({})
 		expect(result).toBeNull()
 	})
 
 	it("resolveClineModels returns null on fetch error", async () => {
-		const { resolveClineModels } = await import("../../open-sse/services/clinepassModels.js")
+		const { resolveClineModels } = await import("../../apps/web/open-sse/services/clinepassModels.js")
 		fetchMock.mockRejectedValue(new Error("network error"))
 		const result = await resolveClineModels({ accessToken: "test-token" })
 		expect(result).toBeNull()
 	})
 
 	it("resolveClineModels returns {id,name} shape", async () => {
-		const { resolveClineModels } = await import("../../open-sse/services/clinepassModels.js")
+		const { resolveClineModels } = await import("../../apps/web/open-sse/services/clinepassModels.js")
 		fetchMock.mockResolvedValue({
 			ok: true,
 			json: async () => API_RESPONSE,

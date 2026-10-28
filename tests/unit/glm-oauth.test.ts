@@ -2,18 +2,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 // proxyAwareFetch captures globalThis.fetch at import time - mock the module
 // (like kimi-usage.test.js) instead of stubbing global fetch for usage tests.
-vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
+vi.mock("../../apps/web/open-sse/utils/proxyFetch.js", () => ({
 	proxyAwareFetch: vi.fn(),
 	default: vi.fn(),
 }))
 
-import { DefaultExecutor } from "../../open-sse/executors/default.js"
-import { PROVIDER_OAUTH, PROVIDERS as TRANSPORTS } from "../../open-sse/providers/index.js"
-import { getUsageForProvider } from "../../open-sse/services/usage.js"
-import { proxyAwareFetch } from "../../open-sse/utils/proxyFetch.js"
-import { getProvider } from "../../src/lib/oauth/providers"
-import glmOauthProvider from "../../src/lib/oauth/providers/glm.js"
-import { USAGE_SUPPORTED_PROVIDERS } from "../../src/shared/constants/providers.js"
+import { DefaultExecutor } from "../../apps/web/open-sse/executors/default.js"
+import { PROVIDER_OAUTH, PROVIDERS as TRANSPORTS } from "../../apps/web/open-sse/providers/index.js"
+import { getUsageForProvider } from "../../apps/web/open-sse/services/usage.js"
+import { proxyAwareFetch } from "../../apps/web/open-sse/utils/proxyFetch.js"
+import { getProvider } from "../../apps/web/src/lib/oauth/providers"
+import glmOauthProvider from "../../apps/web/src/lib/oauth/providers/glm.js"
+import { USAGE_SUPPORTED_PROVIDERS } from "../../apps/web/src/shared/constants/providers.js"
 
 const ANTHROPIC_URL = "https://api.z.ai/api/anthropic/v1/messages"
 const PLAN_KEY = "key123.secret456"

@@ -5,8 +5,8 @@ import {
 	anchorClaudeCache,
 	normalizeClaudePassthrough,
 	prepareClaudeRequest,
-} from "../../open-sse/translator/formats/claude.js"
-import { claudeToOpenAIRequest } from "../../open-sse/translator/request/claude-to-openai.js"
+} from "../../apps/web/open-sse/translator/formats/claude.js"
+import { claudeToOpenAIRequest } from "../../apps/web/open-sse/translator/request/claude-to-openai.js"
 
 const CC = { type: "ephemeral" }
 const text = (t, extra = {}) => ({ type: "text", text: t, ...extra })

@@ -11,7 +11,7 @@
  * but unsigned mirrors the official deepseek provider behavior exactly.
  */
 import { describe, expect, it } from "vitest"
-import { prepareClaudeRequest } from "../../open-sse/translator/formats/claude.js"
+import { prepareClaudeRequest } from "../../apps/web/open-sse/translator/formats/claude.js"
 
 function makeBody(model) {
 	return {

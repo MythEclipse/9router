@@ -7,13 +7,13 @@ vi.mock("@/lib/usageDb.js", () => ({
 	saveRequestDetail: vi.fn(),
 }))
 // and the stream/console-coloring utils that drag in the translator graph
-vi.mock("../../open-sse/utils/stream.js", () => ({
+vi.mock("../../apps/web/open-sse/utils/stream.js", () => ({
 	COLORS: {},
 	formatSSE: vi.fn(),
 }))
 
-import { extractUsageFromResponse } from "../../open-sse/handlers/chatCore/requestDetail.js"
-import { canonicalizeUsage } from "../../open-sse/utils/usageTracking.js"
+import { extractUsageFromResponse } from "../../apps/web/open-sse/handlers/chatCore/requestDetail.js"
+import { canonicalizeUsage } from "../../apps/web/open-sse/utils/usageTracking.js"
 
 // The three real-world usage shapes and how extractUsageFromResponse() must
 // surface their cache-read count so canonicalizeUsage() produces a correct

@@ -2,11 +2,11 @@
 // clients) is a system instruction. Gemini/Antigravity and Claude targets used to drop
 // it (Gemini) or treat it as a conversation turn (Claude), so "Return JSON only" was ignored.
 import { describe, expect, it } from "vitest"
-import { openaiToClaudeRequest } from "../../open-sse/translator/request/openai-to-claude.js"
+import { openaiToClaudeRequest } from "../../apps/web/open-sse/translator/request/openai-to-claude.js"
 import {
 	openaiToAntigravityRequest,
 	openaiToGeminiRequest,
-} from "../../open-sse/translator/request/openai-to-gemini.js"
+} from "../../apps/web/open-sse/translator/request/openai-to-gemini.js"
 
 const messages = (role) => [
 	{ role, content: "Return JSON only." },

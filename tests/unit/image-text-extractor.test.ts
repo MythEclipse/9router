@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
 	convertImageToTextScript,
 	extractImageBuffer,
-} from "../../src/lib/plugins/imageTextExtractor"
+} from "../../apps/web/src/lib/plugins/imageTextExtractor"
 
 describe("Image-to-Text OCR Extractor Script", () => {
 	it("extracts buffer from base64 data URL", () => {

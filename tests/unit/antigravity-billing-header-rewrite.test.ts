@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import { AntigravityExecutor } from "../../open-sse/executors/antigravity.js"
-import { openaiToAntigravityRequest } from "../../open-sse/translator/request/openai-to-gemini.js"
+import { AntigravityExecutor } from "../../apps/web/open-sse/executors/antigravity.js"
+import { openaiToAntigravityRequest } from "../../apps/web/open-sse/translator/request/openai-to-gemini.js"
 
 const HEADER = "x-anthropic-billing-header: cc_version=2.1.275.f15; cc_entrypoint=cli;"
 

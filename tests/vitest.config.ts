@@ -40,9 +40,17 @@ export default defineConfig({
 	resolve: {
 		// Use array form so subpath aliases (e.g. "@/lib/db/index.js") resolve correctly.
 		alias: [
-			{ find: /^open-sse\//, replacement: resolve(__dirname, "../open-sse") + "/" },
-			{ find: "open-sse", replacement: resolve(__dirname, "../open-sse") },
-			{ find: /^@\//, replacement: resolve(__dirname, "../src") + "/" },
+			// The engine moved to apps/web/open-sse with the monorepo split; the
+			// root open-sse/ directory is now empty, so aliasing to it resolved
+			// every "open-sse/..." import to a path that does not exist.
+			{ find: /^open-sse\//, replacement: resolve(__dirname, "../apps/web/open-sse") + "/" },
+			{ find: "open-sse", replacement: resolve(__dirname, "../apps/web/open-sse") },
+			// `@/` is the Next app's own root alias. It pointed at ../src, which
+			// stopped existing when the Next app moved to apps/web; every test
+			// importing "@/..." then failed on module resolution instead of on an
+			// assertion, which is worse — a broken import reports as a failed file,
+			// not a failed expectation, so nobody reads it as a regression.
+			{ find: /^@\//, replacement: resolve(__dirname, "../apps/web/src") + "/" },
 		],
 	},
 })

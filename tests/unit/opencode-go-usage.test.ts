@@ -1,15 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
+vi.mock("../../apps/web/open-sse/utils/proxyFetch.js", () => ({
 	proxyAwareFetch: vi.fn(),
 }))
 
-import { getUsageForProvider } from "../../open-sse/services/usage.js"
-import { proxyAwareFetch } from "../../open-sse/utils/proxyFetch.js"
+import { getUsageForProvider } from "../../apps/web/open-sse/services/usage.js"
+import { proxyAwareFetch } from "../../apps/web/open-sse/utils/proxyFetch.js"
 import {
 	USAGE_APIKEY_PROVIDERS,
 	USAGE_SUPPORTED_PROVIDERS,
-} from "../../src/shared/constants/providers.js"
+} from "../../apps/web/src/shared/constants/providers.js"
 
 const USAGE_URL = "https://opencode.ai/zen/go/v1/usage"
 

@@ -18,7 +18,9 @@ describe("cloudflared PID ownership", () => {
 	})
 
 	it("does not let an old child clear its successor PID", async () => {
-		const { clearPid, loadPid, savePid } = await import("../../src/lib/tunnel/cloudflare/pid")
+		const { clearPid, loadPid, savePid } = await import(
+			"../../apps/web/src/lib/tunnel/cloudflare/pid"
+		)
 
 		savePid(100)
 		savePid(200)
@@ -32,7 +34,7 @@ describe("cloudflared PID ownership", () => {
 
 	it("releases PID and process ownership for the exiting child only", () => {
 		const source = fs.readFileSync(
-			new URL("../../src/lib/tunnel/cloudflare/cloudflared.ts", import.meta.url),
+			new URL("../../apps/web/src/lib/tunnel/cloudflare/cloudflared.ts", import.meta.url),
 			"utf8",
 		)
 

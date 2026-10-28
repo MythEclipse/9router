@@ -1,7 +1,7 @@
 // Tests for Kiro format RTK support
 // Verifies that RTK compression works with Kiro's conversationState format
 import { describe, expect, it } from "vitest"
-import { compressMessages } from "../../open-sse/rtk/index.js"
+import { compressMessages } from "../../apps/web/open-sse/rtk/index.js"
 
 describe("Kiro format RTK support", () => {
 	it("compresses tool results in Kiro conversationState.currentMessage", () => {

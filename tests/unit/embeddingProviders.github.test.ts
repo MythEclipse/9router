@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import githubAdapter from "../../open-sse/handlers/embeddingProviders/github.js"
+import githubAdapter from "../../apps/web/open-sse/handlers/embeddingProviders/github.js"
 
 describe("github embeddings adapter buildBody", () => {
 	it("wraps a bare string input into a one-element array", () => {

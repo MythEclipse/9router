@@ -10,8 +10,8 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { CODEX_CLI_VERSION } from "../../open-sse/config/appConstants"
-import { handleImageGenerationCore } from "../../open-sse/handlers/imageGenerationCore"
+import { CODEX_CLI_VERSION } from "../../apps/web/open-sse/config/appConstants"
+import { handleImageGenerationCore } from "../../apps/web/open-sse/handlers/imageGenerationCore"
 
 const originalFetch = global.fetch
 

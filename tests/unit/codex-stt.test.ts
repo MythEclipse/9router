@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { handleSttCore } from "../../open-sse/handlers/sttCore.js"
-import codex from "../../open-sse/providers/registry/codex.js"
+import { handleSttCore } from "../../apps/web/open-sse/handlers/sttCore.js"
+import codex from "../../apps/web/open-sse/providers/registry/codex.js"
 
 describe("Codex OAuth STT", () => {
 	it("registers a transcription model alongside existing chat and image models", () => {

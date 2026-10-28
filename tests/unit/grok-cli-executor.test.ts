@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { getModelUpstreamId } from "../../open-sse/config/providerModels.js"
+import { getModelUpstreamId } from "../../apps/web/open-sse/config/providerModels.js"
 import {
 	_getGrokCliTurnStoreSize,
 	_resetGrokCliTurnStore,
@@ -8,11 +8,15 @@ import {
 	normalizeGrokCliEffort,
 	resolveGrokCliTurnIdx,
 	supportsGrokCliReasoningEffort,
-} from "../../open-sse/executors/grok-cli.js"
-import { getExecutor, hasSpecializedExecutor } from "../../open-sse/executors/index.js"
-import { PROVIDER_MODELS, PROVIDER_OAUTH, PROVIDERS } from "../../open-sse/providers/index.js"
-import { getModelInfoCore, resolveProviderAlias } from "../../open-sse/services/model.js"
-import { OAUTH_PROVIDERS } from "../../src/shared/constants/providers.js"
+} from "../../apps/web/open-sse/executors/grok-cli.js"
+import { getExecutor, hasSpecializedExecutor } from "../../apps/web/open-sse/executors/index.js"
+import {
+	PROVIDER_MODELS,
+	PROVIDER_OAUTH,
+	PROVIDERS,
+} from "../../apps/web/open-sse/providers/index.js"
+import { getModelInfoCore, resolveProviderAlias } from "../../apps/web/open-sse/services/model.js"
+import { OAUTH_PROVIDERS } from "../../apps/web/src/shared/constants/providers.js"
 
 describe("grok-cli registry", () => {
 	it("registers transport + oauth + models", () => {

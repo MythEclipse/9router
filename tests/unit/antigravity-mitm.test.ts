@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { MODEL_NO_MAP } from "../../src/mitm/config.ts"
-import { MITM_TOOLS } from "../../src/shared/constants/cliTools.js"
+import { MODEL_NO_MAP } from "../../apps/web/src/mitm/config.ts"
+import { MITM_TOOLS } from "../../apps/web/src/shared/constants/cliTools.js"
 
 // All assertions below are grounded in a live MITM dump capture of Antigravity's
 // streamGenerateContent requests (see AI_JOURNAL): the agent loop sends

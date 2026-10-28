@@ -27,7 +27,7 @@ beforeAll(async () => {
 	cwdBefore = process.cwd()
 	tempCwd = mkdtempSync(path.join(tmpdir(), "9r-reqlog-"))
 	process.chdir(tempCwd)
-	;({ createRequestLogger } = await import("../../open-sse/utils/requestLogger.js"))
+	;({ createRequestLogger } = await import("../../apps/web/open-sse/utils/requestLogger.js"))
 	const logger = await createRequestLogger("openai", "openai", "mask-probe")
 	sessionPath = logger.sessionPath
 	logger.logTargetRequest(

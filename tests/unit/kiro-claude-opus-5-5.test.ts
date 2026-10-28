@@ -12,10 +12,10 @@
 
 import fs from "node:fs"
 import { describe, expect, it } from "vitest"
-import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities"
+import { getCapabilitiesForModel } from "../../apps/web/open-sse/providers/capabilities"
 
 const kiroSrc = fs.readFileSync(
-	new URL("../../open-sse/providers/registry/kiro.ts", import.meta.url),
+	new URL("../../apps/web/open-sse/providers/registry/kiro.ts", import.meta.url),
 	"utf-8",
 )
 

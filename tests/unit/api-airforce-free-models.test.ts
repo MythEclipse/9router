@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
-import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js"
-import { PROVIDER_MODELS, PROVIDERS } from "../../open-sse/providers/index.js"
-import airforce from "../../open-sse/providers/registry/api-airforce.js"
+import { getCapabilitiesForModel } from "../../apps/web/open-sse/providers/capabilities.js"
+import { PROVIDER_MODELS, PROVIDERS } from "../../apps/web/open-sse/providers/index.js"
+import airforce from "../../apps/web/open-sse/providers/registry/api-airforce.js"
 
 describe("api-airforce free models", () => {
 	const ids = airforce.models.map((m) => m.id)

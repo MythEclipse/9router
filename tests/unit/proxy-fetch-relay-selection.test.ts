@@ -28,7 +28,7 @@ afterEach(() => {
 
 async function loadProxyFetch() {
 	vi.resetModules()
-	return import("../../open-sse/utils/proxyFetch.js")
+	return import("../../apps/web/open-sse/utils/proxyFetch.js")
 }
 
 const UPSTREAM = "https://opencode.ai/inference/openai/v1/chat/completions"

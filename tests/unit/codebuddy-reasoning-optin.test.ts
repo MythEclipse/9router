@@ -2,7 +2,7 @@
 // on requests where the client never asked for reasoning, tripping CodeBuddy's
 // content filter ("model return error"). Reasoning params must be opt-in.
 import { describe, expect, it } from "vitest"
-import { CodeBuddyExecutor } from "../../open-sse/executors/codebuddy-cn.js"
+import { CodeBuddyExecutor } from "../../apps/web/open-sse/executors/codebuddy-cn.js"
 
 describe("CodeBuddyExecutor reasoning params are opt-in (#2071)", () => {
 	const exec = new CodeBuddyExecutor()

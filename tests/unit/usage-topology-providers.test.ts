@@ -13,7 +13,7 @@ import { describe, expect, it } from "vitest"
 
 const here = dirname(fileURLToPath(import.meta.url))
 const usageStats = readFileSync(
-	resolve(here, "../../src/shared/components/UsageStats.tsx"),
+	resolve(here, "../../apps/web/src/shared/components/UsageStats.tsx"),
 	"utf-8",
 )
 

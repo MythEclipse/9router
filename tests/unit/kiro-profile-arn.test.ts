@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { KiroService } from "../../src/lib/oauth/services/kiro.js"
+import { KiroService } from "../../apps/web/src/lib/oauth/services/kiro.js"
 
 /**
  * Regression tests for Kiro API-key auth.

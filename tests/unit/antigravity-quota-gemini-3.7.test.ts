@@ -34,7 +34,7 @@ const proxyAwareFetch = vi.fn(async (url) => ({
 	text: async () => "{}",
 }))
 
-vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
+vi.mock("../../apps/web/open-sse/utils/proxyFetch.js", () => ({
 	proxyAwareFetch,
 }))
 
@@ -42,7 +42,7 @@ describe("Antigravity quota tracker: Gemini 3.7 Flash usage bars", () => {
 	beforeEach(() => proxyAwareFetch.mockClear())
 
 	it("returns Gemini 3.7 Flash tier quotas so the dashboard can render usage bars", async () => {
-		const { getAntigravityUsage } = await import("../../open-sse/services/usage/google.js")
+		const { getAntigravityUsage } = await import("../../apps/web/open-sse/services/usage/google.js")
 
 		const usage = await getAntigravityUsage("access-token", {})
 

@@ -3,9 +3,9 @@ import {
 	canonicalizeKiroConversation,
 	KIRO_EMPTY_USER_PLACEHOLDER,
 	KIRO_TOOL_RESULTS_PLACEHOLDER,
-} from "../../open-sse/translator/concerns/kiroConversation.js"
-import { claudeToKiroRequest } from "../../open-sse/translator/request/claude-to-kiro.js"
-import { openaiToKiroRequest } from "../../open-sse/translator/request/openai-to-kiro.js"
+} from "../../apps/web/open-sse/translator/concerns/kiroConversation.js"
+import { claudeToKiroRequest } from "../../apps/web/open-sse/translator/request/claude-to-kiro.js"
+import { openaiToKiroRequest } from "../../apps/web/open-sse/translator/request/openai-to-kiro.js"
 
 const TOOLS_OPENAI = [
 	{

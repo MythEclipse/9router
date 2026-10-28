@@ -10,7 +10,7 @@
 // Anthropic itself (the `claude` provider and anthropic-compatible-* nodes) must
 // keep receiving the block so context editing still works there.
 import { describe, expect, it } from "vitest"
-import { prepareClaudeRequest } from "../../open-sse/translator/formats/claude.js"
+import { prepareClaudeRequest } from "../../apps/web/open-sse/translator/formats/claude.js"
 
 const body = () => ({
 	model: "claude-haiku-5-5",

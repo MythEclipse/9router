@@ -6,14 +6,14 @@ import {
 	handleComboChat,
 	orderModelsByChoice,
 	setStickyComboModel,
-} from "../../open-sse/services/combo.js"
+} from "../../apps/web/open-sse/services/combo.js"
 
 import {
 	buildChoiceCriteria,
 	extractPromptState,
 	parseSystemOneRouteAnswer,
 	resetStickyComboStore,
-} from "../../open-sse/services/systemoneRouter.js"
+} from "../../apps/web/open-sse/services/systemoneRouter.js"
 
 const log = { info: () => {}, warn: () => {}, debug: () => {}, error: () => {} }
 

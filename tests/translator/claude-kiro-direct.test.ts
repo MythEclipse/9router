@@ -3,8 +3,8 @@
 // OpenAI pivot, and that the "Improperly formed request" 400-guards survive.
 import { describe, expect, it } from "vitest"
 import "./registerAll.js"
-import { FORMATS } from "../../open-sse/translator/formats.js"
-import { translateRequest, translateResponse } from "../../open-sse/translator/index.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
+import { translateRequest, translateResponse } from "../../apps/web/open-sse/translator/index.js"
 
 // Kiro rejects a top-level systemPrompt (400 REQUEST_BODY_INVALID; 1892ed77), so the
 // system prompt, thinking tags and agentic prompt travel at the start of the first user

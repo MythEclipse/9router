@@ -14,18 +14,18 @@ import {
 	SERVER_TOOL_USE_BLOCK,
 	WEB_SEARCH_RESULT_BLOCK,
 	WEB_SEARCH_TOOL_TYPE,
-} from "../../open-sse/config/webSearchConstants.js"
-import { handleForcedSSEToJson } from "../../open-sse/handlers/chatCore/sseToJsonHandler.js"
+} from "../../apps/web/open-sse/config/webSearchConstants.js"
+import { handleForcedSSEToJson } from "../../apps/web/open-sse/handlers/chatCore/sseToJsonHandler.js"
 import {
 	attachWebSearchToClaudeBody,
 	findWebSearchCall,
 	hasUpstreamSearch,
-} from "../../open-sse/handlers/webSearchBody.js"
+} from "../../apps/web/open-sse/handlers/webSearchBody.js"
 import {
 	installBridgeTool,
 	LANE_BRIDGE,
 	resolveWebSearchPlan,
-} from "../../open-sse/handlers/webSearchProtocol.js"
+} from "../../apps/web/open-sse/handlers/webSearchProtocol.js"
 
 /** The `WebSearch` entry exactly as captured off the wire. */
 const CC_WEBSEARCH_TOOL = {
@@ -317,7 +317,7 @@ describe("forced-SSE to JSON path (Claude Code stream:false)", () => {
 	})
 
 	it("imports the bridge helper", async () => {
-		const mod = await import("../../open-sse/handlers/chatCore/sseToJsonHandler.js")
+		const mod = await import("../../apps/web/open-sse/handlers/chatCore/sseToJsonHandler.js")
 		expect(typeof mod.handleForcedSSEToJson).toBe("function")
 	})
 })

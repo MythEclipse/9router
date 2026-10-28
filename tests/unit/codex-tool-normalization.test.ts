@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { CodexExecutor } from "../../open-sse/executors/codex.js"
+import { CodexExecutor } from "../../apps/web/open-sse/executors/codex.js"
 
 function normalizeTools(tools) {
 	const executor = new CodexExecutor()

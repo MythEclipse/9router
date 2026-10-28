@@ -3,7 +3,7 @@ import {
 	filterModelsByQuery,
 	matchesSearch,
 	parseSearchQuery,
-} from "../../src/shared/utils/modelSearchFilter.js"
+} from "../../apps/web/src/shared/utils/modelSearchFilter.js"
 
 describe("modelSearchFilter utility", () => {
 	const sampleModels = [

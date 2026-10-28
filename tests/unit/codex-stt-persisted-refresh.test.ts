@@ -54,7 +54,7 @@ vi.mock("open-sse/services/oauthCredentialManager.js", () => ({
 	shouldRefreshCredentials: () => true,
 	refreshProviderCredentials: mocks.refresh,
 }))
-const { POST } = await import("../../src/app/api/v1/audio/transcriptions/route")
+const { POST } = await import("../../apps/web/src/app/api/v1/audio/transcriptions/route")
 function request() {
 	const pcm = Buffer.alloc(44 + 4800)
 	pcm.write("RIFF")

@@ -30,7 +30,7 @@ vi.mock("open-sse/shared/zedAuth.js", () => ({ resolveZedModels: async () => nul
 vi.mock("@/sse/services/tokenRefresh", () => ({ updateProviderCredentials: async () => {} }))
 vi.mock("@/lib/network/connectionProxy", () => ({ resolveConnectionProxyConfig: async () => null }))
 
-const { buildModelsList } = await import("../../src/app/api/v1/models/route.js")
+const { buildModelsList } = await import("../../apps/web/src/app/api/v1/models/route.js")
 
 describe("GET /v1/models — OpenAI list contract", () => {
 	it("returns object:list and every entry with id/object/owned_by/created", async () => {

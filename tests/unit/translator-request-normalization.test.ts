@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest"
-import { filterToOpenAIFormat } from "../../open-sse/translator/formats/openai.js"
-import { FORMATS } from "../../open-sse/translator/formats.js"
-import { translateRequest } from "../../open-sse/translator/index.js"
-import { claudeToOpenAIRequest } from "../../open-sse/translator/request/claude-to-openai.js"
-import { openaiToOllamaRequest } from "../../open-sse/translator/request/openai-to-ollama.js"
-import { parseSSELine } from "../../open-sse/utils/streamHelpers.js"
+import { filterToOpenAIFormat } from "../../apps/web/open-sse/translator/formats/openai.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
+import { translateRequest } from "../../apps/web/open-sse/translator/index.js"
+import { claudeToOpenAIRequest } from "../../apps/web/open-sse/translator/request/claude-to-openai.js"
+import { openaiToOllamaRequest } from "../../apps/web/open-sse/translator/request/openai-to-ollama.js"
+import { parseSSELine } from "../../apps/web/open-sse/utils/streamHelpers.js"
 
 describe("request normalization", () => {
 	// OpenAI content is an array of typed parts. Text-only arrays are NOT

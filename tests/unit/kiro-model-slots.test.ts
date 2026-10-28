@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { PROVIDER_MODELS } from "../../open-sse/config/providerModels.js"
-import { MITM_TOOLS } from "../../src/shared/constants/cliTools.js"
+import { PROVIDER_MODELS } from "../../apps/web/open-sse/config/providerModels.js"
+import { MITM_TOOLS } from "../../apps/web/src/shared/constants/cliTools.js"
 
 // Guards Kiro model ids that still need mappable defaultModels slots. Without
 // a slot, getMappedModel (src/mitm/server.js) returns null and the request is

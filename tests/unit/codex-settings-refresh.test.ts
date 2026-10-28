@@ -8,8 +8,10 @@ const readSource = (relativePath) =>
 describe("Codex settings refresh", () => {
 	it("bypasses cached status after applying a selected endpoint", async () => {
 		const [routeSource, cardSource] = await Promise.all([
-			readSource("../../src/app/api/cli-tools/codex-settings/route.ts"),
-			readSource("../../src/app/(dashboard)/dashboard/cli-tools/components/CodexToolCard.tsx"),
+			readSource("../../apps/web/src/app/api/cli-tools/codex-settings/route.ts"),
+			readSource(
+				"../../apps/web/src/app/(dashboard)/dashboard/cli-tools/components/CodexToolCard.tsx",
+			),
 		])
 
 		// Route Handlers already run on the server; a Server Action directive would reject this export.
@@ -22,7 +24,7 @@ describe("Codex settings refresh", () => {
 
 	it("keeps an unmatched active URL in the custom endpoint slot", async () => {
 		const selectorSource = await readSource(
-			"../../src/app/(dashboard)/dashboard/cli-tools/components/BaseUrlSelect.tsx",
+			"../../apps/web/src/app/(dashboard)/dashboard/cli-tools/components/BaseUrlSelect.tsx",
 		)
 
 		expect(selectorSource).toContain("if (current) {")

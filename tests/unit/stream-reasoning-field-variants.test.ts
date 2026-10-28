@@ -8,8 +8,11 @@
 // billed the output tokens. That is what made the request-details feature look
 // broken on a real request (244,736 in / 0 out / no content).
 import { describe, expect, it } from "vitest"
-import { FORMATS } from "../../open-sse/translator/formats.js"
-import { extractReasoningText, hasValuableContent } from "../../open-sse/utils/streamHelpers.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
+import {
+	extractReasoningText,
+	hasValuableContent,
+} from "../../apps/web/open-sse/utils/streamHelpers.js"
 
 function openaiChunk(delta) {
 	return { choices: [{ index: 0, delta }] }

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
 	normalizeKiroUpstreamModelId,
 	resolveKiroModel,
-} from "../../open-sse/config/kiroConstants.js"
+} from "../../apps/web/open-sse/config/kiroConstants.js"
 
 // Kiro's GenerateAssistantResponse only accepts the dotted upstream alias
 // (`claude-sonnet-4.5`). Anything else — including the date-suffixed snapshot

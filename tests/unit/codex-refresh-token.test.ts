@@ -40,7 +40,7 @@ describe("Codex Refresh Token", () => {
 				expires_in: 3600,
 			})
 
-			const { refreshCodexToken } = await import("../../open-sse/services/tokenRefresh.js")
+			const { refreshCodexToken } = await import("../../apps/web/open-sse/services/tokenRefresh.js")
 			const result = await refreshCodexToken("old-refresh-token", null)
 
 			expect(result.refreshToken).toBe("rotated-refresh-token")
@@ -69,7 +69,7 @@ describe("Codex Refresh Token", () => {
 				expires_in: 3600,
 			})
 
-			const { refreshCodexToken } = await import("../../open-sse/services/tokenRefresh.js")
+			const { refreshCodexToken } = await import("../../apps/web/open-sse/services/tokenRefresh.js")
 			const result = await refreshCodexToken("old-refresh-token-without-rotation", null)
 
 			expect(result.refreshToken).toBe("old-refresh-token-without-rotation")
@@ -84,7 +84,7 @@ describe("Codex Refresh Token", () => {
 				expires_in: 3600,
 			})
 
-			const { CodexExecutor } = await import("../../open-sse/executors/codex.js")
+			const { CodexExecutor } = await import("../../apps/web/open-sse/executors/codex.js")
 			const executor = new CodexExecutor()
 			const result = await executor.refreshCredentials(
 				{
@@ -103,7 +103,7 @@ describe("Codex Refresh Token", () => {
 		})
 
 		it("should refresh Codex when lastRefreshAt is older than the upstream stale window", async () => {
-			const { CodexExecutor } = await import("../../open-sse/executors/codex.js")
+			const { CodexExecutor } = await import("../../apps/web/open-sse/executors/codex.js")
 			const executor = new CodexExecutor()
 			const farFuture = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
 			const staleRefresh = new Date(Date.now() - 9 * 24 * 60 * 60 * 1000).toISOString()
@@ -134,7 +134,7 @@ describe("Codex Refresh Token", () => {
 			})
 
 			const { refreshProviderCredentials } = await import(
-				"../../open-sse/services/oauthCredentialManager.js"
+				"../../apps/web/open-sse/services/oauthCredentialManager.js"
 			)
 			const credentials = {
 				connectionId: "codex-single-flight",
@@ -154,7 +154,7 @@ describe("Codex Refresh Token", () => {
 
 	describe("getRefreshLeadMs (early refresh config)", () => {
 		it("should return provider-specific lead time for OAuth providers", async () => {
-			const { getRefreshLeadMs } = await import("../../open-sse/services/tokenRefresh.js")
+			const { getRefreshLeadMs } = await import("../../apps/web/open-sse/services/tokenRefresh.js")
 
 			// Synced with CLIProxyAPI refresh_registry
 			// 10 minutes, not CLIProxyAPI's 5 days: OpenAI rotates the refresh token on every
@@ -169,7 +169,7 @@ describe("Codex Refresh Token", () => {
 
 		it("should fallback to default buffer for unknown providers", async () => {
 			const { getRefreshLeadMs, TOKEN_EXPIRY_BUFFER_MS } = await import(
-				"../../open-sse/services/tokenRefresh.js"
+				"../../apps/web/open-sse/services/tokenRefresh.js"
 			)
 
 			expect(getRefreshLeadMs("unknown-provider")).toBe(TOKEN_EXPIRY_BUFFER_MS)
@@ -178,7 +178,7 @@ describe("Codex Refresh Token", () => {
 
 		it("codex lead should be greater than default buffer", async () => {
 			const { getRefreshLeadMs, TOKEN_EXPIRY_BUFFER_MS } = await import(
-				"../../open-sse/services/tokenRefresh.js"
+				"../../apps/web/open-sse/services/tokenRefresh.js"
 			)
 
 			expect(getRefreshLeadMs("codex")).toBeGreaterThan(TOKEN_EXPIRY_BUFFER_MS)

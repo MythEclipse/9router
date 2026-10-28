@@ -5,7 +5,7 @@ const { handleChat } = vi.hoisted(() => ({ handleChat: vi.fn() }))
 vi.mock("@/sse/handlers/chat.js", () => ({ handleChat }))
 vi.mock("open-sse/translator/index.js", () => ({ initTranslators: vi.fn() }))
 
-import { POST } from "../../src/app/api/v1/responses/compact/route.js"
+import { POST } from "../../apps/web/src/app/api/v1/responses/compact/route.js"
 
 describe("compact compressed JSON", () => {
 	beforeEach(() => {

@@ -88,7 +88,7 @@ vi.mock("@/lib/oauth/utils/server", () => {
 	}
 })
 
-const { GET, POST } = await import("../../src/app/api/oauth/[provider]/[action]/route.js")
+const { GET, POST } = await import("../../apps/web/src/app/api/oauth/[provider]/[action]/route.js")
 
 const get = (action, state) =>
 	GET(new Request(`http://localhost/api/oauth/xiaomi-mimo/${action}?state=${state}`), {

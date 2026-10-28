@@ -5,15 +5,18 @@
 // Keep them narrow — one assertion per discovered failure mode.
 
 import { describe, expect, it } from "vitest"
-import { checkFallbackError, shouldRotateProxy } from "../../open-sse/services/accountFallback.js"
-import { getRotatedModels } from "../../open-sse/services/combo.js"
-import { pickProxyPoolId } from "../../src/lib/network/connectionProxy.js"
-import { isSupportedProxyScheme } from "../../src/lib/network/outboundProxy.js"
+import {
+	checkFallbackError,
+	shouldRotateProxy,
+} from "../../apps/web/open-sse/services/accountFallback.js"
+import { getRotatedModels } from "../../apps/web/open-sse/services/combo.js"
+import { pickProxyPoolId } from "../../apps/web/src/lib/network/connectionProxy.js"
+import { isSupportedProxyScheme } from "../../apps/web/src/lib/network/outboundProxy.js"
 import {
 	markProxyUnhealthy,
 	pickSmartProxyPoolId,
 	resetProxyHealth,
-} from "../../src/lib/network/proxyHealth.js"
+} from "../../apps/web/src/lib/network/proxyHealth.js"
 
 describe("ERROR_RULES: a benign client 4xx must not be read as upstream saturation", () => {
 	// The rule used to be the bare substring "capacity", which appears in bodies

@@ -7,13 +7,13 @@ import {
 	makeSapisidHash,
 	parseStreamReasoning,
 	resolveGeminiWebModel,
-} from "../../open-sse/executors/gemini-web.js"
+} from "../../apps/web/open-sse/executors/gemini-web.js"
 import {
 	buildToolInstructions,
 	buildToolReminder,
 	hasTools,
 	parseToolCallReply,
-} from "../../open-sse/executors/webCookieToolBridge.js"
+} from "../../apps/web/open-sse/executors/webCookieToolBridge.js"
 
 describe("gemini-web model table", () => {
 	it("defaults to 3.6 Flash", () => {

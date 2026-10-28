@@ -17,7 +17,9 @@ import path from "node:path"
 import { describe, expect, it } from "vitest"
 
 const src = fs.readFileSync(
-	path.resolve("../src/app/(dashboard)/dashboard/usage/components/ProviderLimits/index.tsx"),
+	path.resolve(
+		"../../apps/web/src/app/(dashboard)/dashboard/usage/components/ProviderLimits/index.tsx",
+	),
 	"utf-8",
 )
 

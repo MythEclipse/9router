@@ -12,11 +12,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 // scope, which is the documented fix.
 const { searchCoreMock } = vi.hoisted(() => ({ searchCoreMock: vi.fn() }))
 
-vi.mock("../../open-sse/handlers/search/index.js", () => ({
+vi.mock("../../apps/web/open-sse/handlers/search/index.js", () => ({
 	handleSearchCore: (...args) => searchCoreMock(...args),
 }))
 
-import { createSearchRunner } from "../../open-sse/handlers/webSearchRunner.js"
+import { createSearchRunner } from "../../apps/web/open-sse/handlers/webSearchRunner.js"
 
 const result = (over = {}) => ({
 	title: "T",

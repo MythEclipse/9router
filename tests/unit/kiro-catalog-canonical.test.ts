@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import provider from "../../open-sse/providers/registry/kiro.js"
-import { clearKiroModelCache, resolveKiroModels } from "../../open-sse/services/kiroModels.js"
-import { openaiToKiroRequest } from "../../open-sse/translator/request/openai-to-kiro.js"
+import provider from "../../apps/web/open-sse/providers/registry/kiro.js"
+import {
+	clearKiroModelCache,
+	resolveKiroModels,
+} from "../../apps/web/open-sse/services/kiroModels.js"
+import { openaiToKiroRequest } from "../../apps/web/open-sse/translator/request/openai-to-kiro.js"
 
 afterEach(() => {
 	vi.unstubAllGlobals()

@@ -4,7 +4,7 @@ import {
 	MODEL_CAPABILITIES,
 	PATTERN_CAPABILITIES,
 	PROVIDER_CAPABILITIES,
-} from "../../open-sse/providers/capabilities.js"
+} from "../../apps/web/open-sse/providers/capabilities.js"
 
 // Capability resolution is a lookup with three sources (provider override, exact model
 // name, then pattern) and a precedence order between them. Restructuring the tables is

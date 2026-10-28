@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { AI_PROVIDERS } from "@/shared/constants/providers"
-import { FORMAT_HANDLERS } from "../../open-sse/handlers/ttsProviders/genericFormats.js"
-import { PROVIDER_MEDIA } from "../../open-sse/providers/index.js"
-import REGISTRY from "../../open-sse/providers/registry/index.js"
+import { FORMAT_HANDLERS } from "../../apps/web/open-sse/handlers/ttsProviders/genericFormats.js"
+import { PROVIDER_MEDIA } from "../../apps/web/open-sse/providers/index.js"
+import REGISTRY from "../../apps/web/open-sse/providers/registry/index.js"
 
 const AUDIO = new Uint8Array(256).fill(7)
 

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
 	isClaudeEndpoint,
 	validateClaudeMessageBody,
-} from "../../src/sse/protocol/claudeValidation.js"
+} from "../../apps/web/src/sse/protocol/claudeValidation.js"
 
 describe("isClaudeEndpoint", () => {
 	it("recognizes /v1/messages and its subpaths", () => {

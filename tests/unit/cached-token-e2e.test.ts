@@ -5,7 +5,7 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
-import { canonicalizeUsage } from "../../open-sse/utils/usageTracking.js"
+import { canonicalizeUsage } from "../../apps/web/open-sse/utils/usageTracking.js"
 
 const originalDataDir = process.env.DATA_DIR
 let tempDir

@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 // Stub network so handlers don't hit real APIs; each call resolves an empty 200.
-vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
+vi.mock("../../apps/web/open-sse/utils/proxyFetch.js", () => ({
 	proxyAwareFetch: vi.fn(async () => ({
 		ok: true,
 		status: 200,
@@ -11,7 +11,7 @@ vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
 	})),
 }))
 
-const load = () => import("../../open-sse/services/usage.js")
+const load = () => import("../../apps/web/open-sse/services/usage.js")
 const SUPPORTED = [
 	"github",
 	"gemini-cli",

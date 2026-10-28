@@ -16,8 +16,8 @@
  */
 
 import { describe, expect, it } from "vitest"
-import { PROVIDERS } from "../../open-sse/providers/index.js"
-import { prepareClaudeRequest } from "../../open-sse/translator/formats/claude.js"
+import { PROVIDERS } from "../../apps/web/open-sse/providers/index.js"
+import { prepareClaudeRequest } from "../../apps/web/open-sse/translator/formats/claude.js"
 
 function makeBody(tools) {
 	return {

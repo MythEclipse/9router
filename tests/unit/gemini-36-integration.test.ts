@@ -3,19 +3,22 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { getModelUpstreamId } from "../../open-sse/config/providerModels.js"
-import { AntigravityExecutor } from "../../open-sse/executors/antigravity.js"
-import { MODEL_PRICING } from "../../open-sse/providers/pricing.js"
-import antigravity from "../../open-sse/providers/registry/antigravity.js"
-import gemini from "../../open-sse/providers/registry/gemini.js"
-import geminiCli from "../../open-sse/providers/registry/gemini-cli.js"
-import { getProjectIdForConnection, removeConnection } from "../../open-sse/services/projectId.js"
+import { getModelUpstreamId } from "../../apps/web/open-sse/config/providerModels.js"
+import { AntigravityExecutor } from "../../apps/web/open-sse/executors/antigravity.js"
+import { MODEL_PRICING } from "../../apps/web/open-sse/providers/pricing.js"
+import antigravity from "../../apps/web/open-sse/providers/registry/antigravity.js"
+import gemini from "../../apps/web/open-sse/providers/registry/gemini.js"
+import geminiCli from "../../apps/web/open-sse/providers/registry/gemini-cli.js"
+import {
+	getProjectIdForConnection,
+	removeConnection,
+} from "../../apps/web/open-sse/services/projectId.js"
 import {
 	applyThinking,
 	stripThinkingSuffix,
-} from "../../open-sse/translator/concerns/thinkingUnified.js"
+} from "../../apps/web/open-sse/translator/concerns/thinkingUnified.js"
 
-import * as mitmConfig from "../../src/mitm/config.ts"
+import * as mitmConfig from "../../apps/web/src/mitm/config.ts"
 
 const here = dirname(fileURLToPath(import.meta.url))
 

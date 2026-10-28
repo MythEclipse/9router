@@ -5,7 +5,7 @@ import {
 	quotaBody,
 	quotaPressure,
 	quotaTitle,
-} from "../../src/lib/notifications/quotaPressure.js"
+} from "../../apps/web/src/lib/notifications/quotaPressure.js"
 
 const NOW = new Date("2026-10-20T21:00:00Z")
 

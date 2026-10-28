@@ -68,7 +68,7 @@ function makeRequest(query = "?page=1&pageSize=20") {
 }
 
 async function callRoute() {
-	const { GET } = await import("../../src/app/api/usage/request-details/route.js")
+	const { GET } = await import("../../apps/web/src/app/api/usage/request-details/route.js")
 	const res = await GET(makeRequest())
 	return await res.json()
 }

@@ -3,8 +3,8 @@
 // Hand-written bodies drift (a 404 typed "not_found", a missing code), and
 // OpenAI SDKs key off `code` as much as `type`.
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { GET as voicesGET } from "../../src/app/api/v1/audio/voices/route.js"
-import { GET as modelsInfoGET } from "../../src/app/api/v1/models/info/route.js"
+import { GET as voicesGET } from "../../apps/web/src/app/api/v1/audio/voices/route.js"
+import { GET as modelsInfoGET } from "../../apps/web/src/app/api/v1/models/info/route.js"
 
 function assertOpenAiEnvelope(body, { type, code }) {
 	expect(body.type, "OpenAI bodies never carry an Anthropic `type` field").toBeUndefined()

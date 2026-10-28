@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest"
-import { normalizeKiroToolSpecs } from "../../open-sse/translator/concerns/kiroConversation.js"
-import { claudeToKiroRequest } from "../../open-sse/translator/request/claude-to-kiro.js"
-import { openaiToKiroRequest } from "../../open-sse/translator/request/openai-to-kiro.js"
+import { normalizeKiroToolSpecs } from "../../apps/web/open-sse/translator/concerns/kiroConversation.js"
+import { claudeToKiroRequest } from "../../apps/web/open-sse/translator/request/claude-to-kiro.js"
+import { openaiToKiroRequest } from "../../apps/web/open-sse/translator/request/openai-to-kiro.js"
 import {
 	kiroToClaudeNonStreaming,
 	kiroToClaudeResponse,
-} from "../../open-sse/translator/response/kiro-to-claude.js"
-import { kiroToOpenAIResponse } from "../../open-sse/translator/response/kiro-to-openai.js"
+} from "../../apps/web/open-sse/translator/response/kiro-to-claude.js"
+import { kiroToOpenAIResponse } from "../../apps/web/open-sse/translator/response/kiro-to-openai.js"
 
 describe("Kiro tool name normalization and roundtrip", () => {
 	it("preserves consecutive underscores like mcp__gitea__search_repos without collapsing", () => {

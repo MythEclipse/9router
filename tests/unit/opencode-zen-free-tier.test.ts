@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest"
-import { OPENCODE_SESSION_RE, OpenCodeZenExecutor } from "../../open-sse/executors/opencode-zen.js"
-import { isOpencodeFreeTierModel } from "../../open-sse/providers/models/helpers.js"
+import {
+	OPENCODE_SESSION_RE,
+	OpenCodeZenExecutor,
+} from "../../apps/web/open-sse/executors/opencode-zen.js"
+import { isOpencodeFreeTierModel } from "../../apps/web/open-sse/providers/models/helpers.js"
 
 // Upstream 403s free-tier models on the keyed lane when the request carries a
 // real oc_sk_* key (FreeTierError: "can only be used from within OpenCode").

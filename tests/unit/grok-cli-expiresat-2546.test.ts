@@ -29,7 +29,7 @@ describe("Grok CLI (xAI) token expiry propagation (#2546)", () => {
 
 	it("proactive refresh fires for a near-expiry grok-cli token (expiresAt present)", async () => {
 		const { shouldRefreshCredentials } = await import(
-			"../../open-sse/services/oauthCredentialManager.js"
+			"../../apps/web/open-sse/services/oauthCredentialManager.js"
 		)
 		const soon = new Date(Date.now() + 60 * 1000).toISOString()
 		const creds = {
@@ -43,7 +43,7 @@ describe("Grok CLI (xAI) token expiry propagation (#2546)", () => {
 
 	it("proactive refresh does NOT fire for a far-future grok-cli token", async () => {
 		const { shouldRefreshCredentials } = await import(
-			"../../open-sse/services/oauthCredentialManager.js"
+			"../../apps/web/open-sse/services/oauthCredentialManager.js"
 		)
 		const farFuture = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
 		const creds = {

@@ -16,7 +16,7 @@ vi.mock("next/server", () => ({
 	},
 }))
 
-const { POST } = await import("../../src/app/api/cli-tools/cowork-mcp-tools/route.js")
+const { POST } = await import("../../apps/web/src/app/api/cli-tools/cowork-mcp-tools/route.js")
 
 function remoteRequest(url) {
 	return new Request("http://gateway.example.com/api/cli-tools/cowork-mcp-tools", {

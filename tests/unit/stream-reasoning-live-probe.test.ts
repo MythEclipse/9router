@@ -8,7 +8,7 @@
 // despite 77 billed output tokens.
 import http from "node:http"
 import { it } from "vitest"
-import { createPassthroughStreamWithLogger } from "../../open-sse/utils/stream.js"
+import { createPassthroughStreamWithLogger } from "../../apps/web/open-sse/utils/stream.js"
 
 const UPSTREAM_PORT = 20991
 

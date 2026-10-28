@@ -11,15 +11,15 @@ vi.mock("@/lib/db/helpers/kvStore.js", () => ({
 }))
 
 const { storeGeminiThoughtSignature, getGeminiThoughtSignatureSync, signatureFamily } =
-	await import("../../open-sse/services/thoughtSignatureStore.js")
+	await import("../../apps/web/open-sse/services/thoughtSignatureStore.js")
 const { openaiToAntigravityRequest } = await import(
-	"../../open-sse/translator/request/openai-to-gemini.js"
+	"../../apps/web/open-sse/translator/request/openai-to-gemini.js"
 )
 const { geminiToOpenAIResponse } = await import(
-	"../../open-sse/translator/response/gemini-to-openai.js"
+	"../../apps/web/open-sse/translator/response/gemini-to-openai.js"
 )
 const { DEFAULT_THINKING_GEMINI_CLI_SIGNATURE } = await import(
-	"../../open-sse/config/defaultThinkingSignature.js"
+	"../../apps/web/open-sse/config/defaultThinkingSignature.js"
 )
 
 let n = 0

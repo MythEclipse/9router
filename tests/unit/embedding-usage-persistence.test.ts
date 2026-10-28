@@ -5,8 +5,8 @@ const mocks = vi.hoisted(() => ({
 	saveRequestUsage: vi.fn(),
 }))
 
-vi.mock("../../src/sse/services/auth.js", async () => {
-	const { apiKeyGateFailure } = await import("../../src/sse/services/keyGate.js")
+vi.mock("../../apps/web/src/sse/services/auth.js", async () => {
+	const { apiKeyGateFailure } = await import("../../apps/web/src/sse/services/keyGate.js")
 	return {
 		apiKeyGateFailure: apiKeyGateFailure,
 		getProviderCredentials: async () => ({
@@ -21,17 +21,17 @@ vi.mock("../../src/sse/services/auth.js", async () => {
 	}
 })
 vi.mock("@/lib/localDb", () => ({ getSettings: async () => ({ requireApiKey: false }) }))
-vi.mock("../../src/sse/services/model.js", () => ({
+vi.mock("../../apps/web/src/sse/services/model.js", () => ({
 	getModelInfo: async () => ({ provider: "openai", model: "text-embedding-3-small" }),
 }))
-vi.mock("../../open-sse/handlers/embeddingsCore.js", () => ({
+vi.mock("../../apps/web/open-sse/handlers/embeddingsCore.js", () => ({
 	handleEmbeddingsCore: mocks.handleEmbeddingsCore,
 }))
-vi.mock("../../open-sse/utils/error.js", () => ({
+vi.mock("../../apps/web/open-sse/utils/error.js", () => ({
 	errorResponse: (status, message) => Response.json({ error: message }, { status }),
 	unavailableResponse: (status, message) => Response.json({ error: message }, { status }),
 }))
-vi.mock("../../src/sse/utils/logger.js", () => ({
+vi.mock("../../apps/web/src/sse/utils/logger.js", () => ({
 	request: vi.fn(),
 	debug: vi.fn(),
 	warn: vi.fn(),
@@ -39,13 +39,13 @@ vi.mock("../../src/sse/utils/logger.js", () => ({
 	info: vi.fn(),
 	maskKey: vi.fn(),
 }))
-vi.mock("../../src/sse/services/tokenRefresh.js", () => ({
+vi.mock("../../apps/web/src/sse/services/tokenRefresh.js", () => ({
 	updateProviderCredentials: vi.fn(),
 	checkAndRefreshToken: async (_provider, credentials) => credentials,
 }))
 vi.mock("@/lib/usageDb.js", () => ({ saveRequestUsage: mocks.saveRequestUsage }))
 
-import { handleEmbeddings } from "../../src/sse/handlers/embeddings.js"
+import { handleEmbeddings } from "../../apps/web/src/sse/handlers/embeddings.js"
 
 describe("embedding usage persistence", () => {
 	beforeEach(() => {

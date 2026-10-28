@@ -1,9 +1,9 @@
 // OpenAI → Gemini / Cursor / CommandCode request translation.
 import { describe, expect, it } from "vitest"
 import "./registerAll.ts"
-import { FORMATS } from "../../open-sse/translator/formats"
-import { translateRequest } from "../../open-sse/translator/index"
-import { openaiToCommandCodeRequest } from "../../open-sse/translator/request/openai-to-commandcode"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats"
+import { translateRequest } from "../../apps/web/open-sse/translator/index"
+import { openaiToCommandCodeRequest } from "../../apps/web/open-sse/translator/request/openai-to-commandcode"
 
 const O2G = (body) =>
 	translateRequest(FORMATS.OPENAI, FORMATS.GEMINI, "m", body, true, null, "gemini")

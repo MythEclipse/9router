@@ -4,7 +4,7 @@ import {
 	formatHeadroomLog,
 	formatHeadroomSizeLog,
 	isHeadroomPhantomSavings,
-} from "../../open-sse/rtk/headroom.js"
+} from "../../apps/web/open-sse/rtk/headroom.js"
 
 afterEach(() => {
 	vi.restoreAllMocks()

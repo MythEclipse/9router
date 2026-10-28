@@ -19,9 +19,9 @@
 //   - openai: control — known-good (injectReasoningContent covers chat path)
 //   - claude: control — known-broken (handlesThinkingBlocks excludes opencode-go)
 import { describe, expect, it } from "vitest"
-import { handleChatCore } from "../../../open-sse/handlers/chatCore.js"
-import { getProviderCredentials } from "../../../src/sse/services/auth.js"
-import { checkAndRefreshToken } from "../../../src/sse/services/tokenRefresh.js"
+import { handleChatCore } from "../../../apps/web/open-sse/handlers/chatCore.js"
+import { getProviderCredentials } from "../../../apps/web/src/sse/services/auth.js"
+import { checkAndRefreshToken } from "../../../apps/web/src/sse/services/tokenRefresh.js"
 
 const RUN_REAL = process.env.RUN_REAL === "1"
 const PROVIDER = "opencode-go"

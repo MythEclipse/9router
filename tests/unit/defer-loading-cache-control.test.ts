@@ -20,7 +20,7 @@ import { describe, expect, it } from "vitest"
 import {
 	anchorClaudeCache,
 	prepareClaudeRequest,
-} from "../../open-sse/translator/formats/claude.js"
+} from "../../apps/web/open-sse/translator/formats/claude.js"
 
 const tool = (name, extra = {}) => ({
 	name,

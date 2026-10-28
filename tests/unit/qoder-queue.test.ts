@@ -16,7 +16,7 @@ import {
 	QODER_QUEUE_CODE,
 	qoderQueueMaxWaitMs,
 	qoderQueueStatusUrl,
-} from "../../open-sse/shared/qoder/queue.js"
+} from "../../apps/web/open-sse/shared/qoder/queue.js"
 
 const QUEUE_OBJECT = {
 	isQueued: true,

@@ -6,9 +6,11 @@ vi.mock("@/models", () => ({
 }))
 
 const { getProxyPoolById, createProxyPool } = await import("@/models")
-const net = await import("../../src/lib/network/netlifyRelay.js")
-const { resolveConnectionProxyConfig } = await import("../../src/lib/network/connectionProxy.js")
-const { POST } = await import("../../src/app/api/proxy-pools/netlify-deploy/route.js")
+const net = await import("../../apps/web/src/lib/network/netlifyRelay.js")
+const { resolveConnectionProxyConfig } = await import(
+	"../../apps/web/src/lib/network/connectionProxy.js"
+)
+const { POST } = await import("../../apps/web/src/app/api/proxy-pools/netlify-deploy/route.js")
 
 const realFetch = globalThis.fetch
 

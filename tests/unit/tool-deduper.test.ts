@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { dedupeTools } from "../../open-sse/utils/toolDeduper.js"
+import { dedupeTools } from "../../apps/web/open-sse/utils/toolDeduper.js"
 
 const BASH = (name = "Bash", desc = "Run a shell command") => ({
 	name,

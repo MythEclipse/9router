@@ -6,8 +6,8 @@ import {
 	pickSamlDisplayName,
 	pickSamlEmail,
 	validateSamlResponse,
-} from "../../src/lib/auth/saml.js"
-import { mergeWithDefaults } from "../../src/lib/db/repos/settingsRepo.js"
+} from "../../apps/web/src/lib/auth/saml.js"
+import { mergeWithDefaults } from "../../apps/web/src/lib/db/repos/settingsRepo.js"
 
 describe("SAML 2.0 Auth Engine Utilities", () => {
 	describe("formatX509Certificate", () => {

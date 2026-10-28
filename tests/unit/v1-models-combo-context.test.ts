@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { setCatalogSource } from "../../open-sse/providers/capabilities.js"
+import { setCatalogSource } from "../../apps/web/open-sse/providers/capabilities.js"
 
 const db = vi.hoisted(() => ({
 	getProviderConnections: vi.fn(),
@@ -13,7 +13,7 @@ vi.mock("@/lib/disabledModelsDb", () => ({
 	getDisabledModels: vi.fn(async () => ({})),
 }))
 
-const { buildModelsList } = await import("../../src/app/api/v1/models/route.js")
+const { buildModelsList } = await import("../../apps/web/src/app/api/v1/models/route.js")
 
 async function modelsWithCombo(providerId, modelId, combos) {
 	db.getProviderConnections.mockResolvedValue([

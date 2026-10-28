@@ -12,9 +12,9 @@
 // Claude-format clients are untouched - they set display themselves.
 import { describe, expect, it } from "vitest"
 import "./registerAll.js"
-import { selectAnthropicBeta } from "../../open-sse/providers/shared.js"
-import { FORMATS } from "../../open-sse/translator/formats.js"
-import { translateRequest } from "../../open-sse/translator/index.js"
+import { selectAnthropicBeta } from "../../apps/web/open-sse/providers/shared.js"
+import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
+import { translateRequest } from "../../apps/web/open-sse/translator/index.js"
 
 const REDACT = "redact-thinking-2026-02-12"
 const MODEL = "claude-opus-5"

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest"
-import { DefaultExecutor } from "../../open-sse/executors/default.js"
-import { getExecutor } from "../../open-sse/executors/index.js"
-import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js"
-import { PROVIDER_MODELS, PROVIDERS } from "../../open-sse/providers/index.js"
-import REGISTRY from "../../open-sse/providers/registry/index.js"
+import { DefaultExecutor } from "../../apps/web/open-sse/executors/default.js"
+import { getExecutor } from "../../apps/web/open-sse/executors/index.js"
+import { getCapabilitiesForModel } from "../../apps/web/open-sse/providers/capabilities.js"
+import { PROVIDER_MODELS, PROVIDERS } from "../../apps/web/open-sse/providers/index.js"
+import REGISTRY from "../../apps/web/open-sse/providers/registry/index.js"
 
 describe("Token Harbor provider", () => {
 	const entry = REGISTRY.find((e) => e.id === "tokenharbor")

@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { AI_PROVIDERS, getProvidersByKind } from "@/shared/constants/providers.js"
-import { buildSearchRequest } from "../../open-sse/handlers/search/callers.js"
-import { handleSearchCore } from "../../open-sse/handlers/search/index.js"
-import { normalizeSearchResponse } from "../../open-sse/handlers/search/normalizers.js"
-import REGISTRY from "../../open-sse/providers/registry/index.js"
+import { buildSearchRequest } from "../../apps/web/open-sse/handlers/search/callers.js"
+import { handleSearchCore } from "../../apps/web/open-sse/handlers/search/index.js"
+import { normalizeSearchResponse } from "../../apps/web/open-sse/handlers/search/normalizers.js"
+import REGISTRY from "../../apps/web/open-sse/providers/registry/index.js"
 
 const CONFIG = {
 	id: "xquik",

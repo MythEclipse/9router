@@ -90,7 +90,7 @@ describe("quota auto-ping", () => {
 		;({ getClaudeUsage } = await import("open-sse/services/usage/claude.js"))
 		;({ getExecutor } = await import("open-sse/executors/index.js"))
 		;({ runQuotaAutoPingTick, configureQuotaAutoPing } = await import(
-			"../../src/shared/services/quotaAutoPing.js"
+			"../../apps/web/src/shared/services/quotaAutoPing.js"
 		))
 
 		deps = {
@@ -627,7 +627,9 @@ describe("quota auto-ping", () => {
 		})
 
 		it("needs the scheduler running for a schedule alone", async () => {
-			const { hasAnyAutoPingEnabled } = await import("../../src/shared/services/quotaAutoPing.js")
+			const { hasAnyAutoPingEnabled } = await import(
+				"../../apps/web/src/shared/services/quotaAutoPing.js"
+			)
 
 			expect(hasAnyAutoPingEnabled({ codexAutoPing: { connections: { "codex-1": false } } })).toBe(
 				false,

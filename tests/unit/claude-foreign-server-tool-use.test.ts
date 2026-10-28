@@ -2,7 +2,7 @@
 // Anthropic validates server_tool_use ids against ^srvtoolu_[a-zA-Z0-9_]+$ and 400s
 // the whole request when a provider (e.g. z.ai/glm) emits OpenAI-style call_ ids.
 import { describe, expect, it } from "vitest"
-import { normalizeClaudePassthrough } from "../../open-sse/translator/formats/claude.js"
+import { normalizeClaudePassthrough } from "../../apps/web/open-sse/translator/formats/claude.js"
 
 const glmServerToolUse = () => ({
 	role: "assistant",

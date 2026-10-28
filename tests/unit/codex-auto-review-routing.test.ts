@@ -5,8 +5,8 @@ import {
 	getModelQuotaFamily,
 	getModelUpstreamId,
 	getProviderModels,
-} from "../../open-sse/config/providerModels.js"
-import { getModelInfoCore } from "../../open-sse/services/model.js"
+} from "../../apps/web/open-sse/config/providerModels.js"
+import { getModelInfoCore } from "../../apps/web/open-sse/services/model.js"
 
 // Codex CLI's auto-review sends the bare model id "codex-auto-review". Before #1398 it fell
 // through prefix inference to the "openai" default and failed with

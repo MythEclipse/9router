@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest"
-import { getModelsByProviderId, getModelUpstreamId } from "../../open-sse/config/providerModels.js"
-import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js"
-import { getPricingForModel } from "../../open-sse/providers/pricing.js"
-import { stripThinkingSuffix } from "../../open-sse/translator/concerns/thinkingUnified.js"
-import { MODEL_PATTERNS, MODEL_SYNONYMS } from "../../src/mitm/config.ts"
-import { MITM_TOOLS } from "../../src/shared/constants/cliTools.js"
+import {
+	getModelsByProviderId,
+	getModelUpstreamId,
+} from "../../apps/web/open-sse/config/providerModels.js"
+import { getCapabilitiesForModel } from "../../apps/web/open-sse/providers/capabilities.js"
+import { getPricingForModel } from "../../apps/web/open-sse/providers/pricing.js"
+import { stripThinkingSuffix } from "../../apps/web/open-sse/translator/concerns/thinkingUnified.js"
+import { MODEL_PATTERNS, MODEL_SYNONYMS } from "../../apps/web/src/mitm/config.ts"
+import { MITM_TOOLS } from "../../apps/web/src/shared/constants/cliTools.js"
 
 describe("Antigravity Claude 5.5 models (#4555, #4548)", () => {
 	it("includes Claude 5.5 models in Antigravity provider registry", () => {

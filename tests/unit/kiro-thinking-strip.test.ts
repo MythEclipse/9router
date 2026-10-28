@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { KiroExecutor } from "../../open-sse/executors/kiro.js"
+import { KiroExecutor } from "../../apps/web/open-sse/executors/kiro.js"
 import "../translator/registerAll.js"
 
 function createMockFrame(eventType, payloadObj) {

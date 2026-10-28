@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import {
 	resolveClineModels,
 	resolveClinepassModels,
-} from "../../open-sse/services/clinepassModels.js"
+} from "../../apps/web/open-sse/services/clinepassModels.js"
 
 afterEach(() => vi.unstubAllGlobals())
 describe("Cline catalog boundaries", () => {

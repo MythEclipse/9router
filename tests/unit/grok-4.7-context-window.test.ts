@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js"
-import REGISTRY from "../../open-sse/providers/registry/index.js"
+import { getCapabilitiesForModel } from "../../apps/web/open-sse/providers/capabilities.js"
+import REGISTRY from "../../apps/web/open-sse/providers/registry/index.js"
 
 // Grok 4.7 has a 500k window like 4.6, but had no pattern row of its own, so it
 // fell through to `*grok-4*` (256k). Combos report the smallest member window,
