@@ -70,6 +70,49 @@ describe("applyProbe", () => {
   });
 });
 
+describe("a probe that changes nothing must not mint a new state", () => {
+  /**
+   * The page memoizes on the fold result, and the pollers write it on every tick. An
+   * equal-but-fresh object per probe re-ran every effect that consumed it, including
+   * the poll that produced it — that is what made the endpoint page fetch in a loop.
+   * Identity is the contract, not just equality.
+   */
+  it("returns the same object when a success changes nothing", () => {
+    const current: ReachabilityState = { misses: 0, everReachable: true };
+    const result = applyProbe(current, true, THRESHOLD, true);
+    expect(result.state).toBe(current);
+    expect(result.recovered).toBe(false);
+  });
+
+  it("returns a new object when a success clears pending misses", () => {
+    const current: ReachabilityState = { misses: 3, everReachable: true };
+    const result = applyProbe(current, true, THRESHOLD, true);
+    expect(result.state).not.toBe(current);
+    expect(result.state.misses).toBe(0);
+  });
+
+  it("returns a new object when the first success sets everReachable", () => {
+    const current: ReachabilityState = { misses: 0, everReachable: false };
+    const result = applyProbe(current, true, THRESHOLD, false);
+    expect(result.state).not.toBe(current);
+    expect(result.recovered).toBe(true);
+  });
+
+  it("stays identity-stable across a run of healthy probes", () => {
+    let state: ReachabilityState = { misses: 0, everReachable: true };
+    const first = state;
+    for (let i = 0; i < 10; i += 1) {
+      state = applyProbe(state, true, THRESHOLD, true).state;
+    }
+    expect(state).toBe(first);
+  });
+
+  it("still counts every failure, because misses always change", () => {
+    const current: ReachabilityState = { misses: 2, everReachable: true };
+    expect(applyProbe(current, false, THRESHOLD, true).state).not.toBe(current);
+  });
+});
+
 describe("effectiveThreshold", () => {
   it("never allows a zero or negative threshold", () => {
     expect(effectiveThreshold(0)).toBe(1);

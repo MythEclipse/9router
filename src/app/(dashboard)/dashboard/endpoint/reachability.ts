@@ -43,6 +43,11 @@ export interface ReachabilityResult {
  * `reachable` is applied on the first success. A failure only takes effect once
  * `misses` reaches `threshold`, so a single dropped packet does not blank the URL.
  *
+ * A probe that changes nothing returns `current` itself rather than an equal copy.
+ * Callers memoize on this result, and an equal-but-new object defeats that: the
+ * tracker is written on every poll, so a fresh identity per probe re-runs every
+ * effect that consumes it, including the poll that produced it.
+ *
  * @param current the tracker state before this probe
  * @param ok this probe's outcome
  * @param threshold consecutive failures required to call it unreachable
@@ -54,20 +59,22 @@ export function applyProbe(
   threshold: number,
   wasReachable: boolean
 ): ReachabilityResult {
+  const limit = effectiveThreshold(threshold);
+
   if (ok) {
+    const unchanged = current.misses === 0 && current.everReachable;
     return {
-      state: { misses: 0, everReachable: true },
+      state: unchanged ? current : { misses: 0, everReachable: true },
       reachable: true,
       recovered: !current.everReachable,
     };
   }
 
   const misses = current.misses + 1;
-  const unreachableNow = misses >= threshold;
   return {
     state: { misses, everReachable: current.everReachable },
     // Below the threshold the previous verdict stands.
-    reachable: unreachableNow ? false : wasReachable,
+    reachable: misses >= limit ? false : wasReachable,
     recovered: false,
   };
 }

@@ -196,13 +196,32 @@ const EMPTY_PERMISSIONS = { manageApiKeys: false, manageModels: false, managePro
 
 const PERMISSIONS_LOCKED_REASON = "Locked. Sign in with the dashboard password to change permissions.";
 
+/**
+ * Whether two key lists render identically.
+ *
+ * Compared by serialized form rather than by reference: the list comes from a JSON
+ * response, so every poll would hand back a new array of new objects even when not a
+ * single field moved. Key order is the server's and is stable, so this is exact.
+ */
+function keysEqual(previous: unknown[], next: unknown[]): boolean {
+  if (previous === next) return true;
+  if (previous.length !== next.length) return false;
+  for (let i = 0; i < previous.length; i += 1) {
+    if (JSON.stringify(previous[i]) !== JSON.stringify(next[i])) return false;
+  }
+  return true;
+}
+
 interface ResetCountdownProps {
   resetInterval?: string
   lastResetAt?: string
+  // The clock is owned by the page, not by this row. Each row used to call
+  // `useNow(true)` and start its own 1 Hz interval, so N limited keys meant N
+  // extra timers churning state on a page that was already re-rendering.
+  now: number
 }
 
-function ResetCountdown({ resetInterval, lastResetAt }: ResetCountdownProps) {
-  const now = useNow(true);
+function ResetCountdown({ resetInterval, lastResetAt, now }: ResetCountdownProps) {
   if (!resetInterval || resetInterval === "never") return null;
   const due = nextResetAt(resetInterval, lastResetAt);
   if (!due) return null;
@@ -295,6 +314,13 @@ interface APIPageClientProps {
 
 export default function APIPageClient({ machineId }: APIPageClientProps) {
   const [keys, setKeys] = useState([]);
+  // One clock for every reset countdown on the page. It only ticks while at least
+  // one row actually shows a countdown, so an all-unlimited key table never pays
+  // for a 1 Hz render.
+  const hasResetCountdown = keys.some(
+    (key) => limitKindOf(key) !== "cost" && limitCapOf(key) > 0 && key.resetInterval && key.resetInterval !== "never"
+  );
+  const now = useNow(hasResetCountdown);
   // Bulk edit: which rows are ticked, and whether the dialog is open. Nothing is
   // written until Apply, and only the fields the operator ticks are sent.
   const [selectedKeyIds, setSelectedKeyIds] = useState(() => new Set());
@@ -360,10 +386,19 @@ const scopedModelPatterns =
     : null;
 
   // Cloudflare Tunnel + Tailscale lifecycle lives in one hook (see useTunnelExposure).
-  const exposure = useTunnelExposure(requireApiKey, ({ requireApiKey: next, tunnelDashboardAccess: nextAccess }) => {
-    setRequireApiKey(next);
-    setTunnelDashboardAccess(nextAccess);
-  });
+  // The callback must keep its identity across renders: `loadSettings` lists it as a
+  // dependency, and the mount effect downstream lists `loadSettings`. An inline arrow
+  // here re-created both on every render, so the effect re-ran and the page fetched
+  // its whole endpoint set (keys, providers, aliases, settings, tunnel status) again
+  // on each render — a self-sustaining loop, because `fetchData` always writes state.
+  const handleSettingsLoaded = useCallback(
+    ({ requireApiKey: next, tunnelDashboardAccess: nextAccess }: { requireApiKey: boolean; tunnelDashboardAccess: boolean }) => {
+      setRequireApiKey(next);
+      setTunnelDashboardAccess(nextAccess);
+    },
+    []
+  );
+  const exposure = useTunnelExposure(requireApiKey, handleSettingsLoaded);
   const {
     tunnelChecking, tunnelEnabled, tunnelReachable, tunnelUrl, tunnelPublicUrl,
     tunnelLoading, tunnelProgress, tunnelStatus, tunnelEverReachable,
@@ -391,7 +426,9 @@ const scopedModelPatterns =
 
   const { copied, copy } = useCopyToClipboard();
 
-  const fetchData = async () => {
+  // Stable identity: the mount effect depends on it, and the key poll is re-run from
+  // several handlers. An inline definition would re-create the effect on every render.
+  const fetchData = useCallback(async () => {
     try {
       const fetchKeys = async () => {
         const res = await fetch("/api/keys");
@@ -435,13 +472,16 @@ const scopedModelPatterns =
         } catch { /* fall through to empty render */ }
         finally { defaultKeyProvisionInFlight = false; }
       }
-      setKeys(existing);
+      // Only publish when the list actually changed. The poll re-reads the table on a
+      // timer, and writing an equal array would still count as a state change: it
+      // re-renders the page, which re-arms the effects that read it.
+      setKeys((previous) => (keysEqual(previous, existing) ? previous : existing));
     } catch (error) {
       console.log("Error fetching data:", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const handleTunnelDashboardAccess = async (value: boolean) => {
     try {
@@ -502,7 +542,7 @@ const scopedModelPatterns =
       void loadSettings();
     };
     load();
-  }, [loadSettings]);
+  }, [fetchData, loadSettings]);
 
 
   const parseAllowedModelsList = (str) => {
@@ -1018,7 +1058,7 @@ const scopedModelPatterns =
                   <div className="flex flex-wrap items-center gap-1.5 mt-2 overflow-hidden">
                     <LimitBadge entry={key} />
                     {limitKindOf(key) !== "cost" && limitCapOf(key) > 0 && key.resetInterval && key.resetInterval !== "never" && (
-                      <ResetCountdown resetInterval={key.resetInterval} lastResetAt={key.lastResetAt} />
+                      <ResetCountdown resetInterval={key.resetInterval} lastResetAt={key.lastResetAt} now={now} />
                     )}
                     <span className="text-xs max-w-full truncate px-2 py-0.5 rounded bg-blue-500/10 text-blue-500 font-medium">
                       Models: {key.allowedModels && key.allowedModels !== "*" ? key.allowedModels : "All"}

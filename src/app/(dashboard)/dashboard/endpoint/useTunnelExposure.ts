@@ -248,18 +248,46 @@ export function useTunnelExposure(
     }
   }, [applyStatusBody, onSettingsLoaded]);
 
+  // The pollers below must not depend on reachability: they write it, so taking it as
+  // an input makes the effect re-trigger itself on its own output. They depend on
+  // this boolean instead, and it only flips when the *verdict* changes.
+  const degraded = (tunnelEnabled && !tunnelReachable) || (tsEnabled && !tsReachable);
+
+  /** Probes every enabled exposure once and folds the outcome into its tracker. */
+  const probeBoth = useCallback(async () => {
+    if (document.hidden) return;
+    if (tunnelEnabled && (tunnelUrl || tunnelPublicUrl)) {
+      const ok = await clientPingAny(tunnelPublicUrl, tunnelUrl);
+      tunnelClientReachableRef.current = ok;
+      applyReachability(
+        tunnelReachState,
+        ok,
+        setTunnelReachable,
+        setTunnelEverReachable,
+        tunnelReachableRef.current
+      );
+    } else {
+      tunnelClientReachableRef.current = false;
+    }
+    if (tsEnabled && tsUrl) {
+      const ok = await clientPingUrl(tsUrl);
+      tsClientReachableRef.current = ok;
+      applyReachability(tsReachState, ok, setTsReachable, setTsEverReachable, tsReachableRef.current);
+    } else {
+      tsClientReachableRef.current = false;
+    }
+  }, [tunnelEnabled, tunnelUrl, tunnelPublicUrl, tsEnabled, tsUrl, applyReachability]);
+
   // Status poll while degraded, plus a one-shot refresh when the tab reappears.
+  //
+  // Health enters through `degraded`, which only changes when the verdict does — not
+  // through the reachability state the poll itself writes.
   useEffect(() => {
     if (!tunnelEnabled && !tsEnabled) return;
-    const tunnelHealthy = !tunnelEnabled || tunnelReachable;
-    const tsHealthy = !tsEnabled || tsReachable;
     const onVisible = () => {
       if (!document.hidden) syncTunnelStatus();
     };
     document.addEventListener("visibilitychange", onVisible);
-    if (tunnelHealthy && tsHealthy) {
-      return () => document.removeEventListener("visibilitychange", onVisible);
-    }
     const timer = setInterval(() => {
       if (!document.hidden) syncTunnelStatus();
     }, STATUS_POLL_FAST_MS);
@@ -267,46 +295,25 @@ export function useTunnelExposure(
       clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [tunnelEnabled, tsEnabled, tunnelReachable, tsReachable, syncTunnelStatus]);
+  }, [tunnelEnabled, tsEnabled, syncTunnelStatus]);
 
   // Browser-side ping: probes the URLs directly so the UI stays reachable even when
-  // backend DNS hiccups on *.ts.net or *.trycloudflare.com. Adaptive: slow when
-  // healthy, fast when degraded, paused when hidden.
+  // backend DNS hiccups on *.ts.net or *.trycloudflare.com. Adaptive: fast while
+  // degraded, a single probe while healthy, paused when hidden.
+  //
+  // `probeBoth` writes reachability, so this effect must key off `degraded` rather
+  // than off the state it produces. The healthy path still probes once per mount so a
+  // recovery is visible, which is what the unconditional first call was for.
   useEffect(() => {
-    const probeBoth = async () => {
-      if (document.hidden) return;
-      if (tunnelEnabled && (tunnelUrl || tunnelPublicUrl)) {
-        const ok = await clientPingAny(tunnelPublicUrl, tunnelUrl);
-        tunnelClientReachableRef.current = ok;
-        applyReachability(
-          tunnelReachState,
-          ok,
-          setTunnelReachable,
-          setTunnelEverReachable,
-          tunnelReachableRef.current
-        );
-      } else {
-        tunnelClientReachableRef.current = false;
-      }
-      if (tsEnabled && tsUrl) {
-        const ok = await clientPingUrl(tsUrl);
-        tsClientReachableRef.current = ok;
-        applyReachability(tsReachState, ok, setTsReachable, setTsEverReachable, tsReachableRef.current);
-      } else {
-        tsClientReachableRef.current = false;
-      }
-    };
     const anyEnabled = (tunnelEnabled && (tunnelUrl || tunnelPublicUrl)) || (tsEnabled && tsUrl);
     if (!anyEnabled) return;
     probeBoth();
-    const tunnelHealthy = !tunnelEnabled || tunnelReachable;
-    const tsHealthy = !tsEnabled || tsReachable;
-    if (tunnelHealthy && tsHealthy) return;
+    if (!degraded) return;
     const id = setInterval(probeBoth, CLIENT_PING_FAST_MS);
     return () => clearInterval(id);
   }, [
     tunnelEnabled, tunnelUrl, tunnelPublicUrl, tsEnabled, tsUrl,
-    tunnelReachable, tsReachable, applyReachability,
+    degraded, probeBoth,
   ]);
 
   useEffect(() => {
