@@ -1,7 +1,10 @@
-const migration = {
+import type { DbAdapter } from "../types.ts"
+import type { Migration } from "./index.ts"
+
+const migration: Migration = {
 	version: 3,
 	name: "drop prd docs",
-	up(db) {
+	up(db: DbAdapter) {
 		// The document writer is gone; its drafts lived in the shared kv table, so prune that
 		// one scope and leave every other scope alone. A database without those rows no-ops.
 		try {

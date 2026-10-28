@@ -12,6 +12,13 @@ import { makeKv } from "../helpers/kvStore.ts"
 
 const kv = makeKv("autoBackup")
 
+/** Config fields that hold a secret and must be encrypted at rest. */
+const SECRET_FIELDS = ["tgBotToken", "ghToken"]
+
+function isSecretField(key: string): boolean {
+	return SECRET_FIELDS.includes(key)
+}
+
 const ENCRYPT_ALGO = "aes-256-gcm"
 const ENCRYPT_SALT = "9router-backup-token-salt"
 
@@ -26,7 +33,7 @@ function deriveKey() {
 	}
 }
 
-export function encryptSecret(plaintext) {
+export function encryptSecret(plaintext: string): string {
 	if (typeof plaintext !== "string" || !plaintext) return plaintext
 	const key = deriveKey()
 	const iv = crypto.randomBytes(12)
@@ -36,7 +43,7 @@ export function encryptSecret(plaintext) {
 	return `${iv.toString("hex")}:${tag.toString("hex")}:${encrypted.toString("hex")}`
 }
 
-export function decryptSecret(stored) {
+export function decryptSecret(stored: unknown): string {
 	if (typeof stored !== "string" || !stored) return ""
 	const [ivHex, tagHex, dataHex] = stored.split(":")
 	if (!ivHex || !tagHex || !dataHex) return stored // pre-encryption plaintext value
@@ -50,7 +57,18 @@ export function decryptSecret(stored) {
 	}
 }
 
-const DEFAULT_CONFIG = {
+/** The persisted `autoBackup/config` kv blob. Secrets held here are ciphertext. */
+interface AutoBackupConfig {
+	enabled: boolean
+	channel: string
+	intervalHours: number
+	tgBotToken: string
+	tgChatId: string
+	ghToken: string
+	ghRepo: string
+}
+
+const DEFAULT_CONFIG: AutoBackupConfig = {
 	enabled: false,
 	channel: "telegram", // telegram | github
 	intervalHours: 24,
@@ -60,8 +78,8 @@ const DEFAULT_CONFIG = {
 	ghRepo: "", // owner/repo
 }
 
-export async function getAutoBackupConfig() {
-	const stored = { ...DEFAULT_CONFIG, ...(await kv.get("config", {})) }
+export async function getAutoBackupConfig(): Promise<AutoBackupConfig> {
+	const stored = { ...DEFAULT_CONFIG, ...(await kv.get<Partial<AutoBackupConfig>>("config", {})) }
 	return {
 		...stored,
 		tgBotToken: decryptSecret(stored.tgBotToken),
@@ -71,11 +89,13 @@ export async function getAutoBackupConfig() {
 
 // Patches may carry plaintext secrets; they are encrypted before storage.
 // An empty-string secret means "keep the stored one" and must be omitted.
-export async function setAutoBackupConfig(patch) {
-	const current = { ...(await kv.get("config", {})) }
-	const next = { ...current }
+export async function setAutoBackupConfig(
+	patch: Partial<AutoBackupConfig>,
+): Promise<AutoBackupConfig> {
+	const current = await kv.get<Partial<AutoBackupConfig>>("config", {})
+	const next: Record<string, unknown> = { ...current }
 	for (const [key, value] of Object.entries(patch)) {
-		if (key === "tgBotToken" || key === "ghToken") {
+		if (isSecretField(key)) {
 			if (typeof value === "string" && value) next[key] = encryptSecret(value.trim())
 			continue
 		}
@@ -85,10 +105,18 @@ export async function setAutoBackupConfig(patch) {
 	return getAutoBackupConfig()
 }
 
-export async function getAutoBackupStatus() {
-	return kv.get("status", null)
+/** Timestamped outcome of the last automatic-backup run. */
+export interface AutoBackupStatus {
+	lastSentAt?: string
+	ok?: boolean
+	error?: string
+	[key: string]: unknown
 }
 
-export async function setAutoBackupStatus(status) {
+export async function getAutoBackupStatus(): Promise<AutoBackupStatus | null> {
+	return kv.get<AutoBackupStatus>("status", null)
+}
+
+export async function setAutoBackupStatus(status: AutoBackupStatus): Promise<void> {
 	await kv.set("status", status)
 }

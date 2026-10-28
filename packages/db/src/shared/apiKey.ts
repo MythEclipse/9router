@@ -5,7 +5,7 @@ const API_KEY_SECRET = process.env.API_KEY_SECRET || "endpoint-proxy-api-key-sec
 /**
  * Generate 6-char random keyId
  */
-function generateKeyId() {
+function generateKeyId(): string {
 	const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
 	let result = ""
 	for (let i = 0; i < 6; i++) {
@@ -17,7 +17,7 @@ function generateKeyId() {
 /**
  * Generate CRC (8-char HMAC)
  */
-function generateCrc(machineId, keyId) {
+function generateCrc(machineId: string, keyId: string): string {
 	return crypto
 		.createHmac("sha256", API_KEY_SECRET)
 		.update(machineId + keyId)
@@ -31,7 +31,7 @@ function generateCrc(machineId, keyId) {
  * @param {string} machineId - 16-char machine ID
  * @returns {{ key: string, keyId: string }}
  */
-export function generateApiKeyWithMachine(machineId) {
+export function generateApiKeyWithMachine(machineId: string): { key: string; keyId: string } {
 	const keyId = generateKeyId()
 	const crc = generateCrc(machineId, keyId)
 	const key = `sk-${machineId}-${keyId}-${crc}`
@@ -46,7 +46,11 @@ export function generateApiKeyWithMachine(machineId) {
  * @param {string} apiKey
  * @returns {{ machineId: string, keyId: string, isNewFormat: boolean } | null}
  */
-export function parseApiKey(apiKey) {
+export function parseApiKey(apiKey: string | null | undefined): {
+	machineId: string | null
+	keyId: string
+	isNewFormat: boolean
+} | null {
 	if (!apiKey || !apiKey.startsWith("sk-")) return null
 
 	const parts = apiKey.split("-")
@@ -75,7 +79,7 @@ export function parseApiKey(apiKey) {
  * @param {string} apiKey
  * @returns {boolean}
  */
-export function verifyApiKeyCrc(apiKey) {
+export function verifyApiKeyCrc(apiKey: string): boolean {
 	const parsed = parseApiKey(apiKey)
 	if (!parsed) return false
 
@@ -91,7 +95,7 @@ export function verifyApiKeyCrc(apiKey) {
  * @param {string} apiKey
  * @returns {boolean}
  */
-export function isNewFormatKey(apiKey) {
+export function isNewFormatKey(apiKey: string): boolean {
 	const parsed = parseApiKey(apiKey)
 	return parsed?.isNewFormat === true
 }

@@ -12,6 +12,23 @@ interface ProxyPoolRecord {
 	updatedAt?: string
 	name?: string
 	proxyUrl?: string
+	noProxy?: string
+	strictProxy?: boolean
+	[key: string]: unknown
+}
+
+/** What a caller may declare when creating a pool; the rest is defaulted. */
+export interface ProxyPoolInput {
+	id?: string
+	name?: string
+	proxyUrl?: string
+	noProxy?: string
+	type?: string
+	isActive?: boolean
+	strictProxy?: boolean
+	testStatus?: string
+	lastTestedAt?: string | null
+	lastError?: string | null
 	[key: string]: unknown
 }
 
@@ -89,13 +106,12 @@ export async function getProxyPoolById(id: string): Promise<ProxyPoolRecord | nu
 	return row ? rowToPool(row) : null
 }
 
-export async function createProxyPool(data) {
+export async function createProxyPool(data: ProxyPoolInput): Promise<ProxyPoolRecord> {
 	const db = await getAdapter()
 	const now = new Date().toISOString()
-	const pool = {
+	const pool: ProxyPoolRecord = {
+		...data,
 		id: data.id || uuidv4(),
-		name: data.name,
-		proxyUrl: data.proxyUrl,
 		noProxy: data.noProxy || "",
 		type: data.type || "http",
 		isActive: data.isActive !== undefined ? data.isActive : true,
@@ -143,7 +159,7 @@ export async function deleteProxyPool(id: string): Promise<ProxyPoolRecord | nul
 // round trips (and hundreds of auth checks); this does it in a single call.
 // Ids that do not exist are skipped rather than failing the batch, so the
 // result reports what was really removed.
-export async function deleteProxyPools(ids = []) {
+export async function deleteProxyPools(ids: string[] = []): Promise<ProxyPoolRecord[]> {
 	// `Array.isArray` first: a default parameter only covers `undefined`, and a
 	// null from a malformed request body would otherwise throw on `.filter`.
 	const list = Array.isArray(ids) ? ids : []
@@ -151,10 +167,13 @@ export async function deleteProxyPools(ids = []) {
 	if (unique.length === 0) return []
 
 	const db = await getAdapter()
-	let removed = []
+	let removed: ProxyPoolRecord[] = []
 	db.transaction(() => {
 		const placeholders = unique.map(() => "?").join(", ")
-		const rows = db.all(`SELECT * FROM proxyPools WHERE id IN (${placeholders})`, unique)
+		const rows = db.all<ProxyPoolRow>(
+			`SELECT * FROM proxyPools WHERE id IN (${placeholders})`,
+			unique,
+		)
 		db.run(`DELETE FROM proxyPools WHERE id IN (${placeholders})`, unique)
 		removed = rows.map(rowToPool)
 	})

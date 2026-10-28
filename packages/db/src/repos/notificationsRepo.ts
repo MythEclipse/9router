@@ -1,4 +1,5 @@
 import { getAdapter } from "../driver.ts"
+import type { DbAdapter } from "../types.ts"
 
 // Notification feed for the dashboard bell.
 //
@@ -14,9 +15,27 @@ import { getAdapter } from "../driver.ts"
 // key means "we already said so" rather than a new entry each time.
 const DEFAULT_LIMIT = 50
 
+/** The columns the feed query selects. */
+interface NotificationRow {
+	id: string
+	kind: string
+	severity: string | null
+	title: string
+	body: string | null
+	link: string | null
+	createdAt: string
+	readAt: string | null
+	clearedAt: string | null
+}
+
+/** Every mutation here answers the same shape. */
+interface NotificationAck {
+	ok: true
+}
+
 let tableReady = false
 
-function ensureTable(db) {
+function ensureTable(db: DbAdapter): void {
 	if (tableReady) return
 	db.run(`CREATE TABLE IF NOT EXISTS notifications (
     id TEXT PRIMARY KEY,
@@ -91,16 +110,16 @@ export async function notify(input: NotificationInput = {}): Promise<string | nu
 	return id
 }
 
-export async function listNotifications({ limit = DEFAULT_LIMIT } = {}) {
+export async function listNotifications({ limit = DEFAULT_LIMIT }: { limit?: number } = {}) {
 	const db = await getAdapter()
 	ensureTable(db)
 	const safeLimit = Math.min(Math.max(Number(limit) || DEFAULT_LIMIT, 1), 200)
-	const rows = db.all(
+	const rows = db.all<NotificationRow>(
 		`SELECT id, kind, severity, title, body, link, createdAt, readAt, clearedAt
      FROM notifications ORDER BY createdAt DESC LIMIT ?`,
 		[safeLimit],
 	)
-	const unread = db.get(
+	const unread = db.get<{ n: number }>(
 		`SELECT COUNT(*) AS n FROM notifications WHERE readAt IS NULL AND clearedAt IS NULL`,
 	)
 	return {
@@ -119,7 +138,7 @@ export async function listNotifications({ limit = DEFAULT_LIMIT } = {}) {
 	}
 }
 
-export async function markRead(id) {
+export async function markRead(id: string | "all" | null | undefined): Promise<NotificationAck> {
 	const db = await getAdapter()
 	ensureTable(db)
 	const now = new Date().toISOString()
@@ -132,7 +151,9 @@ export async function markRead(id) {
 }
 
 /** Clear a condition: the dedupe row is retired so it can be announced again. */
-export async function clearNotification(dedupeKey) {
+export async function clearNotification(
+	dedupeKey: string | null | undefined,
+): Promise<NotificationAck> {
 	if (!dedupeKey) return { ok: true }
 	const db = await getAdapter()
 	ensureTable(db)
@@ -144,7 +165,10 @@ export async function clearNotification(dedupeKey) {
 }
 
 /** Match a dedupeKey written by notify() without importing its prefix rules. */
-export async function clearNotificationByKind(kind, dedupeKey) {
+export async function clearNotificationByKind(
+	kind: string,
+	dedupeKey: string | null | undefined,
+): Promise<NotificationAck> {
 	if (!dedupeKey) return { ok: true }
 	const db = await getAdapter()
 	ensureTable(db)
@@ -156,7 +180,9 @@ export async function clearNotificationByKind(kind, dedupeKey) {
 	return { ok: true }
 }
 
-export async function clearNotificationsByKind(kind) {
+export async function clearNotificationsByKind(
+	kind: string | null | undefined,
+): Promise<NotificationAck> {
 	if (!kind) return { ok: true }
 	const db = await getAdapter()
 	ensureTable(db)
@@ -175,7 +201,9 @@ export async function clearNotificationsByKind(kind) {
  * that is still true is announced again on the next scan instead of being
  * swallowed for good, and a condition that has since resolved stays gone.
  */
-export async function clearNotificationById(id) {
+export async function clearNotificationById(
+	id: string | null | undefined,
+): Promise<NotificationAck> {
 	if (!id) return { ok: true }
 	const db = await getAdapter()
 	ensureTable(db)

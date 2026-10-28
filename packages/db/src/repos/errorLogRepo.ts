@@ -1,6 +1,7 @@
 import { getAdapter } from "../driver.ts"
+import type { DbAdapter, DbRow } from "../types.ts"
 
-function ensureTable(db) {
+function ensureTable(db: DbAdapter) {
 	db.run(`CREATE TABLE IF NOT EXISTS errorLogs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp TEXT NOT NULL,
@@ -54,7 +55,7 @@ export async function recordErrorLog({
 	}
 }
 
-export async function getErrorLogs(limit = 200) {
+export async function getErrorLogs(limit: number = 200): Promise<DbRow[]> {
 	try {
 		const db = await getAdapter()
 		ensureTable(db)
@@ -66,7 +67,7 @@ export async function getErrorLogs(limit = 200) {
 	}
 }
 
-export async function clearErrorLogs() {
+export async function clearErrorLogs(): Promise<boolean> {
 	try {
 		const db = await getAdapter()
 		ensureTable(db)

@@ -36,7 +36,7 @@ function resetHealthStateOnActivation(
 ) {
 	if (patch?.testStatus !== "active") return patch
 
-	const normalized = {
+	const normalized: Record<string, unknown> = {
 		...patch,
 		testStatus: "active",
 		lastError: Object.hasOwn(patch, "lastError") ? patch.lastError : null,
@@ -438,16 +438,17 @@ export async function deleteProviderConnection(id: string): Promise<boolean> {
 	return ok
 }
 
-export async function deleteProviderConnectionsByProvider(providerId) {
+export async function deleteProviderConnectionsByProvider(providerId: string): Promise<number> {
 	const db = await getAdapter()
-	const before = db.get(`SELECT COUNT(*) AS n FROM providerConnections WHERE provider = ?`, [
-		providerId,
-	])
+	const before = db.get<{ n: number }>(
+		`SELECT COUNT(*) AS n FROM providerConnections WHERE provider = ?`,
+		[providerId],
+	)
 	db.run(`DELETE FROM providerConnections WHERE provider = ?`, [providerId])
 	return before?.n || 0
 }
 
-export async function reorderProviderConnections(providerId) {
+export async function reorderProviderConnections(providerId: string): Promise<void> {
 	const db = await getAdapter()
 	db.transaction(() => reorderInTx(db, providerId))
 }

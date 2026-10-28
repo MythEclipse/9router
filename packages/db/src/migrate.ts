@@ -91,11 +91,16 @@ function isFreshDb(adapter: DbAdapter) {
 }
 
 // ─── Versioned migrations runner (skip-version safe) ─────────────────────
+/** The message of a caught value, which strict typing leaves as `unknown`. */
+function errMessage(err: unknown): string {
+	return err instanceof Error ? err.message : String(err)
+}
+
 function runVersionedMigrations(adapter: DbAdapter) {
 	// Bootstrap _meta first so we can read schemaVersion
 	adapter.exec(buildCreateTableSql("_meta", TABLES._meta))
 
-	const current = parseInt(getMetaSync(adapter, "schemaVersion", "0"), 10) || 0
+	const current = parseInt(getMetaSync(adapter, "schemaVersion", "0") ?? "0", 10) || 0
 	const target = latestVersion()
 	if (current >= target) return { applied: 0, from: current, to: current }
 
@@ -154,7 +159,8 @@ function syncSchemaFromTables(adapter: DbAdapter) {
 }
 
 // ─── Legacy JSON import (one-time) ───────────────────────────────────────
-function importLegacyMain(adapter: DbAdapter, data: Record<string, unknown>) {
+function importLegacyMain(adapter: DbAdapter, data: Record<string, unknown> | null) {
+	if (!data) return
 	if (!data || typeof data !== "object") return
 
 	if (data.settings) {
@@ -309,7 +315,8 @@ function importLegacyMain(adapter: DbAdapter, data: Record<string, unknown>) {
 	}
 }
 
-function importLegacyUsage(adapter: DbAdapter, data: Record<string, unknown>) {
+function importLegacyUsage(adapter: DbAdapter, data: Record<string, unknown> | null) {
+	if (!data) return
 	if (!data || typeof data !== "object") return
 	for (const e of legacyRows(data, "history")) {
 		const t = (e.tokens || {}) as Record<string, unknown>
@@ -343,9 +350,9 @@ function importLegacyUsage(adapter: DbAdapter, data: Record<string, unknown>) {
 	}
 }
 
-function importLegacyDisabled(adapter: DbAdapter, data: Record<string, unknown>) {
-	if (!data || typeof data.disabled !== "object") return
-	for (const [provider, ids] of Object.entries(data.disabled)) {
+function importLegacyDisabled(adapter: DbAdapter, data: Record<string, unknown> | null) {
+	if (!data || typeof data.disabled !== "object" || !data.disabled) return
+	for (const [provider, ids] of Object.entries(data.disabled as Record<string, unknown>)) {
 		adapter.run(`INSERT OR REPLACE INTO kv(scope, key, value) VALUES('disabledModels', ?, ?)`, [
 			provider,
 			stringifyJson(ids || []),
@@ -353,7 +360,8 @@ function importLegacyDisabled(adapter: DbAdapter, data: Record<string, unknown>)
 	}
 }
 
-function importLegacyDetails(adapter: DbAdapter, data: Record<string, unknown>) {
+function importLegacyDetails(adapter: DbAdapter, data: Record<string, unknown> | null) {
+	if (!data) return
 	if (!data || !Array.isArray(data.records)) return
 	for (const r of data.records) {
 		adapter.run(
@@ -389,7 +397,7 @@ export async function runMigrationOnce(adapter: DbAdapter) {
 
 	// Detect a pending schema change via the central SCHEMA_VERSION const.
 	// A lightweight backup is taken BEFORE any schema mutation below.
-	const storedSchemaVer = parseInt(getMetaSync(adapter, "backupSchemaVersion", "0"), 10) || 0
+	const storedSchemaVer = parseInt(getMetaSync(adapter, "backupSchemaVersion", "0") ?? "0", 10) || 0
 	const schemaChanging = !fresh && storedSchemaVer < SCHEMA_VERSION
 	if (schemaChanging) {
 		try {
@@ -400,7 +408,7 @@ export async function runMigrationOnce(adapter: DbAdapter) {
 				`[DB][migrate] pre-schema backup ${storedSchemaVer} → ${SCHEMA_VERSION}: ${backupDir}`,
 			)
 		} catch (e) {
-			console.warn(`[DB][migrate] pre-schema backup failed (continuing): ${e.message}`)
+			console.warn(`[DB][migrate] pre-schema backup failed (continuing): ${errMessage(e)}`)
 		}
 	}
 

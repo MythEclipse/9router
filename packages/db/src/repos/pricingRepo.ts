@@ -1,9 +1,13 @@
+import type { ModelPricing as CatalogModelPricing } from "@9router/pricing"
 import { getAdapter } from "../driver.ts"
 import { parseJson, stringifyJson } from "../helpers/jsonCol.ts"
 import { makeKv } from "../helpers/kvStore.ts"
 
-/** One model's rates. Field names come from `@9router/pricing`'s catalog. */
-export type ModelPricing = Record<string, number>
+/**
+ * One model's rates, re-exported from the catalog so the two packages cannot
+ * drift: `calculateCostFromTokens` takes exactly this shape.
+ */
+export type ModelPricing = CatalogModelPricing
 
 /** The store's view: provider id to model id to rates. */
 export type PricingMap = Record<string, Record<string, ModelPricing>>
@@ -81,7 +85,7 @@ export async function getPricing(): Promise<PricingMap> {
 	const merged: PricingMap = {}
 
 	for (const [provider, models] of Object.entries(
-		PROVIDER_PRICING as Record<string, Record<string, ModelPricing>>,
+		PROVIDER_PRICING as unknown as Record<string, Record<string, ModelPricing>>,
 	)) {
 		merged[provider] = mergeProvider(models, userPricing[provider])
 	}
@@ -98,7 +102,7 @@ export async function getPricingForModel(
 	const userPricing = await getUserPricingCached()
 	if (provider && userPricing[provider]?.[model]) return userPricing[provider][model]
 	const { getPricingForModel: resolveConst } = await import("@9router/pricing")
-	return resolveConst(provider, model)
+	return resolveConst(provider, model) as ModelPricing | null
 }
 
 // Atomic merge inside transaction (per-provider read-modify-write)

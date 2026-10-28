@@ -1,5 +1,6 @@
 import { getAdapter } from "../driver.ts"
 import { parseJson, stringifyJson } from "../helpers/jsonCol.ts"
+import type { DbAdapter } from "../types.ts"
 
 // Settings history: every mutation keeps the before-image, so a bad change can
 // be reverted. The table stores full snapshots (not diffs): settings is one
@@ -19,9 +20,18 @@ const DENY_REVERT = new Set([
 	"githubToken",
 ])
 
+/** The columns `listSettingsHistory`/`getSettingsSnapshot` read back. */
+interface SettingsHistoryRow {
+	id: string
+	at: string
+	actor: string
+	reason: string
+	snapshot: string
+}
+
 let historyReady = false
 
-function ensureHistoryTable(db) {
+function ensureHistoryTable(db: DbAdapter): void {
 	if (historyReady) return
 	db.run(`CREATE TABLE IF NOT EXISTS settingsHistory (
     id TEXT PRIMARY KEY,
@@ -35,8 +45,10 @@ function ensureHistoryTable(db) {
 }
 
 /** Strip anything that must never be stored or restored. */
-export function sanitizeHistorySnapshot(obj = {}) {
-	const clean = {}
+export function sanitizeHistorySnapshot(
+	obj: Record<string, unknown> = {},
+): Record<string, unknown> {
+	const clean: Record<string, unknown> = {}
 	for (const [key, value] of Object.entries(obj || {})) {
 		if (DENY_REVERT.has(key)) continue
 		// Secrets can also hide one level down under provider-shaped keys; a value
@@ -57,7 +69,7 @@ export async function snapshotSettings({
 	before?: Record<string, unknown>
 	actor?: string
 	reason?: string
-} = {}) {
+} = {}): Promise<string> {
 	const db = await getAdapter()
 	ensureHistoryTable(db)
 	const clean = sanitizeHistorySnapshot(before || {})
@@ -78,11 +90,15 @@ export async function snapshotSettings({
 	return id
 }
 
-export async function listSettingsHistory({ limit = MAX_HISTORY } = {}) {
+export async function listSettingsHistory({
+	limit = MAX_HISTORY,
+}: {
+	limit?: number
+} = {}): Promise<{ id: string; at: string; actor: string; reason: string; keys: string[] }[]> {
 	const db = await getAdapter()
 	ensureHistoryTable(db)
 	const safeLimit = Math.min(Math.max(Number(limit) || MAX_HISTORY, 1), MAX_HISTORY)
-	const rows = db.all(
+	const rows = db.all<SettingsHistoryRow>(
 		`SELECT id, at, actor, reason, snapshot FROM settingsHistory ORDER BY at DESC LIMIT ?`,
 		[safeLimit],
 	)
@@ -96,7 +112,7 @@ export async function listSettingsHistory({ limit = MAX_HISTORY } = {}) {
 }
 
 /** One snapshot, with its full body. */
-export async function getSettingsSnapshot(id) {
+export async function getSettingsSnapshot(id: string | null | undefined) {
 	if (!id) return null
 	const db = await getAdapter()
 	ensureHistoryTable(db)

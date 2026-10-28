@@ -21,7 +21,7 @@
  * @param {unknown} value
  * @returns {unknown}
  */
-export function stripNullBytes(value) {
+export function stripNullBytes(value: unknown): unknown {
 	if (typeof value !== "string") return value
 	if (!value.includes("\0")) return value
 	return value.replace(/\0/g, "")

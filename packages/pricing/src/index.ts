@@ -22,8 +22,21 @@ export const ZERO_PRICING = {
 	cache_creation: 0,
 }
 
+/**
+ * Rates for one model, in $/1M tokens. The optional fields are genuine
+ * omissions in the catalog (an entry may bill no cache writes at all), so
+ * `calculateCostFromTokens` falls back to the input/output rate for them.
+ */
+export type ModelPricing = {
+	input: number
+	output: number
+	cached?: number
+	reasoning?: number
+	cache_creation?: number
+}
+
 /** True when the model id sits in a namespace upstream bills at $0. */
-export function isFreeModel(model) {
+export function isFreeModel(model: string | null | undefined): boolean {
 	if (!model) return false
 	const lower = String(model).toLowerCase()
 	return FREE_MODEL_NAMESPACES.some((ns) => lower.startsWith(ns))
@@ -1191,14 +1204,14 @@ const PATTERN_REGEX_CACHE_MAX = 4096
  * Match a model ID against a glob pattern (* = wildcard). Case-insensitive:
  * registry ids mix casing (e.g. "MiniMax-M2.5" vs "minimax-m2.5").
  */
-export function matchPattern(pattern, model) {
+export function matchPattern(pattern: string, model: string): boolean {
 	let regex = patternRegexCache.get(pattern)
 	if (!regex) {
 		regex = new RegExp(
 			"^" +
 				pattern
 					.split("*")
-					.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+					.map((s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
 					.join(".*") +
 				"$",
 			"i",
@@ -1220,26 +1233,30 @@ export function matchPattern(pattern, model) {
  * @param {string} model
  * @returns {object|null}
  */
-export function getPricingForModel(provider, model) {
+export function getPricingForModel(
+	provider: string | null | undefined,
+	model: string,
+): ModelPricing | null {
 	if (!model) return null
 
 	// 1. Provider-specific override
-	if (provider && PROVIDER_PRICING[provider]?.[model]) {
-		return PROVIDER_PRICING[provider][model]
-	}
+	const providerTable = PROVIDER_PRICING as Record<string, Record<string, unknown> | undefined>
+	const override = provider ? providerTable[provider]?.[model] : undefined
+	if (override) return override as ModelPricing
 
 	// 2. Free namespaces bill $0 regardless of the model name behind them.
 	if (isFreeModel(model)) return ZERO_PRICING
 
 	// 3. Canonical model pricing (strip vendor prefix if needed: "deepseek/deepseek-chat" → "deepseek-chat")
 	const baseModel = model.includes("/") ? model.split("/").pop() : model
-	if (MODEL_PRICING[baseModel]) return MODEL_PRICING[baseModel]
-	if (MODEL_PRICING[model]) return MODEL_PRICING[model]
+	const modelTable = MODEL_PRICING as Record<string, unknown>
+	const canonical = (baseModel && modelTable[baseModel]) || modelTable[model]
+	if (canonical) return canonical as ModelPricing
 
 	// 4. Pattern match
 	for (const { pattern, pricing } of PATTERN_PRICING) {
 		if (matchPattern(pattern, baseModel) || matchPattern(pattern, model)) {
-			return pricing
+			return pricing as ModelPricing
 		}
 	}
 
@@ -1279,7 +1296,7 @@ export function getDefaultPricing() {
  * @param {number} cost
  * @returns {string}
  */
-export function formatCost(cost) {
+export function formatCost(cost: number | null | undefined): string {
 	if (cost === null || cost === undefined || Number.isNaN(cost)) return "$0.00"
 	return `$${cost.toFixed(2)}`
 }
@@ -1290,7 +1307,10 @@ export function formatCost(cost) {
  * @param {object} pricing
  * @returns {number} cost in dollars
  */
-export function calculateCostFromTokens(tokens, pricing) {
+export function calculateCostFromTokens(
+	tokens: Record<string, number | null | undefined> | null | undefined,
+	pricing: ModelPricing | null | undefined,
+): number {
 	if (!tokens || !pricing) return 0
 
 	let cost = 0

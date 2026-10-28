@@ -22,6 +22,6 @@ export const KEY_ACCESS_COMBO_OWNER = "combo"
 
 // Client-facing 403 message. Names only what the client itself sent: never the
 // key name or the key's allow list.
-export function keyAccessDeniedMessage(requested) {
+export function keyAccessDeniedMessage(requested: string): string {
 	return `This API key is not allowed to use model "${requested}"`
 }

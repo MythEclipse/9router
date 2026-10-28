@@ -1,6 +1,19 @@
 import Database from "better-sqlite3"
 import { PRAGMA_SQL } from "../schema.ts"
-import type { ResolvedDbAdapter } from "../types.ts"
+import type { DbParams, DbRow, DbRunResult, ResolvedDbAdapter } from "../types.ts"
+
+/** A prepared statement from better-sqlite3, as this adapter caches them. */
+type BetterStatement = ReturnType<InstanceType<typeof Database>["prepare"]>
+/** One positional bind value better-sqlite3 accepts. */
+type SqliteValue = string | number | bigint | Uint8Array | null
+
+/**
+ * Bridge DbParams (a plain array) to the rest tuple better-sqlite3 expects.
+ * TypeScript only spreads a tuple into a rest parameter, never a plain array.
+ */
+function toBindings(params: DbParams): [SqliteValue[]] {
+	return [params as SqliteValue[]]
+}
 
 // Periodic checkpoint to keep WAL file small (avoid huge -wal/-shm growth)
 const CHECKPOINT_INTERVAL_MS = 60 * 1000
@@ -10,9 +23,9 @@ export function createBetterSqliteAdapter(filePath: string): ResolvedDbAdapter {
 	db.exec(PRAGMA_SQL)
 	// Schema is created/synced by migrate.js after adapter init
 
-	const stmtCache = new Map()
+	const stmtCache = new Map<string, BetterStatement>()
 
-	function prepare(sql) {
+	function prepare(sql: string): BetterStatement {
 		let stmt = stmtCache.get(sql)
 		if (!stmt) {
 			stmt = db.prepare(sql)
@@ -65,14 +78,22 @@ export function createBetterSqliteAdapter(filePath: string): ResolvedDbAdapter {
 
 	return {
 		driver: "better-sqlite3",
-		run(sql, params = []) {
-			return prepare(sql).run(...params)
+		// better-sqlite3 takes its bind values as a rest tuple, while DbParams is a
+		// plain array; the cast is the one place that difference is bridged.
+		// Each method is annotated against ResolvedDbAdapter so the return types
+		// stay checked while the generic parameter is read from `this`.
+		run(sql: string, params: DbParams = []): DbRunResult {
+			const stmt = prepare(sql)
+			const r = stmt.run.apply(stmt, toBindings(params))
+			return { changes: Number(r.changes ?? 0), lastInsertRowid: Number(r.lastInsertRowid ?? 0) }
 		},
-		get(sql, params = []) {
-			return prepare(sql).get(...params)
+		get<T = DbRow>(sql: string, params: DbParams = []): T | undefined {
+			const stmt = prepare(sql)
+			return stmt.get.apply(stmt, toBindings(params)) as T | undefined
 		},
-		all(sql, params = []) {
-			return prepare(sql).all(...params)
+		all<T = DbRow>(sql: string, params: DbParams = []): T[] {
+			const stmt = prepare(sql)
+			return stmt.all.apply(stmt, toBindings(params)) as T[]
 		},
 		exec(sql) {
 			return db.exec(sql)

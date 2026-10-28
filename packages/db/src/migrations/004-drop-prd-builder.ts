@@ -1,9 +1,16 @@
 import { TABLES } from "../schema.ts"
+import type { DbAdapter } from "../types.ts"
+import type { Migration } from "./index.ts"
 
-const migration = {
+/** One `sqlite_master` row, narrowed to the column this migration selects. */
+interface TableNameRow {
+	name: string
+}
+
+const migration: Migration = {
 	version: 4,
 	name: "drop prd builder leftovers",
-	up(db) {
+	up(db: DbAdapter) {
 		// The builder never owned a dedicated table in schema.js, and #3 already
 		// pruned its kv scope - but an install still below #3 never ran that, and a
 		// restored database may carry the scope too. Re-running the prune is
@@ -18,7 +25,9 @@ const migration = {
 		// construction, and a database with no leftover (the usual case) no-ops.
 		const declared = new Set(Object.keys(TABLES))
 		const leftover = db
-			.all(`SELECT name FROM sqlite_master WHERE type = 'table' AND lower(name) LIKE 'prd%'`)
+			.all<TableNameRow>(
+				`SELECT name FROM sqlite_master WHERE type = 'table' AND lower(name) LIKE 'prd%'`,
+			)
 			.map((row) => row.name)
 			.filter((name) => !declared.has(name))
 		for (const name of leftover) {

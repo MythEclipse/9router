@@ -1,4 +1,5 @@
 import { getAdapter } from "../driver.ts"
+import type { DbAdapter } from "../types.ts"
 
 /**
  * Security event log: sign-ins, refusals and anything that looks like a probe.
@@ -43,6 +44,9 @@ export interface SecurityEventInput {
 	userAgent?: string
 }
 
+/** The three states the dashboard colours a security event with. */
+export type SecurityLevel = "critical" | "warn" | "info"
+
 /** A normalized security event, exactly as a `securityEvents` row reads back. */
 export interface SecurityEvent {
 	at: string
@@ -55,6 +59,8 @@ export interface SecurityEvent {
 	status: number
 	detail: string
 	userAgent: string
+	/** Kept open: a classifier reads legacy or partially-shaped rows too. */
+	[key: string]: unknown
 }
 
 function normalizeEvent(input: SecurityEventInput = {}): SecurityEvent {
@@ -77,7 +83,7 @@ function normalizeEvent(input: SecurityEventInput = {}): SecurityEvent {
 	}
 }
 
-function ensureTable(db) {
+function ensureTable(db: DbAdapter): void {
 	db.run(`CREATE TABLE IF NOT EXISTS securityEvents (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     at TEXT NOT NULL,
@@ -95,7 +101,7 @@ function ensureTable(db) {
 	db.run(`CREATE INDEX IF NOT EXISTS idx_security_events_severity ON securityEvents(severity)`)
 }
 
-export async function recordSecurityEvent(input) {
+export async function recordSecurityEvent(input: SecurityEventInput = {}): Promise<SecurityEvent> {
 	const event = normalizeEvent(input)
 	try {
 		const db = await getAdapter()
@@ -128,7 +134,10 @@ export async function recordSecurityEvent(input) {
  * a failed login on its own is a warning, a successful sign-in is a review, and
  * a successful sign-in with the published default password is the breach.
  */
-export function classify(event) {
+export function classify(event: Record<string, unknown>): {
+	level: SecurityLevel
+	label: string
+} {
 	const path = String(event.path || "")
 	const detail = String(event.detail || "")
 	const haystack = `${path} ${detail}`
@@ -187,13 +196,19 @@ export function classify(event) {
 		event.type === "key_deleted" ||
 		event.type === "settings_changed"
 	) {
-		return { level: "info", label: event.detail || "Administrative change" }
+		return { level: "info", label: String(event.detail || "Administrative change") }
 	}
 
-	return { level: "info", label: event.detail || event.type }
+	return { level: "info", label: String(event.detail || event.type || "") }
 }
 
-export async function getSecurityEvents({ limit = DEFAULT_LIMIT, severity = null } = {}) {
+export async function getSecurityEvents({
+	limit = DEFAULT_LIMIT,
+	severity = null,
+}: {
+	limit?: number
+	severity?: string | null
+} = {}) {
 	const db = await getAdapter()
 	ensureTable(db)
 	const capped = Math.max(1, Math.min(Number(limit) || DEFAULT_LIMIT, MAX_LIMIT))
@@ -213,7 +228,7 @@ export async function getSecurityEvents({ limit = DEFAULT_LIMIT, severity = null
 /** Headline numbers for the page header. */
 export async function getSecuritySummary() {
 	const events = await getSecurityEvents({ limit: MAX_LIMIT })
-	const counts = { critical: 0, warn: 0, info: 0 }
+	const counts: Record<SecurityLevel, number> = { critical: 0, warn: 0, info: 0 }
 	const logins = { success: 0, failed: 0, viaApiKey: 0, uniqueIps: new Set() }
 	for (const event of events) {
 		counts[event.level] = (counts[event.level] || 0) + 1
@@ -247,7 +262,7 @@ export async function clearSecurityEvents() {
 // door recently", not a flow to replay.
 const ACCESS_KEEP = 1200
 
-function ensureAccessTable(db) {
+function ensureAccessTable(db: DbAdapter): void {
 	db.run(`CREATE TABLE IF NOT EXISTS accessEvents (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     at TEXT NOT NULL,

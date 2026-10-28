@@ -8,7 +8,7 @@
  * typings in redefines `fetch`, which once turned `cache: "no-store"` into a
  * type error in code that never runs on Node.
  *
- * Only what this package actually touches is declared.
+ * Only what this package and its consumers actually touch is declared.
  */
 declare module "bun:sqlite" {
 	export interface BunStatement {
@@ -21,6 +21,8 @@ declare module "bun:sqlite" {
 		constructor(filename: string, options?: { create?: boolean; readwrite?: boolean })
 		exec(sql: string): void
 		prepare(sql: string): BunStatement
+		/** Prepare and return a statement in one step; used by the API migrator. */
+		query(sql: string): BunStatement
 		transaction<Args extends unknown[], R>(fn: (...args: Args) => R): (...args: Args) => R
 		close(): void
 	}

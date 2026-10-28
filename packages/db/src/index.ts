@@ -489,7 +489,10 @@ export async function exportDb(options: ExportScope = null): Promise<DbExportPay
 }
 
 export async function getDbSummary() {
-	const sectionMeta = {
+	const sectionMeta: Record<
+		string,
+		{ label: string; keys: string[]; default: boolean; isHeavy: boolean }
+	> = {
 		settings: {
 			label: "Settings & System Config",
 			keys: ["settings"],
@@ -524,7 +527,10 @@ export async function getDbSummary() {
 		},
 	}
 
-	const sections = {}
+	const sections: Record<
+		string,
+		{ key: string; label: string; bytes: number; count: number; default: boolean; isHeavy: boolean }
+	> = {}
 	let totalBytes = 0
 
 	for (const [secKey, meta] of Object.entries(sectionMeta)) {
@@ -553,7 +559,7 @@ export async function getDbSummary() {
 	return { sections, totalBytes }
 }
 
-export async function importDb(payload) {
+export async function importDb(payload: DbExportPayload): Promise<DbExportPayload> {
 	if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
 		throw new Error("Invalid database payload")
 	}
@@ -601,7 +607,7 @@ export async function importDbProgressive(
 	const db = await getAdapter()
 
 	// Snapshot existing apiKeys BEFORE wiping, so we can fill in missing fields from backup
-	const existingApiKeys = {}
+	const existingApiKeys: Record<string, ApiKeyRow> = {}
 	for (const r of db.all<ApiKeyRow>(`SELECT * FROM apiKeys`)) {
 		existingApiKeys[r.id] = r
 	}
