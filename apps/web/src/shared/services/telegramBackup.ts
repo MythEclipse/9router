@@ -250,7 +250,7 @@ export async function runTelegramBackupTick() {
 	}
 	const status = await getAutoBackupStatus()
 	const intervalMs = intervalMsOf(config)
-	const lastSentMs = status?.lastSentAt ? new Date(status.lastSentAt).getTime() : 0
+	const lastSentMs = toMs(status?.lastSentAt)
 	const remaining = lastSentMs ? lastSentMs + intervalMs - Date.now() : 0
 	if (remaining > 0) {
 		schedule(remaining)
@@ -266,10 +266,17 @@ export async function runTelegramBackupTick() {
 
 // Schedule the next tick from the persisted lastSentAt. A fresh setup (never
 // sent) fires immediately; otherwise only the remainder of the interval waits.
+/** A persisted ISO timestamp as milliseconds, or 0 when absent or unusable. */
+function toMs(value: unknown): number {
+	if (typeof value !== "string" || !value) return 0
+	const ms = new Date(value).getTime()
+	return Number.isFinite(ms) ? ms : 0
+}
+
 function scheduleFirstRun() {
 	Promise.all([getAutoBackupStatus(), getAutoBackupConfig()])
 		.then(([status, config]) => {
-			const lastSentMs = status?.lastSentAt ? new Date(status.lastSentAt).getTime() : 0
+			const lastSentMs = toMs(status?.lastSentAt)
 			schedule(lastSentMs ? lastSentMs + intervalMsOf(config) - Date.now() : 0)
 		})
 		.catch(() => {})

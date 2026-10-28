@@ -12,5 +12,6 @@
     "allowImportingTsExtensions": true,
     "types": ["bun"]
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*", "../../packages/db/src/**/*.d.ts"],
+  "exclude": ["node_modules"]
 }

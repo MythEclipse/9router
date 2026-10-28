@@ -116,7 +116,7 @@ export async function POST(request) {
 			return NextResponse.json({ error: normalized.error }, { status: 400 })
 		}
 
-		const proxyPool = await createProxyPool(normalized)
+		const proxyPool = await createProxyPool({ ...normalized })
 		return NextResponse.json({ proxyPool }, { status: 201 })
 	} catch (error) {
 		console.log("Error creating proxy pool:", error)

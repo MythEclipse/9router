@@ -16,7 +16,10 @@ export const dynamic = "force-dynamic"
 
 const HOUR_MS = 3600000
 
-function publicConfig(config: Record<string, unknown>) {
+/** The config as the repo returns it; derived so this file needs no new export. */
+type BackupConfig = Awaited<ReturnType<typeof getAutoBackupConfig>>
+
+function publicConfig(config: BackupConfig) {
 	// Secrets are write-only for the dashboard: they are never echoed back.
 	return {
 		enabled: config.enabled === true,
