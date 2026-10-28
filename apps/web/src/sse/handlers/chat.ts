@@ -609,8 +609,9 @@ async function handleSingleModelChat(
 	try {
 		const { getStudioModel, getModelOverride } = await import("@9router/db/repos/modelEditorRepo")
 		const studio = await getStudioModel(modelStr)
-		const override: ModelOverrideRecord | null =
-			studio || (provider ? await getModelOverride(`${provider}|${model}`) : null)
+		const legacy = provider ? await getModelOverride(`${provider}|${model}`) : null
+		// Both arms are loose JSON; ModelOverrideRecord is the subset the router reads.
+		const override = (studio ?? legacy) as ModelOverrideRecord | null
 		if (override) {
 			if (override.inputMultiplier || override.outputMultiplier) {
 				modelMultipliers = {

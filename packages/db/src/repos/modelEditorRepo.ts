@@ -1,6 +1,9 @@
 import { getAdapter } from "../driver.ts"
 import { parseJson, stringifyJson } from "../helpers/jsonCol.ts"
 
+/** A kv value this repo stores: JSON the writer shaped, read back unvalidated. */
+type StoredModel = Record<string, unknown>
+
 /** A studio model: a user-owned callable name pointing at any `provider/model`. */
 interface StudioModel {
 	callName: string
@@ -37,12 +40,12 @@ function store() {
 			for (const row of rows) out[row.key] = parseJson<Record<string, unknown>>(row.value, {})
 			return out
 		},
-		async get(key) {
+		async get(key: string) {
 			const db = await getAdapter()
 			const row = db.get(`SELECT value FROM kv WHERE scope = ? AND key = ?`, [SCOPE, key])
 			return row ? parseJson(row.value, {}) : null
 		},
-		async set(key, value) {
+		async set(key: string, value: StoredModel) {
 			const db = await getAdapter()
 			db.run(
 				`INSERT INTO kv(scope, key, value) VALUES(?, ?, ?)
@@ -50,14 +53,14 @@ function store() {
 				[SCOPE, key, stringifyJson(value)],
 			)
 		},
-		async remove(key) {
+		async remove(key: string) {
 			const db = await getAdapter()
 			db.run(`DELETE FROM kv WHERE scope = ? AND key = ?`, [SCOPE, key])
 		},
 	}
 }
 
-function toModel(callName, value) {
+function toModel(callName: string, value: StoredModel) {
 	if (!value || typeof value !== "object") return null
 	const target = typeof value.targetModel === "string" ? value.targetModel.trim() : ""
 	if (!target) return null
@@ -68,12 +71,15 @@ function toModel(callName, value) {
 	if (firstSlash === 0 || firstSlash === target.length - 1) return null
 	return {
 		callName,
-		displayName: (value.displayName || "").trim() || callName,
+		displayName: (typeof value.displayName === "string" ? value.displayName.trim() : "") || callName,
 		// Free-form label this model claims in a model listing. Never derived from the
 		// target, so a studio model can present itself as whatever the owner wants.
 		ownedBy: (typeof value.ownedBy === "string" ? value.ownedBy.trim() : "") || "",
 		targetModel: target,
-		targetLabel: (value.targetLabel || value.targetModel || "").trim() || target,
+		targetLabel:
+			(typeof value.targetLabel === "string" ? value.targetLabel.trim() : "") ||
+			(typeof value.targetModel === "string" ? value.targetModel.trim() : "") ||
+			target,
 		provider: target.slice(0, firstSlash),
 		model: target.slice(firstSlash + 1),
 		contextWindow: Number(value.contextWindow) || 0,
@@ -81,19 +87,26 @@ function toModel(callName, value) {
 		inputMultiplier: Number(value.inputMultiplier) > 0 ? Number(value.inputMultiplier) : undefined,
 		outputMultiplier: Number(value.outputMultiplier) > 0 ? Number(value.outputMultiplier) : undefined,
 		antiProbe: typeof value.antiProbe === "boolean" ? value.antiProbe : undefined,
-		createdAt: value.createdAt || "",
+		createdAt: typeof value.createdAt === "string" ? value.createdAt : "",
 	}
 }
 
 // Studio model pointing at a combo: the callable name routes into the combo,
 // so provider/model are the combo coordinates the caps and router code use.
-function toComboTargetModel(callName, value, target): StudioModel & { isComboTarget: true } {
+function toComboTargetModel(
+	callName: string,
+	value: StoredModel,
+	target: string,
+): StudioModel & { isComboTarget: true } {
 	return {
 		callName,
-		displayName: (value.displayName || "").trim() || callName,
+		displayName: (typeof value.displayName === "string" ? value.displayName.trim() : "") || callName,
 		ownedBy: (typeof value.ownedBy === "string" ? value.ownedBy.trim() : "") || "",
 		targetModel: target,
-		targetLabel: (value.targetLabel || value.targetModel || "").trim() || target,
+		targetLabel:
+			(typeof value.targetLabel === "string" ? value.targetLabel.trim() : "") ||
+			(typeof value.targetModel === "string" ? value.targetModel.trim() : "") ||
+			target,
 		provider: "combo",
 		model: target,
 		isComboTarget: true,
@@ -102,7 +115,7 @@ function toComboTargetModel(callName, value, target): StudioModel & { isComboTar
 		inputMultiplier: Number(value.inputMultiplier) > 0 ? Number(value.inputMultiplier) : undefined,
 		outputMultiplier: Number(value.outputMultiplier) > 0 ? Number(value.outputMultiplier) : undefined,
 		antiProbe: typeof value.antiProbe === "boolean" ? value.antiProbe : undefined,
-		createdAt: value.createdAt || "",
+		createdAt: typeof value.createdAt === "string" ? value.createdAt : "",
 	}
 }
 
@@ -137,10 +150,24 @@ export async function getStudioModels() {
 }
 
 /** One studio model by callable name, or null. */
-export async function getStudioModel(callName) {
+export async function getStudioModel(callName: string): Promise<StudioModel | null> {
 	if (!callName || callName.includes("|") || callName.includes("/")) return null
 	const value = await store().get(callName)
 	return value ? toModel(callName, value) : null
+}
+
+/** Fields the dashboard can set on a studio model; everything is optional but the name. */
+export interface StudioModelInput {
+	callName: string
+	displayName?: string
+	ownedBy?: string
+	targetModel?: string
+	targetLabel?: string
+	contextWindow?: number
+	systemPrompt?: string
+	inputMultiplier?: number
+	outputMultiplier?: number
+	antiProbe?: boolean
 }
 
 export async function setStudioModel({
@@ -154,7 +181,7 @@ export async function setStudioModel({
 	inputMultiplier,
 	outputMultiplier,
 	antiProbe,
-}) {
+}: StudioModelInput) {
 	const payload = {
 		callName,
 		displayName: (displayName || "").trim(),
@@ -172,29 +199,29 @@ export async function setStudioModel({
 	return toModel(callName, payload)
 }
 
-export async function deleteStudioModel(callName) {
+export async function deleteStudioModel(callName: string): Promise<void> {
 	await store().remove(callName)
 }
 
 /** Legacy `{provider}|{model}` records only. */
-export async function getModelOverrides() {
+export async function getModelOverrides(): Promise<Record<string, Record<string, unknown>>> {
 	const rows = await store().all()
-	const out = {}
+	const out: Record<string, Record<string, unknown>> = {}
 	for (const [key, value] of Object.entries(rows)) {
 		if (key.includes("|")) out[key] = value
 	}
 	return out
 }
 
-export async function getModelOverride(key) {
+export async function getModelOverride(key: string): Promise<Record<string, unknown> | null> {
 	if (!key) return null
 	return await store().get(key)
 }
 
-export async function setModelOverride(key, data) {
+export async function setModelOverride(key: string, data: Record<string, unknown>): Promise<void> {
 	await store().set(key, data)
 }
 
-export async function deleteModelOverride(key) {
+export async function deleteModelOverride(key: string): Promise<void> {
 	await store().remove(key)
 }
