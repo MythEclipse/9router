@@ -19,7 +19,10 @@ vi.mock("@/sse/handlers/search.js", () => ({ handleSearch: (...a) => handleSearc
 vi.mock("@9router/db/repos/connectionsRepo", () => ({
 	getProviderConnections: (...a) => getProviderConnections(...a),
 }))
-vi.mock("@/lib/localDb", () => ({ getSettings: (...a) => getSettings(...a) }))
+vi.mock("@/lib/localDb", async (importOriginal) => ({
+	...(await importOriginal()),
+	getSettings: (...a) => getSettings(...a),
+}))
 vi.mock("open-sse/handlers/webSearchCredentials.js", () => ({
 	// Mirrors the real resolveSearchProvider preference order: a connected
 	// dedicated engine wins over the chat provider, which is what keeps

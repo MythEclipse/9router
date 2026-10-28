@@ -18,7 +18,8 @@ const credentials = {
 	expiresAt: "2000-01-01T00:00:00.000Z",
 	providerSpecificData: { workspaceId: "workspace", customMetadata: "preserve-me" },
 }
-vi.mock("@/lib/localDb", () => ({
+vi.mock("@/lib/localDb", async (importOriginal) => ({
+	...(await importOriginal()),
 	getSettings: async () => ({ requireApiKey: true }),
 	getProviderConnectionById: mocks.latest,
 	updateProviderConnection: mocks.update,

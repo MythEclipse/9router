@@ -20,7 +20,10 @@ vi.mock("../../apps/web/src/sse/services/auth.js", async () => {
 		isValidApiKey: vi.fn(),
 	}
 })
-vi.mock("@/lib/localDb", () => ({ getSettings: async () => ({ requireApiKey: false }) }))
+vi.mock("@/lib/localDb", async (importOriginal) => ({
+	...(await importOriginal()),
+	getSettings: async () => ({ requireApiKey: false }),
+}))
 vi.mock("../../apps/web/src/sse/services/model.js", () => ({
 	getModelInfo: async () => ({ provider: "openai", model: "text-embedding-3-small" }),
 }))

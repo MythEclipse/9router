@@ -1,6 +1,6 @@
+import { MODEL_PRICING } from "@9router/pricing"
 import { describe, expect, it } from "vitest"
 import { getCapabilitiesForModel } from "../../apps/web/open-sse/providers/capabilities.js"
-import { MODEL_PRICING } from "../../apps/web/open-sse/providers/pricing.js"
 import antigravityRegistry from "../../apps/web/open-sse/providers/registry/antigravity.js"
 import geminiRegistry from "../../apps/web/open-sse/providers/registry/gemini.js"
 

@@ -16,7 +16,8 @@ vi.mock("../../apps/web/src/sse/services/auth.js", () => ({
 	apiKeyGateFailure: vi.fn(),
 }))
 
-vi.mock("@/lib/localDb", () => ({
+vi.mock("@/lib/localDb", async (importOriginal) => ({
+	...(await importOriginal()),
 	getSettings: async () => ({ requireApiKey: false }),
 }))
 

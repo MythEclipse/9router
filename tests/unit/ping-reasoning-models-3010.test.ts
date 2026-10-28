@@ -8,7 +8,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 // Mock the heavy Next.js-dependent imports BEFORE importing ping.js.
-vi.mock("@/lib/localDb", () => ({
+vi.mock("@/lib/localDb", async (importOriginal) => ({
+	...(await importOriginal()),
 	getApiKeys: vi.fn(async () => [{ key: "test-key", isActive: true }]),
 }))
 vi.mock("@/shared/constants/config", () => ({ SERVER_CONFIG: { port: 20127 } }))

@@ -12,7 +12,8 @@ vi.mock("@/app/api/models/test/ping", () => ({
 	pingModelByKind: pingMock,
 	WEB_COOKIE_PROVIDERS: new Set(),
 }))
-vi.mock("@/lib/localDb", () => ({
+vi.mock("@/lib/localDb", async (importOriginal) => ({
+	...(await importOriginal()),
 	getProviderConnectionById: connectionMock,
 	updateProviderConnection: vi.fn(),
 }))

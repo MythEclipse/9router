@@ -4,7 +4,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 
 const fx = vi.hoisted(() => ({ db: null, aliases: {} }))
 vi.mock("@9router/db/driver", () => ({ getAdapter: async () => fx.db }))
-vi.mock("@/lib/localDb", () => ({
+vi.mock("@/lib/localDb", async (importOriginal) => ({
+	...(await importOriginal()),
 	getModelAliases: async () => fx.aliases,
 	getProviderNodes: async () => [],
 	getComboByName: async (name) => {

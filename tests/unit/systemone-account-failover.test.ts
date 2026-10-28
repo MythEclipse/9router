@@ -25,7 +25,8 @@ vi.mock("@/sse/services/auth.js", () => ({
 	shouldLogAuthFailure: vi.fn(() => false),
 }))
 
-vi.mock("@/lib/localDb", () => ({
+vi.mock("@/lib/localDb", async (importOriginal) => ({
+	...(await importOriginal()),
 	getSettings: mocks.getSettings,
 }))
 

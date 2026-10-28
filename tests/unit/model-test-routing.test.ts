@@ -5,7 +5,8 @@ const mocks = vi.hoisted(() => ({
 	getConsistentMachineId: vi.fn(),
 }))
 
-vi.mock("@/lib/localDb", () => ({
+vi.mock("@/lib/localDb", async (importOriginal) => ({
+	...(await importOriginal()),
 	getApiKeys: mocks.getApiKeys,
 }))
 

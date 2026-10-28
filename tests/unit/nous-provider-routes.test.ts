@@ -29,7 +29,8 @@ vi.mock("@/models", () => ({
 	getProviderConnectionById: mocks.getProviderConnectionByIdFromModels,
 }))
 
-vi.mock("@/lib/localDb", () => ({
+vi.mock("@/lib/localDb", async (importOriginal) => ({
+	...(await importOriginal()),
 	getProviderConnectionById: mocks.getProviderConnectionById,
 	updateProviderConnection: mocks.updateProviderConnection,
 }))

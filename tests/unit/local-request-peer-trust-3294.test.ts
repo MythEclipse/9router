@@ -20,7 +20,8 @@ vi.mock("next/server", () => ({
 	},
 }))
 
-vi.mock("@/lib/localDb", () => ({
+vi.mock("@/lib/localDb", async (importOriginal) => ({
+	...(await importOriginal()),
 	getSettings: mocks.getSettings,
 	validateApiKey: mocks.validateApiKey,
 }))
@@ -29,7 +30,7 @@ vi.mock("@/shared/utils/machineId", () => ({
 	getConsistentMachineId: mocks.getConsistentMachineId,
 }))
 
-vi.mock("@/lib/auth/dashboardSession", () => ({
+vi.mock("@9router/auth/dashboardSession", () => ({
 	verifyDashboardAuthToken: mocks.verifyDashboardAuthToken,
 	getDashboardAuthSession: vi.fn(),
 }))

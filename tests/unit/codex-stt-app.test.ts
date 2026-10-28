@@ -17,7 +17,11 @@ vi.mock("@/sse/services/auth.js", () => ({
 	markAccountUnavailable: mocks.mark,
 	apiKeyGateFailure: vi.fn(),
 }))
-vi.mock("@/lib/localDb", () => ({ getSettings: async () => ({}), getCustomModels: async () => [] }))
+vi.mock("@/lib/localDb", async (importOriginal) => ({
+	...(await importOriginal()),
+	getSettings: async () => ({}),
+	getCustomModels: async () => [],
+}))
 vi.mock("@/sse/services/model.js", () => ({
 	getModelInfo: async () => ({ provider: "codex", model: "transcribe" }),
 }))

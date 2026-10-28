@@ -19,15 +19,16 @@ vi.mock("next/headers", () => ({
 	cookies: mocks.cookies,
 }))
 
-vi.mock("@/lib/localDb", () => ({
+vi.mock("@/lib/localDb", async (importOriginal) => ({
+	...(await importOriginal()),
 	getSettings: mocks.getSettings,
 }))
 
-vi.mock("@/lib/auth/oidc", () => ({
+vi.mock("@9router/auth/oidc", () => ({
 	isOidcConfigured: mocks.isOidcConfigured,
 }))
 
-vi.mock("@/lib/auth/dashboardSession", () => ({
+vi.mock("@9router/auth/dashboardSession", () => ({
 	getDashboardAuthSession: mocks.getDashboardAuthSession,
 }))
 

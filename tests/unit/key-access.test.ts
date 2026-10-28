@@ -13,7 +13,8 @@ const fx = vi.hoisted(() => ({
 	keys: {},
 }))
 
-vi.mock("@/lib/localDb", () => ({
+vi.mock("@/lib/localDb", async (importOriginal) => ({
+	...(await importOriginal()),
 	getModelAliases: async () => fx.aliases,
 	getComboByName: async (name) => fx.combos.find((c) => c.name === name) || null,
 	getProviderNodes: async (filter = {}) =>

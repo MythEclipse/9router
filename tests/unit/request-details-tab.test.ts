@@ -6,7 +6,7 @@ import os from "node:os"
 import path from "node:path"
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 
-vi.mock("@/lib/auth/dashboardPermissions", () => ({
+vi.mock("@9router/auth/dashboardPermissions", () => ({
 	getSessionContext: vi.fn(async () => ({ allowedModels: "*" })),
 }))
 

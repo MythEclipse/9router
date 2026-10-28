@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from "vitest"
 // static catalog only — no connections/combos so buildModelsList returns the
 // static per-provider entries (the no-DB path). Mock localDb to return empty
 // arrays, then assert the OpenAI list contract on the output.
-vi.mock("@/lib/localDb", () => ({
+vi.mock("@/lib/localDb", async (importOriginal) => ({
+	...(await importOriginal()),
 	getProviderConnections: vi.fn(async () => []),
 	getCombos: vi.fn(async () => []),
 	getCustomModels: vi.fn(async () => []),

@@ -48,11 +48,13 @@ vi.mock("@/lib/usageDb.js", () => ({
 	})),
 }))
 
-vi.mock("@/lib/localDb", () => ({}))
+vi.mock("@/lib/localDb", async (importOriginal) => ({
+	...(await importOriginal()),
+}))
 vi.mock("@9router/db/repos/settingsRepo", () => ({
 	getSettings: vi.fn(async () => ({ ...settingsState })),
 }))
-vi.mock("@/lib/auth/dashboardPermissions", () => ({
+vi.mock("@9router/auth/dashboardPermissions", () => ({
 	getSessionContext: vi.fn(async () => ({ allowedModels: "*" })),
 }))
 vi.mock("@9router/db/repos/allowedModels", () => ({

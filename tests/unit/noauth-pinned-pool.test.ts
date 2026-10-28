@@ -13,7 +13,8 @@ const mocks = vi.hoisted(() => ({
 	pickProxyPoolId: vi.fn(),
 }))
 
-vi.mock("@/lib/localDb", () => ({
+vi.mock("@/lib/localDb", async (importOriginal) => ({
+	...(await importOriginal()),
 	getProviderConnections: vi.fn(),
 	getSettings: mocks.getSettings,
 	getProxyPools: mocks.getProxyPools,

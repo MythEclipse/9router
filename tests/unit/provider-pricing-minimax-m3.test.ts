@@ -1,5 +1,5 @@
+import { MODEL_PRICING } from "@9router/pricing"
 import { describe, expect, it } from "vitest"
-import { MODEL_PRICING } from "../../apps/web/open-sse/providers/pricing.js"
 
 describe("MiniMax-M3 pricing", () => {
 	it("includes MiniMax-M3 in MODEL_PRICING", () => {

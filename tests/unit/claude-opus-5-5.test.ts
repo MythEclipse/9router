@@ -1,8 +1,7 @@
+import { getPricingForModel } from "@9router/pricing"
 import { describe, expect, it } from "vitest"
-
 import { getModelsByProviderId } from "../../apps/web/open-sse/config/providerModels.js"
 import { getCapabilitiesForModel } from "../../apps/web/open-sse/providers/capabilities.js"
-import { getPricingForModel } from "../../apps/web/open-sse/providers/pricing.js"
 import { getThinkingLevels } from "../../apps/web/open-sse/providers/thinkingLevels.js"
 import { applyThinking } from "../../apps/web/open-sse/translator/concerns/thinkingUnified.js"
 import { prepareClaudeRequest } from "../../apps/web/open-sse/translator/formats/claude.js"

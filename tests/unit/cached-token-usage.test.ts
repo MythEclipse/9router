@@ -1,5 +1,5 @@
+import { calculateCostFromTokens } from "@9router/pricing"
 import { describe, expect, it } from "vitest"
-import { calculateCostFromTokens } from "../../apps/web/open-sse/providers/pricing.js"
 import { buildUsage, toOpenAIUsage } from "../../apps/web/open-sse/translator/concerns/usage.js"
 import {
 	canonicalizeUsage,

@@ -9,7 +9,8 @@ const fx = vi.hoisted(() => ({
 	seq: 0,
 }))
 
-vi.mock("@/lib/localDb", () => ({
+vi.mock("@/lib/localDb", async (importOriginal) => ({
+	...(await importOriginal()),
 	getCombos: async () => fx.combos,
 	getComboById: async (id: string) => fx.combos.find((c) => c.id === id) || null,
 	createCombo: async (data: Record<string, unknown>) => {

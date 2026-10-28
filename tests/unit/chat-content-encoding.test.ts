@@ -1,7 +1,10 @@
 import { zstdCompressSync } from "node:zlib"
 import { describe, expect, it, vi } from "vitest"
 
-vi.mock("@/lib/localDb", () => ({ getSettings: async () => ({ requireApiKey: false }) }))
+vi.mock("@/lib/localDb", async (importOriginal) => ({
+	...(await importOriginal()),
+	getSettings: async () => ({ requireApiKey: false }),
+}))
 vi.mock("open-sse/index.js", () => ({}))
 vi.mock("@/sse/services/auth.js", () => ({
 	getProviderCredentials: vi.fn(),

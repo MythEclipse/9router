@@ -1,10 +1,10 @@
+import { getPricingForModel } from "@9router/pricing"
 import { describe, expect, it } from "vitest"
 import {
 	getModelsByProviderId,
 	getModelUpstreamId,
 } from "../../apps/web/open-sse/config/providerModels.js"
 import { getCapabilitiesForModel } from "../../apps/web/open-sse/providers/capabilities.js"
-import { getPricingForModel } from "../../apps/web/open-sse/providers/pricing.js"
 import { stripThinkingSuffix } from "../../apps/web/open-sse/translator/concerns/thinkingUnified.js"
 import { MODEL_PATTERNS, MODEL_SYNONYMS } from "../../apps/web/src/mitm/config.ts"
 import { MITM_TOOLS } from "../../apps/web/src/shared/constants/cliTools.js"

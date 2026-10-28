@@ -1,11 +1,10 @@
 import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
+import { MODEL_PRICING } from "@9router/pricing"
 import { afterEach, describe, expect, it, vi } from "vitest"
-
 import { getModelUpstreamId } from "../../apps/web/open-sse/config/providerModels.js"
 import { AntigravityExecutor } from "../../apps/web/open-sse/executors/antigravity.js"
-import { MODEL_PRICING } from "../../apps/web/open-sse/providers/pricing.js"
 import gemini from "../../apps/web/open-sse/providers/registry/gemini.js"
 import {
 	applyThinking,

@@ -23,7 +23,8 @@ vi.mock("@/sse/services/auth.js", () => ({
 	apiKeyGateFailure: vi.fn(),
 }))
 
-vi.mock("@/lib/localDb", () => ({
+vi.mock("@/lib/localDb", async (importOriginal) => ({
+	...(await importOriginal()),
 	getSettings: mocks.getSettings,
 	getCombos: mocks.getCombos,
 }))

@@ -4,7 +4,8 @@ const mocks = vi.hoisted(() => ({
 	getSettings: vi.fn(async () => ({ customPlugins: {} })),
 }))
 
-vi.mock("@/lib/localDb", () => ({
+vi.mock("@/lib/localDb", async (importOriginal) => ({
+	...(await importOriginal()),
 	getSettings: mocks.getSettings,
 }))
 
