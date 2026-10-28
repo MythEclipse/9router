@@ -457,3 +457,89 @@ type instead of its own `Record<string, number>`. One shape, three packages.
 
 Final: `packages/db` 0 under full and `noImplicitAny`, `apps/web` 0,
 `apps/api` 16/16 tests pass.
+
+## Test suite green (2026-10-28)
+
+`bun run test`: **5496 passed, 81 skipped, 0 failed** (was 980 passing /
+481 failing before the migration fixes; 5291/33 at the start of this pass).
+
+Failure classes, in the order they surfaced — each was a different way a test
+could assert nothing while reading as coverage:
+
+1. **Dead import paths (530 files)** — module imports still pointed at the
+   pre-monorepo tree (`../../src`, `../../open-sse`, `@/lib/db`). Tests could
+   not resolve the module at all.
+2. **Closed mocks (39 files)** — `@/lib/localDb` was mocked with an object
+   literal, which erases every export it does not name. Adding a
+   `getStudioModels` call site silently dropped the route onto its fallback
+   branch. Mocks now spread `importOriginal()` and override only what the test
+   drives.
+3. **Mocks on the wrong specifier (2 files)** — `@/lib/auth/...` and `@/lib/db`
+   mocked while the code imports `@9router/auth/...` and `@9router/db`. The mock
+   never applied, so the test asserted against the real implementation.
+4. **Format-sensitive assertions (~12 tests)** — `toContain` on literals ending
+   in `;` against sources formatted without semicolons; regexes pinning two
+   spaces of indentation against tab-indented files; `};` to close an object
+   that ends `}`; a single-line call now spread across lines. Each reported a
+   missing feature (`expected '' to contain ...`) when the feature was intact.
+
+Real product bugs found by the suite:
+
+- `getPricing` iterated only `PROVIDER_PRICING`, dropping providers priced by
+  the user alone (custom endpoints, local models). `getPricingForModel` handled
+  that case, so the two readers disagreed. Fixed in `packages/db`.
+- `resolveStandaloneBuild` picked its entry filename by testing whether the
+  *legacy* `.next/standalone` existed. The CLI build writes `.next-cli-build`,
+  so it looked for `custom-server.js` when the build had `server.js` and
+  declared a good build missing. Both names are probed now.
+- `antislopPrompt.ts` was stale against its sources; regenerated.
+
+Verification: `packages/db` and `apps/api` typecheck 0, `biome check` 426 errors
+against the 443 baseline, `bun run build` exit 0, standalone gateway answers
+`/login` 200, `/dashboard` 307, `/api/auth/status` 200, `/v1/models` 401.
+
+## Phase 8 — combos resource ported (first of 168)
+
+Ported the four combos route handlers (390 LOC) to use-cases in `apps/api`,
+leaving the Next routes in place as thin delegates.
+
+**Where the rules went.** `apps/api/src/domain/combo.ts` holds the parts that
+are pure — name validation, context-window reads, cycle detection. The use-case
+in `application/combos/manage-combos.ts` takes `ComboPort` / `StudioTargetPort` /
+`ComboRotationPort` by constructor, so the rules are testable without a server.
+`infrastructure/use-cases-factory.ts` is the single composition root shared by
+`apps/api/main.ts` and `apps/web/src/lib/useCases.ts`.
+
+**Three bugs the port exposed, all invisible until the standalone was run:**
+
+1. `next.config.mjs` did not list `9router-api` in `transpilePackages`, and the
+   package ships TypeScript. Turbopack compiled the callers and dropped the
+   callee, so every delegating route threw module-not-found at runtime while
+   `bun run build` reported success.
+2. `runMigrations` located its journal from `import.meta.url`. Turbopack rewrites
+   that to a workspace-relative string (`e.F("apps/api/src/...")`), so the ascent
+   walked a path that does not exist and the migrator refused to start. It now
+   accepts an explicit `migrationsDir`, and the web host passes
+   `join(process.cwd(), "migrations")` — the location the standalone build
+   stages. Guessing is gone.
+3. `apps/api`'s db client imported `bun:sqlite` at module scope despite its own
+   header promising a four-step fallback. Any Node consumer failed to load the
+   module graph at all. It now throws a named error on non-Bun hosts pointing at
+   `@9router/db`'s driver, which owns the real fallback chain.
+
+**Test harness.** `tests/vitest.config.ts` gained a `bun:sqlite` resolver — Vite's
+alias table never sees a `bun:` specifier, the ESM loader rejects it first, so
+resolution needs a plugin. `combo-duplicate.test.ts` was rewritten to stub
+`@/lib/useCases` instead of `@/lib/localDb`, because the route no longer touches
+`localDb` directly; it asserts the same behaviour (copy naming, carried strategy
+without aliasing, 404) against the use-case boundary.
+
+**Verification.** `apps/api` and `apps/web` typecheck 0. `biome check` clean on
+every touched path. Suite: 5528 pass, 0 fail (was 5522 — the six recovered are
+the duplicate tests). Twelve test *files* still fail to collect; they reference
+pre-migration paths (`custom-server.ts`, `apps/web/open-sse/`) and fail
+identically on a stashed tree, so they are backlog, not regressions. Standalone
+smoke on a fresh `DATA_DIR`: `/api/combos` create 200, list 200, invalid name
+400, `/login` 200, `/dashboard` 200, `/api/auth/status` 200, `/v1/models` 401.
+
+Remaining: 164 of 168 route handlers.

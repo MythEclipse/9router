@@ -95,6 +95,20 @@ export function copyStandaloneAssets({
 		console.log(`[standalone-assets] Copied ${dir}/ to ${dirDestination}`)
 	}
 
+	// The oRPC use-cases run inside this server too, and they open the database
+	// and run the migrator on first use. The migrator walks up from its own
+	// location looking for a `migrations/` directory holding SQL; `next build`
+	// never traces that directory because it is read at runtime, so without this
+	// copy every route that touches the database fails with "Migration journal
+	// not found" and answers 500.
+	const apiMigrationsSource = resolve(projectRoot, "..", "api", "migrations")
+	if (existsSync(apiMigrationsSource)) {
+		const apiMigrationsDestination = resolve(standaloneDir, "migrations")
+		rmSync(apiMigrationsDestination, { recursive: true, force: true })
+		cpSync(apiMigrationsSource, apiMigrationsDestination, { recursive: true, force: true })
+		console.log(`[standalone-assets] Copied migrations/ to ${apiMigrationsDestination}`)
+	}
+
 	// dashboardGuard.js is copied as source and its `open-sse/*` specifiers are
 	// not understood by Node's resolver (they are aliases from jsconfig.json).
 	// Keep the source tree beside src/ so those runtime imports resolve in the

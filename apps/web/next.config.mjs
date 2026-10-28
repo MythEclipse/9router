@@ -47,6 +47,11 @@ const nextConfig = {
 		// package"). This is a resolution boundary, not a tracing concern.
 		root: workspaceRoot,
 	},
+	// `9router-api` ships TypeScript sources, so Next has to compile it rather
+	// than resolve a built `dist`. Without this the api package is dropped from
+	// the standalone output entirely and every route importing a use-case fails
+	// at runtime with a module-not-found.
+	transpilePackages: ["9router-api"],
 	images: {
 		unoptimized: true,
 	},

@@ -30,7 +30,16 @@ function holdsSql(dir: string): boolean {
 	return readdirSync(dir).some((f) => f.endsWith(".sql"))
 }
 
-/** Locate the journal, or return null. */
+/**
+ * Locate the journal, or return null.
+ *
+ * `from` defaults to this module's directory, which is correct unbundled and
+ * under esbuild. Turbopack is different: it rewrites `import.meta.url` to a
+ * workspace-relative string, so the ascent starts somewhere meaningless and
+ * every candidate misses. Callers therefore pass `migrationsDir` explicitly —
+ * a bundler-aware entry point knows where it staged the journal, this module
+ * does not.
+ */
 export function findMigrationsDir(
 	from: string = dirname(fileURLToPath(import.meta.url)),
 ): string | null {
@@ -47,7 +56,19 @@ export function findMigrationsDir(
 	return null
 }
 
-export function runMigrations(sqlite: Database, dataDir: string): void {
+export interface RunMigrationsOptions {
+	/**
+	 * Journal directory, for a host whose bundler rewrote `import.meta.url`.
+	 * Passed as a plain path so the lookup does not depend on module identity.
+	 */
+	readonly migrationsDir?: string
+}
+
+export function runMigrations(
+	sqlite: Database,
+	dataDir: string,
+	options: RunMigrationsOptions = {},
+): void {
 	sqlite.exec(`
 		CREATE TABLE IF NOT EXISTS _migrations (
 			name TEXT PRIMARY KEY,
@@ -55,10 +76,15 @@ export function runMigrations(sqlite: Database, dataDir: string): void {
 		)
 	`)
 
-	const dir = findMigrationsDir()
+	const dir = options.migrationsDir
+		? holdsSql(options.migrationsDir)
+			? options.migrationsDir
+			: null
+		: findMigrationsDir()
 	if (!dir) {
 		throw new Error(
-			"Migration journal not found. The build must copy migrations/ beside the bundled migrator; refusing to start on an empty schema.",
+			`Migration journal not found${options.migrationsDir ? ` at ${options.migrationsDir}` : ""}. ` +
+				"The build must copy migrations/ beside the bundled migrator; refusing to start on an empty schema.",
 		)
 	}
 

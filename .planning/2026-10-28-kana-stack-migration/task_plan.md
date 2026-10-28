@@ -44,7 +44,12 @@ three packages report 0 `tsc` errors and `biome check` is clean.
 | -------------- | ------ | ------ |
 | `system`       | 2      | done — `health`, `changelog` |
 | `settings`     | 1      | done — login gate as a use-case with a port |
-| (160 more)     | 159    | pending |
+| `combos`       | 4      | done — create/list/update/delete/duplicate/presets |
+| (164 more)     | 164    | pending |
+
+Next resource: pick from the remaining 164 by dependency weight. `api-keys`
+and `usage` already have repositories in `packages/db`, so they are the
+cheapest next step; both are read-heavy and have no streaming bodies.
 
 ### Prerequisite delivered: shared packages
 
