@@ -303,6 +303,38 @@ export type BuildModelsListOptions = {
   skipDynamicFetch?: boolean;
 };
 
+/**
+ * Read one source for the model list, falling back on failure.
+ *
+ * A listing is a view of everything configured, not an operation on one row, so a
+ * single unreadable source must not turn the whole endpoint into a 500 — an operator
+ * who cannot load their combo table still needs to see their provider models. Each
+ * source therefore degrades to an empty result and says which one failed, including
+ * the error itself: the previous version logged only the source name, which made the
+ * cause of a persistently empty list impossible to find afterwards.
+ */
+async function readSource<T>(
+  label: string,
+  read: () => Promise<T>,
+  fallback: T
+): Promise<T> {
+  try {
+    return await read();
+  } catch (error) {
+    console.warn(`[v1/models] could not read ${label}, continuing without it:`, error);
+    return fallback;
+  }
+}
+
+/** The shape the model listing reads off a stored custom model. */
+interface CustomModelRow {
+  id?: string;
+  type?: string;
+  providerAlias?: string;
+  name?: string;
+  ownedBy?: string;
+}
+
 export async function buildModelsList(
   kindFilter: string[],
   options: BuildModelsListOptions = {}
@@ -314,51 +346,25 @@ export async function buildModelsList(
  // 9router instance's fetchCompatibleModelIds - skip dynamic fetch to break
  // cross-instance recursive loops.
  const skipDynamicFetch = options.skipDynamicFetch === true;
-  let connections = [];
-  try {
-    connections = await getProviderConnections();
-    connections = connections.filter(c => c.isActive !== false);
-  } catch (e) {
-    console.log("Could not fetch providers, returning all models");
-  }
+  let connections = await readSource("provider connections", () => getProviderConnections(), [] as Awaited<ReturnType<typeof getProviderConnections>>);
+  connections = connections.filter((c) => c.isActive !== false);
 
-  let combos = [];
-  try {
-    combos = await getCombos();
-  } catch (e) {
-    console.log("Could not fetch combos");
-  }
+  const combos = await readSource("combos", () => getCombos(), [] as Awaited<ReturnType<typeof getCombos>>);
 
-  let customModels = [];
-  try {
-    customModels = await getCustomModels();
-  } catch (e) {
-    console.log("Could not fetch custom models");
-  }
+  const customModels = await readSource<CustomModelRow[]>(
+    "custom models",
+    async () => (await getCustomModels()) as CustomModelRow[],
+    []
+  );
 
-  let modelAliases = {};
-  try {
-    modelAliases = await getModelAliases();
-  } catch (e) {
-    console.log("Could not fetch model aliases");
-  }
+  const modelAliases = await readSource("model aliases", () => getModelAliases(), {} as Awaited<ReturnType<typeof getModelAliases>>);
 
   
-  let studioModels = [];
-  try {
-    studioModels = await getStudioModels();
-  } catch (e) {
-    console.log("Could not fetch model studio models");
-  }
+  const studioModels = await readSource("studio models", () => getStudioModels(), [] as Awaited<ReturnType<typeof getStudioModels>>);
   // Studio names are records of their own now; a leftover alias carrying one would
   // list the same model twice under two different names.
   const studioNames = new Set(studioModels.map((s) => String(s.callName).toLowerCase()));
- let disabledByAlias = {};
-  try {
-    disabledByAlias = await getDisabledModels();
-  } catch (e) {
-    console.log("Could not fetch disabled models");
-  }
+   const disabledByAlias = await readSource("disabled models", () => getDisabledModels(), {} as Awaited<ReturnType<typeof getDisabledModels>>);
   const isDisabled = (alias, modelId) => Array.isArray(disabledByAlias[alias]) && disabledByAlias[alias].includes(modelId);
 
   // A studio name hides the model it points at, everywhere it would be listed.
