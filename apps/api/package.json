@@ -1,0 +1,28 @@
+{
+  "name": "9router-api",
+  "version": "4.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/main.ts",
+    "build": "bun run scripts/build.ts",
+    "start": "bun dist/main.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test tests/",
+    "db:generate": "drizzle-kit generate"
+  },
+  "dependencies": {
+    "@orpc/client": "^1.16.1",
+    "@orpc/openapi": "^1.16.1",
+    "@orpc/server": "^1.16.1",
+    "@orpc/zod": "^1.16.1",
+    "better-auth": "^1.7.14",
+    "drizzle-orm": "^0.45.4",
+    "hono": "^4.13.14",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.4",
+    "drizzle-kit": "^0.31.11"
+  }
+}
