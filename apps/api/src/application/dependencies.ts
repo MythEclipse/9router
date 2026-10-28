@@ -6,6 +6,7 @@
  * plain fakes and keeps the composition root the single wiring point.
  */
 import type { IApiKeyRepository } from "../domain/api-key.ts"
+import type { ChangelogSource } from "./changelog.ts"
 
 export interface IActivityRepository {
 	record(entry: {
@@ -19,6 +20,7 @@ export interface IActivityRepository {
 export interface Dependencies {
 	readonly apiKeys: IApiKeyRepository
 	readonly activity: IActivityRepository
+	readonly changelog: ChangelogSource
 	readonly now: () => Date
 	/** Injected so tests can pin key material instead of hoping. */
 	readonly randomId: () => string

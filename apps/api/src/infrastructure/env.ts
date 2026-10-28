@@ -23,6 +23,12 @@ const EnvSchema = z.object({
 
 	/** Same-origin web app allowed to call the API from a browser. */
 	WEB_ORIGIN: z.string().url().default("http://localhost:20128"),
+
+	/**
+	 * Where `apps/web` lives on disk. The changelog route reads that app's own
+	 * `CHANGELOG.md`, which ships beside the app rather than inside this bundle.
+	 */
+	WEB_APP_DIR: z.string().default("apps/web"),
 })
 
 export type Env = z.infer<typeof EnvSchema>

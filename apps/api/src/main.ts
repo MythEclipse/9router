@@ -7,6 +7,7 @@
 import { randomUUID } from "node:crypto"
 import type { Dependencies } from "./application/dependencies.ts"
 import { buildUseCases } from "./application/use-cases.ts"
+import { createChangelogSourceFromDisk } from "./infrastructure/changelog-source.ts"
 import { createDb, resolveDataDir } from "./infrastructure/db/client.ts"
 import { runMigrations } from "./infrastructure/db/migrate.ts"
 import { createActivityRepository } from "./infrastructure/db/repositories/activity-repository.ts"
@@ -23,6 +24,8 @@ runMigrations(sqlite, dataDir)
 const deps: Dependencies = {
 	apiKeys: createApiKeyRepository(db),
 	activity: createActivityRepository(db, () => randomUUID()),
+	// CHANGELOG.md ships beside the app, not inside the API bundle.
+	changelog: createChangelogSourceFromDisk(env.WEB_APP_DIR),
 	now: () => new Date(),
 	randomId: () => randomUUID(),
 }

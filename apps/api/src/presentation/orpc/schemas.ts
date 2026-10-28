@@ -37,3 +37,10 @@ export const HealthSchema = z.object({
 	status: z.literal("ok"),
 	uptimeSeconds: z.number(),
 })
+
+/** Both changelogs are optional: an offline install legitimately has neither. */
+export const ChangelogSchema = z.object({
+	ok: z.boolean(),
+	official: z.string().nullable(),
+	custom: z.string().nullable(),
+})
