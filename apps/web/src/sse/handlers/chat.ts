@@ -1,3 +1,4 @@
+import { getClientIp } from "@9router/auth/loginLimiter"
 import {
 	GENERIC_FALLBACK_BUDGET_MS,
 	OPENCODE_FALLBACK_BUDGET_MS,
@@ -24,7 +25,6 @@ import {
 import { stripModelContextMarker } from "open-sse/utils/modelMarkers"
 import { resolveSessionIdentity } from "open-sse/utils/sessionManager"
 import { upstreamResponseHeaders } from "open-sse/utils/upstreamHeaders"
-import { getClientIp } from "@/lib/auth/loginLimiter"
 import { DEFAULT_HEADROOM_URL } from "@/lib/headroom/detect"
 import { getSettings } from "@/lib/localDb"
 import { appendPxpipeEvent } from "@/lib/pxpipe/events"
@@ -270,7 +270,7 @@ export async function handleChat(
 	let accessModel = modelStr
 	if (!modelStr.includes("/")) {
 		try {
-			const { getStudioModel } = await import("@/lib/db/repos/modelEditorRepo")
+			const { getStudioModel } = await import("@9router/db/repos/modelEditorRepo")
 			const studio = await getStudioModel(modelStr)
 			if (studio?.targetModel) accessModel = String(studio.targetModel).trim()
 		} catch {
@@ -293,7 +293,7 @@ export async function handleChat(
 	let comboEntryName = modelStr
 	if (!modelStr.includes("/")) {
 		try {
-			const { getStudioModel } = await import("@/lib/db/repos/modelEditorRepo")
+			const { getStudioModel } = await import("@9router/db/repos/modelEditorRepo")
 			const seenStudios = new Set([modelStr])
 			for (let hop = 0; hop < 3; hop += 1) {
 				const studioTarget = await getStudioModel(comboEntryName)
@@ -500,7 +500,7 @@ async function handleSingleModelChat(
 			// A studio calling into a combo may carry its own system prompt; it is
 			// applied here because this branch returns before the override block.
 			try {
-				const { getStudioModel } = await import("@/lib/db/repos/modelEditorRepo")
+				const { getStudioModel } = await import("@9router/db/repos/modelEditorRepo")
 				const entryStudio = comboEntryName !== modelStr ? await getStudioModel(modelStr) : null
 				if (entryStudio?.systemPrompt) {
 					if (Array.isArray(body.messages)) {
@@ -607,7 +607,7 @@ async function handleSingleModelChat(
 
 	// Model overrides: a Model Studio name wins over a per-model override.
 	try {
-		const { getStudioModel, getModelOverride } = await import("@/lib/db/repos/modelEditorRepo")
+		const { getStudioModel, getModelOverride } = await import("@9router/db/repos/modelEditorRepo")
 		const studio = await getStudioModel(modelStr)
 		const override: ModelOverrideRecord | null =
 			studio || (provider ? await getModelOverride(`${provider}|${model}`) : null)

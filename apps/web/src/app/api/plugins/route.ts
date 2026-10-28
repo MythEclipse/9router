@@ -1,7 +1,7 @@
+import { CUSTOM_PLUGIN_KEYS } from "@9router/db/shared/pluginKeys"
 import { NextResponse } from "next/server"
 import { getSettings, updateSettings } from "@/lib/localDb"
 import { clearPluginCache } from "@/lib/plugins/customPluginsRuntime"
-import { CUSTOM_PLUGIN_KEYS } from "@/shared/constants/pluginKeys"
 
 export const dynamic = "force-dynamic"
 

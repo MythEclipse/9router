@@ -35,7 +35,7 @@
 // model spec); set `search` from vendor docs (Claude 4.x+, GPT-5.x/4o, Gemini
 // 2.0+, Grok, Perplexity). Verify with: curl -s https://models.dev/api.json
 
-import { matchPattern } from "./pricing.ts"
+import { matchPattern } from "@9router/pricing"
 import { looksLikeVisionModel } from "./visionPatterns.ts"
 
 /**

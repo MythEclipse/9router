@@ -6,7 +6,7 @@
  * A copy would drift, and the failure is silent in one direction — a scoped session
  * offered a model it is then refused for.
  */
-import { matchesAllowedModels } from "@/lib/db/repos/allowedModels"
+import { matchesAllowedModels } from "@9router/db/repos/allowedModels"
 
 /**
  * Whether a model is inside a scope, checking every name a caller may hold for it.

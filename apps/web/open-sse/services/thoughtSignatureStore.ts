@@ -1,4 +1,4 @@
-import { makeKv } from "../../src/lib/db/helpers/kvStore.ts"
+import { makeKv } from "@9router/db/helpers/kvStore"
 
 const MAX_SIGNATURES = 2000
 const MAX_PERSISTED_SIGNATURES = 10_000

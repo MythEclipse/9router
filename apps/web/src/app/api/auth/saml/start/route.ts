@@ -1,7 +1,7 @@
+import { shouldUseSecureCookie } from "@9router/auth/dashboardSession"
+import { buildSamlAuthorizeUrl, getSamlBaseUrl, isSamlConfigured } from "@9router/auth/saml"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
-import { shouldUseSecureCookie } from "@/lib/auth/dashboardSession"
-import { buildSamlAuthorizeUrl, getSamlBaseUrl, isSamlConfigured } from "@/lib/auth/saml"
 import { getSettings } from "@/lib/localDb"
 
 // getSettings() reads SQLite, and `next build` prerenders every GET route it can.

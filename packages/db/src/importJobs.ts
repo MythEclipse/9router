@@ -13,6 +13,25 @@ import { createJobStore, touchJob } from "./jobStore.ts"
 
 const RESULT_TTL_MS = 10 * 60 * 1000
 
+/**
+ * Post-import refresh hooks.
+ *
+ * These used to be dynamic imports straight into `apps/web`, which made the
+ * shared package depend on one of its consumers. The consumer registers them
+ * instead; an app that has no such hooks (the oRPC API) simply leaves them
+ * unset and the calls become no-ops that log nothing.
+ */
+export interface PostImportHooks {
+	reapplyOutboundProxy?: () => Promise<void>
+	rescheduleAutoBackup?: () => Promise<void>
+}
+
+let postImportHooks: PostImportHooks = {}
+
+export function registerPostImportHooks(hooks: PostImportHooks): void {
+	postImportHooks = { ...postImportHooks, ...hooks }
+}
+
 const { getStore, scheduleResultCleanup } = createJobStore({
 	globalKey: "importJobs",
 	resultTtlMs: RESULT_TTL_MS,
@@ -53,17 +72,13 @@ async function runImportJob(jobId) {
 		// RESULT_TTL cleanup removes the record (and this digest) shortly after.
 
 		try {
-			const { getSettings } = await import("./repos/settingsRepo.ts")
-			const { applyOutboundProxyEnv } = await import("../network/outboundProxy.ts")
-			const settings = await getSettings()
-			applyOutboundProxyEnv(settings)
+			await postImportHooks.reapplyOutboundProxy?.()
 		} catch (err) {
 			console.warn("[Settings][DatabaseImport] Failed to re-apply outbound proxy env:", err)
 		}
 
 		try {
-			const { configureTelegramBackup } = await import("../../shared/services/telegramBackup.ts")
-			await configureTelegramBackup()
+			await postImportHooks.rescheduleAutoBackup?.()
 		} catch (err) {
 			console.warn("[Settings][DatabaseImport] Failed to reschedule auto backup:", err?.message || err)
 		}

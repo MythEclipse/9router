@@ -1,6 +1,6 @@
 "use client"
 
-import { getDefaultPricing } from "open-sse/providers/pricing"
+import { getDefaultPricing } from "@9router/pricing"
 import { useEffect, useMemo, useState } from "react"
 
 /** `provider -> model -> rate field -> cost per 1M tokens` */

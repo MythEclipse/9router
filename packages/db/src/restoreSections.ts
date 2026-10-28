@@ -16,9 +16,9 @@
  * about.
  */
 
-import { KEY_ACCESS_UNRESTRICTED } from "@/shared/constants/keyAccess"
-import { normalizeAllowedEndpoints } from "@/shared/constants/keyEndpoints"
-import { keyAccessToColumns, validateKeyAccessInput } from "@/shared/utils/keyAccess"
+import { keyAccessToColumns, validateKeyAccessInput } from "@9router/db/shared/keyAccess"
+import { KEY_ACCESS_UNRESTRICTED } from "@9router/db/shared/keyAccessConstants"
+import { normalizeAllowedEndpoints } from "@9router/db/shared/keyEndpoints"
 import type { ResolvedDbAdapter } from "./types.ts"
 
 /** The narrow slice of the adapter a restore needs. */

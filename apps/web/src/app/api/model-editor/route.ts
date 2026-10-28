@@ -1,15 +1,15 @@
-import { NextResponse } from "next/server"
-import { resolveProviderAlias } from "open-sse/services/model"
-import { getModelAliases } from "@/lib/db/repos/aliasRepo"
-import { reconcileAllowedModels } from "@/lib/db/repos/apiKeysRepo"
-import { getCombos } from "@/lib/db/repos/combosRepo"
+import { getModelAliases } from "@9router/db/repos/aliasRepo"
+import { reconcileAllowedModels } from "@9router/db/repos/apiKeysRepo"
+import { getCombos } from "@9router/db/repos/combosRepo"
 import {
 	deleteStudioModel,
 	getStudioModel,
 	getStudioModels,
 	setStudioModel,
-} from "@/lib/db/repos/modelEditorRepo"
-import { getProviderNodes } from "@/lib/db/repos/nodesRepo"
+} from "@9router/db/repos/modelEditorRepo"
+import { getProviderNodes } from "@9router/db/repos/nodesRepo"
+import { NextResponse } from "next/server"
+import { resolveProviderAlias } from "open-sse/services/model"
 import { describeStudioCycle, findStudioCycle } from "@/shared/utils/studioComboGuard"
 
 export const dynamic = "force-dynamic"
@@ -26,7 +26,7 @@ const NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/
 async function normalizeTarget(targetModel) {
 	if (!targetModel.includes("/")) {
 		try {
-			const { getComboByName } = await import("@/lib/db/repos/combosRepo")
+			const { getComboByName } = await import("@9router/db/repos/combosRepo")
 			if (await getComboByName(targetModel)) return targetModel
 		} catch {
 			/* combo lookup is best-effort */

@@ -1,4 +1,4 @@
-import { CUSTOM_PLUGIN_KEYS } from "@/shared/constants/pluginKeys"
+import { CUSTOM_PLUGIN_KEYS } from "@9router/db/shared/pluginKeys"
 import { getAdapter } from "../driver.ts"
 import { parseJson, stringifyJson } from "../helpers/jsonCol.ts"
 

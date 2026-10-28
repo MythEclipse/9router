@@ -1,10 +1,11 @@
+import { verifyDashboardPassword } from "@9router/auth/dashboardSession"
 import { NextResponse } from "next/server"
-import { verifyDashboardPassword } from "@/lib/auth/dashboardSession"
 
 export const dynamic = "force-dynamic"
 
-import { PASSWORD_HEADER, verifyPollToken } from "@/lib/db/importJobAuth"
-import { getImportJob } from "@/lib/db/importJobs"
+import { PASSWORD_HEADER, verifyPollToken } from "@9router/db/importJobAuth"
+import { getImportJob } from "@9router/db/importJobs"
+import "@/lib/db/registerPostImportHooks"
 
 const CLI_TOKEN_HEADER = "x-9r-cli-token"
 

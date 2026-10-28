@@ -1,5 +1,5 @@
+import { verifyDashboardPassword } from "@9router/auth/dashboardSession"
 import { NextResponse } from "next/server"
-import { verifyDashboardPassword } from "@/lib/auth/dashboardSession"
 import { exportDb, getDbSummary, getSettings, importDb } from "@/lib/localDb"
 import { applyOutboundProxyEnv } from "@/lib/network/outboundProxy"
 import { configureTelegramBackup } from "@/shared/services/telegramBackup"

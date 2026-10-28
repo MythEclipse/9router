@@ -9,7 +9,7 @@
 // a second copy here would drift apart from it. A route handler is an ordinary
 // async function over a plain Request, so it can be invoked in-process with an
 // object standing in for the params Next would otherwise resolve.
-import { registerDashboardJobHandler } from "@/lib/db/dashboardJobs"
+import { registerDashboardJobHandler } from "@9router/db/dashboardJobs"
 
 const CONCURRENCY = 8
 

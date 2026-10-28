@@ -81,7 +81,7 @@ export function isSttTransport(transport) {
 // this module (it opens with `from "open-sse/config/..."`, which does not
 // resolve inside .next/standalone and once took every route down with a 503).
 // A plain `export ... from` would leave no local binding for pluginMarksFor.
-import { CUSTOM_PLUGIN_KEYS } from "./pluginKeys.ts"
+import { CUSTOM_PLUGIN_KEYS } from "@9router/db/shared/pluginKeys"
 
 export { CUSTOM_PLUGIN_KEYS }
 

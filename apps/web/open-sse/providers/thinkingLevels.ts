@@ -1,10 +1,10 @@
 // Resolve valid thinking levels per model — drives UI level picker (suffix "model(level)").
 // Reuses capabilities.js (thinkingFormat/canDisable) so this file only maps format→levels (DRY).
 
+import { matchPattern } from "@9router/pricing"
 import { resolveKiroEffortPath } from "../config/kiroConstants.ts"
 import { getProviderModels } from "../config/providerModels.ts"
 import { getCapabilitiesForModel } from "./capabilities.ts"
-import { matchPattern } from "./pricing.ts"
 
 // Shared level sets (deduped) — verified against provider docs + wire in thinkingUnified.applyFormat.
 const L = {

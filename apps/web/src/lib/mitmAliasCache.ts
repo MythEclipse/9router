@@ -24,7 +24,7 @@ function writeAtomic(data: Record<string, unknown>): void {
 // Sync entire mitmAlias map from DB → JSON file
 export async function syncToJson() {
 	try {
-		const { getMitmAlias } = await import("@/lib/db/repos/aliasRepo")
+		const { getMitmAlias } = await import("@9router/db/repos/aliasRepo")
 		const all = await getMitmAlias(undefined)
 		writeAtomic((all || {}) as Record<string, unknown>)
 	} catch (e) {

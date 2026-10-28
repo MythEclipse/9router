@@ -1,10 +1,10 @@
-import { NextResponse } from "next/server"
-import { verifyDashboardPassword } from "@/lib/auth/dashboardSession"
+import { verifyDashboardPassword } from "@9router/auth/dashboardSession"
 import {
 	getAutoBackupConfig,
 	getAutoBackupStatus,
 	setAutoBackupConfig,
-} from "@/lib/db/repos/autoBackupRepo"
+} from "@9router/db/repos/autoBackupRepo"
+import { NextResponse } from "next/server"
 import { AUTO_BACKUP_CONFIG } from "@/shared/constants/config"
 import {
 	configureTelegramBackup,

@@ -1,0 +1,21 @@
+{
+  "name": "@9router/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "SQLite layer shared by the gateway (apps/web) and the oRPC API (apps/api)",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts",
+    "./repos/*": "./src/repos/*.ts",
+    "./helpers/*": "./src/helpers/*.ts",
+    "./adapters/*": "./src/adapters/*.ts",
+    "./migrations": "./src/migrations/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@9router/pricing": "workspace:*"
+  }
+}

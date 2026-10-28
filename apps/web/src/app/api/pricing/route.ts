@@ -1,5 +1,5 @@
+import { getDefaultPricing } from "@9router/pricing"
 import { NextResponse } from "next/server"
-import { getDefaultPricing } from "open-sse/providers/pricing"
 import { getPricing, resetAllPricing, resetPricing, updatePricing } from "@/lib/localDb"
 
 export const dynamic = "force-dynamic"

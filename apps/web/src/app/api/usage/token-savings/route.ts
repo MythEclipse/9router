@@ -1,6 +1,6 @@
+import { getAdapter } from "@9router/db/driver"
 import { NextResponse } from "next/server"
 import { getTokenSavingsReport } from "open-sse/rtk/tokenSaverStats"
-import { getAdapter } from "@/lib/db/driver"
 
 export const dynamic = "force-dynamic"
 

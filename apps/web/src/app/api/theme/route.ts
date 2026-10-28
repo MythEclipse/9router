@@ -1,6 +1,6 @@
+import { getDashboardAuthSession } from "@9router/auth/dashboardSession"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
-import { getDashboardAuthSession } from "@/lib/auth/dashboardSession"
 import { getSettings, updateSettings } from "@/lib/localDb"
 
 // The site-wide mode. Reading is public on purpose: ThemeProvider applies it to

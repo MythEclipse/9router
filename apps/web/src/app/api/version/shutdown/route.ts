@@ -1,8 +1,8 @@
+import { getDashboardAuthSession } from "@9router/auth/dashboardSession"
+import { closeDb } from "@9router/db/driver"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 import { killAppProcesses } from "@/lib/appProcessManager"
-import { getDashboardAuthSession } from "@/lib/auth/dashboardSession"
-import { closeDb } from "@/lib/db/driver"
 
 export const dynamic = "force-dynamic"
 

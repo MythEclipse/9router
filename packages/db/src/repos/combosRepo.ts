@@ -1,5 +1,5 @@
+import { normalizeAllowList } from "@9router/db/shared/keyAccess"
 import { v4 as uuidv4 } from "uuid"
-import { normalizeAllowList } from "@/shared/utils/keyAccess"
 import { getAdapter } from "../driver.ts"
 import { parseJson, stringifyJson } from "../helpers/jsonCol.ts"
 import { invalidateApiKeyCache } from "./apiKeysRepo.ts"

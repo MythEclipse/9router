@@ -22,8 +22,8 @@
  * This route answers Claude Code's own worker contract.
  */
 
+import { getProviderConnections } from "@9router/db/repos/connectionsRepo"
 import { resolveSearchProvider } from "open-sse/handlers/webSearchCredentials"
-import { getProviderConnections } from "@/lib/db/repos/connectionsRepo"
 import { getSettings } from "@/lib/localDb"
 import { handleSearch } from "@/sse/handlers/search"
 

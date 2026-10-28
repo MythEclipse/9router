@@ -1,5 +1,5 @@
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { NextResponse } from "next/server"
-import { getSessionContext } from "@/lib/auth/dashboardPermissions"
 import { getAntigravityTier } from "@/lib/usage/antigravityTier"
 
 export const dynamic = "force-dynamic"

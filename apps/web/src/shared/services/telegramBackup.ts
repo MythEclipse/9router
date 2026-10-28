@@ -5,14 +5,14 @@
 // went out.
 import "open-sse/index"
 
-import { proxyAwareFetch } from "open-sse/utils/proxyFetch"
-import { exportDb } from "@/lib/db/index"
+import { exportDb } from "@9router/db/index"
 import {
 	getAutoBackupConfig,
 	getAutoBackupStatus,
 	setAutoBackupStatus,
-} from "@/lib/db/repos/autoBackupRepo"
-import { getAppVersion } from "@/lib/db/version"
+} from "@9router/db/repos/autoBackupRepo"
+import { getAppVersion } from "@9router/db/version"
+import { proxyAwareFetch } from "open-sse/utils/proxyFetch"
 import { AUTO_BACKUP_CONFIG } from "@/shared/constants/config"
 
 const C = AUTO_BACKUP_CONFIG

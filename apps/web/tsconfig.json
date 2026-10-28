@@ -3,7 +3,12 @@
     "paths": {
       "@/*": ["./src/*"],
       "open-sse": ["./open-sse"],
-      "open-sse/*": ["./open-sse/*"]
+      "open-sse/*": ["./open-sse/*"],
+      "@9router/db": ["../../packages/db/src/index.ts"],
+      "@9router/db/*": ["../../packages/db/src/*"],
+      "@9router/pricing": ["../../packages/pricing/src/index.ts"],
+      "@9router/auth": ["../../packages/auth/src/index.ts"],
+      "@9router/auth/*": ["../../packages/auth/src/*"]
     },
     "module": "ESNext",
     "moduleResolution": "bundler",

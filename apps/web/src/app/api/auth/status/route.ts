@@ -1,14 +1,14 @@
-import { cookies } from "next/headers"
-import { NextResponse } from "next/server"
-import { getDashboardAuthSession } from "@/lib/auth/dashboardSession"
-import { isOidcConfigured } from "@/lib/auth/oidc"
+import { getDashboardAuthSession } from "@9router/auth/dashboardSession"
+import { isOidcConfigured } from "@9router/auth/oidc"
+import { isSamlConfigured } from "@9router/auth/saml"
 import {
 	DEFAULT_PERMISSIONS,
 	FULL_PERMISSIONS,
 	firstAllowedPage,
 	normalizePermissions,
-} from "@/lib/auth/permissionPaths"
-import { isSamlConfigured } from "@/lib/auth/saml"
+} from "@9router/db/shared/permissionPaths"
+import { cookies } from "next/headers"
+import { NextResponse } from "next/server"
 import { getSettings } from "@/lib/localDb"
 
 export const dynamic = "force-dynamic"

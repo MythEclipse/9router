@@ -1,10 +1,10 @@
 import crypto from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
+import { getSettings } from "@9router/db/repos/settingsRepo"
+import { DATA_DIR } from "@9router/db/shared/dataDir"
 import bcrypt from "bcryptjs"
 import { jwtVerify, SignJWT } from "jose"
-import { DATA_DIR } from "@/lib/dataDir"
-import { getSettings } from "@/lib/db/repos/settingsRepo"
 
 // Fork default password; upstream's 24h session lifetime is kept.
 const DEFAULT_PASSWORD = "123456"

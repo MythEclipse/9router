@@ -1,7 +1,7 @@
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
+import { getAdapter } from "@9router/db/driver"
+import { matchesAllowedModels, parseAllowedModels } from "@9router/db/repos/allowedModels"
 import { NextResponse } from "next/server"
-import { getSessionContext } from "@/lib/auth/dashboardPermissions"
-import { getAdapter } from "@/lib/db/driver"
-import { matchesAllowedModels, parseAllowedModels } from "@/lib/db/repos/allowedModels"
 
 export const dynamic = "force-dynamic"
 

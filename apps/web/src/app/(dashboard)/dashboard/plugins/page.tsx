@@ -1,9 +1,9 @@
 "use client"
 
+import { CUSTOM_PLUGIN_KEYS } from "@9router/db/shared/pluginKeys"
 import { useCallback, useEffect, useState } from "react"
 import { Badge, Button, CapacityBadges, Card, ModelSelectModal, Toggle } from "@/shared/components"
 import PluginMark from "@/shared/components/PluginMark"
-import { CUSTOM_PLUGIN_KEYS } from "@/shared/constants/pluginKeys"
 import { useModelCaps } from "@/shared/hooks/useModelCaps"
 import { useNotificationStore } from "@/store/notificationStore"
 

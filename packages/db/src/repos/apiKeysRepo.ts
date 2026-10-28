@@ -1,12 +1,12 @@
-import { v4 as uuidv4 } from "uuid"
-import { DEFAULT_PERMISSIONS } from "@/lib/auth/permissionPaths"
-import { normalizeAllowedEndpoints } from "@/shared/constants/keyEndpoints"
 import {
 	type KeyAccess,
 	keyAccessFromColumns,
 	keyAccessToColumns,
 	validateKeyAccessInput,
-} from "@/shared/utils/keyAccess"
+} from "@9router/db/shared/keyAccess"
+import { normalizeAllowedEndpoints } from "@9router/db/shared/keyEndpoints"
+import { DEFAULT_PERMISSIONS } from "@9router/db/shared/permissionPaths"
+import { v4 as uuidv4 } from "uuid"
 import { getAdapter } from "../driver.ts"
 import type { DbRow } from "../types.ts"
 // The allowed-model pattern language lives in a dependency-free module of its own:
@@ -158,7 +158,7 @@ export async function createApiKey(
 ): Promise<ApiKeyRecord> {
 	if (!machineId) throw new Error("machineId is required")
 	const db = await getAdapter()
-	const { generateApiKeyWithMachine } = await import("@/shared/utils/apiKey")
+	const { generateApiKeyWithMachine } = await import("./../shared/apiKey.ts")
 	const result = generateApiKeyWithMachine(machineId)
 	const now = new Date().toISOString()
 	const apiKey = {

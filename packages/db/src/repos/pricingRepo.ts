@@ -47,7 +47,7 @@ export async function getPricing() {
 	if (cache.value && cache.expiresAt > now) return cache.value
 
 	const userPricing = await getUserPricing()
-	const { PROVIDER_PRICING } = await import("open-sse/providers/pricing")
+	const { PROVIDER_PRICING } = await import("@9router/pricing")
 	const merged = {}
 
 	for (const [provider, models] of Object.entries(PROVIDER_PRICING)) {
@@ -79,7 +79,7 @@ export async function getPricingForModel(provider, model) {
 	if (!model) return null
 	const userPricing = await getUserPricingCached()
 	if (provider && userPricing[provider]?.[model]) return userPricing[provider][model]
-	const { getPricingForModel: resolveConst } = await import("open-sse/providers/pricing")
+	const { getPricingForModel: resolveConst } = await import("@9router/pricing")
 	return resolveConst(provider, model)
 }
 

@@ -1,7 +1,6 @@
+import { clearDashboardAuthCookie } from "@9router/auth/dashboardSession"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
-
-import { clearDashboardAuthCookie } from "@/lib/auth/dashboardSession"
 
 export const dynamic = "force-dynamic"
 

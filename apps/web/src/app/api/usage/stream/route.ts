@@ -1,4 +1,4 @@
-import { getSessionContext } from "@/lib/auth/dashboardPermissions"
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { getActiveRequests, getUsageStats, statsEmitter } from "@/lib/usageDb"
 
 export const dynamic = "force-dynamic"

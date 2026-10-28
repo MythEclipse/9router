@@ -4,7 +4,7 @@ import {
 	KEY_ACCESS_MAX_ENTRIES,
 	KEY_ACCESS_MAX_ENTRY_LENGTH,
 	KEY_ACCESS_UNRESTRICTED,
-} from "@/shared/constants/keyAccess"
+} from "@9router/db/shared/keyAccessConstants"
 
 /** A key's model-access setting: unrestricted, or an allow list of patterns. */
 export interface KeyAccess {

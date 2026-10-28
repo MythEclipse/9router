@@ -16,7 +16,7 @@
  * The placeholder DEFAULT_LOCAL_API_KEY is NEVER written; it was never a real key.
  */
 
-import { getApiKeys } from "@/lib/db"
+import { getApiKeys } from "@9router/db"
 import { DEFAULT_LOCAL_API_KEY } from "@/shared/constants/config"
 
 /**

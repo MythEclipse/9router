@@ -5,7 +5,7 @@ const { machineIdSync } = nodeMachineId
 import crypto from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
-import { DATA_DIR } from "@/lib/dataDir"
+import { DATA_DIR } from "@9router/db/shared/dataDir"
 
 const MACHINE_ID_FILE = path.join(DATA_DIR, "machine-id")
 const AUTH_DIR = path.join(DATA_DIR, "auth")

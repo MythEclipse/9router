@@ -1,7 +1,7 @@
+import { verifyDashboardAuthToken } from "@9router/auth/dashboardSession"
+import { fetchOidcDiscovery, getPublicOrigin, probeOidcClientSecret } from "@9router/auth/oidc"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
-import { verifyDashboardAuthToken } from "@/lib/auth/dashboardSession"
-import { fetchOidcDiscovery, getPublicOrigin, probeOidcClientSecret } from "@/lib/auth/oidc"
 import { getSettings } from "@/lib/localDb"
 
 export const dynamic = "force-dynamic"

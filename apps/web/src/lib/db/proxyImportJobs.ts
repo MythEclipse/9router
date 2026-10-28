@@ -16,7 +16,7 @@
 // an in-flight import. Records are kept for RESULT_TTL_MS after completion so
 // the dashboard can show the outcome of a run the operator stopped watching.
 import { randomUUID } from "node:crypto"
-import { createJobStore, touchJob } from "./jobStore.ts"
+import { createJobStore, touchJob } from "@9router/db/jobStore"
 
 const RESULT_TTL_MS = 15 * 60 * 1000
 

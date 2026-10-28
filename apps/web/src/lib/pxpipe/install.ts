@@ -1,7 +1,7 @@
 import { execSync, spawn } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
-import { DATA_DIR } from "@/lib/dataDir"
+import { DATA_DIR } from "@9router/db/shared/dataDir"
 
 export const PXPIPE_DIR = path.join(DATA_DIR, "pxpipe")
 export const PXPIPE_PACKAGE = "pxpipe-proxy"

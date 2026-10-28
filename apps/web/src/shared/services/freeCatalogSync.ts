@@ -10,9 +10,9 @@
  * modelsFetcher). Authenticated per-account lists are never synced here.
  */
 
+import { makeKv } from "@9router/db/helpers/kvStore"
 import REGISTRY from "open-sse/providers/registry/index"
 import { FILTERS, onlyFree } from "@/app/api/providers/suggested-models/filters"
-import { makeKv } from "@/lib/db/helpers/kvStore"
 
 const kv = makeKv("freeCatalogSync")
 

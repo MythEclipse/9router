@@ -1,4 +1,4 @@
-import { getAdapter } from "@/lib/db/driver"
+import { getAdapter } from "@9router/db/driver"
 import type { CustomPluginResult } from "@/lib/plugins/customPluginsRuntime"
 import { applyCustomPlugins } from "@/lib/plugins/customPluginsRuntime"
 import { appendRequestLog, saveRequestDetail, trackPendingRequest } from "@/lib/usageDb"

@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
-import { DATA_DIR } from "@/lib/dataDir"
+import { DATA_DIR } from "@9router/db/shared/dataDir"
 import {
 	EXTRA_MARKERS,
 	findHeadroomBinary,

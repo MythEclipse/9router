@@ -1,17 +1,17 @@
-import { NextResponse } from "next/server"
-import { FORMATS } from "open-sse/translator/formats"
-import { buildErrorBody } from "open-sse/utils/error"
-import { getDashboardAuthSession, verifyDashboardAuthToken } from "@/lib/auth/dashboardSession"
+import { getDashboardAuthSession, verifyDashboardAuthToken } from "@9router/auth/dashboardSession"
+import { hasTrustedPeerHeaders } from "@9router/auth/trustedPeer"
+import { getApiKeyByKey, validateApiKey } from "@9router/db/repos/apiKeysRepo"
+import { getSettings } from "@9router/db/repos/settingsRepo"
+import { classifyApiKeyEndpoint, isApiKeyEndpointAllowed } from "@9router/db/shared/keyEndpoints"
 import {
 	canOpenPage,
 	firstAllowedPage,
 	normalizePermissions,
 	requiredPermissionsForApiPath,
-} from "@/lib/auth/permissionPaths"
-import { hasTrustedPeerHeaders } from "@/lib/auth/trustedPeer"
-import { getApiKeyByKey, validateApiKey } from "@/lib/db/repos/apiKeysRepo"
-import { getSettings } from "@/lib/db/repos/settingsRepo"
-import { classifyApiKeyEndpoint, isApiKeyEndpointAllowed } from "@/shared/constants/keyEndpoints"
+} from "@9router/db/shared/permissionPaths"
+import { NextResponse } from "next/server"
+import { FORMATS } from "open-sse/translator/formats"
+import { buildErrorBody } from "open-sse/utils/error"
 import { getConsistentMachineId } from "@/shared/utils/machineId"
 
 const CLI_TOKEN_HEADER = "x-9r-cli-token"

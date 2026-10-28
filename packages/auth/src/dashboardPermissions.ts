@@ -1,6 +1,6 @@
+import { FULL_PERMISSIONS, normalizePermissions } from "@9router/db/shared/permissionPaths"
 import { cookies } from "next/headers"
-import { getDashboardAuthSession } from "@/lib/auth/dashboardSession"
-import { FULL_PERMISSIONS, normalizePermissions } from "@/lib/auth/permissionPaths"
+import { getDashboardAuthSession } from "./dashboardSession.ts"
 
 export {
 	canGrantPermissions,
@@ -13,7 +13,7 @@ export {
 	PERMISSION_KEYS,
 	requiredPermissionsForApiPath,
 	requiredPermissionsForPage,
-} from "@/lib/auth/permissionPaths"
+} from "@9router/db/shared/permissionPaths"
 
 // Usage rows are always scoped to the key that authenticated the session, so an
 // API key login can never read another key's numbers.

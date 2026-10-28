@@ -18,7 +18,7 @@
  * where the removed text no longer exists.
  */
 
-import { getPricingForModel } from "../providers/pricing.ts"
+import { getPricingForModel } from "@9router/pricing"
 import { estimateMessageTokens } from "../translator/concerns/contextSqueezer.ts"
 
 const SCOPE = "tokenSaverStats"

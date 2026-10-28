@@ -1,6 +1,4 @@
-import { cookies } from "next/headers"
-import { NextResponse } from "next/server"
-import { shouldUseSecureCookie } from "@/lib/auth/dashboardSession"
+import { shouldUseSecureCookie } from "@9router/auth/dashboardSession"
 import {
 	buildOidcAuthorizationUrl,
 	createOidcNonce,
@@ -9,7 +7,9 @@ import {
 	fetchOidcDiscovery,
 	getOidcRuntimeConfig,
 	getPublicOrigin,
-} from "@/lib/auth/oidc"
+} from "@9router/auth/oidc"
+import { cookies } from "next/headers"
+import { NextResponse } from "next/server"
 
 export const dynamic = "force-dynamic"
 

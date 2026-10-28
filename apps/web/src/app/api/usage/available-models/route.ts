@@ -1,7 +1,7 @@
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
+import { getSettings } from "@9router/db/repos/settingsRepo"
 import { NextResponse } from "next/server"
 import { getCapabilitiesForModel } from "open-sse/providers/capabilities"
-import { getSessionContext } from "@/lib/auth/dashboardPermissions"
-import { getSettings } from "@/lib/db/repos/settingsRepo"
 import { getDisabledModels } from "@/lib/disabledModelsDb"
 import {
 	collapseModelsByAdmittedId,
@@ -87,7 +87,7 @@ export async function GET() {
 				import("@/lib/localDb").then((m) => m.getCustomModels().catch(() => [])),
 				import("@/lib/localDb").then((m) => m.getCombos().catch(() => [])),
 				import("@/lib/localDb").then((m) => m.getProviderConnections().catch(() => [])),
-				import("@/lib/db/repos/modelEditorRepo").then((m) => m.getStudioModels().catch(() => [])),
+				import("@9router/db/repos/modelEditorRepo").then((m) => m.getStudioModels().catch(() => [])),
 			])
 
 		const entries = []

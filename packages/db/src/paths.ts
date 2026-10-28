@@ -1,6 +1,6 @@
 import fs from "node:fs"
 import path from "node:path"
-import { DATA_DIR } from "@/lib/dataDir"
+import { DATA_DIR } from "@9router/db/shared/dataDir"
 
 export const DB_DIR = path.join(DATA_DIR, "db")
 export const DATA_FILE = path.join(DB_DIR, "data.sqlite")

@@ -209,7 +209,7 @@ export async function GET() {
 
 		// Studio (Custom Models) entries: the callable name is the key clients use,
 		// so the plugin badge lookup must answer for the bare callName as well.
-		const { getStudioModels } = await import("@/lib/db/repos/modelEditorRepo")
+		const { getStudioModels } = await import("@9router/db/repos/modelEditorRepo")
 		type StudioModelRow = {
 			provider: string
 			model: string

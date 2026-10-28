@@ -1,6 +1,6 @@
 import fs from "node:fs"
 import path from "node:path"
-import { DATA_DIR } from "@/lib/dataDir"
+import { DATA_DIR } from "@9router/db/shared/dataDir"
 
 const TUNNEL_DIR = path.join(DATA_DIR, "tunnel")
 const STATE_FILE = path.join(TUNNEL_DIR, "state.json")

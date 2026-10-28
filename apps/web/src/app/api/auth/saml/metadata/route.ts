@@ -1,4 +1,4 @@
-import { generateSamlMetadata } from "@/lib/auth/saml"
+import { generateSamlMetadata } from "@9router/auth/saml"
 import { getSettings } from "@/lib/localDb"
 
 export const dynamic = "force-dynamic"

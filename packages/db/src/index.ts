@@ -1,7 +1,7 @@
 // Public API barrel - all DB functions
 
-import { normalizeAllowedEndpoints } from "@/shared/constants/keyEndpoints"
-import { keyAccessFromColumns } from "@/shared/utils/keyAccess"
+import { keyAccessFromColumns } from "@9router/db/shared/keyAccess"
+import { normalizeAllowedEndpoints } from "@9router/db/shared/keyEndpoints"
 import { getAdapter } from "./driver.ts"
 import { parseJson } from "./helpers/jsonCol.ts"
 import { invalidateApiKeyCache } from "./repos/apiKeysRepo.ts"

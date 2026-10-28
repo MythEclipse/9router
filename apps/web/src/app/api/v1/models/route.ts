@@ -3,6 +3,7 @@ import { resolveModelDisplayName } from "@/shared/utils/modelDisplayName"
 
 export const dynamic = "force-dynamic"
 
+import { getAllowedModelsOfKey, matchesAllowedModels } from "@9router/db/repos/apiKeysRepo"
 import {
 	aggregateComboCapabilities,
 	capabilitiesFromServiceKind,
@@ -17,7 +18,6 @@ import { resolveKiroModels } from "open-sse/services/kiroModels"
 import { resolveQoderModels, routableQoderModels } from "open-sse/services/qoderModels"
 import { resolveZedModels } from "open-sse/shared/zedAuth"
 import { fetchSuggestedModelsServer, onlyFree } from "@/app/api/providers/suggested-models/filters"
-import { getAllowedModelsOfKey, matchesAllowedModels } from "@/lib/db/repos/apiKeysRepo"
 import { getDisabledModels } from "@/lib/disabledModelsDb"
 import {
 	getCombos,

@@ -1,6 +1,6 @@
 import crypto from "node:crypto"
+import { getSettings } from "@9router/db"
 import { createRemoteJWKSet, jwtVerify } from "jose"
-import { getSettings } from "@/lib/localDb"
 
 export const OIDC_COOKIE_NAMES = {
 	state: "oidc_state",

@@ -3,7 +3,7 @@ import fs from "node:fs"
 import https from "node:https"
 import os from "node:os"
 import path from "node:path"
-import { DATA_DIR } from "@/lib/dataDir"
+import { DATA_DIR } from "@9router/db/shared/dataDir"
 import { clearPid, loadPid, savePid } from "./pid.ts"
 
 const BIN_DIR = path.join(DATA_DIR, "bin")

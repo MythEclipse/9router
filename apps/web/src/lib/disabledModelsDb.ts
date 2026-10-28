@@ -4,4 +4,4 @@ export {
 	enableModels,
 	getDisabledByProvider,
 	getDisabledModels,
-} from "@/lib/db/index"
+} from "@9router/db/index"

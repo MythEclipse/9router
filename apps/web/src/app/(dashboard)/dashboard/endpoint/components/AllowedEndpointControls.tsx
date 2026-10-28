@@ -1,6 +1,6 @@
 "use client"
 
-import { API_KEY_ENDPOINT_KINDS, type ApiKeyEndpointKind } from "@/shared/constants/keyEndpoints"
+import { API_KEY_ENDPOINT_KINDS, type ApiKeyEndpointKind } from "@9router/db/shared/keyEndpoints"
 
 const LABELS: Record<ApiKeyEndpointKind, string> = {
 	chat: "Chat / Messages",

@@ -1,7 +1,7 @@
+import { verifyDashboardAuthToken } from "@9router/auth/dashboardSession"
+import { formatX509Certificate } from "@9router/auth/saml"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
-import { verifyDashboardAuthToken } from "@/lib/auth/dashboardSession"
-import { formatX509Certificate } from "@/lib/auth/saml"
 import { getSettings } from "@/lib/localDb"
 
 export const dynamic = "force-dynamic"

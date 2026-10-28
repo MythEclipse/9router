@@ -1,9 +1,10 @@
+import { verifyDashboardPassword } from "@9router/auth/dashboardSession"
 import { NextResponse } from "next/server"
-import { verifyDashboardPassword } from "@/lib/auth/dashboardSession"
 
 export const dynamic = "force-dynamic"
 
-import { createImportJob } from "@/lib/db/importJobs"
+import { createImportJob } from "@9router/db/importJobs"
+import "@/lib/db/registerPostImportHooks"
 
 const CLI_TOKEN_HEADER = "x-9r-cli-token"
 const MAX_IMPORT_BYTES = 50 * 1024 * 1024

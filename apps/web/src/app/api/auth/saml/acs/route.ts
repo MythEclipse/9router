@@ -1,14 +1,14 @@
-import { cookies } from "next/headers"
-import { NextResponse } from "next/server"
-import { setDashboardAuthCookie } from "@/lib/auth/dashboardSession"
-import { checkLock, getClientIp, recordFail, recordSuccess } from "@/lib/auth/loginLimiter"
+import { setDashboardAuthCookie } from "@9router/auth/dashboardSession"
+import { checkLock, getClientIp, recordFail, recordSuccess } from "@9router/auth/loginLimiter"
 import {
 	getSamlBaseUrl,
 	isSamlConfigured,
 	pickSamlDisplayName,
 	pickSamlEmail,
 	validateSamlResponse,
-} from "@/lib/auth/saml"
+} from "@9router/auth/saml"
+import { cookies } from "next/headers"
+import { NextResponse } from "next/server"
 import { getSettings } from "@/lib/localDb"
 
 export const dynamic = "force-dynamic"

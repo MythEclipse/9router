@@ -4,4 +4,4 @@ export {
 	getRequestDetailById,
 	getRequestDetails,
 	saveRequestDetail,
-} from "@/lib/db/index"
+} from "@9router/db/index"

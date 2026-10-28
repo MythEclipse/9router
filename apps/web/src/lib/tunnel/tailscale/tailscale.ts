@@ -4,7 +4,7 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { promisify } from "node:util"
-import { DATA_DIR } from "@/lib/dataDir"
+import { DATA_DIR } from "@9router/db/shared/dataDir"
 import { execWithPassword } from "@/mitm/dns/dnsConfig"
 
 const execAsync = promisify(exec)

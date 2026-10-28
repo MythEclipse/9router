@@ -1,5 +1,5 @@
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { NextResponse } from "next/server"
-import { getSessionContext } from "@/lib/auth/dashboardPermissions"
 import { getUsageHistory } from "@/lib/usageDb"
 
 export const dynamic = "force-dynamic"

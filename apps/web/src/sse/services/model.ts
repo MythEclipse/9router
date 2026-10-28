@@ -85,7 +85,7 @@ export async function getModelInfo(modelStr, studioHops = 0) {
 
 	// Check studio models
 	try {
-		const { getStudioModel } = await import("@/lib/db/repos/modelEditorRepo")
+		const { getStudioModel } = await import("@9router/db/repos/modelEditorRepo")
 		const studio = studioHops < MAX_STUDIO_HOPS ? await getStudioModel(parsed.model) : null
 		if (studio && "isComboTarget" in studio && studio.isComboTarget) {
 			// The studio name points at a combo: answer the combo name itself so the

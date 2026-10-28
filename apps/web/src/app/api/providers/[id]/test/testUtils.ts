@@ -1,3 +1,4 @@
+import type { ProviderConnectionRecord } from "@9router/db/repos/connectionsRepo"
 import { CODEX_CLI_VERSION } from "open-sse/config/appConstants"
 import { GROK_CLI_PAGER_USER_AGENT, GROK_CLI_VERSION } from "open-sse/config/grokCli"
 import {
@@ -19,7 +20,6 @@ import {
 	shouldRefreshCredentials,
 } from "open-sse/services/oauthCredentialManager"
 import { pingModelByKind } from "@/app/api/models/test/ping"
-import type { ProviderConnectionRecord } from "@/lib/db/repos/connectionsRepo"
 import { getProviderConnectionById, updateProviderConnection } from "@/lib/localDb"
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy"
 import { testProxyUrl } from "@/lib/network/proxyTest"

@@ -1,6 +1,6 @@
+import { getDashboardAuthSession } from "@9router/auth/dashboardSession"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
-import { getDashboardAuthSession } from "@/lib/auth/dashboardSession"
 import { getRequestDetailById } from "@/lib/requestDetailsDb"
 
 export const dynamic = "force-dynamic"

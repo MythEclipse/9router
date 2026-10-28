@@ -1,6 +1,6 @@
 "use client"
 
-import { calculateCostFromTokens, formatCost, getPricingForModel } from "open-sse/providers/pricing"
+import { calculateCostFromTokens, formatCost, getPricingForModel } from "@9router/pricing"
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Button, Card, CardSkeleton, Input, ModelSelectModal } from "@/shared/components"
 import { PROVIDER_ID_TO_ALIAS } from "@/shared/constants/models"

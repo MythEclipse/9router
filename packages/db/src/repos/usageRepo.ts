@@ -436,7 +436,7 @@ async function calculateCost(
 		// Delegate the actual math to the single source of truth (avoids the two
 		// copies drifting apart - see open-sse/providers/pricing.js for the
 		// cache-inclusive prompt_tokens convention this assumes).
-		const { calculateCostFromTokens } = await import("open-sse/providers/pricing")
+		const { calculateCostFromTokens } = await import("@9router/pricing")
 		return calculateCostFromTokens(tokens, pricing)
 	} catch (e) {
 		console.error("Error calculating cost:", e)

@@ -1,0 +1,13 @@
+{
+  "name": "@9router/pricing",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Provider pricing tables and cost calculation shared by the gateway, the DB layer and the API",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}
