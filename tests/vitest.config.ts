@@ -1,10 +1,49 @@
+import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { fileURLToPath } from "node:url"
+import type { Plugin } from "vite"
 import { defineConfig } from "vitest/config"
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url))
 
+/**
+ * Resolve `bun:sqlite` to an inert stand-in.
+ *
+ * Vite's `resolve.alias` table never sees a `bun:` specifier — Node's resolver
+ * rejects the protocol before the alias is consulted ("Only URLs with a scheme
+ * in: file, data, and node are supported"), so the handler has to sit in front
+ * of resolution instead.
+ *
+ * Needed because route handlers now delegate to `apps/api` use-cases, whose db
+ * client imports `bun:sqlite` at module scope. Without this, every test that
+ * touches a delegating route fails at collection and reports "no tests", which
+ * reads as a missing file rather than a broken environment.
+ */
+function bunSqliteStub(): Plugin {
+	const stub = resolve(__dirname, "stubs/bun-sqlite.ts")
+	const clientStub = resolve(__dirname, "stubs/api-db-client.ts")
+	return {
+		name: "9router:bun-sqlite-stub",
+		enforce: "pre",
+		resolveId(source, importer) {
+			if (source === "bun:sqlite") return stub
+			// The api's db client imports `bun:sqlite` at module scope and opens a
+			// handle immediately; resolving the whole file for a test that only
+			// reaches a use-case would drag the native binding in. Substitute the
+			// module instead of its import.
+			if (source.endsWith("infrastructure/db/client.ts")) return clientStub
+			return null
+		},
+		load(id) {
+			if (id === "bun:sqlite" || id === stub) return readFileSync(stub, "utf8")
+			if (id === clientStub) return readFileSync(clientStub, "utf8")
+			return null
+		},
+	}
+}
+
 export default defineConfig({
+	plugins: [bunSqliteStub()],
 	test: {
 		environment: "node",
 		globals: true,
@@ -51,6 +90,9 @@ export default defineConfig({
 			// assertion, which is worse — a broken import reports as a failed file,
 			// not a failed expectation, so nobody reads it as a regression.
 			{ find: /^@\//, replacement: resolve(__dirname, "../apps/web/src") + "/" },
+			// Next route handlers now delegate to `apps/api` use-cases, whose db
+			// client imports `bun:sqlite`. Vite has no such builtin, so any test
+			// touching a delegating route failed at collection. The alias points
 		],
 	},
 })

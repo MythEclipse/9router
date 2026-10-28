@@ -9,24 +9,48 @@ const fx = vi.hoisted(() => ({
 	seq: 0,
 }))
 
-vi.mock("@/lib/localDb", async (importOriginal) => ({
-	...(await importOriginal()),
-	getCombos: async () => fx.combos,
-	getComboById: async (id: string) => fx.combos.find((c) => c.id === id) || null,
-	createCombo: async (data: Record<string, unknown>) => {
-		const combo = { id: `new-${++fx.seq}`, ...data }
-		fx.combos.push(combo)
-		return combo
-	},
-	getSettings: async () => fx.settings,
-	updateSettings: async (updates: Record<string, unknown>) => {
-		fx.settings = { ...fx.settings, ...updates } as typeof fx.settings
-		return fx.settings
-	},
+// The route delegates to a use-case, so the fixture stands in for the service
+// rather than the old `@/lib/localDb` accessors. A full module mock, without
+// `importOriginal`: the real one opens a database, which Vitest (running on
+// Node) cannot do.
+// Mirrors the shape `toResponse` maps to a 404, without importing the real
+// error module (it lives in `apps/api`, which pulls in the db client).
+class ComboNotFoundError extends Error {
+	readonly code = "NOT_FOUND"
+	constructor(id: string) {
+		super(`Combo not found: ${id}`)
+	}
+}
+
+vi.mock("@/lib/useCases", () => ({
+	getUseCases: () => ({
+		duplicateCombo: async (id: string) => {
+			const { nextCopyName } = await import("../../apps/web/src/shared/utils/comboCopyName.js")
+			const source = fx.combos.find((c) => c.id === id)
+			if (!source) throw new ComboNotFoundError(id)
+			const copy = {
+				id: `new-${++fx.seq}`,
+				...source,
+				name: nextCopyName(
+					String(source.name),
+					fx.combos.map((c) => String(c.name)),
+				),
+			}
+			fx.combos.push(copy)
+			const strategies = fx.settings.comboStrategies as Record<string, unknown>
+			if (strategies[String(source.name)]) {
+				strategies[copy.name] = structuredClone(strategies[String(source.name)])
+			}
+			return copy
+		},
+	}),
 }))
 
-const { POST } = await import("../../apps/web/src/app/api/combos/[id]/duplicate/route.js")
-const { nextCopyName } = await import("../../apps/web/src/shared/utils/comboCopyName.js")
+// Static imports, not top-level `await import()`: the dynamic form is executed
+// by Node's ESM loader before Vite's plugin pipeline sees it, so the stubbed
+// `bun:sqlite` never gets substituted and the whole file fails to collect.
+import { POST } from "../../apps/web/src/app/api/combos/[id]/duplicate/route.js"
+import { nextCopyName } from "../../apps/web/src/shared/utils/comboCopyName.js"
 
 const post = (id: string) => POST({}, { params: Promise.resolve({ id }) })
 
