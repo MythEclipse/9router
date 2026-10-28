@@ -2,15 +2,21 @@ import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 
+/**
+ * Sources are formatted without semicolons, so literals ending in ";"
+ * never matched. Normalise both sides before comparing.
+ */
+const withoutSemicolons = (text: string) => text.replace(/;\s*$/gm, "").replace(/;\n/g, "\n")
+
 const root = resolve(__dirname, "../..")
-const read = (p) => readFileSync(resolve(root, p), "utf8")
+const read = (p) => withoutSemicolons(readFileSync(resolve(root, p), "utf8"))
 
 describe("debug navigation access", () => {
 	it("restricts debug navigation to administrator sessions or advanced permissions", () => {
 		const sidebar = read("apps/web/src/shared/components/Sidebar.tsx")
-		expect(sidebar).toContain("if (!sessionReady) return false;")
-		expect(sidebar).toContain("if (!isApiKeyUser) return true;")
-		expect(sidebar).toContain("return permissions.manageAdvanced;")
+		expect(sidebar).toContain("if (!sessionReady) return false")
+		expect(sidebar).toContain("if (!isApiKeyUser) return true")
+		expect(sidebar).toContain("return permissions.manageAdvanced")
 	})
 })
 

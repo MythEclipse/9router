@@ -65,6 +65,6 @@ describe("live stream model naming", () => {
 	})
 
 	it("exposes requestedModel on RecentRequest so the UI can qualify a row", () => {
-		expect(repo).toMatch(/interface RecentRequest \{[\s\S]*?requestedModel\?: string;/)
+		expect(repo).toMatch(/interface RecentRequest \{[\s\S]*?requestedModel\?: string;?/)
 	})
 })

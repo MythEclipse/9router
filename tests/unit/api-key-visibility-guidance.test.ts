@@ -29,7 +29,10 @@ describe("API key visibility guidance source verification", () => {
 		"updates the existing %s translation without retaining the one-time claim",
 		(locale) => {
 			const translations = JSON.parse(
-				readFileSync(new URL(`../../public/i18n/literals/${locale}.json`, import.meta.url), "utf-8"),
+				readFileSync(
+					new URL(`../../apps/web/public/i18n/literals/${locale}.json`, import.meta.url),
+					"utf-8",
+				),
 			)
 			expect(translations).not.toHaveProperty(oldGuidance)
 			expect(translations[guidance]).toEqual(expect.any(String))

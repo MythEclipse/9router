@@ -18,7 +18,10 @@ import { describe, expect, it } from "vitest"
 
 // ── #4202 Registry checks ────────────────────────────────────────────────────
 
-const codexSrc = fs.readFileSync(path.resolve("../open-sse/providers/registry/codex.ts"), "utf-8")
+const codexSrc = fs.readFileSync(
+	path.resolve("apps/web/open-sse/providers/registry/codex.ts"),
+	"utf-8",
+)
 
 describe("Codex registry — ghost models removed (#4202)", () => {
 	it("gpt-5.4 is removed", () => {

@@ -90,6 +90,15 @@ export async function getPricing(): Promise<PricingMap> {
 		merged[provider] = mergeProvider(models, userPricing[provider])
 	}
 
+	// mergeProvider only folds user pricing into a provider the catalog already
+	// lists. A provider the user priced themselves — a custom endpoint, or a
+	// local model never shipped in PROVIDER_PRICING — was silently dropped from
+	// the result, so callers saw no pricing for it at all.
+	for (const [provider, models] of Object.entries(userPricing)) {
+		if (merged[provider]) continue
+		merged[provider] = { ...models }
+	}
+
 	cache = { value: merged, expiresAt: now + CACHE_TTL_MS }
 	return merged
 }

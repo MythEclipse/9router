@@ -81,7 +81,10 @@ describe("Anti Slop reproduces the skill, it does not summarise it", () => {
 	it("matches the checked-in upstream sources byte for byte", () => {
 		// Not a sample and not a set of headings: the whole document, character for character. Any
 		// paraphrase, reformat or dropped paragraph fails here.
-		const core = fs.readFileSync(path.join(ROOT, "open-sse/rtk/antislop-src/core.md"), "utf8")
+		const core = fs.readFileSync(
+			path.join(ROOT, "apps/web/open-sse/rtk/antislop-src/core.md"),
+			"utf8",
+		)
 		const body = core.slice(core.indexOf("## What This Is")).trim()
 		expect(full.includes(body), "core text is not verbatim in FULL").toBe(true)
 
@@ -96,7 +99,7 @@ describe("Anti Slop reproduces the skill, it does not summarise it", () => {
 			["layoutmobile.md", "# antislop-layoutmobile"],
 			["code.md", "# antislop-code"],
 		]) {
-			const md = fs.readFileSync(path.join(ROOT, "open-sse/rtk/antislop-src", file), "utf8")
+			const md = fs.readFileSync(path.join(ROOT, "apps/web/open-sse/rtk/antislop-src", file), "utf8")
 			const skill = `${title}\n\n${stripFrontmatter(md)}`
 			expect(ultra.includes(skill), `${file} is not verbatim in ULTRA`).toBe(true)
 		}

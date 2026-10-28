@@ -3,6 +3,12 @@ import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import { aggregateComboCapabilities } from "../../apps/web/open-sse/providers/capabilities"
 
+/**
+ * Sources are formatted without semicolons, so literals ending in ";"
+ * never matched. Normalise both sides before comparing.
+ */
+const withoutSemicolons = (text: string) => text.replace(/;\s*$/gm, "").replace(/;\n/g, "\n")
+
 describe("aggregateComboCapabilities - null / empty", () => {
 	it("returns null for null", () => {
 		expect(aggregateComboCapabilities(null)).toBeNull()
@@ -185,9 +191,11 @@ describe("the routes that publish combos pass the arguments in the right slots",
 		"apps/web/src/app/api/v1/models/route.ts",
 	]) {
 		it(`${file} sends null for the resolver and the combo window last`, () => {
-			const src = readFileSync(resolve(__dirname, "../..", file), "utf8")
+			const src = withoutSemicolons(readFileSync(resolve(__dirname, "../..", file), "utf8"))
+			// The call is spread over several lines, so the pattern tolerates
+			// whitespace between arguments instead of demanding a single line.
 			expect(src).toMatch(
-				/aggregateComboCapabilities\([\w.]+(?:, comboByName), null, 0, Number\(combo\.contextWindow\) \|\| 0\)/,
+				/aggregateComboCapabilities\(\s*[\w.]+,\s*comboByName,\s*null,\s*0,\s*Number\(combo\.contextWindow\)\s*\|\|\s*0,?\s*\)/,
 			)
 			expect(src).not.toMatch(/aggregateComboCapabilities\([^)]*comboByName, 0,/)
 		})

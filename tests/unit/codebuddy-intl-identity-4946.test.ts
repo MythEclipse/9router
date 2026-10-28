@@ -119,7 +119,7 @@ describe("codebuddy-intl outbound identity (#4946)", () => {
 	describe("no stale identity left behind", () => {
 		it("does not mention the old IDE identity", () => {
 			const registrySrc = readFileSync(
-				resolve(root, "open-sse/providers/registry/codebuddy-intl.ts"),
+				resolve(root, "apps/web/open-sse/providers/registry/codebuddy-intl.ts"),
 				"utf8",
 			)
 			expect(registrySrc).not.toContain("IDE/2.108.1 CodeBuddy/2.108.1")

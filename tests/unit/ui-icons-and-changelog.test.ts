@@ -2,12 +2,19 @@ import { existsSync, readFileSync, statSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 
+/**
+ * Sources are formatted without semicolons, so literals ending in ";"
+ * never matched. Normalise both sides before comparing.
+ */
+const withoutSemicolons = (text: string) =>
+	text.replace(/;\s*$/gm, "").replace(/;\n/g, "\n")
+
 const root = resolve(__dirname, "../..")
-const modal = readFileSync(
+const modal = withoutSemicolons(readFileSync(
 	resolve(root, "apps/web/src/shared/components/ChangelogModal.tsx"),
 	"utf8",
 )
-const globals = readFileSync(resolve(root, "apps/web/src/app/globals.css"), "utf8")
+const globals = readFileSync(resolve(root, "apps/web/src/app/globals.css"), "utf8"))
 const layout = readFileSync(resolve(root, "apps/web/src/app/layout.tsx"), "utf8")
 
 describe("changelog: every release card shows a commit count", () => {

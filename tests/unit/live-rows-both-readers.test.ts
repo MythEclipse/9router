@@ -4,6 +4,12 @@ import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
 
 /**
+ * Sources are formatted without semicolons, so literals ending in ";"
+ * never matched. Normalise both sides before comparing.
+ */
+const withoutSemicolons = (text: string) => text.replace(/;\s*$/gm, "").replace(/;\n/g, "\n")
+
+/**
  * The live rows reach the dashboard from TWO independent readers, and the client
  * merges both:
  *
@@ -20,7 +26,9 @@ import { describe, expect, it } from "vitest"
  */
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..")
-const repo = readFileSync(join(REPO_ROOT, "packages/db/src/repos/usageRepo.ts"), "utf8")
+const repo = withoutSemicolons(
+	readFileSync(join(REPO_ROOT, "packages/db/src/repos/usageRepo.ts"), "utf8"),
+)
 
 /** Every `SELECT ... FROM usageHistory` that yields live rows (has both model and status). */
 function recentRowQueries(source: string): string[] {
@@ -47,7 +55,7 @@ describe("every live-row reader resolves the alias", () => {
 
 	it("maps the resolved model in the stats reader too, not just the ring", () => {
 		// The ring reader already did this; the stats reader is the regression.
-		expect(repo).toContain("const label = labelForRow(r.model, r.meta);")
+		expect(repo).toContain("const label = labelForRow(r.model, r.meta)")
 		expect(repo).toContain("model: label.display,")
 	})
 

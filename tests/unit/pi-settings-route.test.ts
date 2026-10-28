@@ -59,7 +59,7 @@ describe("Pi CLI-tools settings route", () => {
 				},
 			},
 		}))
-		vi.doMock("@/lib/db", () => ({ getApiKeys: async () => dbKeys }))
+		vi.doMock("@9router/db", () => ({ getApiKeys: async () => dbKeys }))
 
 		;({ POST: postPiSettings } = await import("@/app/api/cli-tools/pi-settings/route.js"))
 	})
