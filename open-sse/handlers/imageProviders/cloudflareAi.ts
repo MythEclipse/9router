@@ -1,5 +1,5 @@
-import { nowSec, urlToBase64 } from "./_base";
-import { PROVIDER_MEDIA } from "../../providers/index";
+import { nowSec, urlToBase64 } from "./_base.ts";
+import { PROVIDER_MEDIA } from "../../providers/index.ts";
 
 const BASE_URL = PROVIDER_MEDIA["cloudflare-ai"]?.imageConfig?.baseUrl;
 

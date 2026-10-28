@@ -1,10 +1,10 @@
 import open from "open";
-import { OAuthService } from "./oauth";
+import { OAuthService } from "./oauth.ts";
 import crypto from "crypto";
-import { XAI_CONFIG, XAI_PKCE_VERIFIER_BYTES } from "../constants/xai";
-import { startLocalServer } from "../utils/server";
-import { generateCodeVerifier, generateCodeChallenge, generateState } from "../utils/pkce";
-import { spinner as createSpinner } from "../utils/ui";
+import { XAI_CONFIG, XAI_PKCE_VERIFIER_BYTES } from "../constants/xai.ts";
+import { startLocalServer } from "../utils/server.ts";
+import { generateCodeVerifier, generateCodeChallenge, generateState } from "../utils/pkce.ts";
+import { spinner as createSpinner } from "../utils/ui.ts";
 
 /**
  * xAI (Grok) OAuth Service

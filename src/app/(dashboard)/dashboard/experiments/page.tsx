@@ -1,4 +1,4 @@
-import ExperimentsClient from "./ExperimentsClient";
+import ExperimentsClient from "./ExperimentsClient.tsx";
 
 export const dynamic = "force-dynamic";
 

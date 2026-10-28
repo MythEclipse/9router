@@ -1,7 +1,7 @@
-import { register } from "../index";
-import { FORMATS } from "../formats";
-import { GEMINI_ROLE, OPENAI_FINISH, GEMINI_FINISH } from "../schema/index";
-import { extractReasoningText } from "../concerns/reasoning";
+import { register } from "../index.ts";
+import { FORMATS } from "../formats.ts";
+import { GEMINI_ROLE, OPENAI_FINISH, GEMINI_FINISH } from "../schema/index.ts";
+import { extractReasoningText } from "../concerns/reasoning.ts";
 
 // Convert OpenAI SSE chunk to Antigravity SSE format
 // Real Antigravity format:

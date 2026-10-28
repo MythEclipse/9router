@@ -21,8 +21,8 @@
 
 import { v4 as uuidv4 } from "uuid";
 import { createHash } from "crypto";
-import { refreshKiroToken } from "./tokenRefresh";
-import type { Credentials, EngineLogger, RefreshedCredentials } from "../types";
+import { refreshKiroToken } from "./tokenRefresh.ts";
+import type { Credentials, EngineLogger, RefreshedCredentials } from "../types.ts";
 
 const KIRO_RUNTIME_SDK_VERSION = "1.0.0";
 const KIRO_AGENT_OS = "windows";

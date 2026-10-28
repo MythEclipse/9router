@@ -3,8 +3,8 @@
  * Auth: Bearer <apiKey>
  */
 
-import { proxyAwareFetch } from "../../utils/proxyFetch";
-import { toFiniteNumber } from "./shared";
+import { proxyAwareFetch } from "../../utils/proxyFetch.ts";
+import { toFiniteNumber } from "./shared.ts";
 
 const BALANCE_URL = "https://api.deepseek.com/user/balance";
 

@@ -17,25 +17,25 @@ import { useModelCaps } from "@/shared/hooks/useModelCaps";
 import { translate } from "@/i18n/runtime";
 import { fetchSuggestedModels } from "@/shared/utils/providerModelsFetcher";
 import { getProviderCustomModelRows } from "@/shared/utils/providerCustomModels";
-import ModelRow from "./ModelRow";
-import PassthroughModelsSection from "./PassthroughModelsSection";
-import CompatibleModelsSection from "./CompatibleModelsSection";
-import { availableModels } from "./availableModels";
-import ConnectionRow from "./ConnectionRow";
-import AddApiKeyModal from "./AddApiKeyModal";
-import EditCompatibleNodeModal, { editCompatibleNodeModalKey } from "./EditCompatibleNodeModal";
-import AddCustomModelModal, { addCustomModelModalKey } from "./AddCustomModelModal";
-import BulkImportCodexModal from "./BulkImportCodexModal";
-import BulkImportGrokCliModal from "./BulkImportGrokCliModal";
-import CustomConfigCard from "./CustomConfigCard";
-import AutoPingScheduleModal from "./AutoPingScheduleModal";
+import ModelRow from "./ModelRow.tsx";
+import PassthroughModelsSection from "./PassthroughModelsSection.tsx";
+import CompatibleModelsSection from "./CompatibleModelsSection.tsx";
+import { availableModels } from "./availableModels.ts";
+import ConnectionRow from "./ConnectionRow.tsx";
+import AddApiKeyModal from "./AddApiKeyModal.tsx";
+import EditCompatibleNodeModal, { editCompatibleNodeModalKey } from "./EditCompatibleNodeModal.tsx";
+import AddCustomModelModal, { addCustomModelModalKey } from "./AddCustomModelModal.tsx";
+import BulkImportCodexModal from "./BulkImportCodexModal.tsx";
+import BulkImportGrokCliModal from "./BulkImportGrokCliModal.tsx";
+import CustomConfigCard from "./CustomConfigCard.tsx";
+import AutoPingScheduleModal from "./AutoPingScheduleModal.tsx";
 import { getScheduleSlotLabels } from "@/shared/services/quotaPingSchedule";
 import {
   resolveThinkingSuffix as resolveThinkingSuffixOf,
   providerThinkingLevels as deriveThinkingLevels,
   summarizeSelectedProxies,
   initialBulkProxyPoolId,
-} from "./providerDerivations";
+} from "./providerDerivations.ts";
 
 const ONE_BY_ONE_DELAY_MS = 1000;
 

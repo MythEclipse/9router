@@ -1,20 +1,20 @@
 // Claude helper functions for translator
-import { DEFAULT_THINKING_CLAUDE_SIGNATURE } from "../../config/defaultThinkingSignature";
-import { ROLE, CLAUDE_BLOCK } from "../schema/index";
-import { adjustMaxTokens } from "./maxTokens";
-import { applyCloaking } from "../../utils/claudeCloaking";
-import { resolveSessionId } from "../../utils/sessionManager";
-import { isValidClaudeSignature } from "../../utils/claudeSignature";
-import { PROVIDERS } from "../../providers/index";
-import { getCapabilitiesForModel } from "../../providers/capabilities";
-import { isDeepSeekModel } from "../../providers/models/helpers";
-import { DEFAULT_MAX_TOKENS } from "../../config/runtimeConfig";
+import { DEFAULT_THINKING_CLAUDE_SIGNATURE } from "../../config/defaultThinkingSignature.ts";
+import { ROLE, CLAUDE_BLOCK } from "../schema/index.ts";
+import { adjustMaxTokens } from "./maxTokens.ts";
+import { applyCloaking } from "../../utils/claudeCloaking.ts";
+import { resolveSessionId } from "../../utils/sessionManager.ts";
+import { isValidClaudeSignature } from "../../utils/claudeSignature.ts";
+import { PROVIDERS } from "../../providers/index.ts";
+import { getCapabilitiesForModel } from "../../providers/capabilities.ts";
+import { isDeepSeekModel } from "../../providers/models/helpers.ts";
+import { DEFAULT_MAX_TOKENS } from "../../config/runtimeConfig.ts";
 import {
   CACHE_DEFAULT_MARKERS,
   applyClaudeCacheLimits,
   countCacheControlBlocks,
   newCacheLimit,
-} from "./claudeCache";
+} from "./claudeCache.ts";
 
 const CACHE_CONTROL_1H = { type: "ephemeral", ttl: "1h" };
 

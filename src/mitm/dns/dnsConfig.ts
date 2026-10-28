@@ -2,9 +2,9 @@ import { exec, spawn, execSync } from "child_process";
 import fs from "fs";
 import path from "path";
 import os from "os";
-import { log, err } from "../logger";
-import { TOOL_HOSTS } from "../../shared/constants/mitmToolHosts";
-import { runElevatedPowerShell, isAdmin } from "../winElevated";
+import { log, err } from "../logger.ts";
+import { TOOL_HOSTS } from "../../shared/constants/mitmToolHosts.ts";
+import { runElevatedPowerShell, isAdmin } from "../winElevated.ts";
 
 /**
  * Atomic-ish write for Windows hosts file with rollback on failure.

@@ -1,7 +1,7 @@
 // UC image adapter — delegates to the executor (persona web path, un-metered:
 // Clerk JWT minted from the pasted __client cookie).
-import { nowSec } from "./_base";
-import { getExecutor } from "../../executors/index";
+import { nowSec } from "./_base.ts";
+import { getExecutor } from "../../executors/index.ts";
 
 const UcWeb = {
   useExecutor: true,

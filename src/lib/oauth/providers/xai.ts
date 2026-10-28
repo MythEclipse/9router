@@ -1,6 +1,6 @@
 import crypto from "crypto";
-import { XAI_CONFIG, XAI_PKCE_VERIFIER_BYTES } from "../constants/xai";
-import { validateXaiOAuthEndpoint, decodeXaiIdTokenEmail } from "../providerHelpers";
+import { XAI_CONFIG, XAI_PKCE_VERIFIER_BYTES } from "../constants/xai.ts";
+import { validateXaiOAuthEndpoint, decodeXaiIdTokenEmail } from "../providerHelpers.ts";
 
 // Inlined from services/xai.js to keep web route bundle free of `open` (CLI-only) package
 let cachedXaiDiscovery = null;

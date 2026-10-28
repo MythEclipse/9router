@@ -1,4 +1,4 @@
-import { OPENAI_BLOCK } from "../schema/index";
+import { OPENAI_BLOCK } from "../schema/index.ts";
 
 // Collapse an OpenAI content-part array: a lone text part becomes a plain string,
 // otherwise the array is returned as-is. Matches existing translator behavior.

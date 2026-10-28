@@ -1,12 +1,12 @@
-import { register } from "../index";
-import { FORMATS } from "../formats";
-import { ROLE, OPENAI_BLOCK, OPENAI_FINISH, DEFAULT_IMAGE_MIME } from "../schema/index";
-import { buildChunk } from "../concerns/chunk";
-import { toOpenAIUsage } from "../concerns/usage";
-import { reasoningDelta } from "../concerns/reasoning";
-import { encodeDataUri } from "../concerns/image";
-import { toOpenAIFinish } from "../concerns/finishReason";
-import { storeGeminiThoughtSignature } from "../../services/thoughtSignatureStore";
+import { register } from "../index.ts";
+import { FORMATS } from "../formats.ts";
+import { ROLE, OPENAI_BLOCK, OPENAI_FINISH, DEFAULT_IMAGE_MIME } from "../schema/index.ts";
+import { buildChunk } from "../concerns/chunk.ts";
+import { toOpenAIUsage } from "../concerns/usage.ts";
+import { reasoningDelta } from "../concerns/reasoning.ts";
+import { encodeDataUri } from "../concerns/image.ts";
+import { toOpenAIFinish } from "../concerns/finishReason.ts";
+import { storeGeminiThoughtSignature } from "../../services/thoughtSignatureStore.ts";
 
 // Build chunk meta for current gemini state
 function chunkMeta(state) {

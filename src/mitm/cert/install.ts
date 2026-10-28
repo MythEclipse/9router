@@ -1,9 +1,9 @@
 import fs from "fs";
 import crypto from "crypto";
 import { exec } from "child_process";
-import { execWithPassword, isSudoAvailable } from "../dns/dnsConfig";
-import { runElevatedPowerShell, quotePs } from "../winElevated";
-import { log, err } from "../logger";
+import { execWithPassword, isSudoAvailable } from "../dns/dnsConfig.ts";
+import { runElevatedPowerShell, quotePs } from "../winElevated.ts";
+import { log, err } from "../logger.ts";
 
 const IS_WIN = process.platform === "win32";
 const IS_MAC = process.platform === "darwin";

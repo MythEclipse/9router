@@ -1,4 +1,4 @@
-import { ROLE, OPENAI_BLOCK, RESPONSES_ITEM } from "../schema/index";
+import { ROLE, OPENAI_BLOCK, RESPONSES_ITEM } from "../schema/index.ts";
 
 /**
  * Normalize Responses API input to array format.

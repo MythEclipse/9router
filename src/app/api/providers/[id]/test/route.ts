@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { testSingleConnection } from "./testUtils";
+import { testSingleConnection } from "./testUtils.ts";
 
 export const dynamic = "force-dynamic";
 

@@ -19,7 +19,7 @@
  * Pure functions, no I/O - the executor wires them into buildQoderRequestBody.
  */
 
-import { QODER_CONTEXT_TIER_HEADROOM, QODER_CONTEXT_TIER_MODES } from "./constants";
+import { QODER_CONTEXT_TIER_HEADROOM, QODER_CONTEXT_TIER_MODES } from "./constants.ts";
 
 const UNIT: Record<string, number> = { K: 1_000, M: 1_000_000 };
 

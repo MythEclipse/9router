@@ -1,6 +1,6 @@
 import { SAML, ValidateInResponseTo } from "@node-saml/node-saml";
 import type { Profile, SamlConfig } from "@node-saml/node-saml/lib/types";
-import { getSettings } from "../db/repos/settingsRepo";
+import { getSettings } from "../db/repos/settingsRepo.ts";
 
 /**
  * Calls a library method that `@node-saml` marks `protected` but that the

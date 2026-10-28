@@ -24,9 +24,9 @@ import {
   RESULT_ERROR_QUERY_TOO_LONG,
   RESULT_ERROR_UNAVAILABLE,
   isClaudeCodeSearchTool,
-} from "../config/webSearchConstants";
-import { buildSearchBlocks, buildSearchErrorBlocks, searchFailureNotice } from "./webSearchBridge";
-import { SSE_DONE } from "../utils/sseConstants";
+} from "../config/webSearchConstants.ts";
+import { buildSearchBlocks, buildSearchErrorBlocks, searchFailureNotice } from "./webSearchBridge.ts";
+import { SSE_DONE } from "../utils/sseConstants.ts";
 
 /** Mutable state accumulated while the upstream stream is observed. */
 export function createWebSearchStreamState() {

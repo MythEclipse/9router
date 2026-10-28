@@ -1,4 +1,4 @@
-import { CLAUDE_CLI_VERSION } from "../shared";
+import { CLAUDE_CLI_VERSION } from "../shared.ts";
 
 const Claude = {
   id: "claude",

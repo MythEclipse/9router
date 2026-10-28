@@ -23,7 +23,7 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import os from "node:os";
 import fs from "node:fs";
-import { BaseExecutor } from "./base";
+import { BaseExecutor } from "./base.ts";
 
 // ─── Binary discovery ────────────────────────────────────────────────────────
 

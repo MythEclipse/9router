@@ -12,9 +12,9 @@
 //     polled until `is_complete`, otherwise a long tool batch is parsed half-way.
 
 import { randomUUID } from "node:crypto";
-import { fetchSentinelHeaders } from "./sentinel";
-import { prepareToolMessages } from "../../translator/webTools";
-import type { ChatGptConversationDocument } from "../../types";
+import { fetchSentinelHeaders } from "./sentinel.ts";
+import { prepareToolMessages } from "../../translator/webTools.ts";
+import type { ChatGptConversationDocument } from "../../types.ts";
 const SSE_DEADLINE_MS = 120000;
 const POLL_INTERVAL_MS = 1500;
 const POLL_TIMEOUT_MS = 180000;

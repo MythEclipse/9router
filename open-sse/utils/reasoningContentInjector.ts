@@ -1,7 +1,7 @@
 // Some thinking-mode providers (DeepSeek, Kimi, MiniMax, ...) require reasoning_content
 // to be echoed back on assistant messages. Clients in OpenAI format don't send it,
 // so we inject a non-empty placeholder to satisfy upstream validation.
-import { PROVIDERS } from "../config/providers";
+import { PROVIDERS } from "../config/providers.ts";
 
 const PLACEHOLDER = " ";
 

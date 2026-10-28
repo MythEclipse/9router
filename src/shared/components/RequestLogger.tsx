@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Card from "./Card";
+import Card from "./Card.tsx";
 
 export default function RequestLogger() {
   const [logs, setLogs] = useState([]);

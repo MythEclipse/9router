@@ -1,7 +1,7 @@
-import { BaseExecutor } from "./base";
-import { proxyAwareFetch } from "../utils/proxyFetch";
-import { PROVIDERS } from "../config/providers";
-import type { ChatCompletionBody } from "../types";
+import { BaseExecutor } from "./base.ts";
+import { proxyAwareFetch } from "../utils/proxyFetch.ts";
+import { PROVIDERS } from "../config/providers.ts";
+import type { ChatCompletionBody } from "../types.ts";
 
 // Trae executor - SOLO remote agent API.
 //

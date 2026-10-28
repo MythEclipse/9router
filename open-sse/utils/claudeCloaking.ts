@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "crypto";
-import { CLAUDE_TOOL_SUFFIX, CC_DEFAULT_TOOLS } from "../config/appConstants";
-import { CLAUDE_CLI_VERSION } from "../providers/shared";
+import { CLAUDE_TOOL_SUFFIX, CC_DEFAULT_TOOLS } from "../config/appConstants.ts";
+import { CLAUDE_CLI_VERSION } from "../providers/shared.ts";
 
 const CC_ENTRYPOINT = "sdk-cli";
 

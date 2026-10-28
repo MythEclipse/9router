@@ -1,7 +1,7 @@
-import { register } from "../index";
-import { FORMATS } from "../formats";
-import { openaiToGeminiRequest } from "./openai-to-gemini";
-import { DEFAULT_THINKING_VERTEX_SIGNATURE } from "../../config/defaultThinkingSignature";
+import { register } from "../index.ts";
+import { FORMATS } from "../formats.ts";
+import { openaiToGeminiRequest } from "./openai-to-gemini.ts";
+import { DEFAULT_THINKING_VERTEX_SIGNATURE } from "../../config/defaultThinkingSignature.ts";
 
 /**
  * Post-process a Gemini-format body for Vertex AI compatibility:

@@ -3,8 +3,8 @@
 import { useEffect } from "react";
 import type { ReactNode } from "react";
 import { cn } from "@/shared/utils/cn";
-import Button from "./Button";
-import Tooltip from "./Tooltip";
+import Button from "./Button.tsx";
+import Tooltip from "./Tooltip.tsx";
 import { lockBodyScroll, unlockBodyScroll } from "@/shared/utils/scrollLock";
 
 // Overlay geometry and motion come from the chrome contract

@@ -19,9 +19,9 @@
  * for refill packs, "Bonus Pack N" for bonus packs (soonest-expiring first).
  */
 
-import { proxyAwareFetch } from "../../utils/proxyFetch";
-import { PROVIDERS } from "../../providers/index";
-import { U, parseResetTime } from "./shared";
+import { proxyAwareFetch } from "../../utils/proxyFetch.ts";
+import { PROVIDERS } from "../../providers/index.ts";
+import { U, parseResetTime } from "./shared.ts";
 
 const PROVIDER_ID = "codebuddy-cn";
 

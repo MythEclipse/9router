@@ -1,8 +1,8 @@
 // Muse Web (muse.ai Hatch) image adapter — delegates to the executor, which
 // drives the Hatch agent in a real browser page and downloads the generated
 // attachment in-page as base64.
-import { nowSec } from "./_base";
-import { getExecutor } from "../../executors/index";
+import { nowSec } from "./_base.ts";
+import { getExecutor } from "../../executors/index.ts";
 
 const MuseWeb = {
   // Delegate to executor instead of building URL/headers/body manually

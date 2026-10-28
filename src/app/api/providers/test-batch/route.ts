@@ -9,7 +9,7 @@ import {
   OPENAI_COMPATIBLE_PREFIX,
   ANTHROPIC_COMPATIBLE_PREFIX,
 } from "@/shared/constants/providers";
-import { testSingleConnection } from "../[id]/test/testUtils";
+import { testSingleConnection } from "../[id]/test/testUtils.ts";
 
 function getAuthGroup(providerId, connection = null) {
   // Prioritize authType from connection if available

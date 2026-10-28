@@ -1,13 +1,13 @@
-import { BaseExecutor } from "./base";
-import { PROVIDERS } from "../config/providers";
-import { commandCodeToOpenAIResponse } from "../translator/response/commandcode-to-openai";
-import { SSE_DONE } from "../utils/sseConstants";
-import { commandCodeThreadId, isCommandCodeThreadId } from "../utils/commandCodeSession";
-import { safePipeResponseBody } from "../utils/streamHandler";
+import { BaseExecutor } from "./base.ts";
+import { PROVIDERS } from "../config/providers.ts";
+import { commandCodeToOpenAIResponse } from "../translator/response/commandcode-to-openai.ts";
+import { SSE_DONE } from "../utils/sseConstants.ts";
+import { commandCodeThreadId, isCommandCodeThreadId } from "../utils/commandCodeSession.ts";
+import { safePipeResponseBody } from "../utils/streamHandler.ts";
 import {
   appendCommandCodeReasoning,
   getCommandCodeReasoning,
-} from "../utils/commandcodeReasoningStore";
+} from "../utils/commandcodeReasoningStore.ts";
 
 /**
  * CommandCodeExecutor - talks to https://api.commandcode.ai/alpha/generate

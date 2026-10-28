@@ -24,8 +24,8 @@
 // Fail-open throughout: anything unexpected returns the call untouched, because
 // a repair that mangles a working call is worse than the fault it prevents.
 
-import { ROLE } from "../schema/roles";
-import { CLAUDE_BLOCK, RESPONSES_ITEM } from "../schema/blocks";
+import { ROLE } from "../schema/roles.ts";
+import { CLAUDE_BLOCK, RESPONSES_ITEM } from "../schema/blocks.ts";
 
 // A property the model spelled differently but meant. Keys are the required
 // name we are filling, values are what the model may have called it instead.

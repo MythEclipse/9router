@@ -1,16 +1,16 @@
-import { BaseExecutor } from "./base";
-import { PROVIDERS } from "../config/providers";
-import { AWS_EVENTSTREAM, AWS_SIGV4, BEDROCK } from "../config/awsConstants";
+import { BaseExecutor } from "./base.ts";
+import { PROVIDERS } from "../config/providers.ts";
+import { AWS_EVENTSTREAM, AWS_SIGV4, BEDROCK } from "../config/awsConstants.ts";
 import {
   resolveAwsCredentials,
   resolveRegion,
-} from "../shared/awsCredentials";
-import { crc32, parseEventFrame } from "../utils/awsEventStream";
-import { escapeUri, signAwsRequest } from "../utils/awsSigv4";
-import { proxyAwareFetch } from "../utils/proxyFetch";
-import { SSE_DONE, SSE_HEADERS } from "../utils/sseConstants";
-import { FORMATS } from "../translator/formats";
-import { FETCH_CONNECT_TIMEOUT_MS } from "../config/runtimeConfig";
+} from "../shared/awsCredentials.ts";
+import { crc32, parseEventFrame } from "../utils/awsEventStream.ts";
+import { escapeUri, signAwsRequest } from "../utils/awsSigv4.ts";
+import { proxyAwareFetch } from "../utils/proxyFetch.ts";
+import { SSE_DONE, SSE_HEADERS } from "../utils/sseConstants.ts";
+import { FORMATS } from "../translator/formats.ts";
+import { FETCH_CONNECT_TIMEOUT_MS } from "../config/runtimeConfig.ts";
 
 /**
  * BedrockExecutor — Amazon Bedrock runtime.

@@ -1,4 +1,4 @@
-import { extractAssistantText, formatGatewayError } from "./modelResponse";
+import { extractAssistantText, formatGatewayError } from "./modelResponse.ts";
 
 // One streaming chat-completions client, so Compare Models talks to the gateway through
 // exactly the same code as any other client.

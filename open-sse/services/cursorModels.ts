@@ -8,10 +8,10 @@
 
 import crypto from "crypto";
 import http2 from "http2";
-import { PROVIDER_OAUTH } from "../providers/index";
-import { buildCursorHeaders } from "../utils/cursorChecksum";
-import { decodeMessage } from "../utils/cursorProtobuf";
-import type { Credentials, EngineLogger } from "../types";
+import { PROVIDER_OAUTH } from "../providers/index.ts";
+import { buildCursorHeaders } from "../utils/cursorChecksum.ts";
+import { decodeMessage } from "../utils/cursorProtobuf.ts";
+import type { Credentials, EngineLogger } from "../types.ts";
 
 const FETCH_TIMEOUT_MS = 10_000;
 const CACHE_TTL_MS = 5 * 60 * 1000;

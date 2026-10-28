@@ -1,4 +1,4 @@
-import { CLIENT_PING_TIMEOUT_MS } from "./endpointConstants";
+import { CLIENT_PING_TIMEOUT_MS } from "./endpointConstants.ts";
 
 // Browser-side health probe: must reach origin (not just CF/TS edge).
 // cors mode → res.ok=false for 5xx (e.g. Cloudflare 530 when origin dead).

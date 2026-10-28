@@ -16,7 +16,7 @@
  *   assistant turn in this session (ordinal among assistant messages).
  */
 
-import { MEMORY_CONFIG } from "../config/runtimeConfig";
+import { MEMORY_CONFIG } from "../config/runtimeConfig.ts";
 
 const reasoningStore = new Map();
 const MAX_SESSIONS = 5000;

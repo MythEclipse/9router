@@ -1,6 +1,6 @@
 // Gemini TTS - generateContent with AUDIO modality returns PCM L16, wrap as WAV
 import { Buffer } from "node:buffer";
-import { PROVIDER_MEDIA, PROVIDER_MODELS } from "../../providers/index";
+import { PROVIDER_MEDIA, PROVIDER_MODELS } from "../../providers/index.ts";
 
 const TTS_CFG = PROVIDER_MEDIA["gemini"]?.ttsConfig || {};
 const TTS_BASE = TTS_CFG.baseUrl;

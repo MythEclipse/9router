@@ -2,11 +2,11 @@
  * Misc usage handlers (iFlow, Ollama, GLM, Vercel AI Gateway, Qoder)
  */
 
-import { proxyAwareFetch } from "../../utils/proxyFetch";
-import { U } from "./shared";
-import type { UsageQuotaMap } from "./shared";
+import { proxyAwareFetch } from "../../utils/proxyFetch.ts";
+import { U } from "./shared.ts";
+import type { UsageQuotaMap } from "./shared.ts";
 
-export { getGlmUsage } from "./glm";
+export { getGlmUsage } from "./glm.ts";
 
 
 // Vercel AI Gateway credits endpoint

@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Modal from "./Modal";
-import Input from "./Input";
-import Button from "./Button";
-import ModelSelectModal from "./ModelSelectModal";
+import Modal from "./Modal.tsx";
+import Input from "./Input.tsx";
+import Button from "./Button.tsx";
+import ModelSelectModal from "./ModelSelectModal.tsx";
 import { useModelCaps } from "@/shared/hooks/useModelCaps";
 import { formatContextWindow } from "@/shared/utils/contextWindow";
 

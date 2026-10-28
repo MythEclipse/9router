@@ -1,4 +1,4 @@
-import { CODEBUDDY_CONFIG } from "../constants/oauth";
+import { CODEBUDDY_CONFIG } from "../constants/oauth.ts";
 
 // CodeBuddy (Tencent) - Browser OAuth Polling Flow
 // 1. POST stateUrl → get { state, authUrl }

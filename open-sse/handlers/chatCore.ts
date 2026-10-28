@@ -1,24 +1,24 @@
-import { detectFormat, getTargetFormat, resolveTransport } from "../services/provider";
-import { translateRequest } from "../translator/index";
-import { applyThinking, extractThinking, stripThinkingSuffix } from "../translator/concerns/thinkingUnified";
-import { FORMATS } from "../translator/formats";
-import { normalizeClaudePassthrough, anchorClaudeCache } from "../translator/formats/claude";
-import { cacheConfigFrom } from "../translator/formats/claudeCache";
-import { createStreamController } from "../utils/streamHandler";
-import { refreshWithRetry } from "../services/tokenRefresh";
-import { createRequestLogger } from "../utils/requestLogger";
-import { getModelTargetFormat, getModelSupportedFormats, getModelStrip, getModelUpstreamId, getModelType, PROVIDER_ID_TO_ALIAS } from "../config/providerModels";
-import { PROVIDERS } from "../config/providers";
-import { createErrorResult, parseUpstreamError, formatProviderError } from "../utils/error";
-import { upstreamResponseHeaders } from "../utils/upstreamHeaders";
-import { HTTP_STATUS, TOKEN_SAVER_HEADER } from "../config/runtimeConfig";
-import { handleBypassRequest } from "../utils/bypassHandler";
+import { detectFormat, getTargetFormat, resolveTransport } from "../services/provider.ts";
+import { translateRequest } from "../translator/index.ts";
+import { applyThinking, extractThinking, stripThinkingSuffix } from "../translator/concerns/thinkingUnified.ts";
+import { FORMATS } from "../translator/formats.ts";
+import { normalizeClaudePassthrough, anchorClaudeCache } from "../translator/formats/claude.ts";
+import { cacheConfigFrom } from "../translator/formats/claudeCache.ts";
+import { createStreamController } from "../utils/streamHandler.ts";
+import { refreshWithRetry } from "../services/tokenRefresh.ts";
+import { createRequestLogger } from "../utils/requestLogger.ts";
+import { getModelTargetFormat, getModelSupportedFormats, getModelStrip, getModelUpstreamId, getModelType, PROVIDER_ID_TO_ALIAS } from "../config/providerModels.ts";
+import { PROVIDERS } from "../config/providers.ts";
+import { createErrorResult, parseUpstreamError, formatProviderError } from "../utils/error.ts";
+import { upstreamResponseHeaders } from "../utils/upstreamHeaders.ts";
+import { HTTP_STATUS, TOKEN_SAVER_HEADER } from "../config/runtimeConfig.ts";
+import { handleBypassRequest } from "../utils/bypassHandler.ts";
 import { trackPendingRequest, appendRequestLog, saveRequestDetail } from "@/lib/usageDb";
-import { getExecutor } from "../executors/index";
-import { supportsGrokCliReasoningEffort } from "../config/grokCli";
-import { buildRequestDetail, extractRequestConfig, saveFailedUsage } from "./chatCore/requestDetail";
-import { handleForcedSSEToJson } from "./chatCore/sseToJsonHandler";
-import { handleNonStreamingResponse } from "./chatCore/nonStreamingHandler";
+import { getExecutor } from "../executors/index.ts";
+import { supportsGrokCliReasoningEffort } from "../config/grokCli.ts";
+import { buildRequestDetail, extractRequestConfig, saveFailedUsage } from "./chatCore/requestDetail.ts";
+import { handleForcedSSEToJson } from "./chatCore/sseToJsonHandler.ts";
+import { handleNonStreamingResponse } from "./chatCore/nonStreamingHandler.ts";
 import {
   isEventStreamResponse,
   looksLikeSseText,
@@ -26,32 +26,32 @@ import {
   readJsonBody,
   jsonResponseFromBody,
   sseResponseFromCompletion,
-} from "../transformer/jsonToStreamConverter";
-import { handleStreamingResponse, buildOnStreamComplete } from "./chatCore/streamingHandler";
-import { applyModelAlias, calledModelName } from "../utils/modelAlias";
-import { detectClientTool, isNativePassthrough } from "../utils/clientDetector";
-import { dedupeTools } from "../utils/toolDeduper";
-import { takeRenamedToolNames } from "../utils/opencodeFingerprint";
-import { injectCaveman } from "../rtk/caveman";
-import { injectPonytail } from "../rtk/ponytail";
-import { pruneContextMessages, resolvePruningLimit } from "../rtk/contextPruning";
-import { checkSemanticCache, saveToSemanticCache, setSemanticCacheTtlMs, setSemanticCacheMaxEntries } from "../rtk/semanticCache";
+} from "../transformer/jsonToStreamConverter.ts";
+import { handleStreamingResponse, buildOnStreamComplete } from "./chatCore/streamingHandler.ts";
+import { applyModelAlias, calledModelName } from "../utils/modelAlias.ts";
+import { detectClientTool, isNativePassthrough } from "../utils/clientDetector.ts";
+import { dedupeTools } from "../utils/toolDeduper.ts";
+import { takeRenamedToolNames } from "../utils/opencodeFingerprint.ts";
+import { injectCaveman } from "../rtk/caveman.ts";
+import { injectPonytail } from "../rtk/ponytail.ts";
+import { pruneContextMessages, resolvePruningLimit } from "../rtk/contextPruning.ts";
+import { checkSemanticCache, saveToSemanticCache, setSemanticCacheTtlMs, setSemanticCacheMaxEntries } from "../rtk/semanticCache.ts";
 import { getAdapter } from "@/lib/db/driver";
-import { recordTokenSavings, measurePruningSavings, measureRtkSavings, measureCacheSavings } from "../rtk/tokenSaverStats";
-import { compressMessages, formatRtkLog } from "../rtk/index";
-import { compressWithHeadroom, formatHeadroomLog, formatHeadroomSizeLog, isHeadroomPhantomSavings } from "../rtk/headroom";
-import type { HeadroomDiagnostics } from "../rtk/headroom";
-import { compressWithPxpipe } from "../rtk/pxpipe";
-import { getCapabilitiesForModel } from "../providers/capabilities";
-import { stripUnsupportedModalities } from "../translator/concerns/modality";
-import { prefetchRemoteImages } from "../translator/concerns/prefetch";
-import { defaultClaudeToolType, shouldDefaultClaudeToolType } from "../translator/concerns/toolCall";
-import { repair as repairToolPayload, degrade as degradeToolPayload, isToolCallRejection, TOOL_FALLBACK_MAX_LEVEL } from "../translator/concerns/toolCallFallback";
-import { rescueRequest } from "../translator/concerns/toolCallRescue";
-import { resolveSessionId } from "../utils/sessionManager";
+import { recordTokenSavings, measurePruningSavings, measureRtkSavings, measureCacheSavings } from "../rtk/tokenSaverStats.ts";
+import { compressMessages, formatRtkLog } from "../rtk/index.ts";
+import { compressWithHeadroom, formatHeadroomLog, formatHeadroomSizeLog, isHeadroomPhantomSavings } from "../rtk/headroom.ts";
+import type { HeadroomDiagnostics } from "../rtk/headroom.ts";
+import { compressWithPxpipe } from "../rtk/pxpipe.ts";
+import { getCapabilitiesForModel } from "../providers/capabilities.ts";
+import { stripUnsupportedModalities } from "../translator/concerns/modality.ts";
+import { prefetchRemoteImages } from "../translator/concerns/prefetch.ts";
+import { defaultClaudeToolType, shouldDefaultClaudeToolType } from "../translator/concerns/toolCall.ts";
+import { repair as repairToolPayload, degrade as degradeToolPayload, isToolCallRejection, TOOL_FALLBACK_MAX_LEVEL } from "../translator/concerns/toolCallFallback.ts";
+import { rescueRequest } from "../translator/concerns/toolCallRescue.ts";
+import { resolveSessionId } from "../utils/sessionManager.ts";
 import { applyCustomPlugins } from "@/lib/plugins/customPluginsRuntime";
 import type { CustomPluginResult } from "@/lib/plugins/customPluginsRuntime";
-import { injectCustomPrompt } from "../rtk/customPrompt";
+import { injectCustomPrompt } from "../rtk/customPrompt.ts";
 
 /**
  * Core chat handler - shared between SSE and Worker

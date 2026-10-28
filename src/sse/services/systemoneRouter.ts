@@ -1,6 +1,6 @@
-import { getModelInfo } from "../services/model";
-import { getProviderCredentials } from "../services/auth";
-import { checkAndRefreshToken } from "../services/tokenRefresh";
+import { getModelInfo } from "../services/model.ts";
+import { getProviderCredentials } from "../services/auth.ts";
+import { checkAndRefreshToken } from "../services/tokenRefresh.ts";
 import { handleSystemoneCore } from "open-sse/handlers/systemoneCore";
 import {
   DEFAULT_SYSTEMONE_ROUTER_MODEL,

@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { initRuntimeI18n, reloadTranslations } from "./runtime";
+import { initRuntimeI18n, reloadTranslations } from "./runtime.tsx";
 
 export function RuntimeI18nProvider({ children }) {
   const pathname = usePathname();

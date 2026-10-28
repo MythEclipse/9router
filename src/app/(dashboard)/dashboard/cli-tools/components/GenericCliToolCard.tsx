@@ -3,10 +3,10 @@
 import { useState, useEffect } from "react";
 import { Card, Button, ModelSelectModal, ManualConfigModal } from "@/shared/components";
 import Image from "next/image";
-import { EndpointField } from "./CardField";
-import { rememberEndpoint } from "./cliEndpointPresets";
-import ApiKeySelect from "./ApiKeySelect";
-import { matchKnownEndpoint } from "./cliEndpointMatch";
+import { EndpointField } from "./CardField.tsx";
+import { rememberEndpoint } from "./cliEndpointPresets.ts";
+import ApiKeySelect from "./ApiKeySelect.tsx";
+import { matchKnownEndpoint } from "./cliEndpointMatch.ts";
 import { getModelsByProviderId, PROVIDER_ID_TO_ALIAS } from "@/shared/constants/models";
 import { DEFAULT_LOCAL_API_KEY } from "@/shared/constants/config";
 

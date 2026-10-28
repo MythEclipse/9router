@@ -14,16 +14,16 @@
 // shape (thread envelope, LLM-token exchange, NDJSON status frames) doesn't
 // fit the generic transformRequest/buildUrl contract.
 
-import { BaseExecutor } from "./base";
-import { safePipeResponseBody } from "../utils/streamHandler";
-import { FORMATS } from "../translator/formats";
-import { initState } from "../translator/index";
-import { openaiToClaudeRequest } from "../translator/request/openai-to-claude";
-import { openaiToGeminiRequest } from "../translator/request/openai-to-gemini";
-import { openaiToOpenAIResponsesRequest } from "../translator/request/openai-responses";
-import { claudeToOpenAIResponse } from "../translator/response/claude-to-openai";
-import { geminiToOpenAIResponse } from "../translator/response/gemini-to-openai";
-import { openaiResponsesToOpenAIResponse } from "../translator/response/openai-responses";
+import { BaseExecutor } from "./base.ts";
+import { safePipeResponseBody } from "../utils/streamHandler.ts";
+import { FORMATS } from "../translator/formats.ts";
+import { initState } from "../translator/index.ts";
+import { openaiToClaudeRequest } from "../translator/request/openai-to-claude.ts";
+import { openaiToGeminiRequest } from "../translator/request/openai-to-gemini.ts";
+import { openaiToOpenAIResponsesRequest } from "../translator/request/openai-responses.ts";
+import { claudeToOpenAIResponse } from "../translator/response/claude-to-openai.ts";
+import { geminiToOpenAIResponse } from "../translator/response/gemini-to-openai.ts";
+import { openaiResponsesToOpenAIResponse } from "../translator/response/openai-responses.ts";
 import {
   ZED_HEADERS,
   ZED_WEB_BASE_URL,
@@ -31,7 +31,7 @@ import {
   ZED_LLM_BASE_URL,
   resolveZedModels,
   zedLlmFetch,
-} from "../shared/zedAuth";
+} from "../shared/zedAuth.ts";
 
 // Wire values for the `provider` field of POST /completions. These are NOT
 // display names: cloud.zed.dev matches them exactly, and an unrecognized value

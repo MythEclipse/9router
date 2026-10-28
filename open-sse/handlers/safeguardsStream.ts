@@ -17,10 +17,10 @@
  * received, so the ids are captured from the stream as they pass through.
  */
 
-import { buildSafeguardMessageDeltaSse, collectToolUseIds, buildUnavailableResults } from "./safeguardsProtocol";
-import { reviewAndBuildSafeguardResults } from "./safeguardsBridge";
-import { resolveDecisionCredentials } from "./safeguardsCredentials";
-import { SAFEGUARD_STATUS_UNAVAILABLE, SAFEGUARD_STATUS_UNSUPPORTED } from "../config/safeguardsConstants";
+import { buildSafeguardMessageDeltaSse, collectToolUseIds, buildUnavailableResults } from "./safeguardsProtocol.ts";
+import { reviewAndBuildSafeguardResults } from "./safeguardsBridge.ts";
+import { resolveDecisionCredentials } from "./safeguardsCredentials.ts";
+import { SAFEGUARD_STATUS_UNAVAILABLE, SAFEGUARD_STATUS_UNSUPPORTED } from "../config/safeguardsConstants.ts";
 
 /**
  * Accumulated state for one streamed Claude response.

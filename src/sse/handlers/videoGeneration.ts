@@ -6,18 +6,18 @@ import {
   extractApiKey,
   apiKeyGateFailure,
   isValidApiKey,
-} from "../services/auth";
+} from "../services/auth.ts";
 import { getSettings, getProviderConnectionById } from "@/lib/localDb";
-import { getModelInfo } from "../services/model";
-import { getKeyAccessContext, enforceKeyAccessResolved } from "../services/keyAccess";
+import { getModelInfo } from "../services/model.ts";
+import { getKeyAccessContext, enforceKeyAccessResolved } from "../services/keyAccess.ts";
 import { handleVideoProxyCore, getVideoConfig, sanitizeSecrets } from "open-sse/handlers/videoCore";
 import { errorResponse } from "open-sse/utils/error";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig";
-import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh";
+import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh.ts";
 
 const NO_AUTH_VIDEO_PROVIDERS = new Set(["veoaifree-web"]);
-import * as log from "../utils/logger";
-import { unavailableCredentialResponse } from "../services/accountFallbackLoop";
+import * as log from "../utils/logger.ts";
+import { unavailableCredentialResponse } from "../services/accountFallbackLoop.ts";
 
 // Video generation is xAI-only today; requests without a provider prefix
 // (bare model id, or multipart bodies we deliberately don't parse) land here.

@@ -1,8 +1,8 @@
-import { register } from "../index";
-import { FORMATS } from "../formats";
-import { parseDataUri } from "../concerns/image";
-import { safeParseJSON } from "../concerns/json";
-import { ROLE, OPENAI_BLOCK } from "../schema/index";
+import { register } from "../index.ts";
+import { FORMATS } from "../formats.ts";
+import { parseDataUri } from "../concerns/image.ts";
+import { safeParseJSON } from "../concerns/json.ts";
+import { ROLE, OPENAI_BLOCK } from "../schema/index.ts";
 
 /**
  * Convert OpenAI request to Ollama format

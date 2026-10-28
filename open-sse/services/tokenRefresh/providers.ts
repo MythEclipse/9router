@@ -1,8 +1,8 @@
-import { PROVIDERS, PROVIDER_OAUTH } from "../../config/providers";
-import { OAUTH_ENDPOINTS, GITHUB_COPILOT, buildKimiHeaders } from "../../config/appConstants";
-import { proxyAwareFetch } from "../../utils/proxyFetch";
-import { dedupRefresh } from "./dedup";
-import { buildExternalIdpRefreshParams } from "../../../src/lib/oauth/kiroExternalIdp";
+import { PROVIDERS, PROVIDER_OAUTH } from "../../config/providers.ts";
+import { OAUTH_ENDPOINTS, GITHUB_COPILOT, buildKimiHeaders } from "../../config/appConstants.ts";
+import { proxyAwareFetch } from "../../utils/proxyFetch.ts";
+import { dedupRefresh } from "./dedup.ts";
+import { buildExternalIdpRefreshParams } from "../../../src/lib/oauth/kiroExternalIdp.ts";
 
 let _xaiServiceSingleton = null;
 export async function refreshXaiToken(refreshToken, log) {
@@ -10,7 +10,7 @@ export async function refreshXaiToken(refreshToken, log) {
   return dedupRefresh("xai", refreshToken, async () => {
     try {
       if (!_xaiServiceSingleton) {
-        const mod = await import("../../../src/lib/oauth/services/xai");
+        const mod = await import("../../../src/lib/oauth/services/xai.ts");
         _xaiServiceSingleton = new mod.XaiService();
       }
       const tokens = await _xaiServiceSingleton.refreshAccessToken(refreshToken);
@@ -321,7 +321,7 @@ async function resolveKiroProfileArnPatch(providerSpecificData, accessToken, ref
   if (providerSpecificData?.profileArn) return {};
   let profileArn = refreshedArn?.trim?.() || null;
   if (!profileArn) {
-    const { fetchKiroProfileArn } = await import("../../../src/lib/oauth/providers");
+    const { fetchKiroProfileArn } = await import("../../../src/lib/oauth/providers.ts");
     profileArn = await fetchKiroProfileArn(accessToken);
   }
   return profileArn ? { providerSpecificData: { profileArn } } : {};

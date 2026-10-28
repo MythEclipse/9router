@@ -6,19 +6,19 @@ import {
   extractApiKey,
   apiKeyGateFailure,
   isValidApiKey,
-} from "../services/auth";
+} from "../services/auth.ts";
 import { getSettings } from "@/lib/localDb";
-import { getModelInfo, getComboModels } from "../services/model";
-import { getKeyAccessContext, enforceKeyAccess } from "../services/keyAccess";
+import { getModelInfo, getComboModels } from "../services/model.ts";
+import { getKeyAccessContext, enforceKeyAccess } from "../services/keyAccess.ts";
 import { handleImageGenerationCore } from "open-sse/handlers/imageGenerationCore";
 import { getImageAdapter } from "open-sse/handlers/imageProviders/index";
 import { errorResponse } from "open-sse/utils/error";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig";
-import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh";
+import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh.ts";
 import { handleComboChat } from "open-sse/services/combo";
-import * as log from "../utils/logger";
+import * as log from "../utils/logger.ts";
 import { saveRequestUsage } from "@/lib/usageDb";
-import { unavailableCredentialResponse } from "../services/accountFallbackLoop";
+import { unavailableCredentialResponse } from "../services/accountFallbackLoop.ts";
 
 // Providers that don't require credentials (noAuth)
 const NO_AUTH_PROVIDERS = new Set(["sdwebui", "comfyui", "veoaifree-web"]);

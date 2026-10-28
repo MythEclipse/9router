@@ -1,13 +1,13 @@
 import crypto from "crypto";
-import { BaseExecutor } from "./base";
-import { PROVIDERS } from "../config/providers";
-import { OAUTH_ENDPOINTS, ANTIGRAVITY_HEADERS, AG_DEFAULT_TOOLS, AG_TOOL_SUFFIX, ANTIGRAVITY_PROMPT_REWRITES } from "../config/appConstants";
-import { HTTP_STATUS } from "../config/runtimeConfig";
-import { resolveSessionId, toNumericSessionId } from "../utils/sessionManager";
-import { proxyAwareFetch } from "../utils/proxyFetch";
-import { cleanJSONSchemaForAntigravity, normalizeGeminiContents } from "../translator/formats/gemini";
-import { DEFAULT_THINKING_AG_SIGNATURE } from "../config/defaultThinkingSignature";
-import { getGeminiThoughtSignatureSync } from "../services/thoughtSignatureStore";
+import { BaseExecutor } from "./base.ts";
+import { PROVIDERS } from "../config/providers.ts";
+import { OAUTH_ENDPOINTS, ANTIGRAVITY_HEADERS, AG_DEFAULT_TOOLS, AG_TOOL_SUFFIX, ANTIGRAVITY_PROMPT_REWRITES } from "../config/appConstants.ts";
+import { HTTP_STATUS } from "../config/runtimeConfig.ts";
+import { resolveSessionId, toNumericSessionId } from "../utils/sessionManager.ts";
+import { proxyAwareFetch } from "../utils/proxyFetch.ts";
+import { cleanJSONSchemaForAntigravity, normalizeGeminiContents } from "../translator/formats/gemini.ts";
+import { DEFAULT_THINKING_AG_SIGNATURE } from "../config/defaultThinkingSignature.ts";
+import { getGeminiThoughtSignatureSync } from "../services/thoughtSignatureStore.ts";
 
 // Sanitize function name: Gemini requires [a-zA-Z_][a-zA-Z0-9_.:\-]{0,63}
 function sanitizeFunctionName(name) {

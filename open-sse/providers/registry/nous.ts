@@ -7,7 +7,7 @@ import {
   NOUS_OAUTH_SCOPE,
   NOUS_PORTAL_BASE_URL,
   NOUS_TOKEN_URL,
-} from "../../services/nous";
+} from "../../services/nous.ts";
 
 const nous = {
   id: "nous",

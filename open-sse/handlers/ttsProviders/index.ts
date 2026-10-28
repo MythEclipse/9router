@@ -1,16 +1,16 @@
 // TTS provider registry
-import googleTts from "./googleTts";
-import edgeTts, { fetchEdgeTtsVoices } from "./edgeTts";
-import localDevice, { fetchLocalDeviceVoices } from "./localDevice";
-import elevenlabs, { fetchElevenLabsVoices } from "./elevenlabs";
-import openai from "./openai";
-import openrouter from "./openrouter";
-import gemini, { fetchGeminiVoices } from "./gemini";
-import xiaomiMimo from "./xiaomi-mimo";
-import selfhostedTts from "./selfhostedTts";
-import ollamaLocal from "./ollamaLocal";
-import { FORMAT_HANDLERS } from "./genericFormats";
-import { parseModelVoice } from "./_base";
+import googleTts from "./googleTts.ts";
+import edgeTts, { fetchEdgeTtsVoices } from "./edgeTts.ts";
+import localDevice, { fetchLocalDeviceVoices } from "./localDevice.ts";
+import elevenlabs, { fetchElevenLabsVoices } from "./elevenlabs.ts";
+import openai from "./openai.ts";
+import openrouter from "./openrouter.ts";
+import gemini, { fetchGeminiVoices } from "./gemini.ts";
+import xiaomiMimo from "./xiaomi-mimo.ts";
+import selfhostedTts from "./selfhostedTts.ts";
+import ollamaLocal from "./ollamaLocal.ts";
+import { FORMAT_HANDLERS } from "./genericFormats.ts";
+import { parseModelVoice } from "./_base.ts";
 
 // Special providers with custom synthesize() logic
 const SPECIAL_ADAPTERS = {
@@ -56,4 +56,4 @@ export const VOICE_FETCHERS = {
 
 // Re-export for backward compat
 export { fetchEdgeTtsVoices, fetchLocalDeviceVoices, fetchElevenLabsVoices, fetchGeminiVoices };
-export type { ElevenLabsVoice } from "./elevenlabs";
+export type { ElevenLabsVoice } from "./elevenlabs.ts";

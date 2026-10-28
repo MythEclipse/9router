@@ -1,6 +1,6 @@
 // OpenAI-compatible adapter (used by openai, minimax, openrouter, recraft)
-import { PROVIDER_MEDIA } from "../../providers/index";
-import type { ProviderMediaConfig } from "../../types";
+import { PROVIDER_MEDIA } from "../../providers/index.ts";
+import type { ProviderMediaConfig } from "../../types.ts";
 
 const imageCfg = (id): ProviderMediaConfig => (PROVIDER_MEDIA[id]?.imageConfig as ProviderMediaConfig | undefined) || {};
 const imageUrl = (id) => imageCfg(id).baseUrl;

@@ -1,17 +1,17 @@
-import { FORMATS } from "../../translator/formats";
-import { needsTranslation } from "../../translator/index";
-import { createSSETransformStreamWithLogger, createPassthroughStreamWithLogger } from "../../utils/stream";
-import { pipeWithDisconnect } from "../../utils/streamHandler";
-import { PROVIDERS } from "../../config/providers";
-import { HTTP_STATUS, STREAM_STALL_TIMEOUT_MS } from "../../config/runtimeConfig";
-import { buildAbortedResponsesTerminalBytes } from "../../utils/responsesStreamHelpers";
-import { buildStreamErrorBytes } from "../../utils/streamHelpers";
-import { buildRequestDetail, extractRequestConfig, saveUsageStats, formatDoneLine } from "./requestDetail";
+import { FORMATS } from "../../translator/formats.ts";
+import { needsTranslation } from "../../translator/index.ts";
+import { createSSETransformStreamWithLogger, createPassthroughStreamWithLogger } from "../../utils/stream.ts";
+import { pipeWithDisconnect } from "../../utils/streamHandler.ts";
+import { PROVIDERS } from "../../config/providers.ts";
+import { HTTP_STATUS, STREAM_STALL_TIMEOUT_MS } from "../../config/runtimeConfig.ts";
+import { buildAbortedResponsesTerminalBytes } from "../../utils/responsesStreamHelpers.ts";
+import { buildStreamErrorBytes } from "../../utils/streamHelpers.ts";
+import { buildRequestDetail, extractRequestConfig, saveUsageStats, formatDoneLine } from "./requestDetail.ts";
 import { saveRequestDetail } from "@/lib/usageDb";
-import { SSE_HEADERS_CORS as SSE_HEADERS } from "../../utils/sseConstants";
-import { calledModelName } from "../../utils/modelAlias";
-import { upstreamResponseHeaders } from "../../utils/upstreamHeaders";
-import { applyUsageMultipliers } from "../../utils/usageTracking";
+import { SSE_HEADERS_CORS as SSE_HEADERS } from "../../utils/sseConstants.ts";
+import { calledModelName } from "../../utils/modelAlias.ts";
+import { upstreamResponseHeaders } from "../../utils/upstreamHeaders.ts";
+import { applyUsageMultipliers } from "../../utils/usageTracking.ts";
 
 // Codex returns Responses API SSE → which client format to translate INTO, by request sourceFormat.
 // Gemini-family all map to ANTIGRAVITY decoder; unknown sources fall back to OPENAI.

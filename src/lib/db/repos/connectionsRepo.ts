@@ -1,8 +1,8 @@
 import { v4 as uuidv4 } from "uuid";
-import { getAdapter } from "../driver";
-import { parseJson, stringifyJson } from "../helpers/jsonCol";
-import type { DbRow, ResolvedDbAdapter } from "../types";
-import { getCombos } from "./combosRepo";
+import { getAdapter } from "../driver.ts";
+import { parseJson, stringifyJson } from "../helpers/jsonCol.ts";
+import type { DbRow, ResolvedDbAdapter } from "../types.ts";
+import { getCombos } from "./combosRepo.ts";
 import { getModelInfoCore } from "open-sse/services/model";
 
 const OPTIONAL_FIELDS = [

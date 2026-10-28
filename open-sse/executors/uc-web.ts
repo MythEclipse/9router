@@ -3,7 +3,7 @@
 // (must include the durable Clerk `__client` cookie). A short-lived `__session`
 // JWT is minted from Clerk per request; the account uid comes from the minted
 // token's claims. Ported from OmniRoute's uc persona paths.
-import { BaseExecutor } from "./base";
+import { BaseExecutor } from "./base.ts";
 
 const UC_ORIGIN = "https://uncensored.com";
 const UC_CLERK_FAPI = "https://clerk.uncensored.com";

@@ -1,4 +1,4 @@
-import { CLAUDE_API_HEADERS } from "../shared";
+import { CLAUDE_API_HEADERS } from "../shared.ts";
 
 // Dual auth (same pattern as xai): OAuth = Kimi Code subscription (device code),
 // API key = platform.moonshot / api.kimi.com. Transport is shared.

@@ -1,6 +1,6 @@
-import { FORMATS } from "../formats";
-import { fromOpenAIFinish } from "./finishReason";
-import { CLAUDE_BLOCK, MODEL_FALLBACK, RESPONSES_ITEM, ROLE } from "../schema/index";
+import { FORMATS } from "../formats.ts";
+import { fromOpenAIFinish } from "./finishReason.ts";
+import { CLAUDE_BLOCK, MODEL_FALLBACK, RESPONSES_ITEM, ROLE } from "../schema/index.ts";
 
 function parseToolArguments(value) {
   if (!value) return {};

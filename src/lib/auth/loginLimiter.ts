@@ -1,5 +1,5 @@
 // In-memory progressive lockout for dashboard login. Resets on process restart.
-import { hasTrustedPeerHeaders } from "./trustedPeer";
+import { hasTrustedPeerHeaders } from "./trustedPeer.ts";
 
 const MAX_FAILS_BEFORE_LOCK = 5;
 const LOCK_STEPS_MS = [30_000, 120_000, 600_000, 1_800_000]; // 30s, 2m, 10m, 30m

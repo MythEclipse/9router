@@ -1,22 +1,22 @@
 import crypto from "crypto";
-import { BaseExecutor } from "./base";
-import { PROVIDERS } from "../config/providers";
-import { MEMORY_CONFIG, MAX_TOOL_NAME_LEN } from "../config/runtimeConfig";
-import { getThinkingLevels } from "../providers/thinkingLevels";
-import { injectReasoningContent } from "../utils/reasoningContentInjector";
-import { resolveSessionId } from "../utils/sessionManager";
-import { isMuseSparkModel } from "../providers/models/helpers";
-import { applyFingerprintTools } from "../utils/opencodeFingerprint";
-import { loadAgentHarness, applyAgentHarness } from "../utils/opencodeAgentHarness";
-import { ANTHROPIC_API_VERSION } from "../providers/shared";
-import { opencodeTlsFetch, OpencodeTlsUnavailableError } from "../services/opencodeTlsClient";
+import { BaseExecutor } from "./base.ts";
+import { PROVIDERS } from "../config/providers.ts";
+import { MEMORY_CONFIG, MAX_TOOL_NAME_LEN } from "../config/runtimeConfig.ts";
+import { getThinkingLevels } from "../providers/thinkingLevels.ts";
+import { injectReasoningContent } from "../utils/reasoningContentInjector.ts";
+import { resolveSessionId } from "../utils/sessionManager.ts";
+import { isMuseSparkModel } from "../providers/models/helpers.ts";
+import { applyFingerprintTools } from "../utils/opencodeFingerprint.ts";
+import { loadAgentHarness, applyAgentHarness } from "../utils/opencodeAgentHarness.ts";
+import { ANTHROPIC_API_VERSION } from "../providers/shared.ts";
+import { opencodeTlsFetch, OpencodeTlsUnavailableError } from "../services/opencodeTlsClient.ts";
 import {
   normalizeResponsesInput,
   clampResponsesCallId,
   coerceResponsesArguments,
   coerceResponsesOutput,
-} from "../translator/formats/responsesApi";
-import { normalizeResponsesTools, sanitizeResponsesItems } from "../utils/responsesTools";
+} from "../translator/formats/responsesApi.ts";
+import { normalizeResponsesTools, sanitizeResponsesItems } from "../utils/responsesTools.ts";
 
 // Upstream UA shape: "opencode/<version> ai-sdk/provider-utils/<v> runtime/bun/<v>".
 // OpenCode's older "opencode/<channel>/<version>/<client>" form and the

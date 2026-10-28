@@ -1,6 +1,6 @@
-import { BaseExecutor } from "./base";
-import { PROVIDERS, PROVIDER_OAUTH } from "../config/providers";
-import { HTTP_STATUS } from "../config/runtimeConfig";
+import { BaseExecutor } from "./base.ts";
+import { PROVIDERS, PROVIDER_OAUTH } from "../config/providers.ts";
+import { HTTP_STATUS } from "../config/runtimeConfig.ts";
 import {
   generateCursorBody,
   encodeField,
@@ -10,16 +10,16 @@ import {
   extractTextFromResponse,
   encodeMcpTools,
   decodeMcpArgs,
-} from "../utils/cursorProtobuf";
-import { buildCursorHeaders } from "../utils/cursorChecksum";
-import { resolveCursorModels, resolveAutoModelSelection } from "../services/cursorModels";
-import { estimateUsage } from "../utils/usageTracking";
-import { SSE_DONE, SSE_HEADERS } from "../utils/sseConstants";
-import { chatChunkSse, sseChunk } from "../utils/sse";
-import { FORMATS } from "../translator/formats";
-import { ROLE, OPENAI_BLOCK } from "../translator/schema/index";
-import { proxyAwareFetch } from "../utils/proxyFetch";
-import type { ChatRequestBody, ProxyOptions } from "../types";
+} from "../utils/cursorProtobuf.ts";
+import { buildCursorHeaders } from "../utils/cursorChecksum.ts";
+import { resolveCursorModels, resolveAutoModelSelection } from "../services/cursorModels.ts";
+import { estimateUsage } from "../utils/usageTracking.ts";
+import { SSE_DONE, SSE_HEADERS } from "../utils/sseConstants.ts";
+import { chatChunkSse, sseChunk } from "../utils/sse.ts";
+import { FORMATS } from "../translator/formats.ts";
+import { ROLE, OPENAI_BLOCK } from "../translator/schema/index.ts";
+import { proxyAwareFetch } from "../utils/proxyFetch.ts";
+import type { ChatRequestBody, ProxyOptions } from "../types.ts";
 import zlib from "zlib";
 import crypto from "crypto";
 

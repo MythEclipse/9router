@@ -3,9 +3,9 @@
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { useNotificationStore } from "@/store/notificationStore";
-import Sidebar from "../Sidebar";
-import Header from "../Header";
-import WelcomeModal from "../WelcomeModal";
+import Sidebar from "../Sidebar.tsx";
+import Header from "../Header.tsx";
+import WelcomeModal from "../WelcomeModal.tsx";
 
 function getToastStyle(type) {
   if (type === "success") {

@@ -1,6 +1,6 @@
 import { errorResponse, unavailableResponse } from "open-sse/utils/error";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig";
-import * as log from "../utils/logger";
+import * as log from "../utils/logger.ts";
 
 /**
  * The "no usable credential" tail of the account-fallback loop shared by every

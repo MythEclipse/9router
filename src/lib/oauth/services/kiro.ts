@@ -1,4 +1,4 @@
-import { KIRO_CONFIG, assertValidAwsRegion } from "../constants/oauth";
+import { KIRO_CONFIG, assertValidAwsRegion } from "../constants/oauth.ts";
 
 /**
  * Kiro OAuth Service

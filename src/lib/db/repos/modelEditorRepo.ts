@@ -1,5 +1,5 @@
-import { getAdapter } from "../driver";
-import { parseJson, stringifyJson } from "../helpers/jsonCol";
+import { getAdapter } from "../driver.ts";
+import { parseJson, stringifyJson } from "../helpers/jsonCol.ts";
 
 /** A studio model: a user-owned callable name pointing at any `provider/model`. */
 interface StudioModel {
@@ -120,7 +120,7 @@ export async function getStudioModels() {
   // studio name, whatever value it stored. Idempotent, best-effort.
   if (models.length) {
     try {
-      const { getModelAliases, deleteModelAlias } = await import("./aliasRepo");
+      const { getModelAliases, deleteModelAlias } = await import("./aliasRepo.ts");
       const aliases = await getModelAliases();
       for (const m of models) {
         if (m.callName in aliases) await deleteModelAlias(m.callName);

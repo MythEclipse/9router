@@ -1,7 +1,7 @@
 import path from "path";
 import fs from "fs";
 import forge from "node-forge";
-import { MITM_DIR } from "../paths";
+import { MITM_DIR } from "../paths.ts";
 
 const ROOT_CA_KEY_PATH = path.join(MITM_DIR, "rootCA.key");
 const ROOT_CA_CERT_PATH = path.join(MITM_DIR, "rootCA.crt");

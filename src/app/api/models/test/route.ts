@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { pingModelByKind } from "./ping";
+import { pingModelByKind } from "./ping.ts";
 
 export const dynamic = "force-dynamic";
 

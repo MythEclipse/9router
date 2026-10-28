@@ -4,8 +4,8 @@ import { useState } from "react";
 import Card from "@/shared/components/Card";
 import ProviderIcon from "@/shared/components/ProviderIcon";
 import Badge from "@/shared/components/Badge";
-import QuotaProgressBar from "./QuotaProgressBar";
-import { calculatePercentage } from "./utils";
+import QuotaProgressBar from "./QuotaProgressBar.tsx";
+import { calculatePercentage } from "./utils.ts";
 
 const planVariants = {
   free: "default",

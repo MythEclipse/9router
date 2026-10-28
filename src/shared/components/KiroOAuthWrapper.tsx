@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import OAuthModal from "./OAuthModal";
-import KiroAuthModal from "./KiroAuthModal";
-import KiroSocialOAuthModal from "./KiroSocialOAuthModal";
+import OAuthModal from "./OAuthModal.tsx";
+import KiroAuthModal from "./KiroAuthModal.tsx";
+import KiroSocialOAuthModal from "./KiroSocialOAuthModal.tsx";
 
 /**
  * Kiro OAuth Wrapper

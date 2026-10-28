@@ -3,7 +3,7 @@
 // Grok sits behind Cloudflare Enterprise, which rejects Node's native TLS
 // fingerprint even with valid sso+sso-rw+cf_clearance cookies. wreq-js sends
 // a Chrome-like handshake instead (browser profile chrome_146). The session's
-import { loadRuntimeDep } from "./lazyRuntime";
+import { loadRuntimeDep } from "./lazyRuntime.ts";
 // User-Agent must match the browser that earned the cf_clearance cookie —
 // callers send GROK_TLS_USER_AGENT with the pasted cookie header.
 //

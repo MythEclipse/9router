@@ -6,8 +6,8 @@
  * and subscription_period.ended_at for billing-cycle reset.
  */
 
-import { fetchZedAuthenticatedUser } from "../../shared/zedAuth";
-import { parseResetTime, toFiniteNumber } from "./shared";
+import { fetchZedAuthenticatedUser } from "../../shared/zedAuth.ts";
+import { parseResetTime, toFiniteNumber } from "./shared.ts";
 
 /** Map plan_v3 ids to dashboard labels (CodexBar-compatible). */
 export function formatZedPlanLabel(rawPlan) {
@@ -187,7 +187,7 @@ export function parseZedAuthenticatedUserUsage(userInfo) {
  * @param {object|null|undefined} providerSpecificData
  * @param {object|null|undefined} proxyOptions
  */
-import type { UsageProviderData } from "./shared";
+import type { UsageProviderData } from "./shared.ts";
 
 export async function getZedUsage(
   accessToken = null,

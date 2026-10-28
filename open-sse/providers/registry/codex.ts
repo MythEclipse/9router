@@ -1,4 +1,4 @@
-import { withCodexReviewModels } from "../models/helpers";
+import { withCodexReviewModels } from "../models/helpers.ts";
 
 // Codex CLI version seen by OpenAI's backend — single source for the Version /
 // User-Agent identity headers. Bump when the installed codex CLI is upgraded.

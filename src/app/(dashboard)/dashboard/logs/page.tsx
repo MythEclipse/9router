@@ -1,4 +1,4 @@
-import LogsClient from "./LogsClient";
+import LogsClient from "./LogsClient.tsx";
 
 export const dynamic = "force-dynamic";
 

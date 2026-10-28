@@ -1,6 +1,6 @@
 // Black Forest Labs (FLUX) - async submit + polling_url
-import { sleep, nowSec, POLL_INTERVAL_MS, POLL_TIMEOUT_MS } from "./_base";
-import { PROVIDER_MEDIA } from "../../providers/index";
+import { sleep, nowSec, POLL_INTERVAL_MS, POLL_TIMEOUT_MS } from "./_base.ts";
+import { PROVIDER_MEDIA } from "../../providers/index.ts";
 
 const BASE_URL = PROVIDER_MEDIA["black-forest-labs"]?.imageConfig?.baseUrl;
 

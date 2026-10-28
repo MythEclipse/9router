@@ -1,4 +1,4 @@
-import { loadRuntimeDep } from "./lazyRuntime";
+import { loadRuntimeDep } from "./lazyRuntime.ts";
 
 const OPENCODE_CIPHER_LIST = [
   "TLS_AES_128_GCM_SHA256",

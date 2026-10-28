@@ -1,12 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
-import { LEGACY_FILES, DB_DIR } from "./paths";
-import { type TableDef, TABLES, buildCreateTableSql, SCHEMA_VERSION } from "./schema";
-import { MIGRATIONS, latestVersion } from "./migrations/index";
-import { getMetaSync, setMetaSync } from "./helpers/metaStore";
-import { makeBackupDir, backupFile, backupDbLite, pruneOldBackups } from "./backup";
-import { getAppVersion } from "./version";
-import { stringifyJson } from "./helpers/jsonCol";
+import { LEGACY_FILES, DB_DIR } from "./paths.ts";
+import { type TableDef, TABLES, buildCreateTableSql, SCHEMA_VERSION } from "./schema.ts";
+import { MIGRATIONS, latestVersion } from "./migrations/index.ts";
+import { getMetaSync, setMetaSync } from "./helpers/metaStore.ts";
+import { makeBackupDir, backupFile, backupDbLite, pruneOldBackups } from "./backup.ts";
+import { getAppVersion } from "./version.ts";
+import { stringifyJson } from "./helpers/jsonCol.ts";
 
 // Marker file: prevents re-importing legacy JSON when user wipes data.sqlite.
 const MIGRATED_MARKER = path.join(DB_DIR, ".migrated-from-json");

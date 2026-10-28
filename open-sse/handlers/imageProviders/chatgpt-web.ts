@@ -1,7 +1,7 @@
 // ChatGPT Web image adapter — delegates to the executor's picture_v2 in-page
 // generation flow (prepare → conversation SSE → poll → download).
-import { nowSec } from "./_base";
-import { getExecutor } from "../../executors/index";
+import { nowSec } from "./_base.ts";
+import { getExecutor } from "../../executors/index.ts";
 
 const ChatgptWeb = {
   useExecutor: true,

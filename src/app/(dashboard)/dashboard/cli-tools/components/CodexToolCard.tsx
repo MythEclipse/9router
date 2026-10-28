@@ -4,11 +4,11 @@ import { useState, useEffect, useRef } from "react";
 import { Card, Button, ModelSelectModal, ManualConfigModal } from "@/shared/components";
 import Image from "next/image";
 import ProviderIcon from "@/shared/components/ProviderIcon";
-import { EndpointField } from "./CardField";
-import ApiKeySelect from "./ApiKeySelect";
-import { matchKnownEndpoint } from "./cliEndpointMatch";
-import { rememberEndpoint } from "./cliEndpointPresets";
-import { getCurrentCodexProviderSettings, deriveProfileNameFromModel } from "./codexConfig";
+import { EndpointField } from "./CardField.tsx";
+import ApiKeySelect from "./ApiKeySelect.tsx";
+import { matchKnownEndpoint } from "./cliEndpointMatch.ts";
+import { rememberEndpoint } from "./cliEndpointPresets.ts";
+import { getCurrentCodexProviderSettings, deriveProfileNameFromModel } from "./codexConfig.ts";
 import { DEFAULT_LOCAL_API_KEY } from "@/shared/constants/config";
 import { useModelAliases } from "@/shared/hooks/useModelAliases";
 

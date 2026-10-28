@@ -1,6 +1,6 @@
-import { getAdapter } from "../driver";
+import { getAdapter } from "../driver.ts";
 import { CUSTOM_PLUGIN_KEYS } from "@/shared/constants/pluginKeys";
-import { parseJson, stringifyJson } from "../helpers/jsonCol";
+import { parseJson, stringifyJson } from "../helpers/jsonCol.ts";
 
 const DEFAULT_MITM_ROUTER_BASE = "http://localhost:20128";
 const DEFAULT_HEADROOM_URL = process.env.HEADROOM_URL || "http://localhost:8787";

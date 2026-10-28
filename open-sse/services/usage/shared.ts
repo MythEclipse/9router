@@ -2,10 +2,10 @@
  * Shared usage helpers (cross-provider)
  */
 
-import { PROVIDERS } from "../../providers/index";
-import { proxyAwareFetch } from "../../utils/proxyFetch";
-import type { ProxyOptions } from "../../types";
-import type { UsageConfig } from "../../providers/schema";
+import { PROVIDERS } from "../../providers/index.ts";
+import { proxyAwareFetch } from "../../utils/proxyFetch.ts";
+import type { ProxyOptions } from "../../types.ts";
+import type { UsageConfig } from "../../providers/schema.ts";
 
 /**
  * One quota row rendered by the dashboard's QuotaTable.

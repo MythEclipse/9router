@@ -1,7 +1,7 @@
-import { FORMATS } from "../translator/formats";
-import { fallbackToolCallId } from "../translator/concerns/toolCall";
-import { buildErrorBody } from "./error";
-import { SSE_DONE } from "./sseConstants";
+import { FORMATS } from "../translator/formats.ts";
+import { fallbackToolCallId } from "../translator/concerns/toolCall.ts";
+import { buildErrorBody } from "./error.ts";
+import { SSE_DONE } from "./sseConstants.ts";
 
 const sharedEncoder = new TextEncoder();
 const MAX_SSE_LINE_LENGTH = 64 * 1024; // 64KB to prevent DoS

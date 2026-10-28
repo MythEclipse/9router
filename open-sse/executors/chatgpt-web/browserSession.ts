@@ -6,11 +6,11 @@
 // port keeps just the direct `/f/conversation` path used by the clean-room
 // adapter (the shared-WebSocket handoff flow is not wired here).
 
-import { ChatGptWebDeltaV1Decoder, parseChatGptWebEncodedItem } from "./deltaV1";
-import type { ChatGptWebEncodedEvent } from "./deltaV1";
-import { executeChatGptWebFirstPartyTurn } from "./firstParty";
-import type { ChatGptWebFirstPartyInput, ChatGptWebPage } from "./firstParty";
-import type { ChatGptWebResolvedAttachment } from "./attachments";
+import { ChatGptWebDeltaV1Decoder, parseChatGptWebEncodedItem } from "./deltaV1.ts";
+import type { ChatGptWebEncodedEvent } from "./deltaV1.ts";
+import { executeChatGptWebFirstPartyTurn } from "./firstParty.ts";
+import type { ChatGptWebFirstPartyInput, ChatGptWebPage } from "./firstParty.ts";
+import type { ChatGptWebResolvedAttachment } from "./attachments.ts";
 
 const CHATGPT_WEB_ORIGIN = "https://chatgpt.com";
 const DEFAULT_TURN_TIMEOUT_MS = 180000;

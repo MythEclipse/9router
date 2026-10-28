@@ -1,18 +1,18 @@
-import { BaseExecutor } from "./base";
-import { PROVIDERS } from "../config/providers";
+import { BaseExecutor } from "./base.ts";
+import { PROVIDERS } from "../config/providers.ts";
 import {
   KIRO_CODEWHISPERER_TARGET,
   KIRO_ENDPOINT_FALLBACK_STATUSES,
   resolveKiroModel,
-} from "../config/kiroConstants";
+} from "../config/kiroConstants.ts";
 import { v4 as uuidv4 } from "uuid";
-import { refreshKiroToken } from "../services/tokenRefresh";
-import { SSE_DONE, SSE_HEADERS } from "../utils/sseConstants";
-import { getCapabilitiesForModel } from "../providers/capabilities";
-import { STREAM_FIRST_CHUNK_TIMEOUT_MS } from "../config/runtimeConfig";
-import { AWS_EVENTSTREAM } from "../config/awsConstants";
-import { crc32, parseEventFrame } from "../utils/awsEventStream";
-import { estimateInputTokens } from "../utils/usageTracking";
+import { refreshKiroToken } from "../services/tokenRefresh.ts";
+import { SSE_DONE, SSE_HEADERS } from "../utils/sseConstants.ts";
+import { getCapabilitiesForModel } from "../providers/capabilities.ts";
+import { STREAM_FIRST_CHUNK_TIMEOUT_MS } from "../config/runtimeConfig.ts";
+import { AWS_EVENTSTREAM } from "../config/awsConstants.ts";
+import { crc32, parseEventFrame } from "../utils/awsEventStream.ts";
+import { estimateInputTokens } from "../utils/usageTracking.ts";
 
 const KIRO_REPAIR_BUFFER_MAX_BYTES = 8 * 1024 * 1024;
 const KIRO_REPAIR_HEARTBEAT_MS = 10_000;

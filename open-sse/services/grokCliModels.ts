@@ -4,10 +4,10 @@ import {
   GROK_CLI_MODEL,
   GROK_CLI_USER_AGENT,
   GROK_CLI_VERSION,
-} from "../config/grokCli";
-import { refreshProviderCredentials } from "./oauthCredentialManager";
-import { proxyAwareFetch } from "../utils/proxyFetch";
-import type { Credentials, EngineLogger, ProxyOptions, RefreshedCredentials } from "../types";
+} from "../config/grokCli.ts";
+import { refreshProviderCredentials } from "./oauthCredentialManager.ts";
+import { proxyAwareFetch } from "../utils/proxyFetch.ts";
+import type { Credentials, EngineLogger, ProxyOptions, RefreshedCredentials } from "../types.ts";
 
 const MODELS_URL = `${GROK_CLI_BASE_URL}/models`;
 

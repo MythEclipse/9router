@@ -2,9 +2,9 @@
  * GitHub Copilot usage handler
  */
 
-import { proxyAwareFetch } from "../../utils/proxyFetch";
-import { PROVIDER_OAUTH } from "../../providers/index";
-import { U, parseResetTime } from "./shared";
+import { proxyAwareFetch } from "../../utils/proxyFetch.ts";
+import { PROVIDER_OAUTH } from "../../providers/index.ts";
+import { U, parseResetTime } from "./shared.ts";
 
 // GitHub API config - single source from registry oauth block
 const githubOauth = PROVIDER_OAUTH.github;

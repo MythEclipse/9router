@@ -1,5 +1,5 @@
-import { DefaultExecutor } from "./default";
-import { refreshMiniMaxCodeToken } from "../services/tokenRefresh";
+import { DefaultExecutor } from "./default.ts";
+import { refreshMiniMaxCodeToken } from "../services/tokenRefresh.ts";
 
 // MiniMax Code reports credit/quota exhaustion as 402/403 (and 429) with a
 // body that names the balance. chatCore treats 401/403 as refresh-and-retry

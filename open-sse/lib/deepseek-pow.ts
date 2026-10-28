@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { Worker } from "node:worker_threads";
 
-import { findDeepSeekPowNonce, MAX_DEEPSEEK_POW_DIFFICULTY } from "./deepseek-pow-hash";
+import { findDeepSeekPowNonce, MAX_DEEPSEEK_POW_DIFFICULTY } from "./deepseek-pow-hash.ts";
 
 const DEEPSEEK_POW_ALGORITHM = "DeepSeekHashV1";
 const SHA3_256_HEX_PATTERN = /^[a-f0-9]{64}$/i;

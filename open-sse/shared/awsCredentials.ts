@@ -7,7 +7,7 @@ import {
   AWS_PROFILE_PATTERN,
   AWS_REGION_PATTERN,
   BEDROCK,
-} from "../config/awsConstants";
+} from "../config/awsConstants.ts";
 
 /**
  * AWS credential resolution for Bedrock, in two modes.

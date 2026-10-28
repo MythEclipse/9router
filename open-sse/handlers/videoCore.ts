@@ -1,9 +1,9 @@
-import { createErrorResult } from "../utils/error";
-import { HTTP_STATUS } from "../config/runtimeConfig";
-import { refreshTokenByProvider } from "../services/tokenRefresh";
-import { PROVIDER_MEDIA } from "../providers/index";
-import { getVideoAdapter } from "./videoProviders/index";
-import type { Credentials, CredentialsRefreshedCallback, EngineLogger, MediaRequestPlan } from "../types";
+import { createErrorResult } from "../utils/error.ts";
+import { HTTP_STATUS } from "../config/runtimeConfig.ts";
+import { refreshTokenByProvider } from "../services/tokenRefresh.ts";
+import { PROVIDER_MEDIA } from "../providers/index.ts";
+import { getVideoAdapter } from "./videoProviders/index.ts";
+import type { Credentials, CredentialsRefreshedCallback, EngineLogger, MediaRequestPlan } from "../types.ts";
 
 // Upstream fetch deadline for video job submission/polling (the job itself is
 // async upstream - this only bounds the HTTP round-trip, not video rendering).
@@ -57,7 +57,7 @@ async function executeExecutorDrivenVideo({ provider, rawBody, credentials, sign
     .concat(Array.isArray(parsed.image_urls) ? parsed.image_urls : [])
     .filter((ref) => typeof ref === "string" && ref);
 
-  const { getExecutor } = await import("../executors/index");
+  const { getExecutor } = await import("../executors/index.ts");
   const executor = getExecutor(provider);
   if (!executor?.generateMedia) {
     return createErrorResult(HTTP_STATUS.BAD_REQUEST, `[${provider}] has no executor video support`);

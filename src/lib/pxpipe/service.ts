@@ -1,5 +1,5 @@
-import { getInstallInfo, isInstalling, findNpm } from "./install";
-import { getLoadedInfo, loadPxpipe, selfTest } from "./loader";
+import { getInstallInfo, isInstalling, findNpm } from "./install.ts";
+import { getLoadedInfo, loadPxpipe, selfTest } from "./loader.ts";
 
 // Aggregate status for the Token Saver card and /api/pxpipe/status.
 // "running" in library mode = module loaded into this process.

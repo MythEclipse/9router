@@ -1,5 +1,5 @@
-import { resolveOllamaLocalHost } from "../../config/providers";
-import { responseToBase64, throwUpstreamError } from "./_base";
+import { resolveOllamaLocalHost } from "../../config/providers.ts";
+import { responseToBase64, throwUpstreamError } from "./_base.ts";
 
 const DEFAULT_MODEL = "phonon:multilingual";
 const DEFAULT_VOICE = "default";

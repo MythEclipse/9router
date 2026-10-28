@@ -1,7 +1,7 @@
 import http from "http";
 import type { AddressInfo } from "net";
 import { URL } from "url";
-import { CODEX_CONFIG, TRAE_CONFIG, WINDSURF_CONFIG, ZED_HOSTED_CONFIG } from "../constants/oauth";
+import { CODEX_CONFIG, TRAE_CONFIG, WINDSURF_CONFIG, ZED_HOSTED_CONFIG } from "../constants/oauth.ts";
 
 // Loopback origin guard for local callback proxies.
 // Legit OAuth redirects are top-level navigations (no `Origin` header); a cross-site
@@ -250,7 +250,7 @@ export function startCodexProxy(appPort) {
           if (!code) throw new Error("No authorization code received");
 
           // Lazy import to avoid circular deps
-          const { exchangeTokens } = await import("../providers");
+          const { exchangeTokens } = await import("../providers.ts");
           const { createProviderConnection } = await import("@/models");
 
           const tokenData = await exchangeTokens(
@@ -392,7 +392,7 @@ export function startXaiProxy(appPort) {
           }
           if (!code) throw new Error("No authorization code received");
 
-          const { exchangeTokens } = await import("../providers");
+          const { exchangeTokens } = await import("../providers.ts");
           const { createProviderConnection } = await import("@/models");
 
           const tokenData = await exchangeTokens(
@@ -525,7 +525,7 @@ export function startTraeProxy() {
       // Pass the raw callback query to exchangeTokens → parseTraeCallback
       const rawCallback = `${url.pathname}?${url.searchParams.toString()}`;
       try {
-        const { exchangeTokens } = await import("../providers");
+        const { exchangeTokens } = await import("../providers.ts");
         const { createProviderConnection } = await import("@/models");
         const tokenData = await exchangeTokens("trae", rawCallback);
         const connection = await createProviderConnection({
@@ -627,7 +627,7 @@ export function startWindsurfProxy() {
       }
       const rawCallback = `${url.pathname}?${url.searchParams.toString()}`;
       try {
-        const { exchangeTokens } = await import("../providers");
+        const { exchangeTokens } = await import("../providers.ts");
         const { createProviderConnection } = await import("@/models");
         const tokenData = await exchangeTokens("windsurf", rawCallback, null, null, session.state);
         const connection = await createProviderConnection({
@@ -751,7 +751,7 @@ export function startZedProxy(preferredPort = 0) {
       // codeVerifier carries the encoded RSA private key for decryption.
       const rawCallback = url.search ? `${url.pathname}?${url.searchParams.toString()}` : url.pathname;
       try {
-        const { exchangeTokens } = await import("../providers");
+        const { exchangeTokens } = await import("../providers.ts");
         const { createProviderConnection } = await import("@/models");
         const tokenData = await exchangeTokens(
           "zed",
@@ -920,7 +920,7 @@ export function startXiaomiMimoProxy() {
       }
 
       try {
-        const { decryptCallback } = await import("../providers/xiaomi-mimo");
+        const { decryptCallback } = await import("../providers/xiaomi-mimo.ts");
         let result = null;
         let matchedState = null;
 

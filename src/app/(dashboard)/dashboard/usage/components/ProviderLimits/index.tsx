@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import ProviderIcon from "@/shared/components/ProviderIcon";
-import QuotaTable from "./QuotaTable";
+import QuotaTable from "./QuotaTable.tsx";
 import Toggle from "@/shared/components/Toggle";
 import Tooltip from "@/shared/components/Tooltip";
 import {
@@ -38,7 +38,7 @@ import {
   ACCOUNT_PAGE_SIZE_MAX,
   ACCOUNT_FILTER_OPTIONS,
   QUOTA_SORT_OPTIONS,
-} from "./utils";
+} from "./utils.ts";
 import Card from "@/shared/components/Card";
 import { ConfirmModal, EditConnectionModal } from "@/shared/components";
 import AutoPingScheduleModal from "@/app/(dashboard)/dashboard/providers/[id]/AutoPingScheduleModal";
@@ -56,7 +56,7 @@ import {
   providerLabel,
   formatCreditDate,
   formatTimeRemaining,
-} from "./connectionLabels";
+} from "./connectionLabels.ts";
 
 const AUTO_PING_SETTINGS_KEYS = {
   claude: "claudeAutoPing",

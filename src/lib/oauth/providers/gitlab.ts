@@ -1,4 +1,4 @@
-import { GITLAB_CONFIG } from "../constants/oauth";
+import { GITLAB_CONFIG } from "../constants/oauth.ts";
 
 // GitLab Duo - Authorization Code Flow with PKCE
 // Supports two login modes via loginMode metadata: "oauth" (default) or "pat"

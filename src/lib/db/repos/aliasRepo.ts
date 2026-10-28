@@ -1,6 +1,6 @@
-import { getAdapter } from "../driver";
-import { parseJson, stringifyJson } from "../helpers/jsonCol";
-import { makeKv } from "../helpers/kvStore";
+import { getAdapter } from "../driver.ts";
+import { parseJson, stringifyJson } from "../helpers/jsonCol.ts";
+import { makeKv } from "../helpers/kvStore.ts";
 
 const aliasKv = makeKv("modelAliases");
 const customKv = makeKv("customModels");

@@ -16,10 +16,10 @@
  * pair: Anthropic hard-400s when it receives one half without the other.
  */
 
-import { hasSafeguardsRequest, getClassifierContext } from "./safeguardsProtocol";
-import REGISTRY from "../providers/registry/index";
-import { PROVIDER_MEDIA } from "../providers/index";
-import { DANGEROUS_TOOL_USE_BETA } from "../config/safeguardsConstants";
+import { hasSafeguardsRequest, getClassifierContext } from "./safeguardsProtocol.ts";
+import REGISTRY from "../providers/registry/index.ts";
+import { PROVIDER_MEDIA } from "../providers/index.ts";
+import { DANGEROUS_TOOL_USE_BETA } from "../config/safeguardsConstants.ts";
 
 // Upstreams that implement Anthropic's server-side dangerous_tool_use review.
 // A verdict from these is Anthropic's own, so we relay rather than re-review.

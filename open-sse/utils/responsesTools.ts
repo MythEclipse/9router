@@ -1,5 +1,5 @@
-import { MAX_TOOL_NAME_LEN } from "../config/runtimeConfig";
-import { clampResponsesCallId, coerceResponsesArguments, coerceResponsesOutput } from "../translator/formats/responsesApi";
+import { MAX_TOOL_NAME_LEN } from "../config/runtimeConfig.ts";
+import { clampResponsesCallId, coerceResponsesArguments, coerceResponsesOutput } from "../translator/formats/responsesApi.ts";
 
 /**
  * Normalize OpenAI-style `tools` into the flat shape strict Responses backends

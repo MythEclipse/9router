@@ -12,8 +12,8 @@
 //               a plain chat turn with the tool history inlined as prose, instead
 //               of surfacing a tool error to the caller.
 
-import { ROLE } from "../schema/roles";
-import { CLAUDE_BLOCK, RESPONSES_ITEM } from "../schema/blocks";
+import { ROLE } from "../schema/roles.ts";
+import { CLAUDE_BLOCK, RESPONSES_ITEM } from "../schema/blocks.ts";
 
 // Highest level degrade() will apply. Levels are cumulative and each is more
 // lossy than the last, so the caller stops at the first one the provider accepts.

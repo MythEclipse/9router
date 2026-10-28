@@ -1,6 +1,6 @@
 // Concern #6: finish_reason / stop_reason mapping.
 // One entry per direction; switch by special format, default handles common providers.
-import { OPENAI_FINISH, CLAUDE_STOP, GEMINI_FINISH } from "../schema/finishReasons";
+import { OPENAI_FINISH, CLAUDE_STOP, GEMINI_FINISH } from "../schema/finishReasons.ts";
 
 // upstream finish/stop reason → OpenAI finish_reason
 export function toOpenAIFinish(reason, format) {

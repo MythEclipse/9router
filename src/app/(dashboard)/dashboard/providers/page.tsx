@@ -26,9 +26,9 @@ import { getErrorCode, getRelativeTime } from "@/shared/utils";
 import { useNotificationStore } from "@/store/notificationStore";
 import { useHeaderSearchStore } from "@/store/headerSearchStore";
 import { useTaskStore } from "@/store/taskStore";
-import ModelAvailabilityBadge from "./components/ModelAvailabilityBadge";
-import AddCompatibleModal from "./components/AddCompatibleModal";
-import { STATUS_FILTER_OPTIONS, matchesStatusFilter } from "./utils";
+import ModelAvailabilityBadge from "./components/ModelAvailabilityBadge.tsx";
+import AddCompatibleModal from "./components/AddCompatibleModal.tsx";
+import { STATUS_FILTER_OPTIONS, matchesStatusFilter } from "./utils.ts";
 
 function getStatusDisplay(connected, error, errorCode) {
   const parts = [];

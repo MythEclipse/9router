@@ -1,6 +1,6 @@
 // Re-export from open-sse with local logger
-import * as log from "../utils/logger";
-import { getProviderConnectionById, updateProviderConnection } from "../../lib/localDb";
+import * as log from "../utils/logger.ts";
+import { getProviderConnectionById, updateProviderConnection } from "../../lib/localDb.ts";
 import {
   getProjectIdForConnection,
   invalidateProjectId,

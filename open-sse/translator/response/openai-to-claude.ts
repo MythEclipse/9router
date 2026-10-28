@@ -1,8 +1,8 @@
-import { register } from "../index";
-import { FORMATS } from "../formats";
-import { ROLE, CLAUDE_BLOCK, MODEL_FALLBACK } from "../schema/index";
-import { fromOpenAIFinish } from "../concerns/finishReason";
-import { extractReasoningText } from "../concerns/reasoning";
+import { register } from "../index.ts";
+import { FORMATS } from "../formats.ts";
+import { ROLE, CLAUDE_BLOCK, MODEL_FALLBACK } from "../schema/index.ts";
+import { fromOpenAIFinish } from "../concerns/finishReason.ts";
+import { extractReasoningText } from "../concerns/reasoning.ts";
 
 // Legacy "proxy_" prefix used by older request translators. Response strips it
 // defensively so tool names from such turns resolve back (e.g. proxy_Read → Read

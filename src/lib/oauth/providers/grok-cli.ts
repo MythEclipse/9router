@@ -1,6 +1,6 @@
 import { GROK_CLI_PAGER_USER_AGENT, GROK_CLI_VERSION } from "open-sse/config/grokCli";
-import { GROK_CLI_CONFIG } from "../constants/oauth";
-import { decodeXaiIdTokenEmail, extractEmailFromAccessToken } from "../providerHelpers";
+import { GROK_CLI_CONFIG } from "../constants/oauth.ts";
+import { decodeXaiIdTokenEmail, extractEmailFromAccessToken } from "../providerHelpers.ts";
 
 // Grok CLI / Grok Build - device code flow to auth.x.ai, inference on cli-chat-proxy.grok.com
 const grokCli = {

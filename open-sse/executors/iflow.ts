@@ -1,6 +1,6 @@
 import crypto from "crypto";
-import { BaseExecutor } from "./base";
-import { PROVIDERS } from "../config/providers";
+import { BaseExecutor } from "./base.ts";
+import { PROVIDERS } from "../config/providers.ts";
 
 /**
  * IFlowExecutor - Executor for iFlow API with HMAC-SHA256 signature

@@ -1,5 +1,5 @@
 "use client";
-import { bucketTimestampsByDowHour } from "./activityBuckets";
+import { bucketTimestampsByDowHour } from "./activityBuckets.ts";
 
 /**
  * Shared visual atoms for the Usage Overview: a tiny trend line for the

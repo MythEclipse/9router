@@ -1,4 +1,4 @@
 // Shared Hooks - Export all
-export { useTheme } from "./useTheme";
-export { useModelCaps } from "./useModelCaps";
-export { useModelAliases, invalidateModelAliases } from "./useModelAliases";
+export { useTheme } from "./useTheme.tsx";
+export { useModelCaps } from "./useModelCaps.tsx";
+export { useModelAliases, invalidateModelAliases } from "./useModelAliases.ts";

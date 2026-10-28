@@ -1,5 +1,5 @@
 // Single source: build PROVIDERS + PROVIDER_MODELS from registry/{id}.ts (transport + models co-located).
-import REGISTRY from "./registry/index";
+import REGISTRY from "./registry/index.ts";
 import type {
   MediaConfig,
   OAuthConfig,
@@ -9,10 +9,10 @@ import type {
   ProviderRegistry,
   RegistryEntry,
   TransportConfig,
-} from "./schema";
-import { PROVIDER_DEFAULTS } from "./schema";
-import { normalizeModel } from "./models/schema";
-import { buildTtsProviderModels } from "../config/ttsModels";
+} from "./schema.ts";
+import { PROVIDER_DEFAULTS } from "./schema.ts";
+import { normalizeModel } from "./models/schema.ts";
+import { buildTtsProviderModels } from "../config/ttsModels.ts";
 
 // oauth block is canonical for these fields; inject into transport so executors reading
 // this.config.{clientId,clientSecret,tokenUrl} keep working without duplicating in transport

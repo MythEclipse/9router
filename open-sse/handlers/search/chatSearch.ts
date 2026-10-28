@@ -3,8 +3,8 @@
  * /v1/search response format. Supports gemini, antigravity, openai, xai, kimi,
  * minimax, perplexity.
  */
-import { PROVIDER_MEDIA } from "../../providers/index";
-import { ANTIGRAVITY_IDE_USER_AGENT } from "../../providers/shared";
+import { PROVIDER_MEDIA } from "../../providers/index.ts";
+import { ANTIGRAVITY_IDE_USER_AGENT } from "../../providers/shared.ts";
 
 // Default search model + endpoint derive from registry searchViaChat (single source)
 const searchModel = (id) => PROVIDER_MEDIA[id]?.searchViaChat?.defaultModel as string | undefined;

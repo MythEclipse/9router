@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import initSqlJs from "sql.js";
-import { PRAGMA_SQL } from "../schema";
-import type { DbParams, DbRow, DbRunResult, ResolvedDbAdapter } from "../types";
+import { PRAGMA_SQL } from "../schema.ts";
+import type { DbParams, DbRow, DbRunResult, ResolvedDbAdapter } from "../types.ts";
 
 let SQL = null;
 

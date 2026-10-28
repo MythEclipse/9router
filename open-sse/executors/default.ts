@@ -1,15 +1,15 @@
-import { BaseExecutor } from "./base";
+import { BaseExecutor } from "./base.ts";
 import { randomUUID } from "node:crypto";
-import { PROVIDERS, PROVIDER_OAUTH } from "../config/providers";
-import { ANTHROPIC_API_VERSION, OPENAI_COMPAT_BASE, ANTHROPIC_COMPAT_BASE, selectAnthropicBeta, mergeAnthropicBeta } from "../providers/shared";
-import { DANGEROUS_TOOL_USE_BETA } from "../config/safeguardsConstants";
-import { resolveOpenAICompatibleApiType } from "../services/provider";
-import { OAUTH_ENDPOINTS, buildKimiHeaders, NOUS_ATTRIBUTION } from "../config/appConstants";
-import { buildClineHeaders } from "../shared/clineAuth";
-import { proxyAwareFetch } from "../utils/proxyFetch";
-import { injectReasoningContent } from "../utils/reasoningContentInjector";
-import { stripUnsupportedParams } from "../translator/concerns/paramSupport";
-import { extractClaudeSessionIdFromUserId } from "../utils/claudeCloaking";
+import { PROVIDERS, PROVIDER_OAUTH } from "../config/providers.ts";
+import { ANTHROPIC_API_VERSION, OPENAI_COMPAT_BASE, ANTHROPIC_COMPAT_BASE, selectAnthropicBeta, mergeAnthropicBeta } from "../providers/shared.ts";
+import { DANGEROUS_TOOL_USE_BETA } from "../config/safeguardsConstants.ts";
+import { resolveOpenAICompatibleApiType } from "../services/provider.ts";
+import { OAUTH_ENDPOINTS, buildKimiHeaders, NOUS_ATTRIBUTION } from "../config/appConstants.ts";
+import { buildClineHeaders } from "../shared/clineAuth.ts";
+import { proxyAwareFetch } from "../utils/proxyFetch.ts";
+import { injectReasoningContent } from "../utils/reasoningContentInjector.ts";
+import { stripUnsupportedParams } from "../translator/concerns/paramSupport.ts";
+import { extractClaudeSessionIdFromUserId } from "../utils/claudeCloaking.ts";
 
 // Auth header descriptors - derived from registry transport.auth, fallback to hardcoded defaults.
 const BEARER = { combined: true, header: "Authorization", scheme: "bearer" };

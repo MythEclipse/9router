@@ -1,4 +1,4 @@
-import { QODER_CONFIG } from "../constants/oauth";
+import { QODER_CONFIG } from "../constants/oauth.ts";
 
 /**
  * Build a Qoder device-code provider for a region. `config` is the registry

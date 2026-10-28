@@ -1,4 +1,4 @@
-import { NOUS_CONFIG } from "../constants/oauth";
+import { NOUS_CONFIG } from "../constants/oauth.ts";
 
 const nous = {
   config: NOUS_CONFIG,

@@ -1,4 +1,4 @@
-import { GITHUB_CONFIG } from "../constants/oauth";
+import { GITHUB_CONFIG } from "../constants/oauth.ts";
 
 const github = {
   config: GITHUB_CONFIG,

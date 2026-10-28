@@ -5,7 +5,7 @@
 // fetches with the stored cookie jar.
 
 import { randomUUID } from "node:crypto";
-import { SENTINEL_HEADERS, fetchSentinelHeaders } from "./sentinel";
+import { SENTINEL_HEADERS, fetchSentinelHeaders } from "./sentinel.ts";
 
 const MAX_SSE_BYTES = 16 * 1024 * 1024;
 const MAX_CONVERSATION_BYTES = 32 * 1024 * 1024;

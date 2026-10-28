@@ -2,8 +2,8 @@
  * MiniMax usage handler
  */
 
-import { proxyAwareFetch } from "../../utils/proxyFetch";
-import { U, parseResetTime } from "./shared";
+import { proxyAwareFetch } from "../../utils/proxyFetch.ts";
+import { U, parseResetTime } from "./shared.ts";
 
 // MiniMax usage endpoints (try in order, fallback on transient errors)
 const MINIMAX_USAGE_URLS = {

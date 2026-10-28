@@ -1,4 +1,4 @@
-import { CLAUDE_CONFIG } from "../constants/oauth";
+import { CLAUDE_CONFIG } from "../constants/oauth.ts";
 
 const claude = {
   config: CLAUDE_CONFIG,

@@ -1,7 +1,7 @@
 // Antigravity image adapter - delegates to the executor for correct request
 // envelope (project, model, requestType, sessionId) and auth headers.
-import { nowSec, sizeToAspectRatio } from "./_base";
-import { getExecutor } from "../../executors/index";
+import { nowSec, sizeToAspectRatio } from "./_base.ts";
+import { getExecutor } from "../../executors/index.ts";
 
 // Antigravity accepts up to 10 reference images per request
 const MAX_REFERENCE_IMAGES = 10;

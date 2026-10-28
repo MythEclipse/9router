@@ -1,7 +1,7 @@
 import path from "path";
 import fs from "fs";
-import { MITM_DIR } from "../paths";
-import { generateRootCA, loadRootCA, generateLeafCert } from "./rootCA";
+import { MITM_DIR } from "../paths.ts";
+import { generateRootCA, loadRootCA, generateLeafCert } from "./rootCA.ts";
 
 /**
  * Generate Root CA certificate (one-time setup)

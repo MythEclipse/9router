@@ -1,4 +1,4 @@
-import { safePipeResponseBody } from "./streamHandler";
+import { safePipeResponseBody } from "./streamHandler.ts";
 
 // Transform OpenAI SSE stream to Ollama JSON lines format
 export function transformToOllama(response, model) {

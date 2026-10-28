@@ -1,7 +1,7 @@
 // veoaifree-web image adapter — delegates to the executor's nano-banana
 // generator (no auth, ~6 requests/hour per IP).
-import { nowSec } from "./_base";
-import { getExecutor } from "../../executors/index";
+import { nowSec } from "./_base.ts";
+import { getExecutor } from "../../executors/index.ts";
 
 const VeoaifreeWeb = {
   useExecutor: true,

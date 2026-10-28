@@ -3,8 +3,8 @@
  * Failure never breaks existing per-model quota display.
  */
 
-import { U, parseResetTime, fetchWithTimeout } from "./shared";
-import { ANTIGRAVITY_IDE_USER_AGENT, ANTIGRAVITY_IDE_VERSION } from "../../providers/shared";
+import { U, parseResetTime, fetchWithTimeout } from "./shared.ts";
+import { ANTIGRAVITY_IDE_USER_AGENT, ANTIGRAVITY_IDE_VERSION } from "../../providers/shared.ts";
 
 // - Weekly quota summary config ------------------------------
 const WEEKLY_CONFIG = {

@@ -1,16 +1,16 @@
 import crypto from "node:crypto";
-import { DefaultExecutor } from "./default";
-import { resolveSessionId } from "../utils/sessionManager";
-import { getModelTargetFormat } from "../config/providerModels";
-import { FORMATS } from "../translator/formats";
+import { DefaultExecutor } from "./default.ts";
+import { resolveSessionId } from "../utils/sessionManager.ts";
+import { getModelTargetFormat } from "../config/providerModels.ts";
+import { FORMATS } from "../translator/formats.ts";
 import {
   normalizeResponsesInput,
   clampResponsesCallId,
   coerceResponsesArguments,
   coerceResponsesOutput,
-} from "../translator/formats/responsesApi";
-import { normalizeResponsesTools, sanitizeResponsesItems } from "../utils/responsesTools";
-import { MAX_TOOL_NAME_LEN } from "../config/runtimeConfig";
+} from "../translator/formats/responsesApi.ts";
+import { normalizeResponsesTools, sanitizeResponsesItems } from "../utils/responsesTools.ts";
+import { MAX_TOOL_NAME_LEN } from "../config/runtimeConfig.ts";
 
 const SESSION_HEADER = "x-opencode-session";
 const SESSION_FIELD = "_opencodeGoSession";

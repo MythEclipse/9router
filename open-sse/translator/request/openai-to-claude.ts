@@ -1,14 +1,14 @@
-import { register } from "../index";
-import { FORMATS } from "../formats";
-import { CLAUDE_SYSTEM_PROMPT } from "../../config/appConstants";
-import { adjustMaxTokens } from "../formats/maxTokens";
-import { safeParseJSON } from "../concerns/json";
-import { parseDataUri } from "../concerns/image";
-import { extractTextContent } from "../formats/gemini";
-import { extractReasoningText } from "../concerns/reasoning";
-import { DEFAULT_THINKING_CLAUDE_SIGNATURE } from "../../config/defaultThinkingSignature";
-import { ROLE, OPENAI_BLOCK, CLAUDE_BLOCK } from "../schema/index";
-import { getCapabilitiesForModel } from "../../providers/capabilities";
+import { register } from "../index.ts";
+import { FORMATS } from "../formats.ts";
+import { CLAUDE_SYSTEM_PROMPT } from "../../config/appConstants.ts";
+import { adjustMaxTokens } from "../formats/maxTokens.ts";
+import { safeParseJSON } from "../concerns/json.ts";
+import { parseDataUri } from "../concerns/image.ts";
+import { extractTextContent } from "../formats/gemini.ts";
+import { extractReasoningText } from "../concerns/reasoning.ts";
+import { DEFAULT_THINKING_CLAUDE_SIGNATURE } from "../../config/defaultThinkingSignature.ts";
+import { ROLE, OPENAI_BLOCK, CLAUDE_BLOCK } from "../schema/index.ts";
+import { getCapabilitiesForModel } from "../../providers/capabilities.ts";
 
 // Empty prefix matches real Claude Code behavior (no tool name prefix).
 // Previously "proxy_" was used but this is a detectable fingerprint difference.

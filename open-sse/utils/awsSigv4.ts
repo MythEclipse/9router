@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-import { AWS_SIGV4 } from "../config/awsConstants";
+import { AWS_SIGV4 } from "../config/awsConstants.ts";
 
 /**
  * AWS Signature Version 4 request signing.

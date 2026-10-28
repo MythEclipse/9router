@@ -1,15 +1,15 @@
-import { FILTERS } from "./constants";
-import { gitDiff } from "./filters/gitDiff";
-import { gitStatus } from "./filters/gitStatus";
-import { gitLog } from "./filters/gitLog";
-import { grep } from "./filters/grep";
-import { find } from "./filters/find";
-import { dedupLog } from "./filters/dedupLog";
-import { ls } from "./filters/ls";
-import { tree } from "./filters/tree";
-import { smartTruncate } from "./filters/smartTruncate";
-import { readNumbered } from "./filters/readNumbered";
-import { searchList } from "./filters/searchList";
+import { FILTERS } from "./constants.ts";
+import { gitDiff } from "./filters/gitDiff.ts";
+import { gitStatus } from "./filters/gitStatus.ts";
+import { gitLog } from "./filters/gitLog.ts";
+import { grep } from "./filters/grep.ts";
+import { find } from "./filters/find.ts";
+import { dedupLog } from "./filters/dedupLog.ts";
+import { ls } from "./filters/ls.ts";
+import { tree } from "./filters/tree.ts";
+import { smartTruncate } from "./filters/smartTruncate.ts";
+import { readNumbered } from "./filters/readNumbered.ts";
+import { searchList } from "./filters/searchList.ts";
 
 const REGISTRY = {
   [FILTERS.GIT_DIFF]: gitDiff,

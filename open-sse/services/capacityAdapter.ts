@@ -8,7 +8,7 @@
  * front only when none of the original models can handle the request - so this
  * never overrides a combo that already has a member covering the capability.
  */
-import { getCapabilitiesForModel } from "../providers/capabilities";
+import { getCapabilitiesForModel } from "../providers/capabilities.ts";
 
 const CAPABILITY_KEYS = ["vision", "pdf", "audioInput", "videoInput"];
 const HARD_CAPS = new Set(CAPABILITY_KEYS);

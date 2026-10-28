@@ -1,4 +1,4 @@
-import { GOOGLE_OAUTH_CLIENT } from "../shared";
+import { GOOGLE_OAUTH_CLIENT } from "../shared.ts";
 
 const Gemini = {
   id: "gemini",

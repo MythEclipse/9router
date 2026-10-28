@@ -1,6 +1,6 @@
-import { BaseExecutor } from "./base";
-import { PROVIDERS } from "../config/providers";
-import { proxyAwareFetch } from "../utils/proxyFetch";
+import { BaseExecutor } from "./base.ts";
+import { PROVIDERS } from "../config/providers.ts";
+import { proxyAwareFetch } from "../utils/proxyFetch.ts";
 import { createHash } from "crypto";
 import os from "os";
 

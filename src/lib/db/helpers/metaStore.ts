@@ -1,4 +1,4 @@
-import { getAdapter } from "../driver";
+import { getAdapter } from "../driver.ts";
 
 export async function getMeta(key, fallback = null) {
   const db = await getAdapter();

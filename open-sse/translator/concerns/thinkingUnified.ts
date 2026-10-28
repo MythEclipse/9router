@@ -2,12 +2,12 @@
 // Config-driven: thinking format/limits come from capabilities.js + registry transport,
 // never hardcoded per-model here. See .docs/thinking/plan.md MATRIX VI-A.
 
-import { getCapabilitiesForModel } from "../../providers/capabilities";
-import { getThinkingLevels } from "../../providers/thinkingLevels";
-import { isMuseSparkModel } from "../../providers/models/helpers";
-import { PROVIDERS } from "../../providers/index";
-import type { TransportConfig } from "../../providers/schema";
-import { LEVEL_TO_BUDGET, budgetToLevel, effortToBudget, effortToThinkingLevel } from "./thinking";
+import { getCapabilitiesForModel } from "../../providers/capabilities.ts";
+import { getThinkingLevels } from "../../providers/thinkingLevels.ts";
+import { isMuseSparkModel } from "../../providers/models/helpers.ts";
+import { PROVIDERS } from "../../providers/index.ts";
+import type { TransportConfig } from "../../providers/schema.ts";
+import { LEVEL_TO_BUDGET, budgetToLevel, effortToBudget, effortToThinkingLevel } from "./thinking.ts";
 
 // Map a target wire-format to its native thinking format (when capability has none).
 const FORMAT_TO_NATIVE = {

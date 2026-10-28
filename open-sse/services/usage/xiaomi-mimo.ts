@@ -9,8 +9,8 @@
  * available we surface a graceful message instead of failing.
  */
 
-import { proxyAwareFetch } from "../../utils/proxyFetch";
-import { getMimoAccountUsage } from "../../shared/mimoAccount";
+import { proxyAwareFetch } from "../../utils/proxyFetch.ts";
+import { getMimoAccountUsage } from "../../shared/mimoAccount.ts";
 
 const USAGE_URL = "https://aistudio.xiaomimimo.com/open-apis/v1/user/usage";
 

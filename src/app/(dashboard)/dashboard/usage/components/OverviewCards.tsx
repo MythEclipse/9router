@@ -1,7 +1,7 @@
 "use client";
 import Card from "@/shared/components/Card";
 import Badge from "@/shared/components/Badge";
-import { Sparkline } from "./UsageChartsBits";
+import { Sparkline } from "./UsageChartsBits.tsx";
 import { formatCount, formatCostCents } from "@/shared/utils/chartFormat";
 
 const fmt = formatCount;

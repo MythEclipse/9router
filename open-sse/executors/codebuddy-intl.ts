@@ -1,6 +1,6 @@
 import { randomBytes, createHash } from "node:crypto";
-import { DefaultExecutor } from "./default";
-import { resolveContinuationId, resolveSessionIdentity } from "../utils/sessionManager";
+import { DefaultExecutor } from "./default.ts";
+import { resolveContinuationId, resolveSessionIdentity } from "../utils/sessionManager.ts";
 
 function findHeaderKey(headers, name) {
   if (!headers || typeof headers !== "object") return null;

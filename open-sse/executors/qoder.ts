@@ -20,25 +20,25 @@
  *     different model upstream, so a missing entry is a hard error.
  */
 
-import { qoderEncodeBody } from "../shared/qoder/encoding";
+import { qoderEncodeBody } from "../shared/qoder/encoding.ts";
 import { v4 as uuidv4 } from "uuid";
 import { createHash } from "crypto";
 
-import { BaseExecutor } from "./base";
-import { PROVIDERS } from "../config/providers";
-import { proxyAwareFetch } from "../utils/proxyFetch";
-import { SSE_DONE } from "../utils/sseConstants";
-import { FETCH_CONNECT_TIMEOUT_MS, HTTP_STATUS } from "../config/runtimeConfig";
+import { BaseExecutor } from "./base.ts";
+import { PROVIDERS } from "../config/providers.ts";
+import { proxyAwareFetch } from "../utils/proxyFetch.ts";
+import { SSE_DONE } from "../utils/sseConstants.ts";
+import { FETCH_CONNECT_TIMEOUT_MS, HTTP_STATUS } from "../config/runtimeConfig.ts";
 import {
   QODER_CHAT_SIG_PATH,
   QODER_CONTEXT_TIER_ENV,
   getQoderStaticModelConfig,
   qoderInferenceBase,
-} from "../shared/qoder/constants";
-import { getQoderModelConfig, resolveQoderModels, isQoderPat, resolveQoderCredentials } from "../services/qoderModels";
-import { OPENAI_BLOCK, CLAUDE_BLOCK } from "../translator/schema/blocks";
-import { encodeDataUri } from "../translator/concerns/image";
-import { buildCosyHeaders, deriveMachineId } from "../shared/qoder/cosy";
+} from "../shared/qoder/constants.ts";
+import { getQoderModelConfig, resolveQoderModels, isQoderPat, resolveQoderCredentials } from "../services/qoderModels.ts";
+import { OPENAI_BLOCK, CLAUDE_BLOCK } from "../translator/schema/blocks.ts";
+import { encodeDataUri } from "../translator/concerns/image.ts";
+import { buildCosyHeaders, deriveMachineId } from "../shared/qoder/cosy.ts";
 import {
   computeQoderQueueDelayMs,
   isQoderQueuedBody,
@@ -46,10 +46,10 @@ import {
   parseQoderQueueStatus,
   qoderQueueMaxWaitMs,
   qoderQueueStatusUrl,
-} from "../shared/qoder/queue";
-import { createQoderSseCoalescer } from "../shared/qoder/sse";
-import { rewriteQoderMessageAttachments } from "../shared/qoder/attachments";
-import { resolveQoderContextTier, applyQoderContextTier } from "../shared/qoder/contextTier";
+} from "../shared/qoder/queue.ts";
+import { createQoderSseCoalescer } from "../shared/qoder/sse.ts";
+import { rewriteQoderMessageAttachments } from "../shared/qoder/attachments.ts";
+import { resolveQoderContextTier, applyQoderContextTier } from "../shared/qoder/contextTier.ts";
 
 /**
  * Hoist role:"system" messages out of the messages array (Qoder rejects

@@ -8,8 +8,8 @@
 // the import rewrites the settings row that holds the dashboard password
 // hash, so a progress poll must not re-derive trust from the database.
 import { randomUUID } from "node:crypto";
-import { issuePollToken } from "./importJobAuth";
-import { createJobStore, touchJob } from "./jobStore";
+import { issuePollToken } from "./importJobAuth.ts";
+import { createJobStore, touchJob } from "./jobStore.ts";
 
 const RESULT_TTL_MS = 10 * 60 * 1000;
 
@@ -28,7 +28,7 @@ async function runImportJob(jobId) {
   touchJob(job);
 
   try {
-    const { importDbProgressive } = await import("./index");
+    const { importDbProgressive } = await import("./index.ts");
     await importDbProgressive(job.payload, (progress) => {
       const current = store.get(jobId);
       if (!current) return;
@@ -53,8 +53,8 @@ async function runImportJob(jobId) {
     // RESULT_TTL cleanup removes the record (and this digest) shortly after.
 
     try {
-      const { getSettings } = await import("./repos/settingsRepo");
-      const { applyOutboundProxyEnv } = await import("../network/outboundProxy");
+      const { getSettings } = await import("./repos/settingsRepo.ts");
+      const { applyOutboundProxyEnv } = await import("../network/outboundProxy.ts");
       const settings = await getSettings();
       applyOutboundProxyEnv(settings);
     } catch (err) {
@@ -62,7 +62,7 @@ async function runImportJob(jobId) {
     }
 
     try {
-      const { configureTelegramBackup } = await import("../../shared/services/telegramBackup");
+      const { configureTelegramBackup } = await import("../../shared/services/telegramBackup.ts");
       await configureTelegramBackup();
     } catch (err) {
       console.warn("[Settings][DatabaseImport] Failed to reschedule auto backup:", err?.message || err);

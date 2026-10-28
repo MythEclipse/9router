@@ -12,11 +12,11 @@
 import { mkdirSync, readdirSync, rmSync } from "node:fs";
 import path from "node:path";
 import { join } from "node:path";
-import { loadRuntimeDep } from "./lazyRuntime";
-import { getWebLoginConfig } from "./webLoginConfig";
-import { getWritableDataDir } from "../utils/writableDataDir";
-import { pruneProfileCaches, formatBytes } from "./browserProfileCache";
-import { resolveSystemChromeExecutable } from "../executors/browserExecutableCheck";
+import { loadRuntimeDep } from "./lazyRuntime.ts";
+import { getWebLoginConfig } from "./webLoginConfig.ts";
+import { getWritableDataDir } from "../utils/writableDataDir.ts";
+import { pruneProfileCaches, formatBytes } from "./browserProfileCache.ts";
+import { resolveSystemChromeExecutable } from "../executors/browserExecutableCheck.ts";
 
 const POLL_INTERVAL_MS = 1500;
 const LOGIN_TIMEOUT_MS = 300000;

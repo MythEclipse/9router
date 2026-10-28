@@ -4,10 +4,10 @@ import { Suspense, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { RequestLogger, CardSkeleton, SegmentedControl } from "@/shared/components";
 import UsageStats from "@/shared/components/UsageStats";
-import RequestDetailsTab from "./components/RequestDetailsTab";
-import ErrorClassificationTab from "./components/ErrorClassificationTab";
-import ModelLeaderboardTab from "./components/ModelLeaderboardTab";
-import TokenSavingsTab from "./components/TokenSavingsTab";
+import RequestDetailsTab from "./components/RequestDetailsTab.tsx";
+import ErrorClassificationTab from "./components/ErrorClassificationTab.tsx";
+import ModelLeaderboardTab from "./components/ModelLeaderboardTab.tsx";
+import TokenSavingsTab from "./components/TokenSavingsTab.tsx";
 
 const PERIODS = [
   { value: "today", label: "Today" },

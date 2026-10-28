@@ -1,8 +1,8 @@
-import { ensureDirs, DATA_FILE } from "./paths";
-import { stripNullBytes } from "./helpers/nullBytes";
-import type { DbParams, ResolvedDbAdapter } from "./types";
+import { ensureDirs, DATA_FILE } from "./paths.ts";
+import { stripNullBytes } from "./helpers/nullBytes.ts";
+import type { DbParams, ResolvedDbAdapter } from "./types.ts";
 
-export type { DbDriverName, ResolvedDbAdapter } from "./types";
+export type { DbDriverName, ResolvedDbAdapter } from "./types.ts";
 
 interface DbDriverState {
   instance: ResolvedDbAdapter | null;
@@ -21,7 +21,7 @@ async function tryBunSqlite() {
   // Bun runtime only - built-in, no install needed
   if (!process.versions.bun) return null;
   try {
-    const { createBunSqliteAdapter } = await import("./adapters/bunSqliteAdapter");
+    const { createBunSqliteAdapter } = await import("./adapters/bunSqliteAdapter.ts");
     return await createBunSqliteAdapter(DATA_FILE);
   } catch (e) {
     console.warn(`[DB] bun:sqlite unavailable: ${e instanceof Error ? e.message : String(e)}`);
@@ -37,7 +37,7 @@ async function tryBetterSqlite() {
   const [nodeMajor] = process.versions.node.split(".").map(Number);
   if (nodeMajor >= 24) return null;
   try {
-    const { createBetterSqliteAdapter } = await import("./adapters/betterSqliteAdapter");
+    const { createBetterSqliteAdapter } = await import("./adapters/betterSqliteAdapter.ts");
     return createBetterSqliteAdapter(DATA_FILE);
   } catch (e) {
     console.warn(`[DB] better-sqlite3 unavailable: ${e instanceof Error ? e.message : String(e)}`);
@@ -51,7 +51,7 @@ async function tryNodeSqlite() {
   const [maj, min] = process.versions.node.split(".").map(Number);
   if (maj < 22 || (maj === 22 && min < 5)) return null;
   try {
-    const { createNodeSqliteAdapter } = await import("./adapters/nodeSqliteAdapter");
+    const { createNodeSqliteAdapter } = await import("./adapters/nodeSqliteAdapter.ts");
     return await createNodeSqliteAdapter(DATA_FILE);
   } catch (e) {
     console.warn(`[DB] node:sqlite unavailable: ${e instanceof Error ? e.message : String(e)}`);
@@ -61,7 +61,7 @@ async function tryNodeSqlite() {
 
 async function trySqlJs() {
   try {
-    const { createSqlJsAdapter } = await import("./adapters/sqljsAdapter");
+    const { createSqlJsAdapter } = await import("./adapters/sqljsAdapter.ts");
     return await createSqlJsAdapter(DATA_FILE);
   } catch (e) {
     console.warn(`[DB] sql.js unavailable: ${e instanceof Error ? e.message : String(e)}`);
@@ -113,7 +113,7 @@ async function initAdapter(): Promise<ResolvedDbAdapter> {
     state.logged = true;
   }
 
-  const { runMigrationOnce } = await import("./migrate");
+  const { runMigrationOnce } = await import("./migrate.ts");
   await runMigrationOnce(adapter);
   return adapter;
 }

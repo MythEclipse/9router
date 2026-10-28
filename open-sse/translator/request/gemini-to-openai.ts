@@ -1,9 +1,9 @@
-import { register } from "../index";
-import { FORMATS } from "../formats";
-import { adjustMaxTokens } from "../formats/maxTokens";
-import { encodeDataUri } from "../concerns/image";
-import { collapseTextParts } from "../concerns/message";
-import { ROLE, GEMINI_ROLE, OPENAI_BLOCK } from "../schema/index";
+import { register } from "../index.ts";
+import { FORMATS } from "../formats.ts";
+import { adjustMaxTokens } from "../formats/maxTokens.ts";
+import { encodeDataUri } from "../concerns/image.ts";
+import { collapseTextParts } from "../concerns/message.ts";
+import { ROLE, GEMINI_ROLE, OPENAI_BLOCK } from "../schema/index.ts";
 
 // Convert Gemini request to OpenAI format
 export function geminiToOpenAIRequest(model, body, stream) {

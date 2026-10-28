@@ -1,10 +1,10 @@
 import https from "node:https";
 import { Readable } from "node:stream";
 import { randomUUID } from "node:crypto";
-import { proxyAwareFetch } from "../utils/proxyFetch";
-import codex from "../providers/registry/codex";
-import { convertAudio, readBounded, MAX_AUDIO_BYTES } from "./codexSttAudio";
-import { createErrorResult } from "../utils/error";
+import { proxyAwareFetch } from "../utils/proxyFetch.ts";
+import codex from "../providers/registry/codex.ts";
+import { convertAudio, readBounded, MAX_AUDIO_BYTES } from "./codexSttAudio.ts";
+import { createErrorResult } from "../utils/error.ts";
 
 let active = 0;
 const failure = (status, message) => Object.assign(new Error(message), { status });

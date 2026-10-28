@@ -4,7 +4,7 @@
 // forwarded (the caller can inline remote media as data URLs upstream).
 // Images are sniffed for format + dimensions before upload.
 
-import { sniffImageFormat, sniffImageDimensions, MAX_IMAGE_DECODE_EDGE, MAX_IMAGE_PIXELS } from "./imageSniff";
+import { sniffImageFormat, sniffImageDimensions, MAX_IMAGE_DECODE_EDGE, MAX_IMAGE_PIXELS } from "./imageSniff.ts";
 
 export const MAX_CHATGPT_WEB_ATTACHMENTS = 10;
 export const MAX_CHATGPT_WEB_IMAGE_BYTES = 20 * 1024 * 1024;

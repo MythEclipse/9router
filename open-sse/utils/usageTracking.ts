@@ -2,8 +2,8 @@
  * Token Usage Tracking - Extract, normalize, estimate and log token usage
  */
 
-import { FORMATS } from "../translator/formats";
-import { formatClockTime } from "./timeFormat";
+import { FORMATS } from "../translator/formats.ts";
+import { formatClockTime } from "./timeFormat.ts";
 
 // Legacy per-chunk usage console line; off by default (superseded by "📊 done")
 const DEBUG_USAGE = process.env.LOG_USAGE_VERBOSE === "1";

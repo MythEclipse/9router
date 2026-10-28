@@ -1,7 +1,7 @@
 // Generic config-driven TTS handlers - dispatched by ttsConfig.format.
 // Each handler accepts { baseUrl, apiKey, text, modelId, voiceId } and returns { base64, format }.
-import { responseToBase64, throwUpstreamError } from "./_base";
-import minimaxTts from "./minimax";
+import { responseToBase64, throwUpstreamError } from "./_base.ts";
+import minimaxTts from "./minimax.ts";
 
 // Hyperbolic: POST { text } → { audio: base64 }
 async function hyperbolic({ baseUrl, apiKey, text }) {

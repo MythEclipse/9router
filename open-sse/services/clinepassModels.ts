@@ -1,4 +1,4 @@
-import { buildClineHeaders } from "../shared/clineAuth";
+import { buildClineHeaders } from "../shared/clineAuth.ts";
 
 const CLINEPASS_MODELS_ENDPOINT = "https://api.cline.bot/api/v1/models";
 // Cline's free tier is published here, not in /api/v1/models: the catalog

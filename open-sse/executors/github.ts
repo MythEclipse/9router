@@ -1,18 +1,18 @@
-import { BaseExecutor } from "./base";
-import { PROVIDERS } from "../config/providers";
-import { OAUTH_ENDPOINTS, GITHUB_COPILOT } from "../config/appConstants";
-import { HTTP_STATUS } from "../config/runtimeConfig";
-import { openaiToOpenAIResponsesRequest } from "../translator/request/openai-responses";
-import { openaiResponsesToOpenAIResponse } from "../translator/response/openai-responses";
-import { initState, translateRequest, translateResponse } from "../translator/index";
-import { FORMATS } from "../translator/formats";
-import { parseSSELine, formatSSE } from "../utils/streamHelpers";
-import { proxyAwareFetch } from "../utils/proxyFetch";
-import { stripUnsupportedParams } from "../translator/concerns/paramSupport";
-import { SSE_DONE } from "../utils/sseConstants";
-import { safePipeResponseBody } from "../utils/streamHandler";
-import { ANTHROPIC_API_VERSION } from "../providers/shared";
-import type { ExecuteOptions, ExecutorResult, StreamState } from "../types";
+import { BaseExecutor } from "./base.ts";
+import { PROVIDERS } from "../config/providers.ts";
+import { OAUTH_ENDPOINTS, GITHUB_COPILOT } from "../config/appConstants.ts";
+import { HTTP_STATUS } from "../config/runtimeConfig.ts";
+import { openaiToOpenAIResponsesRequest } from "../translator/request/openai-responses.ts";
+import { openaiResponsesToOpenAIResponse } from "../translator/response/openai-responses.ts";
+import { initState, translateRequest, translateResponse } from "../translator/index.ts";
+import { FORMATS } from "../translator/formats.ts";
+import { parseSSELine, formatSSE } from "../utils/streamHelpers.ts";
+import { proxyAwareFetch } from "../utils/proxyFetch.ts";
+import { stripUnsupportedParams } from "../translator/concerns/paramSupport.ts";
+import { SSE_DONE } from "../utils/sseConstants.ts";
+import { safePipeResponseBody } from "../utils/streamHandler.ts";
+import { ANTHROPIC_API_VERSION } from "../providers/shared.ts";
+import type { ExecuteOptions, ExecutorResult, StreamState } from "../types.ts";
 import crypto from "crypto";
 
 export class GithubExecutor extends BaseExecutor {

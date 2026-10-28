@@ -2,9 +2,9 @@
  * Claude usage handler
  */
 
-import { proxyAwareFetch } from "../../utils/proxyFetch";
-import { ANTHROPIC_API_VERSION, CLAUDE_CLI_VERSION } from "../../providers/shared";
-import { U, parseResetTime } from "./shared";
+import { proxyAwareFetch } from "../../utils/proxyFetch.ts";
+import { ANTHROPIC_API_VERSION, CLAUDE_CLI_VERSION } from "../../providers/shared.ts";
+import { U, parseResetTime } from "./shared.ts";
 
 // Claude API config (urls from registry, apiVersion is header logic kept here)
 const CLAUDE_CONFIG = {

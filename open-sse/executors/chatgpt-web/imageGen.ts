@@ -6,8 +6,8 @@
 // polled until the image_gen tool record lands, and the generated file is
 // downloaded in-page as base64.
 
-import { ensureFirstPartyBridge, FIRST_PARTY_BRIDGE_KEY } from "./firstParty";
-import type { ChatGptConversationDocument } from "../../types";
+import { ensureFirstPartyBridge, FIRST_PARTY_BRIDGE_KEY } from "./firstParty.ts";
+import type { ChatGptConversationDocument } from "../../types.ts";
 
 const MAX_SSE_BYTES = 16 * 1024 * 1024;
 const MAX_CONVERSATION_BYTES = 32 * 1024 * 1024;

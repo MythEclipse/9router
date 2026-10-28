@@ -109,10 +109,10 @@ export {
   WEB_COOKIE_PROVIDERS,
   AI_PROVIDERS,
   AUTH_METHODS,
-} from "./providers";
+} from "./providers.ts";
 
 // Re-export from models.js for backward compatibility
 export {
   PROVIDER_MODELS,
   AI_MODELS,
-} from "./models";
+} from "./models.ts";

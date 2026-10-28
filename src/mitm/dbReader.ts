@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 // at $DATA_DIR/mitm/aliases.json (synced by app from SQLite on startup + writes).
 // JSON-only: no SQLite native binding required in MITM bundle.
-import { DATA_DIR } from "./paths";
+import { DATA_DIR } from "./paths.ts";
 
 const CACHE_FILE = path.join(DATA_DIR, "mitm", "aliases.json");
 

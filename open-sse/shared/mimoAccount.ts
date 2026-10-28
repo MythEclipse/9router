@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
-import { proxyAwareFetch } from "../utils/proxyFetch";
+import { proxyAwareFetch } from "../utils/proxyFetch.ts";
 
 /**
  * Xiaomi MiMo account-session helpers (used for weekly quota).

@@ -1,10 +1,10 @@
 // Patch global fetch with proxy support (must be first)
-import "./utils/proxyFetch";
+import "./utils/proxyFetch.ts";
 
 // Config
-export { PROVIDERS } from "./config/providers";
-export { OAUTH_ENDPOINTS, CLAUDE_SYSTEM_PROMPT } from "./config/appConstants";
-export { CACHE_TTL, DEFAULT_MAX_TOKENS, COOLDOWN_MS, BACKOFF_CONFIG } from "./config/runtimeConfig";
+export { PROVIDERS } from "./config/providers.ts";
+export { OAUTH_ENDPOINTS, CLAUDE_SYSTEM_PROMPT } from "./config/appConstants.ts";
+export { CACHE_TTL, DEFAULT_MAX_TOKENS, COOLDOWN_MS, BACKOFF_CONFIG } from "./config/runtimeConfig.ts";
 export { 
   PROVIDER_MODELS, 
   getProviderModels,
@@ -14,10 +14,10 @@ export {
   getModelTargetFormat,
   PROVIDER_ID_TO_ALIAS,
   getModelsByProviderId
-} from "./config/providerModels";
+} from "./config/providerModels.ts";
 
 // Translator
-export { FORMATS } from "./translator/formats";
+export { FORMATS } from "./translator/formats.ts";
 export { 
   register, 
   translateRequest, 
@@ -25,21 +25,21 @@ export {
   needsTranslation, 
   initState, 
   initTranslators 
-} from "./translator/index";
+} from "./translator/index.ts";
 
 // Services
 export { 
   detectFormat, 
   getTargetFormat 
-} from "./services/provider";
+} from "./services/provider.ts";
 
-export { parseModel, resolveModelAliasFromMap, getModelInfoCore } from "./services/model";
+export { parseModel, resolveModelAliasFromMap, getModelInfoCore } from "./services/model.ts";
 
 export {
   checkFallbackError,
   isAccountUnavailable,
   getUnavailableUntil
-} from "./services/accountFallback";
+} from "./services/accountFallback.ts";
 
 export {
   TOKEN_EXPIRY_BUFFER_MS,
@@ -52,7 +52,7 @@ export {
   refreshCopilotToken,
   getAccessToken,
   refreshTokenByProvider
-} from "./services/tokenRefresh";
+} from "./services/tokenRefresh.ts";
 
 export {
   CODEX_MAX_REFRESH_AGE_MS,
@@ -60,18 +60,18 @@ export {
   refreshProviderCredentials,
   mergeRefreshedCredentials,
   mergeProviderSpecificData,
-} from "./services/oauthCredentialManager";
+} from "./services/oauthCredentialManager.ts";
 
 // Handlers
-export { handleChatCore, isTokenExpiringSoon } from "./handlers/chatCore";
-export { createStreamController, pipeWithDisconnect, createDisconnectAwareStream } from "./utils/streamHandler";
+export { handleChatCore, isTokenExpiringSoon } from "./handlers/chatCore.ts";
+export { createStreamController, pipeWithDisconnect, createDisconnectAwareStream } from "./utils/streamHandler.ts";
 
 // Executors
-export { getExecutor, hasSpecializedExecutor } from "./executors/index";
+export { getExecutor, hasSpecializedExecutor } from "./executors/index.ts";
 
 // Utils
-export { errorResponse, formatProviderError } from "./utils/error";
+export { errorResponse, formatProviderError } from "./utils/error.ts";
 export { 
   createSSETransformStreamWithLogger, 
   createPassthroughStreamWithLogger 
-} from "./utils/stream";
+} from "./utils/stream.ts";

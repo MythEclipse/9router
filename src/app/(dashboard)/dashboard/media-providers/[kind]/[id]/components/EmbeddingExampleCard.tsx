@@ -5,7 +5,7 @@ import { Card } from "@/shared/components";
 import { getProviderAlias, isCustomEmbeddingProvider } from "@/shared/constants/providers";
 import { getModelsByProviderId, getModelKind } from "@/shared/constants/models";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
-import { Row, fetchFirstActiveApiKey, fetchTunnelPublicUrl } from "./exampleShared";
+import { Row, fetchFirstActiveApiKey, fetchTunnelPublicUrl } from "./exampleShared.tsx";
 
 const DEFAULT_RESPONSE_EXAMPLE = `{
   "object": "list",

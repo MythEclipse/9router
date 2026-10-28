@@ -2,7 +2,7 @@ import {
   QODER_DEVICE_TOKEN_URL,
   QODER_LOGIN_URL,
   QODER_USERINFO_URL,
-} from "../../qoder/constants";
+} from "../../qoder/constants.ts";
 import crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
 

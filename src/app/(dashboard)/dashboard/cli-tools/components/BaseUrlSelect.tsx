@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SERVER_CONFIG } from "@/shared/constants/config";
-import { readPresets, upsertPreset, deletePreset, subscribePresets, stripSlash } from "./cliEndpointPresets";
+import { readPresets, upsertPreset, deletePreset, subscribePresets, stripSlash } from "./cliEndpointPresets.ts";
 
 const CUSTOM_VALUE = "__custom__";
 const SAVE_VALUE = "__save__";

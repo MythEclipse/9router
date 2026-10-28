@@ -22,15 +22,15 @@
  * or prepaidBalance; richer credit fields are parsed opportunistically if present.
  */
 
-import { proxyAwareFetch } from "../../utils/proxyFetch";
-import { U, parseResetTime, toFiniteNumber } from "./shared";
-import type { UsageProviderData, UsageQuotaMap, UsageQuotaRow } from "./shared";
+import { proxyAwareFetch } from "../../utils/proxyFetch.ts";
+import { U, parseResetTime, toFiniteNumber } from "./shared.ts";
+import type { UsageProviderData, UsageQuotaMap, UsageQuotaRow } from "./shared.ts";
 import {
   GROK_CLI_CLIENT_IDENTIFIER,
   GROK_CLI_USER_AGENT,
   GROK_CLI_VERSION,
-} from "../../config/grokCli";
-import { decodeGrokCreditsFrame } from "./grokCliQuotaFrame";
+} from "../../config/grokCli.ts";
+import { decodeGrokCreditsFrame } from "./grokCliQuotaFrame.ts";
 
 const USAGE = U("grok-cli");
 const BILLING_URL = USAGE.url || "https://cli-chat-proxy.grok.com/v1/billing?format=credits";

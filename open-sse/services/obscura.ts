@@ -13,7 +13,7 @@
 // module is also disabled entirely when NINEROUTER_BROWSER_POOL=off.
 
 import { spawn } from "node:child_process";
-import { loadRuntimeDep } from "./lazyRuntime";
+import { loadRuntimeDep } from "./lazyRuntime.ts";
 import { createServer } from "node:net";
 
 let shared = null;

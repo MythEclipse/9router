@@ -6,7 +6,7 @@
 // Response bodies are passed through verbatim.
 
 // ponytail: generations only - OpenRouter has no edits/extensions endpoint today.
-import type { MediaAdapterRequestOptions, MediaRequestPlan } from "../../types";
+import type { MediaAdapterRequestOptions, MediaRequestPlan } from "../../types.ts";
 
 const SUPPORTED_ACTIONS = new Set(["generations"]);
 

@@ -2,9 +2,9 @@
  * Kiro (AWS CodeWhisperer) usage handler
  */
 
-import { proxyAwareFetch } from "../../utils/proxyFetch";
-import { resolveDefaultProfileArn } from "../../config/kiroConstants";
-import { U, parseResetTime } from "./shared";
+import { proxyAwareFetch } from "../../utils/proxyFetch.ts";
+import { resolveDefaultProfileArn } from "../../config/kiroConstants.ts";
+import { U, parseResetTime } from "./shared.ts";
 
 /**
  * Kiro (AWS CodeWhisperer) Usage

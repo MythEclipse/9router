@@ -1,5 +1,5 @@
-import { ERROR_TYPES, DEFAULT_ERROR_MESSAGES } from "../config/errorConfig";
-import { FORMATS } from "../translator/formats";
+import { ERROR_TYPES, DEFAULT_ERROR_MESSAGES } from "../config/errorConfig.ts";
+import { FORMATS } from "../translator/formats.ts";
 
 // Maximum length for error messages to prevent DoS
 const MAX_ERROR_MESSAGE_LENGTH = 500;

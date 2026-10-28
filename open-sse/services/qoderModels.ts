@@ -24,9 +24,9 @@
 
 import { createHash } from "crypto";
 
-import { proxyAwareFetch } from "../utils/proxyFetch";
-import { buildCosyHeaders } from "../shared/qoder/cosy";
-import type { Credentials, EngineLogger, ProxyOptions, RefreshedCredentials } from "../types";
+import { proxyAwareFetch } from "../utils/proxyFetch.ts";
+import { buildCosyHeaders } from "../shared/qoder/cosy.ts";
+import type { Credentials, EngineLogger, ProxyOptions, RefreshedCredentials } from "../types.ts";
 import {
   QODER_IDE_VERSION,
   QODER_CLIENT_TYPE,
@@ -35,7 +35,7 @@ import {
   qoderUserInfoUrl,
   qoderInferenceBase,
   QODER_STATIC_MODEL_CONFIGS,
-} from "../shared/qoder/constants";
+} from "../shared/qoder/constants.ts";
 
 const FETCH_TIMEOUT_MS = 15_000;
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1h, same as the Kiro catalog

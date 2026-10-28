@@ -10,10 +10,10 @@
  * disabled models are filtered out.
  */
 
-import { proxyAwareFetch } from "../utils/proxyFetch";
-import { GITHUB_COPILOT } from "../config/appConstants";
-import { refreshCopilotToken } from "./tokenRefresh";
-import type { Credentials, EngineLogger } from "../types";
+import { proxyAwareFetch } from "../utils/proxyFetch.ts";
+import { GITHUB_COPILOT } from "../config/appConstants.ts";
+import { refreshCopilotToken } from "./tokenRefresh.ts";
+import type { Credentials, EngineLogger } from "../types.ts";
 
 const MODELS_URL = "https://api.githubcopilot.com/models";
 const FETCH_TIMEOUT_MS = 10_000;

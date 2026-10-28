@@ -6,10 +6,10 @@
  * with partial schema mismatches. For stability, tool outputs are represented as
  * structured text blocks in user messages.
  */
-import { register } from "../index";
-import { FORMATS } from "../formats";
-import { ROLE, OPENAI_BLOCK, CLAUDE_BLOCK } from "../schema/index";
-import { DEFAULT_MIN_TOKENS } from "../../config/runtimeConfig";
+import { register } from "../index.ts";
+import { FORMATS } from "../formats.ts";
+import { ROLE, OPENAI_BLOCK, CLAUDE_BLOCK } from "../schema/index.ts";
+import { DEFAULT_MIN_TOKENS } from "../../config/runtimeConfig.ts";
 
 function extractContent(content) {
   if (typeof content === "string") return content;

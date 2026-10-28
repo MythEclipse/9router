@@ -7,14 +7,14 @@ export {
   isTunnelReconnecting,
   getTunnelService,
   setTunnelUnexpectedExitCallback,
-} from "./cloudflare/manager";
+} from "./cloudflare/manager.ts";
 export {
   killCloudflared,
   isCloudflaredRunning,
   ensureCloudflared,
   getDownloadStatus,
-} from "./cloudflare/cloudflared";
-export { probeUrlAlive as probeCloudflareAlive } from "./cloudflare/healthCheck";
+} from "./cloudflare/cloudflared.ts";
+export { probeUrlAlive as probeCloudflareAlive } from "./cloudflare/healthCheck.ts";
 
 // Tailscale service
 export {
@@ -23,7 +23,7 @@ export {
   getTailscaleStatus,
   isTailscaleReconnecting,
   getTailscaleService,
-} from "./tailscale/manager";
+} from "./tailscale/manager.ts";
 export {
   isTailscaleInstalled,
   isTailscaleRunning,
@@ -38,16 +38,16 @@ export {
   startLogin,
   startDaemonWithPassword,
   TAILSCALE_SOCKET,
-} from "./tailscale/tailscale";
-export { probeUrlAlive as probeTailscaleAlive } from "./tailscale/healthCheck";
+} from "./tailscale/tailscale.ts";
+export { probeUrlAlive as probeTailscaleAlive } from "./tailscale/healthCheck.ts";
 
 // Shared
-export { loadState, generateShortId } from "./shared/state";
-export { checkInternet } from "./shared/internetCheck";
+export { loadState, generateShortId } from "./shared/state.ts";
+export { checkInternet } from "./shared/internetCheck.ts";
 export {
   RESTART_COOLDOWN_MS,
   NETWORK_SETTLE_MS,
   WATCHDOG_INTERVAL_MS,
   NETWORK_CHECK_INTERVAL_MS,
   VIRTUAL_IFACE_REGEX,
-} from "./shared/watchdogConfig";
+} from "./shared/watchdogConfig.ts";

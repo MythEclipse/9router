@@ -3,7 +3,7 @@
 // shape mirrors what GET /api/models returns: { provider, model, name,
 // fullModel, routedModel, origin } where origin is one of "provider",
 // "custom", "studio" or "combo".
-import { parseAllowedModels, matchesAllowedModels } from "../db/repos/allowedModels";
+import { parseAllowedModels, matchesAllowedModels } from "../db/repos/allowedModels.ts";
 
 /**
  * Every id spelling one catalog entry may be called by. The request gate and

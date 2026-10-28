@@ -1,4 +1,4 @@
-import { CLINE_CONFIG } from "../constants/oauth";
+import { CLINE_CONFIG } from "../constants/oauth.ts";
 
 const cline = {
   config: CLINE_CONFIG,

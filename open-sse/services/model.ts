@@ -1,4 +1,4 @@
-import REGISTRY from "../providers/registry/index";
+import REGISTRY from "../providers/registry/index.ts";
 
 // Alias→id derived from registry single-source: id→id, alias→id, aliases[]→id.
 // Media-only providers without a registry transport entry keep explicit aliases here.

@@ -1,5 +1,5 @@
 // ComfyUI - local, noAuth (placeholder; full graph workflow not implemented)
-import { PROVIDER_MEDIA } from "../../providers/index";
+import { PROVIDER_MEDIA } from "../../providers/index.ts";
 
 const BASE_URL = PROVIDER_MEDIA["comfyui"]?.imageConfig?.baseUrl;
 

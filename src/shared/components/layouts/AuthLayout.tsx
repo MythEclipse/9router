@@ -1,5 +1,5 @@
 "use client";
-import ThemeToggle from "../ThemeToggle";
+import ThemeToggle from "../ThemeToggle.tsx";
 
 interface AuthLayoutProps {
   children: React.ReactNode

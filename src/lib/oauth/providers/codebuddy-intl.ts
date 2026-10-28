@@ -1,4 +1,4 @@
-import { CODEBUDDY_INTL_CONFIG } from "../constants/oauth";
+import { CODEBUDDY_INTL_CONFIG } from "../constants/oauth.ts";
 
 // CodeBuddy International - mirrors codebuddy-cn flow against the .ai domain.
 const codebuddyIntl = {

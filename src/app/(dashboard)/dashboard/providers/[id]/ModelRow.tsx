@@ -1,6 +1,6 @@
 import { CapacityBadges, ModelTierBadge } from "@/shared/components";
 import PluginMark from "@/shared/components/PluginMark";
-import { useModelPluginMarks } from "./useModelPluginMarks";
+import { useModelPluginMarks } from "./useModelPluginMarks.tsx";
 
 interface ModelRowProps {
   model: {

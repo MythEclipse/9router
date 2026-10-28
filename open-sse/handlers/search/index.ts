@@ -7,10 +7,10 @@
  *   provider.searchViaChat   → wrap chat-completions (chatSearch.js)
  */
 
-import { buildSearchRequest } from "./callers";
-import { normalizeSearchResponse } from "./normalizers";
-import { handleChatSearch } from "./chatSearch";
-import { fetchPublic } from "../../../src/shared/utils/ssrfGuard";
+import { buildSearchRequest } from "./callers.ts";
+import { normalizeSearchResponse } from "./normalizers.ts";
+import { handleChatSearch } from "./chatSearch.ts";
+import { fetchPublic } from "../../../src/shared/utils/ssrfGuard.ts";
 
 const GLOBAL_TIMEOUT_MS = 15000;
 const NON_RETRIABLE = new Set([400, 401, 403, 404]);

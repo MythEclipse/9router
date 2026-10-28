@@ -5,8 +5,8 @@ import Link from "next/link";
 import { CardSkeleton } from "@/shared/components";
 import { CLI_TOOLS } from "@/shared/constants/cliTools";
 import { getModelsByProviderId, PROVIDER_ID_TO_ALIAS } from "@/shared/constants/models";
-import { DefaultToolCard } from "../components";
-import { resolveToolCard } from "../components/toolCardRegistry";
+import { DefaultToolCard } from "../components/index.ts";
+import { resolveToolCard } from "../components/toolCardRegistry.tsx";
 
 const CLOUD_URL = process.env.NEXT_PUBLIC_CLOUD_URL;
 

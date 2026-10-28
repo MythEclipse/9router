@@ -2,7 +2,7 @@ import {
   KIRO_TOOL_DESCRIPTION_MAX_LENGTH,
   KIRO_TOOL_ID_MAX_LENGTH,
   KIRO_TOOL_NAME_MAX_LENGTH,
-} from "../../config/kiroConstants";
+} from "../../config/kiroConstants.ts";
 
 /**
  * Kiro wire shapes, shared with the request translators that build them.

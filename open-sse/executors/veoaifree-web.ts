@@ -4,7 +4,7 @@
 // generator returning URLs or raw base64 parts. Ported from OmniRoute.
 import dns from "node:dns";
 import { isIP } from "node:net";
-import { BaseExecutor } from "./base";
+import { BaseExecutor } from "./base.ts";
 
 const BASE_URL = "https://veoaifree.com";
 const AJAX_URL = `${BASE_URL}/wp-admin/admin-ajax.php`;

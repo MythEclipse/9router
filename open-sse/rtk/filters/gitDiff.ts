@@ -1,6 +1,6 @@
 // Port of Rust git::compact_diff (src/cmds/git/git.rs L325-413)
 // Compacts unified diff: file headers, hunk-level truncation at 100 lines, +/-/context counting
-import { GIT_DIFF_HUNK_MAX_LINES } from "../constants";
+import { GIT_DIFF_HUNK_MAX_LINES } from "../constants.ts";
 
 export function gitDiff(diff, maxLines = 500) {
   const result = [];

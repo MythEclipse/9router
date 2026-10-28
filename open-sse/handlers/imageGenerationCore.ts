@@ -1,9 +1,9 @@
-import { createErrorResult, parseUpstreamError, formatProviderError } from "../utils/error";
-import { HTTP_STATUS } from "../config/runtimeConfig";
-import { refreshWithRetry } from "../services/tokenRefresh";
-import { getExecutor } from "../executors/index";
-import { getImageAdapter } from "./imageProviders/index";
-import { urlToBase64 } from "./imageProviders/_base";
+import { createErrorResult, parseUpstreamError, formatProviderError } from "../utils/error.ts";
+import { HTTP_STATUS } from "../config/runtimeConfig.ts";
+import { refreshWithRetry } from "../services/tokenRefresh.ts";
+import { getExecutor } from "../executors/index.ts";
+import { getImageAdapter } from "./imageProviders/index.ts";
+import { urlToBase64 } from "./imageProviders/_base.ts";
 
 function serializeRequestBody(requestBody) {
   if (typeof FormData !== "undefined" && requestBody instanceof FormData) return requestBody;

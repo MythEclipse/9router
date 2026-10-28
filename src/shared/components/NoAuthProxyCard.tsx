@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Card from "./Card";
-import Select from "./Select";
-import Badge from "./Badge";
+import Card from "./Card.tsx";
+import Select from "./Select.tsx";
+import Badge from "./Badge.tsx";
 
 const NONE_PROXY_POOL_VALUE = "__none__";
 const STRATEGIES = [

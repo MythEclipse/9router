@@ -1,8 +1,8 @@
-import { detectFormat } from "../services/provider";
-import { translateResponse, initState } from "../translator/index";
-import { FORMATS } from "../translator/formats";
-import { SKIP_PATTERNS } from "../config/runtimeConfig";
-import { formatSSE } from "./stream";
+import { detectFormat } from "../services/provider.ts";
+import { translateResponse, initState } from "../translator/index.ts";
+import { FORMATS } from "../translator/formats.ts";
+import { SKIP_PATTERNS } from "../config/runtimeConfig.ts";
+import { formatSSE } from "./stream.ts";
 
 /**
  * Check for bypass patterns - return fake response without calling provider

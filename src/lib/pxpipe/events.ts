@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { PXPIPE_DIR } from "./install";
+import { PXPIPE_DIR } from "./install.ts";
 
 const EVENTS_FILE = path.join(PXPIPE_DIR, "events.jsonl");
 const ROTATED_FILE = path.join(PXPIPE_DIR, "events.jsonl.1");

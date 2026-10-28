@@ -14,7 +14,7 @@ import {
   GROK_CLI_MODEL,
   GROK_CLI_USER_AGENT,
   GROK_CLI_VERSION,
-} from "../../config/grokCli";
+} from "../../config/grokCli.ts";
 
 const GrokCli = {
   id: "grok-cli",

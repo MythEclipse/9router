@@ -2,13 +2,13 @@
  * Translator: OpenAI Chat Completions → OpenAI Responses API (response)
  * Converts streaming chunks from Chat Completions to Responses API events
  */
-import { register } from "../index";
-import { FORMATS } from "../formats";
-import { buildChunk } from "../concerns/chunk";
-import { buildUsage } from "../concerns/usage";
-import { fallbackToolCallId } from "../concerns/toolCall";
-import { reasoningDelta, extractReasoningText } from "../concerns/reasoning";
-import { ROLE, OPENAI_BLOCK, RESPONSES_ITEM, OPENAI_FINISH, MODEL_FALLBACK } from "../schema/index";
+import { register } from "../index.ts";
+import { FORMATS } from "../formats.ts";
+import { buildChunk } from "../concerns/chunk.ts";
+import { buildUsage } from "../concerns/usage.ts";
+import { fallbackToolCallId } from "../concerns/toolCall.ts";
+import { reasoningDelta, extractReasoningText } from "../concerns/reasoning.ts";
+import { ROLE, OPENAI_BLOCK, RESPONSES_ITEM, OPENAI_FINISH, MODEL_FALLBACK } from "../schema/index.ts";
 
 /**
  * Translate OpenAI chunk to Responses API events

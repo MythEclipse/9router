@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import EmptyWithAction from "./EmptyWithAction";
+import EmptyWithAction from "./EmptyWithAction.tsx";
 
 export default function ModelLeaderboardTab({ period }) {
   const [data, setData] = useState(null);

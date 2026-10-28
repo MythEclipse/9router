@@ -1,7 +1,7 @@
 import { Buffer } from "node:buffer";
-import { createErrorResult } from "../utils/error";
-import { HTTP_STATUS } from "../config/runtimeConfig";
-import { getTtsAdapter, synthesizeViaConfig } from "./ttsProviders/index";
+import { createErrorResult } from "../utils/error.ts";
+import { HTTP_STATUS } from "../config/runtimeConfig.ts";
+import { getTtsAdapter, synthesizeViaConfig } from "./ttsProviders/index.ts";
 
 // Re-export voice fetchers + voices APIs for backward compat with existing routes
 export {
@@ -9,8 +9,8 @@ export {
   fetchEdgeTtsVoices,
   fetchLocalDeviceVoices,
   fetchElevenLabsVoices,
-} from "./ttsProviders/index";
-export type { ElevenLabsVoice } from "./ttsProviders/index";
+} from "./ttsProviders/index.ts";
+export type { ElevenLabsVoice } from "./ttsProviders/index.ts";
 
 // ── Response Formatter (DRY) ───────────────────────────────────
 function createTtsResponse(base64Audio, format, responseFormat) {

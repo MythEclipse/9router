@@ -2,9 +2,9 @@ import {
   getRefreshLeadMs,
   isUnrecoverableRefreshError,
   refreshTokenByProvider,
-} from "./tokenRefresh";
-import { PROVIDER_OAUTH } from "../providers/index";
-import type { Credentials, EngineLogger, ProxyOptions, RefreshedCredentials } from "../types";
+} from "./tokenRefresh.ts";
+import { PROVIDER_OAUTH } from "../providers/index.ts";
+import type { Credentials, EngineLogger, ProxyOptions, RefreshedCredentials } from "../types.ts";
 
 // Single source: codex.oauth.maxRefreshAgeMs (8 days) - proactive refresh window
 export const CODEX_MAX_REFRESH_AGE_MS = PROVIDER_OAUTH["codex"]?.maxRefreshAgeMs;

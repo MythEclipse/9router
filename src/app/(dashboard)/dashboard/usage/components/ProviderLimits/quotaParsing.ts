@@ -7,7 +7,7 @@
  * shows a limit that does not exist.
  */
 import { getModelsByProviderId } from "open-sse/config/providerModels";
-import { calculatePercentage } from "./quotaPercentage";
+import { calculatePercentage } from "./quotaPercentage.ts";
 
 /** One quota bucket as returned by a provider quota endpoint. */
 export interface RawQuotaEntry {

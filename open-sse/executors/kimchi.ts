@@ -1,5 +1,5 @@
-import { DefaultExecutor } from "./default";
-import { getCachedKimchiModelMetadata } from "../services/kimchiModels";
+import { DefaultExecutor } from "./default.ts";
+import { getCachedKimchiModelMetadata } from "../services/kimchiModels.ts";
 
 const TOP_LEVEL_OPENAI_GATEWAY_DROPS = [
   "anthropic_version",

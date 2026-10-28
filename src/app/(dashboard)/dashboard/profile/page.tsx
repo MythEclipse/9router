@@ -12,9 +12,9 @@ import { useTaskStore } from "@/store/taskStore";
 import { APP_CONFIG } from "@/shared/constants/config";
 import { LOCALE_COOKIE, normalizeLocale } from "@/i18n/config";
 import { LOCALE_FLAGS } from "@/shared/constants/locales";
-import { getLocaleFromCookie, formatCountdown, isOidcSaveAllowed, buildOidcPayload, oidcFormFromResponse, oidcSaveMessage, canTestOidc, oidcTestSuccessMessage } from "./profileHelpers";
-import SsoCard from "./SsoCard";
-import { useSso } from "./useSso";
+import { getLocaleFromCookie, formatCountdown, isOidcSaveAllowed, buildOidcPayload, oidcFormFromResponse, oidcSaveMessage, canTestOidc, oidcTestSuccessMessage } from "./profileHelpers.ts";
+import SsoCard from "./SsoCard.tsx";
+import { useSso } from "./useSso.ts";
 
 function readLocaleFromCookie() {
   return getLocaleFromCookie(

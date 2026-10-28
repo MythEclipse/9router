@@ -1,16 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { clientPingUrl, clientPingAny } from "./endpointPing";
+import { clientPingUrl, clientPingAny } from "./endpointPing.ts";
 import { ServerSentFrameReader } from "@/shared/utils/sseFrames";
-import { applyProbe, initialReachability, type ReachabilityState } from "./reachability";
+import { applyProbe, initialReachability, type ReachabilityState } from "./reachability.ts";
 import {
   CLIENT_PING_FAST_MS,
   REACHABLE_MISS_THRESHOLD,
   STATUS_POLL_FAST_MS,
   TUNNEL_PING_INTERVAL_MS,
   TUNNEL_PING_MAX_MS,
-} from "./endpointConstants";
+} from "./endpointConstants.ts";
 
 /**
  * A status banner. The page renders `error` in red, `success`/`warning` through the

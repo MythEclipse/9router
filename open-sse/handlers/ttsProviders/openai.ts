@@ -1,6 +1,6 @@
 // OpenAI TTS - model format: "tts-model/voice"
 import { Buffer } from "node:buffer";
-import { PROVIDER_MEDIA } from "../../providers/index";
+import { PROVIDER_MEDIA } from "../../providers/index.ts";
 
 const DEFAULT_TTS_MODEL = PROVIDER_MEDIA["openai"]?.ttsConfig?.defaultModel;
 

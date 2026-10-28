@@ -2,37 +2,37 @@
  * Usage Fetcher - Get usage data from provider APIs
  */
 
-import { getGitHubUsage } from "./usage/github";
-import { getGeminiUsage, getAntigravityUsage } from "./usage/google";
-import { getClaudeUsage, consumeClaudeResetGrant } from "./usage/claude";
-import { getCodexUsage, consumeCodexRateLimitResetCredit, getCodexRateLimitResetCredits } from "./usage/codex";
+import { getGitHubUsage } from "./usage/github.ts";
+import { getGeminiUsage, getAntigravityUsage } from "./usage/google.ts";
+import { getClaudeUsage, consumeClaudeResetGrant } from "./usage/claude.ts";
+import { getCodexUsage, consumeCodexRateLimitResetCredit, getCodexRateLimitResetCredits } from "./usage/codex.ts";
 
 export { consumeCodexRateLimitResetCredit, getCodexRateLimitResetCredits, consumeClaudeResetGrant };
-import { getKiroUsage } from "./usage/kiro";
-import { getMiniMaxUsage } from "./usage/minimax";
-import { getMiniMaxCodeUsage } from "./minimaxCodeUsage";
-import { getCodeBuddyCnUsage, getCodeBuddyIntlUsage } from "./usage/codebuddy-cn";
-import { getGrokCliUsage } from "./usage/grok-cli";
-import { getKimiUsage } from "./usage/kimi";
-import { getDeepseekUsage } from "./usage/deepseek";
-import { getOpenCodeGoUsage } from "./usage/opencode-go";
-import { getOpenCodeZenUsage } from "./usage/opencode-zen";
-import { getGroqUsage } from "./usage/groq";
-import { getZedUsage } from "./usage/zed";
-import { getXiaomiMimoUsage } from "./usage/xiaomi-mimo";
-import { getCursorUsage } from "./usage/cursor";
-import { resolveQoderCredentials } from "./qoderModels";
-import { getGlmUsage } from "./usage/glm";
-import { getCommandCodeUsage } from "./usage/commandcode";
-import { getCustomCreditsUsage, isCustomQuotaProvider } from "./usage/customCredits";
-import type { Credentials, ProxyOptions } from "../types";
-import type { UsageProviderData, UsageQuotaMap } from "./usage/shared";
+import { getKiroUsage } from "./usage/kiro.ts";
+import { getMiniMaxUsage } from "./usage/minimax.ts";
+import { getMiniMaxCodeUsage } from "./minimaxCodeUsage.ts";
+import { getCodeBuddyCnUsage, getCodeBuddyIntlUsage } from "./usage/codebuddy-cn.ts";
+import { getGrokCliUsage } from "./usage/grok-cli.ts";
+import { getKimiUsage } from "./usage/kimi.ts";
+import { getDeepseekUsage } from "./usage/deepseek.ts";
+import { getOpenCodeGoUsage } from "./usage/opencode-go.ts";
+import { getOpenCodeZenUsage } from "./usage/opencode-zen.ts";
+import { getGroqUsage } from "./usage/groq.ts";
+import { getZedUsage } from "./usage/zed.ts";
+import { getXiaomiMimoUsage } from "./usage/xiaomi-mimo.ts";
+import { getCursorUsage } from "./usage/cursor.ts";
+import { resolveQoderCredentials } from "./qoderModels.ts";
+import { getGlmUsage } from "./usage/glm.ts";
+import { getCommandCodeUsage } from "./usage/commandcode.ts";
+import { getCustomCreditsUsage, isCustomQuotaProvider } from "./usage/customCredits.ts";
+import type { Credentials, ProxyOptions } from "../types.ts";
+import type { UsageProviderData, UsageQuotaMap } from "./usage/shared.ts";
 import {
   getIflowUsage,
   getOllamaUsage,
   getVercelAiGatewayUsage,
   getQoderUsage,
-} from "./usage/misc";
+} from "./usage/misc.ts";
 
 /**
  * Get usage data for a provider connection

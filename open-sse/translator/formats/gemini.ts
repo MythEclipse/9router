@@ -1,8 +1,8 @@
 // Gemini helper functions for translator
 
-import { safeParseJSON } from "../concerns/json";
-import { OPENAI_BLOCK } from "../schema/index";
-import { isGemini4Model } from "../../providers/capabilities";
+import { safeParseJSON } from "../concerns/json.ts";
+import { OPENAI_BLOCK } from "../schema/index.ts";
+import { isGemini4Model } from "../../providers/capabilities.ts";
 
 // Unsupported JSON Schema constraints that should be removed for Antigravity
 export const UNSUPPORTED_SCHEMA_CONSTRAINTS = [

@@ -1,4 +1,4 @@
-import { IFLOW_CONFIG } from "../constants/oauth";
+import { IFLOW_CONFIG } from "../constants/oauth.ts";
 
 const iflow = {
   config: IFLOW_CONFIG,

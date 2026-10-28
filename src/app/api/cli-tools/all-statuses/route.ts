@@ -1,25 +1,25 @@
 
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { GET as claudeGet } from "../claude-settings/route";
-import { GET as codexGet } from "../codex-settings/route";
-import { GET as opencodeGet } from "../opencode-settings/route";
-import { GET as droidGet } from "../droid-settings/route";
-import { GET as openclawGet } from "../openclaw-settings/route";
-import { GET as hermesGet } from "../hermes-settings/route";
-import { GET as coworkGet } from "../cowork-settings/route";
-import { GET as clineGet } from "../cline-settings/route";
-import { GET as kiloGet } from "../kilo-settings/route";
-import { GET as deepseekTuiGet } from "../deepseek-tui-settings/route";
-import { GET as jcodeGet } from "../jcode-settings/route";
-import { GET as grokBuildGet } from "../grok-build-settings/route";
-import { GET as devinGet } from "../devin-settings/route";
-import { GET as piGet } from "../pi-settings/route";
-import { GET as ompGet } from "../omp-settings/route";
-import { GET as crushGet } from "../crush-settings/route";
-import { GET as forgeGet } from "../forge-settings/route";
-import { GET as smeltGet } from "../smelt-settings/route";
-import { GET as codewhaleGet } from "../codewhale-settings/route";
+import { GET as claudeGet } from "../claude-settings/route.ts";
+import { GET as codexGet } from "../codex-settings/route.ts";
+import { GET as opencodeGet } from "../opencode-settings/route.ts";
+import { GET as droidGet } from "../droid-settings/route.ts";
+import { GET as openclawGet } from "../openclaw-settings/route.ts";
+import { GET as hermesGet } from "../hermes-settings/route.ts";
+import { GET as coworkGet } from "../cowork-settings/route.ts";
+import { GET as clineGet } from "../cline-settings/route.ts";
+import { GET as kiloGet } from "../kilo-settings/route.ts";
+import { GET as deepseekTuiGet } from "../deepseek-tui-settings/route.ts";
+import { GET as jcodeGet } from "../jcode-settings/route.ts";
+import { GET as grokBuildGet } from "../grok-build-settings/route.ts";
+import { GET as devinGet } from "../devin-settings/route.ts";
+import { GET as piGet } from "../pi-settings/route.ts";
+import { GET as ompGet } from "../omp-settings/route.ts";
+import { GET as crushGet } from "../crush-settings/route.ts";
+import { GET as forgeGet } from "../forge-settings/route.ts";
+import { GET as smeltGet } from "../smelt-settings/route.ts";
+import { GET as codewhaleGet } from "../codewhale-settings/route.ts";
 
 export const dynamic = "force-dynamic";
 

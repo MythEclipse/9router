@@ -10,8 +10,8 @@
  * this module never sees a literal key.
  */
 
-import { handleSearchCore } from "./search/index";
-import { resolveSearchProvider, resolveSearchCredentials, supportsSearch } from "./webSearchCredentials";
+import { handleSearchCore } from "./search/index.ts";
+import { resolveSearchProvider, resolveSearchCredentials, supportsSearch } from "./webSearchCredentials.ts";
 
 /**
  * Build a `runSearch({query, plan}) => SearchResult[]` closure.

@@ -1,4 +1,4 @@
-import { DefaultExecutor } from "./default";
+import { DefaultExecutor } from "./default.ts";
 
 export class AzureExecutor extends DefaultExecutor {
   constructor() {

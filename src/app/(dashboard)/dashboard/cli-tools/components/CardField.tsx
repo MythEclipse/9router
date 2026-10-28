@@ -1,6 +1,6 @@
 "use client";
 
-import BaseUrlSelect from "./BaseUrlSelect";
+import BaseUrlSelect from "./BaseUrlSelect.tsx";
 
 /**
  * Layout primitives for the CLI tool cards.

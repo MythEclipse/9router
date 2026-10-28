@@ -1,7 +1,7 @@
 // Barrel: PROVIDERS now built from providers/registry (transport co-located with models)
-import { PROVIDERS } from "../providers/index";
-import type { Credentials } from "../types";
-export { PROVIDERS, PROVIDER_OAUTH } from "../providers/index";
+import { PROVIDERS } from "../providers/index.ts";
+import type { Credentials } from "../types.ts";
+export { PROVIDERS, PROVIDER_OAUTH } from "../providers/index.ts";
 
 export const OLLAMA_LOCAL_DEFAULT_HOST = "http://localhost:11434";
 

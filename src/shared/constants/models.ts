@@ -13,7 +13,7 @@ export {
   getModelQuotaFamily
 } from "open-sse/config/providerModels";
 
-import { AI_PROVIDERS, isOpenAICompatibleProvider } from "./providers";
+import { AI_PROVIDERS, isOpenAICompatibleProvider } from "./providers.ts";
 import { PROVIDER_MODELS as MODELS } from "open-sse/config/providerModels";
 
 // Providers that accept any model (passthrough)
@@ -77,7 +77,7 @@ export function isSttTransport(transport) {
 // this module (it opens with `from "open-sse/config/..."`, which does not
 // resolve inside .next/standalone and once took every route down with a 503).
 // A plain `export ... from` would leave no local binding for pluginMarksFor.
-import { CUSTOM_PLUGIN_KEYS } from "./pluginKeys";
+import { CUSTOM_PLUGIN_KEYS } from "./pluginKeys.ts";
 export { CUSTOM_PLUGIN_KEYS };
 
 /**

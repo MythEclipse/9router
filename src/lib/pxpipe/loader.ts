@@ -1,5 +1,5 @@
 import { pathToFileURL } from "url";
-import { getInstallInfo, libraryEntry } from "./install";
+import { getInstallInfo, libraryEntry } from "./install.ts";
 
 // Module cache: pxpipe is loaded once per process ("started") and dropped on
 // "stop". In library mode start/stop govern the in-process module, not a daemon.

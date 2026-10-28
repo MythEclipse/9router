@@ -16,7 +16,7 @@
  * is exactly one place that answers both questions.
  */
 
-import { parseJson } from "../helpers/jsonCol";
+import { parseJson } from "../helpers/jsonCol.ts";
 
 /** The columns a reader must select for {@link resolvedModelOf} to see the alias. */
 export const MODEL_NAME_COLUMNS = "model, meta";

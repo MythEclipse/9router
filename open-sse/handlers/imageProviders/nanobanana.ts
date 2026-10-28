@@ -1,6 +1,6 @@
 // NanoBanana API - async submit + poll record-info
-import { sleep, nowSec, sizeToAspectRatio, POLL_INTERVAL_MS, POLL_TIMEOUT_MS } from "./_base";
-import { PROVIDER_MEDIA } from "../../providers/index";
+import { sleep, nowSec, sizeToAspectRatio, POLL_INTERVAL_MS, POLL_TIMEOUT_MS } from "./_base.ts";
+import { PROVIDER_MEDIA } from "../../providers/index.ts";
 
 const IMG_CFG = PROVIDER_MEDIA["nanobanana"]?.imageConfig || {};
 const SUBMIT_URL = IMG_CFG.baseUrl;

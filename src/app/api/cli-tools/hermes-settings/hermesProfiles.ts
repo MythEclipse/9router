@@ -10,7 +10,7 @@
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
-import { parseModelBlock, parseDelegationBlock, parseAuxRoles, has9RouterConfig } from "./hermesYaml";
+import { parseModelBlock, parseDelegationBlock, parseAuxRoles, has9RouterConfig } from "./hermesYaml.ts";
 
 // Profile names become directory names and command aliases — keep them inert.
 export const PROFILE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;

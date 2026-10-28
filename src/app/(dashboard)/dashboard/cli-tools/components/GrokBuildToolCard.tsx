@@ -4,10 +4,10 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, Button, ModelSelectModal, ManualConfigModal } from "@/shared/components";
 import { useModelCaps } from "@/shared/hooks/useModelCaps";
 import Image from "next/image";
-import BaseUrlSelect from "./BaseUrlSelect";
-import { rememberEndpoint } from "./cliEndpointPresets";
-import ApiKeySelect from "./ApiKeySelect";
-import { matchKnownEndpoint } from "./cliEndpointMatch";
+import BaseUrlSelect from "./BaseUrlSelect.tsx";
+import { rememberEndpoint } from "./cliEndpointPresets.ts";
+import ApiKeySelect from "./ApiKeySelect.tsx";
+import { matchKnownEndpoint } from "./cliEndpointMatch.ts";
 import { DEFAULT_LOCAL_API_KEY } from "@/shared/constants/config";
 
 const ENDPOINT = "/api/cli-tools/grok-build-settings";

@@ -1,4 +1,4 @@
-import { KIMCHI_CONFIG } from "../constants/oauth";
+import { KIMCHI_CONFIG } from "../constants/oauth.ts";
 
 const kimchi = {
   config: KIMCHI_CONFIG,

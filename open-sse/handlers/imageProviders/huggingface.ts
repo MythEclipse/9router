@@ -8,8 +8,8 @@
 //
 // The legacy `api-inference.huggingface.co` host is gone (DNS ENOTFOUND) and is
 // deliberately not referenced anywhere here.
-import { nowSec, urlToBase64 } from "./_base";
-import { PROVIDER_MEDIA } from "../../providers/index";
+import { nowSec, urlToBase64 } from "./_base.ts";
+import { PROVIDER_MEDIA } from "../../providers/index.ts";
 
 const imageConfig = () => PROVIDER_MEDIA["huggingface"]?.imageConfig || {};
 const BASE_URL = imageConfig().baseUrl;

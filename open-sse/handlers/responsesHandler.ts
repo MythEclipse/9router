@@ -3,12 +3,12 @@
  * Converts Chat Completions to Codex Responses API format
  */
 
-import { handleChatCore } from "./chatCore";
-import { convertResponsesApiFormat } from "../translator/formats/responsesApi";
-import { createResponsesApiTransformStream } from "../transformer/responsesTransformer";
-import { convertResponsesStreamToJson } from "../transformer/streamToJsonConverter";
-import { SSE_HEADERS_CORS } from "../utils/sseConstants";
-import { safePipeResponseBody } from "../utils/streamHandler";
+import { handleChatCore } from "./chatCore.ts";
+import { convertResponsesApiFormat } from "../translator/formats/responsesApi.ts";
+import { createResponsesApiTransformStream } from "../transformer/responsesTransformer.ts";
+import { convertResponsesStreamToJson } from "../transformer/streamToJsonConverter.ts";
+import { SSE_HEADERS_CORS } from "../utils/sseConstants.ts";
+import { safePipeResponseBody } from "../utils/streamHandler.ts";
 
 /**
  * Handle /v1/responses request

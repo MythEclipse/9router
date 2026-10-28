@@ -6,7 +6,7 @@
 // contract on the request side, and (b) parse the upstream `<tool>{...}</tool>` text
 // back into OpenAI `tool_calls` on the response side.
 
-import { findTagBlocks } from "../utils/tagBlocks";
+import { findTagBlocks } from "../utils/tagBlocks.ts";
 
 const TOOL_OPEN_RE = /<tool>/g;
 const TOOL_CLOSE_RE = /<\/tool>/g;

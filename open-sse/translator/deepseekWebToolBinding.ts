@@ -9,7 +9,7 @@ import {
   getToolNonce,
   parseLooseJsonObject,
   resolveRequestedToolName,
-} from "./webTools";
+} from "./webTools.ts";
 
 const ajv = new Ajv2020({ strict: false, allErrors: false, validateFormats: false });
 const toolValidatorCache = new WeakMap();

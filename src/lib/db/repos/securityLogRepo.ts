@@ -1,4 +1,4 @@
-import { getAdapter } from "../driver";
+import { getAdapter } from "../driver.ts";
 
 /**
  * Security event log: sign-ins, refusals and anything that looks like a probe.

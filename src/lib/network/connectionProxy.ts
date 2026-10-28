@@ -1,6 +1,6 @@
 import { normalizeConfigString as normalizeString } from "@/lib/network/normalizeConfigString";
 import { getProxyPoolById } from "@/models";
-import { pickSmartProxyPoolId } from "./proxyHealth";
+import { pickSmartProxyPoolId } from "./proxyHealth.ts";
 
 // Safely normalize any value into a trimmed string.
 // ─── Proxy pool rotation state (in-memory) ─────────────────────────

@@ -1,4 +1,4 @@
-import { CLINEPASS_CONFIG } from "../constants/oauth";
+import { CLINEPASS_CONFIG } from "../constants/oauth.ts";
 
 const clinepass = {
   config: CLINEPASS_CONFIG,

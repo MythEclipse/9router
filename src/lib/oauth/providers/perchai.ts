@@ -1,4 +1,4 @@
-import { PERCHAI_CONFIG } from "../constants/oauth";
+import { PERCHAI_CONFIG } from "../constants/oauth.ts";
 
 const provider = {
   config: PERCHAI_CONFIG,

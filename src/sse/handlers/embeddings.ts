@@ -7,18 +7,18 @@ import {
   apiKeyGateFailure,
   isValidApiKey,
   shouldLogAuthFailure,
-} from "../services/auth";
+} from "../services/auth.ts";
 import { getSettings } from "@/lib/localDb";
 import { getClientIp } from "@/lib/auth/loginLimiter";
-import { getModelInfo } from "../services/model";
-import { getKeyAccessContext, enforceKeyAccessResolved } from "../services/keyAccess";
+import { getModelInfo } from "../services/model.ts";
+import { getKeyAccessContext, enforceKeyAccessResolved } from "../services/keyAccess.ts";
 import { handleEmbeddingsCore } from "open-sse/handlers/embeddingsCore";
 import { errorResponse } from "open-sse/utils/error";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig";
-import * as log from "../utils/logger";
-import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh";
+import * as log from "../utils/logger.ts";
+import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh.ts";
 import { saveRequestUsage } from "@/lib/usageDb";
-import { unavailableCredentialResponse } from "../services/accountFallbackLoop";
+import { unavailableCredentialResponse } from "../services/accountFallbackLoop.ts";
 
 /** Token counts an embeddings provider reports back for one request. */
 interface EmbeddingUsage {

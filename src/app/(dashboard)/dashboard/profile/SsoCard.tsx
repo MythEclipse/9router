@@ -9,8 +9,8 @@
  */
 import { Card, Button, Toggle, Input, Select } from "@/shared/components";
 import { cn } from "@/shared/utils/cn";
-import type { SsoController } from "./useSso";
-import { ssoCallbackUrls } from "./useSso";
+import type { SsoController } from "./useSso.ts";
+import { ssoCallbackUrls } from "./useSso.ts";
 
 interface SsoCardProps {
   sso: SsoController;

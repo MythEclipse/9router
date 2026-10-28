@@ -8,8 +8,8 @@
 // - Only the newest KEEP_BACKUPS are kept; older ones are pruned automatically.
 import fs from "node:fs";
 import path from "node:path";
-import { BACKUPS_DIR, ensureDirs } from "./paths";
-import { timestampSlug, getAppVersion } from "./version";
+import { BACKUPS_DIR, ensureDirs } from "./paths.ts";
+import { timestampSlug, getAppVersion } from "./version.ts";
 
 const KEEP_BACKUPS = 3;
 

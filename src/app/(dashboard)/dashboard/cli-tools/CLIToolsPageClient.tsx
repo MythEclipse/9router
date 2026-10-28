@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 import { CardSkeleton } from "@/shared/components";
 import { CLI_TOOLS, MITM_TOOLS } from "@/shared/constants/cliTools";
-import { MitmLinkCard } from "./components";
-import ToolSummaryCard from "./components/ToolSummaryCard";
+import { MitmLinkCard } from "./components/index.ts";
+import ToolSummaryCard from "./components/ToolSummaryCard.tsx";
 
 const ALL_STATUSES_URL = "/api/cli-tools/all-statuses";
 

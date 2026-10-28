@@ -1,12 +1,12 @@
-import { BaseExecutor } from "./base";
-import type { AssistantCompletionMessage } from "../types";
+import { BaseExecutor } from "./base.ts";
+import type { AssistantCompletionMessage } from "../types.ts";
 import {
   buildToolInstructions,
   buildToolReminder,
   emitToolCallChunks,
   hasTools,
   parseToolCallReply,
-} from "./webCookieToolBridge";
+} from "./webCookieToolBridge.ts";
 
 const BASE_URL = "https://www.kimi.ai";
 const CHAT_URL = `${BASE_URL}/apiv2/kimi.gateway.chat.v1.ChatService/Chat`;

@@ -1,5 +1,5 @@
-import { resolveDns } from "../shared/dnsResolver";
-import { HEALTH_CHECK } from "./config";
+import { resolveDns } from "../shared/dnsResolver.ts";
+import { HEALTH_CHECK } from "./config.ts";
 
 export async function probeUrlAlive(url) {
   if (!url) return false;

@@ -5,7 +5,7 @@
 // interfaces below therefore carry an index signature: known fields are typed
 // (so call sites get completion and typos surface), while provider-specific
 // extras stay assignable without editing this file for each new provider.
-import { DEFAULT_RETRY_CONFIG, FETCH_CONNECT_TIMEOUT_MS } from "../config/runtimeConfig";
+import { DEFAULT_RETRY_CONFIG, FETCH_CONNECT_TIMEOUT_MS } from "../config/runtimeConfig.ts";
 
 /** Loose bag for provider-specific extras the shared types do not name. */
 export type ProviderExtras = Record<string, unknown>;

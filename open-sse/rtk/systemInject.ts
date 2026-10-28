@@ -2,9 +2,9 @@
 // the final request body, dispatching by format so it works for translated and
 // native-passthrough flows. Used by caveman.js and ponytail.js.
 
-import { FORMATS } from "../translator/formats";
-import { OPENAI_BLOCK, CLAUDE_BLOCK, RESPONSES_ITEM } from "../translator/schema/blocks";
-import { ROLE } from "../translator/schema/roles";
+import { FORMATS } from "../translator/formats.ts";
+import { OPENAI_BLOCK, CLAUDE_BLOCK, RESPONSES_ITEM } from "../translator/schema/blocks.ts";
+import { ROLE } from "../translator/schema/roles.ts";
 
 const SEP = "\n\n";
 

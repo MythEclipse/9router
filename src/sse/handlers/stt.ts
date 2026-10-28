@@ -1,18 +1,18 @@
 import {
   extractApiKey, isValidApiKey, apiKeyGateFailure, clearAccountError,
   getProviderCredentials, markAccountUnavailable, shouldTryNextAccount,
-} from "../services/auth";
+} from "../services/auth.ts";
 import { getSettings, getCustomModels } from "@/lib/localDb";
-import { getModelInfo } from "../services/model";
-import { getKeyAccessContext, enforceKeyAccessResolved } from "../services/keyAccess";
+import { getModelInfo } from "../services/model.ts";
+import { getKeyAccessContext, enforceKeyAccessResolved } from "../services/keyAccess.ts";
 import { handleSttCore } from "open-sse/handlers/sttCore";
 import { errorResponse } from "open-sse/utils/error";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig";
 import { AI_PROVIDERS } from "@/shared/constants/providers";
-import * as log from "../utils/logger";
-import { checkAndRefreshToken } from "../services/tokenRefresh";
+import * as log from "../utils/logger.ts";
+import { checkAndRefreshToken } from "../services/tokenRefresh.ts";
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy";
-import { unavailableCredentialResponse } from "../services/accountFallbackLoop";
+import { unavailableCredentialResponse } from "../services/accountFallbackLoop.ts";
 
 // Providers requiring credentials for STT
 const CREDENTIALED_PROVIDERS = new Set(

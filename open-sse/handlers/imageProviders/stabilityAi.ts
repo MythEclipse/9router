@@ -1,6 +1,6 @@
 // Stability AI v2 - sync, returns { image: "<b64>" }
-import { nowSec, sizeToAspectRatio } from "./_base";
-import { PROVIDER_MEDIA } from "../../providers/index";
+import { nowSec, sizeToAspectRatio } from "./_base.ts";
+import { PROVIDER_MEDIA } from "../../providers/index.ts";
 
 const BASE_URL = PROVIDER_MEDIA["stability-ai"]?.imageConfig?.baseUrl;
 

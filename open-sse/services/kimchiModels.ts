@@ -1,7 +1,7 @@
 import { createHash } from "crypto";
 
-import { proxyAwareFetch } from "../utils/proxyFetch";
-import type { Credentials, EngineLogger, ProxyOptions } from "../types";
+import { proxyAwareFetch } from "../utils/proxyFetch.ts";
+import type { Credentials, EngineLogger, ProxyOptions } from "../types.ts";
 
 export const KIMCHI_API = "https://llm.kimchi.dev";
 export const KIMCHI_USER_AGENT = "kimchi/0.1.40";

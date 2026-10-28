@@ -1,38 +1,38 @@
 // Ensure outbound fetch respects HTTP(S)_PROXY/ALL_PROXY in Node runtime
 import "open-sse/index";
 
-import { generatePKCE } from "../utils/pkce";
-import { extractCodexAccountInfo, fetchKiroProfileArn } from "../providerHelpers";
+import { generatePKCE } from "../utils/pkce.ts";
+import { extractCodexAccountInfo, fetchKiroProfileArn } from "../providerHelpers.ts";
 
-import claude from "./claude";
-import codex from "./codex";
-import xai from "./xai";
-import grokCli from "./grok-cli";
-import muse from "./muse";
-import geminiCli from "./gemini-cli";
-import antigravity from "./antigravity";
-import iflow from "./iflow";
-import qoder from "./qoder";
-import qoderCn from "./qoder-cn";
-import github from "./github";
-import kiro from "./kiro";
-import cursor from "./cursor";
-import kimi from "./kimi";
-import kilocode from "./kilocode";
-import cline from "./cline";
-import clinepass from "./clinepass";
-import gitlab from "./gitlab";
-import codebuddyCn from "./codebuddy-cn";
-import codebuddyIntl from "./codebuddy-intl";
-import perchai from "./perchai";
-import kimchi from "./kimchi";
-import trae from "./trae";
-import windsurf from "./windsurf";
-import zed from "./zed";
-import glm from "./glm";
-import minimaxCode from "./minimax-code";
-import minimaxCodeGlobal from "./minimax-code-global";
-import nous from "./nous";
+import claude from "./claude.ts";
+import codex from "./codex.ts";
+import xai from "./xai.ts";
+import grokCli from "./grok-cli.ts";
+import muse from "./muse.ts";
+import geminiCli from "./gemini-cli.ts";
+import antigravity from "./antigravity.ts";
+import iflow from "./iflow.ts";
+import qoder from "./qoder.ts";
+import qoderCn from "./qoder-cn.ts";
+import github from "./github.ts";
+import kiro from "./kiro.ts";
+import cursor from "./cursor.ts";
+import kimi from "./kimi.ts";
+import kilocode from "./kilocode.ts";
+import cline from "./cline.ts";
+import clinepass from "./clinepass.ts";
+import gitlab from "./gitlab.ts";
+import codebuddyCn from "./codebuddy-cn.ts";
+import codebuddyIntl from "./codebuddy-intl.ts";
+import perchai from "./perchai.ts";
+import kimchi from "./kimchi.ts";
+import trae from "./trae.ts";
+import windsurf from "./windsurf.ts";
+import zed from "./zed.ts";
+import glm from "./glm.ts";
+import minimaxCode from "./minimax-code.ts";
+import minimaxCodeGlobal from "./minimax-code-global.ts";
+import nous from "./nous.ts";
 
 // Provider configurations
 const PROVIDERS = {

@@ -6,8 +6,8 @@ import { Card } from "@/shared/components";
 import { MEDIA_PROVIDER_KINDS, getProviderAlias, resolveProviderId } from "@/shared/constants/providers";
 import { getModelsByProviderId, getModelKind } from "@/shared/constants/models";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
-import { Row, KIND_EXAMPLE_CONFIG, fetchFirstActiveApiKey, fetchTunnelPublicUrl } from "./exampleShared";
-import { toImagePreviewSrc, base64PngDataUrl } from "./imagePreview";
+import { Row, KIND_EXAMPLE_CONFIG, fetchFirstActiveApiKey, fetchTunnelPublicUrl } from "./exampleShared.tsx";
+import { toImagePreviewSrc, base64PngDataUrl } from "./imagePreview.ts";
 
 const CLOUDFLARE_TEST_IMAGE_URL = "https://pub-1fb693cb11cc46b2b2f656f51e015a2c.r2.dev/dog.png";
 const CLOUDFLARE_TEST_MASK_URL = "https://pub-1fb693cb11cc46b2b2f656f51e015a2c.r2.dev/dog-mask.png";

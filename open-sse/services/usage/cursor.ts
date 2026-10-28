@@ -6,10 +6,10 @@
  * Plan label: POST GetPlanInfo (fail-open).
  */
 
-import { proxyAwareFetch } from "../../utils/proxyFetch";
-import { U, parseResetTime, toFiniteNumber } from "./shared";
-import type { UsageProviderData, UsageQuotaMap } from "./shared";
-import { buildCursorHeaders } from "../../utils/cursorChecksum";
+import { proxyAwareFetch } from "../../utils/proxyFetch.ts";
+import { U, parseResetTime, toFiniteNumber } from "./shared.ts";
+import type { UsageProviderData, UsageQuotaMap } from "./shared.ts";
+import { buildCursorHeaders } from "../../utils/cursorChecksum.ts";
 
 const CURSOR_USAGE = U("cursor");
 

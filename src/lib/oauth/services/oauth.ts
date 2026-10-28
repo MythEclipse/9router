@@ -1,8 +1,8 @@
 import open from "open";
-import { startLocalServer } from "../utils/server";
-import { generatePKCE } from "../utils/pkce";
-import { spinner as createSpinner } from "../utils/ui";
-import { OAUTH_TIMEOUT } from "../constants/oauth";
+import { startLocalServer } from "../utils/server.ts";
+import { generatePKCE } from "../utils/pkce.ts";
+import { spinner as createSpinner } from "../utils/ui.ts";
+import { OAUTH_TIMEOUT } from "../constants/oauth.ts";
 import type { OAuthConfig } from "open-sse/providers/schema";
 
 /** Callback query params handed back by the local loopback server. */

@@ -2,8 +2,8 @@
  * Codex (OpenAI) usage handler
  */
 
-import { proxyAwareFetch } from "../../utils/proxyFetch";
-import { U, parseResetTime, toFiniteNumber } from "./shared";
+import { proxyAwareFetch } from "../../utils/proxyFetch.ts";
+import { U, parseResetTime, toFiniteNumber } from "./shared.ts";
 
 // Codex (OpenAI) API config
 const CODEX_CONFIG = {

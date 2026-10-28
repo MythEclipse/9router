@@ -1,4 +1,4 @@
-import { AWS_EVENTSTREAM } from "../config/awsConstants";
+import { AWS_EVENTSTREAM } from "../config/awsConstants.ts";
 
 /**
  * AWS EventStream binary framing: CRC32 and single-frame decoding.

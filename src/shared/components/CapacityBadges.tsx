@@ -1,8 +1,8 @@
 "use client";
 
 import { CAPACITY_META, PLUGIN_MARK_META, pluginMarksFor } from "@/shared/constants/models";
-import Tooltip from "./Tooltip";
-import PluginMark from "./PluginMark";
+import Tooltip from "./Tooltip.tsx";
+import PluginMark from "./PluginMark.tsx";
 
 // Render the badges for a model: its capabilities, plus the marks of the custom
 // plugins active on it.

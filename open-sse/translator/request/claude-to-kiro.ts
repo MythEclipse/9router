@@ -15,10 +15,10 @@
  * the `<thinking_mode>enabled</thinking_mode>` reasoning trigger, matching
  * buildKiroPayload.
  */
-import { register } from "../index";
-import { FORMATS } from "../formats";
-import { applyKiroSessionReplay } from "../../utils/kiroSessionReplay";
-import { resolveContinuationId, resolveSessionIdentity } from "../../utils/sessionManager";
+import { register } from "../index.ts";
+import { FORMATS } from "../formats.ts";
+import { applyKiroSessionReplay } from "../../utils/kiroSessionReplay.ts";
+import { resolveContinuationId, resolveSessionIdentity } from "../../utils/sessionManager.ts";
 import {
   resolveKiroModelIntent,
   applyKiroThinkingOverride,
@@ -28,20 +28,20 @@ import {
   resolveDefaultProfileArn,
   buildKiroAdditionalModelRequestFieldsForModel,
   usesKiroNativeGptEffort,
-} from "../../config/kiroConstants";
-import { DEFAULT_IMAGE_MIME } from "../schema/index";
-import { ROLE, CLAUDE_BLOCK } from "../schema/index";
+} from "../../config/kiroConstants.ts";
+import { DEFAULT_IMAGE_MIME } from "../schema/index.ts";
+import { ROLE, CLAUDE_BLOCK } from "../schema/index.ts";
 import {
   canonicalizeKiroConversation,
   normalizeKiroToolSpecs,
   kiroEmptyUserContent,
-} from "../concerns/kiroConversation";
+} from "../concerns/kiroConversation.ts";
 import type {
   KiroPayload,
   KiroToolResult,
   KiroTurn,
   KiroUserInputMessage,
-} from "../concerns/kiroConversation";
+} from "../concerns/kiroConversation.ts";
 
 /**
  * Convert Claude messages to Kiro history + currentMessage.

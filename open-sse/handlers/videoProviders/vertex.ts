@@ -9,8 +9,8 @@
 // The operation name is a resource path (contains "/"), so it is base64url-encoded
 // into the job id returned to the client - GET /v1/videos/{id} stays a flat path.
 import { Buffer } from "node:buffer";
-import { parseVertexSaJson, refreshVertexToken } from "../../services/tokenRefresh";
-import type { Credentials, EngineLogger, MediaAdapterRequestOptions, MediaRequestPlan } from "../../types";
+import { parseVertexSaJson, refreshVertexToken } from "../../services/tokenRefresh.ts";
+import type { Credentials, EngineLogger, MediaAdapterRequestOptions, MediaRequestPlan } from "../../types.ts";
 
 const DEFAULT_LOCATION = "us-central1";
 

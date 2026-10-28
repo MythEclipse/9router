@@ -15,7 +15,7 @@
  * caller's job, because that is the only thing the two import paths actually disagree
  * about.
  */
-import type { ResolvedDbAdapter } from "./types";
+import type { ResolvedDbAdapter } from "./types.ts";
 import { normalizeAllowedEndpoints } from "@/shared/constants/keyEndpoints";
 import { keyAccessToColumns, validateKeyAccessInput } from "@/shared/utils/keyAccess";
 import { KEY_ACCESS_UNRESTRICTED } from "@/shared/constants/keyAccess";

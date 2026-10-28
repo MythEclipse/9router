@@ -3,10 +3,10 @@
 // the other way round). Everything here keys off what actually arrived instead of
 // what the request asked for, so a mismatch degrades into working traffic instead
 // of an empty stream.
-import { SSE_CONTENT_TYPE_EVENT_STREAM, SSE_CONTENT_TYPE_JSON, SSE_DATA_PREFIX, SSE_DONE } from "../utils/sseConstants";
-import { chatChunkSse, sseChunk } from "../utils/sse";
-import { MODEL_FALLBACK } from "../translator/schema/defaults";
-import { OPENAI_FINISH } from "../translator/schema/finishReasons";
+import { SSE_CONTENT_TYPE_EVENT_STREAM, SSE_CONTENT_TYPE_JSON, SSE_DATA_PREFIX, SSE_DONE } from "../utils/sseConstants.ts";
+import { chatChunkSse, sseChunk } from "../utils/sse.ts";
+import { MODEL_FALLBACK } from "../translator/schema/defaults.ts";
+import { OPENAI_FINISH } from "../translator/schema/finishReasons.ts";
 
 const MAX_JSON_BODY_SIZE = 5 * 1024 * 1024; // 5MB for JSON body parsing
 

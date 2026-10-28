@@ -1,8 +1,8 @@
 // Codex (paid ChatGPT plans: Go/Plus/Pro/...) image generation via Responses API + SSE
 import { randomUUID } from "node:crypto";
-import { nowSec } from "./_base";
-import { PROVIDERS } from "../../config/providers";
-import { CODEX_CLI_VERSION } from "../../config/appConstants";
+import { nowSec } from "./_base.ts";
+import { PROVIDERS } from "../../config/providers.ts";
+import { CODEX_CLI_VERSION } from "../../config/appConstants.ts";
 
 const CODEX_RESPONSES_URL = PROVIDERS["codex"].baseUrl;
 const CODEX_USER_AGENT = `codex_cli_rs/${CODEX_CLI_VERSION}`;

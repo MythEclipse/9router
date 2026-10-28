@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
-import { getAdapter } from "../driver";
-import type { DbRow, ResolvedDbAdapter } from "../types";
-import { parseJson, stringifyJson } from "../helpers/jsonCol";
+import { getAdapter } from "../driver.ts";
+import type { DbRow, ResolvedDbAdapter } from "../types.ts";
+import { parseJson, stringifyJson } from "../helpers/jsonCol.ts";
 
 /** A proxy pool row as the app sees it (columns flattened, JSON payload spread). */
 interface ProxyPoolRecord {

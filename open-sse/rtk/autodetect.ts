@@ -1,19 +1,19 @@
 // Port of auto_detect_filter (rtk/src/cmds/system/pipe_cmd.rs:132-188) + JS extras
 // Detection order: git-log → git-diff → git-status → build-output → grep → find → tree → ls → search-list
 //                  → read-numbered → dedup-log → smart-truncate → null
-import { DETECT_WINDOW, READ_NUMBERED_MIN_HIT_RATIO, SMART_TRUNCATE_MIN_LINES } from "./constants";
-import { gitDiff } from "./filters/gitDiff";
-import { gitStatus } from "./filters/gitStatus";
-import { gitLog } from "./filters/gitLog";
-import { buildOutput } from "./filters/buildOutput";
-import { grep } from "./filters/grep";
-import { find } from "./filters/find";
-import { dedupLog } from "./filters/dedupLog";
-import { ls } from "./filters/ls";
-import { tree } from "./filters/tree";
-import { smartTruncate } from "./filters/smartTruncate";
-import { readNumbered, READ_NUMBERED_LINE_RE } from "./filters/readNumbered";
-import { searchList, SEARCH_LIST_HEADER_RE } from "./filters/searchList";
+import { DETECT_WINDOW, READ_NUMBERED_MIN_HIT_RATIO, SMART_TRUNCATE_MIN_LINES } from "./constants.ts";
+import { gitDiff } from "./filters/gitDiff.ts";
+import { gitStatus } from "./filters/gitStatus.ts";
+import { gitLog } from "./filters/gitLog.ts";
+import { buildOutput } from "./filters/buildOutput.ts";
+import { grep } from "./filters/grep.ts";
+import { find } from "./filters/find.ts";
+import { dedupLog } from "./filters/dedupLog.ts";
+import { ls } from "./filters/ls.ts";
+import { tree } from "./filters/tree.ts";
+import { smartTruncate } from "./filters/smartTruncate.ts";
+import { readNumbered, READ_NUMBERED_LINE_RE } from "./filters/readNumbered.ts";
+import { searchList, SEARCH_LIST_HEADER_RE } from "./filters/searchList.ts";
 
 const RE_GIT_DIFF = /^diff --git /m;
 const RE_GIT_DIFF_HUNK = /^@@ /m;

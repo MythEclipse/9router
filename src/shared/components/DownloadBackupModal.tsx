@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import Modal from "./Modal";
-import Button from "./Button";
-import Input from "./Input";
-import Badge from "./Badge";
+import Modal from "./Modal.tsx";
+import Button from "./Button.tsx";
+import Input from "./Input.tsx";
+import Badge from "./Badge.tsx";
 import { formatByteSize } from "@/shared/utils/chartFormat";
 
 const DEFAULT_SECTIONS = [

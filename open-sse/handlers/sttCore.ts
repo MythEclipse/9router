@@ -1,9 +1,9 @@
 import { Buffer } from "node:buffer";
-import { createErrorResult } from "../utils/error";
-import { transcribeGeminiLive } from "./geminiLiveStt";
-import { transcribeCodex } from "./codexStt";
-import { PROVIDER_MODELS, PROVIDER_ID_TO_ALIAS } from "../config/providerModels";
-import { HTTP_STATUS } from "../config/runtimeConfig";
+import { createErrorResult } from "../utils/error.ts";
+import { transcribeGeminiLive } from "./geminiLiveStt.ts";
+import { transcribeCodex } from "./codexStt.ts";
+import { PROVIDER_MODELS, PROVIDER_ID_TO_ALIAS } from "../config/providerModels.ts";
+import { HTTP_STATUS } from "../config/runtimeConfig.ts";
 
 // Build auth headers from sttConfig + token
 function buildAuthHeaders(cfg, token) {

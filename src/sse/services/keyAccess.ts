@@ -24,7 +24,7 @@
 // touches a provider account.
 import { getApiKeyByKey } from "@/lib/db/repos/apiKeysRepo";
 import { getCombos } from "@/lib/db/repos/combosRepo";
-import { getModelInfo, getComboModels } from "./model";
+import { getModelInfo, getComboModels } from "./model.ts";
 import { resolveProviderId } from "@/shared/constants/providers";
 import {
   KEY_ACCESS_COMBO_OWNER,
@@ -33,7 +33,7 @@ import {
 } from "@/shared/constants/keyAccess";
 import { errorResponse } from "open-sse/utils/error";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig";
-import * as log from "../utils/logger";
+import * as log from "../utils/logger.ts";
 
 const lower = (s) => String(s).toLowerCase();
 const canonicalModel = (provider, model) => lower(`${provider}/${model}`);

@@ -8,7 +8,7 @@ const CLI_TOKEN_SALT = "9r-cli-auth";
 
 // Probe budgets live next to this file (not behind a @/ alias) so unit tests
 // can import them without the alias resolver.
-import { WEB_COOKIE_PROVIDERS, probeTimeoutMs } from "./probeBudget";
+import { WEB_COOKIE_PROVIDERS, probeTimeoutMs } from "./probeBudget.ts";
 export { WEB_COOKIE_PROVIDERS, probeTimeoutMs };
 
 function createSilentWavFile() {

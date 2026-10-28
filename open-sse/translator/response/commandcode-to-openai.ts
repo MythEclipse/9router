@@ -15,14 +15,14 @@
  * Each upstream "event" arrives as one JSON object per line - we receive it as a string chunk
  * already split per line by the upstream SSE/JSON-line reader in 9router.
  */
-import { register } from "../index";
-import { FORMATS } from "../formats";
-import { ROLE, OPENAI_BLOCK, OPENAI_FINISH } from "../schema/index";
-import { buildChunk } from "../concerns/chunk";
-import { toOpenAIUsage } from "../concerns/usage";
-import { reasoningDelta } from "../concerns/reasoning";
-import { fallbackToolCallId } from "../concerns/toolCall";
-import { toOpenAIFinish } from "../concerns/finishReason";
+import { register } from "../index.ts";
+import { FORMATS } from "../formats.ts";
+import { ROLE, OPENAI_BLOCK, OPENAI_FINISH } from "../schema/index.ts";
+import { buildChunk } from "../concerns/chunk.ts";
+import { toOpenAIUsage } from "../concerns/usage.ts";
+import { reasoningDelta } from "../concerns/reasoning.ts";
+import { fallbackToolCallId } from "../concerns/toolCall.ts";
+import { toOpenAIFinish } from "../concerns/finishReason.ts";
 
 function ensureState(state, model) {
   if (!state.responseId) {

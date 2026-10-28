@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/shared/utils/cn";
-import Button from "./Button";
+import Button from "./Button.tsx";
 
 export interface PaginationProps {
   currentPage: number;

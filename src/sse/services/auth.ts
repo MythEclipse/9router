@@ -20,10 +20,10 @@ import {
 import { MAX_RATE_LIMIT_COOLDOWN_MS } from "open-sse/config/errorConfig";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig";
 import { resolveProviderId, FREE_PROVIDERS } from "@/shared/constants/providers";
-import { getAntigravityQuotaCache, getAntigravityModelQuota } from "./antigravityQuota";
+import { getAntigravityQuotaCache, getAntigravityModelQuota } from "./antigravityQuota.ts";
 
-export { apiKeyGateFailure, shouldLogAuthFailure } from "./keyGate";
-import * as log from "../utils/logger";
+export { apiKeyGateFailure, shouldLogAuthFailure } from "./keyGate.ts";
+import * as log from "../utils/logger.ts";
 
 /**
  * Retry a failed request with another credential when the failure is

@@ -23,7 +23,7 @@ import {
   removeCapModelAt,
   removeCapModel,
   moveCapModel,
-} from "./capacityAdapter";
+} from "./capacityAdapter.ts";
 
 // Validate combo name: only a-z, A-Z, 0-9, -, _
 const VALID_NAME_REGEX = /^[a-zA-Z0-9_.\-]+$/;

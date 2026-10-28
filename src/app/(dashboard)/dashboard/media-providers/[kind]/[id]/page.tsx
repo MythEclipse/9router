@@ -17,11 +17,11 @@ import { MEDIA_PROVIDER_KINDS, AI_PROVIDERS, OAUTH_PROVIDERS, isCustomEmbeddingP
 import ConnectionsCard from "@/app/(dashboard)/dashboard/providers/components/ConnectionsCard";
 import { WEB_LOGIN_PROVIDERS } from "@/app/(dashboard)/dashboard/providers/components/WebLoginButton";
 import ModelsCard from "@/app/(dashboard)/dashboard/providers/components/ModelsCard";
-import { KIND_EXAMPLE_CONFIG } from "./components/exampleShared";
-import { EmbeddingExampleCard } from "./components/EmbeddingExampleCard";
-import { TtsExampleCard } from "./components/TtsExampleCard";
-import { GenericExampleCard } from "./components/GenericExampleCard";
-import { SttExampleCard } from "./components/SttExampleCard";
+import { KIND_EXAMPLE_CONFIG } from "./components/exampleShared.tsx";
+import { EmbeddingExampleCard } from "./components/EmbeddingExampleCard.tsx";
+import { TtsExampleCard } from "./components/TtsExampleCard.tsx";
+import { GenericExampleCard } from "./components/GenericExampleCard.tsx";
+import { SttExampleCard } from "./components/SttExampleCard.tsx";
 
 // MediaProviderDetailPage
 export default function MediaProviderDetailPage() {

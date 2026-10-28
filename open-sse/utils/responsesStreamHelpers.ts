@@ -1,6 +1,6 @@
 // Helpers for OpenAI Responses API streaming termination + event framing
-import { FORMATS } from "../translator/formats";
-import { formatSSE } from "./streamHelpers";
+import { FORMATS } from "../translator/formats.ts";
+import { formatSSE } from "./streamHelpers.ts";
 
 // Responses API events that signal the stream has reached a terminal state
 const OPENAI_RESPONSES_TERMINAL_EVENTS = new Set([

@@ -2,11 +2,11 @@
  * OpenAI to Kiro Request Translator
  * Converts OpenAI Chat Completions format to Kiro/AWS CodeWhisperer format
  */
-import { register } from "../index";
-import { FORMATS } from "../formats";
+import { register } from "../index.ts";
+import { FORMATS } from "../formats.ts";
 import { v4 as uuidv4 } from "uuid";
-import { applyKiroSessionReplay } from "../../utils/kiroSessionReplay";
-import { resolveContinuationId, resolveSessionIdentity } from "../../utils/sessionManager";
+import { applyKiroSessionReplay } from "../../utils/kiroSessionReplay.ts";
+import { resolveContinuationId, resolveSessionIdentity } from "../../utils/sessionManager.ts";
 import {
   resolveKiroModelIntent,
   applyKiroThinkingOverride,
@@ -16,21 +16,21 @@ import {
   resolveDefaultProfileArn,
   buildKiroAdditionalModelRequestFieldsForModel,
   usesKiroNativeGptEffort
-} from "../../config/kiroConstants";
-import { parseDataUri } from "../concerns/image";
-import { DEFAULT_IMAGE_MIME } from "../schema/index";
-import { ROLE, OPENAI_BLOCK, CLAUDE_BLOCK } from "../schema/index";
+} from "../../config/kiroConstants.ts";
+import { parseDataUri } from "../concerns/image.ts";
+import { DEFAULT_IMAGE_MIME } from "../schema/index.ts";
+import { ROLE, OPENAI_BLOCK, CLAUDE_BLOCK } from "../schema/index.ts";
 import {
   canonicalizeKiroConversation,
   normalizeKiroToolSpecs,
   kiroEmptyUserContent,
-} from "../concerns/kiroConversation";
+} from "../concerns/kiroConversation.ts";
 import type {
   KiroPayload,
   KiroToolResult,
   KiroTurn,
   KiroUserInputMessage,
-} from "../concerns/kiroConversation";
+} from "../concerns/kiroConversation.ts";
 
 /**
  * Safely parse JSON string, returning fallback on failure.

@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { KIMI_CONFIG } from "../constants/oauth";
+import { KIMI_CONFIG } from "../constants/oauth.ts";
 
 // Kimi Code device flow (CLIProxyAPI internal/auth/kimi). Id is `kimi`;
 // `kimi-coding` remains an alias key so old UI/API routes still resolve.

@@ -1,7 +1,7 @@
 // Stream handler with disconnect detection - shared for all providers
-import { STREAM_STALL_TIMEOUT_MS, MAX_STREAM_BYTES_PER_REQUEST } from "../config/runtimeConfig";
-import { dbg, isDebugEnabled } from "./debugLog";
-import { formatClockTime } from "./timeFormat";
+import { STREAM_STALL_TIMEOUT_MS, MAX_STREAM_BYTES_PER_REQUEST } from "../config/runtimeConfig.ts";
+import { dbg, isDebugEnabled } from "./debugLog.ts";
+import { formatClockTime } from "./timeFormat.ts";
 
 const MAX_TOTAL_STREAM_BYTES = MAX_STREAM_BYTES_PER_REQUEST || 100 * 1024 * 1024; // 100MB default
 const STALL_CHECK_INTERVAL_MS = 1000; // Check stall every second

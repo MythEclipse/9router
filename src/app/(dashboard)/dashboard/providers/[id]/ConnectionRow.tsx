@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { getStatusVariant as getConnectionStatusVariant } from "@/shared/utils/connectionStatus";
 import { Badge, Toggle, Tooltip } from "@/shared/components";
 import { BadgeVariant } from "@/shared/components/Badge";
-import CooldownTimer from "./CooldownTimer";
+import CooldownTimer from "./CooldownTimer.tsx";
 
 interface ConnectionRowProps {
   connection: {

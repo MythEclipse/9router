@@ -1,16 +1,16 @@
-import { FORMATS } from "./formats";
-import { ensureToolCallIds, fixMissingToolResponses } from "./concerns/toolCall";
-import { prepareClaudeRequest, ensureTrailingUserTurn } from "./formats/claude";
-import { cloakClaudeTools, decloakStreamChunk } from "../utils/claudeCloaking";
-import { restoreToolNames } from "../utils/opencodeFingerprint";
-import { filterToOpenAIFormat } from "./formats/openai";
-import { normalizeThinkingConfig } from "../services/provider";
-import { applyThinking, captureThinking } from "./concerns/thinkingUnified";
-import { captureSessionId } from "../utils/sessionManager";
-import { ensureStreamToolCallIds } from "../utils/streamHelpers";
-import { AntigravityExecutor } from "../executors/antigravity";
-import { PROVIDERS } from "../providers/index";
-import { ROLE, GEMINI_ROLE } from "./schema/roles";
+import { FORMATS } from "./formats.ts";
+import { ensureToolCallIds, fixMissingToolResponses } from "./concerns/toolCall.ts";
+import { prepareClaudeRequest, ensureTrailingUserTurn } from "./formats/claude.ts";
+import { cloakClaudeTools, decloakStreamChunk } from "../utils/claudeCloaking.ts";
+import { restoreToolNames } from "../utils/opencodeFingerprint.ts";
+import { filterToOpenAIFormat } from "./formats/openai.ts";
+import { normalizeThinkingConfig } from "../services/provider.ts";
+import { applyThinking, captureThinking } from "./concerns/thinkingUnified.ts";
+import { captureSessionId } from "../utils/sessionManager.ts";
+import { ensureStreamToolCallIds } from "../utils/streamHelpers.ts";
+import { AntigravityExecutor } from "../executors/antigravity.ts";
+import { PROVIDERS } from "../providers/index.ts";
+import { ROLE, GEMINI_ROLE } from "./schema/roles.ts";
 
 // Registry for translators. Lazy-init guards against circular-import order:
 // translator modules call register() (side-effect) before this module's body runs.
@@ -327,25 +327,25 @@ export function initTranslators() {
 }
 
 // Static side-effect imports: each module calls register() at load (works in ESM + bundler).
-import "./request/claude-to-openai";
-import "./request/openai-to-claude";
-import "./request/gemini-to-openai";
-import "./request/openai-to-gemini";
-import "./request/openai-to-vertex";
-import "./request/antigravity-to-openai";
-import "./request/openai-responses";
-import "./request/openai-to-kiro";
-import "./request/openai-to-cursor";
-import "./request/openai-to-ollama";
-import "./request/openai-to-commandcode";
-import "./request/claude-to-kiro";
-import "./response/claude-to-openai";
-import "./response/openai-to-claude";
-import "./response/gemini-to-openai";
-import "./response/openai-to-antigravity";
-import "./response/openai-responses";
-import "./response/kiro-to-openai";
-import "./response/cursor-to-openai";
-import "./response/ollama-to-openai";
-import "./response/commandcode-to-openai";
-import "./response/kiro-to-claude";
+import "./request/claude-to-openai.ts";
+import "./request/openai-to-claude.ts";
+import "./request/gemini-to-openai.ts";
+import "./request/openai-to-gemini.ts";
+import "./request/openai-to-vertex.ts";
+import "./request/antigravity-to-openai.ts";
+import "./request/openai-responses.ts";
+import "./request/openai-to-kiro.ts";
+import "./request/openai-to-cursor.ts";
+import "./request/openai-to-ollama.ts";
+import "./request/openai-to-commandcode.ts";
+import "./request/claude-to-kiro.ts";
+import "./response/claude-to-openai.ts";
+import "./response/openai-to-claude.ts";
+import "./response/gemini-to-openai.ts";
+import "./response/openai-to-antigravity.ts";
+import "./response/openai-responses.ts";
+import "./response/kiro-to-openai.ts";
+import "./response/cursor-to-openai.ts";
+import "./response/ollama-to-openai.ts";
+import "./response/commandcode-to-openai.ts";
+import "./response/kiro-to-claude.ts";

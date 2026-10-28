@@ -12,7 +12,7 @@
  * provider when that provider can actually search.
  */
 
-import { AI_PROVIDERS } from "../../src/shared/constants/providers";
+import { AI_PROVIDERS } from "../../src/shared/constants/providers.ts";
 
 /** Providers that can serve a search, cheapest/most-local first. */
 const PREFERRED_SEARCH_PROVIDERS = [

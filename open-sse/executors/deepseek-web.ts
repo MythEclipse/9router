@@ -1,7 +1,7 @@
-import { BaseExecutor } from "./base";
-import { PROVIDERS } from "../config/providers";
-import { findDeepSeekPowNonce } from "../lib/deepseek-pow-hash";
-import type { AssistantCompletionMessage } from "../types";
+import { BaseExecutor } from "./base.ts";
+import { PROVIDERS } from "../config/providers.ts";
+import { findDeepSeekPowNonce } from "../lib/deepseek-pow-hash.ts";
+import type { AssistantCompletionMessage } from "../types.ts";
 import {
   hasTools,
   buildToolSystemPrompt,
@@ -9,7 +9,7 @@ import {
   parseToolCallReply,
   emitToolCallChunks,
   buildToolCallResponse,
-} from "./deepseekWebToolBridge";
+} from "./deepseekWebToolBridge.ts";
 
 const DEEPSEEK_WEB_BASE = "https://chat.deepseek.com";
 const DEEPSEEK_API_BASE = `${DEEPSEEK_WEB_BASE}/api`;

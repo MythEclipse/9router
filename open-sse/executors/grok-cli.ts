@@ -1,21 +1,21 @@
 import crypto from "node:crypto";
-import { BaseExecutor } from "./base";
-import { PROVIDERS } from "../config/providers";
-import type { TransportConfig } from "../providers/schema";
+import { BaseExecutor } from "./base.ts";
+import { PROVIDERS } from "../config/providers.ts";
+import type { TransportConfig } from "../providers/schema.ts";
 import {
   refreshProviderCredentials,
   shouldRefreshCredentials,
-} from "../services/oauthCredentialManager";
-import { normalizeResponsesInput } from "../translator/formats/responsesApi";
-import { getModelUpstreamId } from "../config/providerModels";
+} from "../services/oauthCredentialManager.ts";
+import { normalizeResponsesInput } from "../translator/formats/responsesApi.ts";
+import { getModelUpstreamId } from "../config/providerModels.ts";
 import {
   GROK_CLI_CLIENT_IDENTIFIER,
   GROK_CLI_VERSION,
   supportsGrokCliReasoningEffort,
-} from "../config/grokCli";
-import { MEMORY_CONFIG } from "../config/runtimeConfig";
-import { resolveSessionId } from "../utils/sessionManager";
-import { getConsistentMachineId } from "../shared/machineId";
+} from "../config/grokCli.ts";
+import { MEMORY_CONFIG } from "../config/runtimeConfig.ts";
+import { resolveSessionId } from "../utils/sessionManager.ts";
+import { getConsistentMachineId } from "../shared/machineId.ts";
 
 // Server-generated item id prefixes that /responses cannot resolve when store=false
 const SERVER_ID_PATTERN = /^(rs|fc|resp|msg)_/;
@@ -129,7 +129,7 @@ export function normalizeGrokCliEffort(value) {
   return "high";
 }
 
-export { supportsGrokCliReasoningEffort } from "../config/grokCli";
+export { supportsGrokCliReasoningEffort } from "../config/grokCli.ts";
 
 export function resolveGrokCliSessionId(credentials, body) {
   // ponytail: clients without stable thread metadata share one connection session;

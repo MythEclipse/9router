@@ -1,18 +1,18 @@
-import { BaseExecutor } from "./base";
-import { CODEX_DEFAULT_INSTRUCTIONS } from "../config/codexInstructions";
-import { PROVIDERS } from "../config/providers";
+import { BaseExecutor } from "./base.ts";
+import { CODEX_DEFAULT_INSTRUCTIONS } from "../config/codexInstructions.ts";
+import { PROVIDERS } from "../config/providers.ts";
 import {
   refreshProviderCredentials,
   shouldRefreshCredentials,
-} from "../services/oauthCredentialManager";
-import { normalizeResponsesInput } from "../translator/formats/responsesApi";
-import { fetchImageAsBase64 } from "../translator/concerns/image";
-import { getModelUpstreamId, getProviderModels } from "../config/providerModels";
-import { getThinkingLevels } from "../providers/thinkingLevels";
-import { DEFAULT_RETRY_CONFIG, HTTP_STATUS, resolveRetryEntry } from "../config/runtimeConfig";
-import { dbg } from "../utils/debugLog";
-import { resolveSessionId } from "../utils/sessionManager";
-import { stripCodexUnsupportedPatterns } from "../utils/codexToolSchema";
+} from "../services/oauthCredentialManager.ts";
+import { normalizeResponsesInput } from "../translator/formats/responsesApi.ts";
+import { fetchImageAsBase64 } from "../translator/concerns/image.ts";
+import { getModelUpstreamId, getProviderModels } from "../config/providerModels.ts";
+import { getThinkingLevels } from "../providers/thinkingLevels.ts";
+import { DEFAULT_RETRY_CONFIG, HTTP_STATUS, resolveRetryEntry } from "../config/runtimeConfig.ts";
+import { dbg } from "../utils/debugLog.ts";
+import { resolveSessionId } from "../utils/sessionManager.ts";
+import { stripCodexUnsupportedPatterns } from "../utils/codexToolSchema.ts";
 
 // SSE error patterns inside 200-OK bodies. Some retry same account first; capacity rotates accounts.
 const CODEX_SSE_RETRY_PATTERNS = ["server_is_overloaded", "service_unavailable_error"];

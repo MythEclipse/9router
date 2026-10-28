@@ -1,6 +1,6 @@
-import { BaseExecutor } from "./base";
-import { PROVIDERS } from "../config/providers";
-import { OAUTH_ENDPOINTS, GEMINI_CLI_API_CLIENT, geminiCLIUserAgent } from "../config/appConstants";
+import { BaseExecutor } from "./base.ts";
+import { PROVIDERS } from "../config/providers.ts";
+import { OAUTH_ENDPOINTS, GEMINI_CLI_API_CLIENT, geminiCLIUserAgent } from "../config/appConstants.ts";
 
 export class GeminiCLIExecutor extends BaseExecutor {
   /** Model id captured in transformRequest so buildHeaders can fingerprint it. */

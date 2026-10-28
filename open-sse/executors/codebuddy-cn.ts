@@ -1,4 +1,4 @@
-import { DefaultExecutor } from "./default";
+import { DefaultExecutor } from "./default.ts";
 
 /**
  * CodeBuddyExecutor - talks to https://copilot.tencent.com/v2/chat/completions

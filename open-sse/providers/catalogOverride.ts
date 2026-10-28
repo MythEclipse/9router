@@ -81,6 +81,6 @@ export function invalidateCatalog() {
 // Hand the reader to capabilities.js. That module is bundled into the browser
 // too, so it cannot import this file directly - the server pushes it in.
 export async function installCatalogSource() {
-  const { setCatalogSource } = await import("./capabilities");
+  const { setCatalogSource } = await import("./capabilities.ts");
   setCatalogSource({ getModalities: getCatalogModalities, getLimits: getCatalogLimits });
 }

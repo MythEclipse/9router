@@ -1,8 +1,8 @@
 // Pre-fetch remote image URLs into base64 BEFORE translation, for target
 // formats whose upstream providers cannot fetch remote URLs themselves
 // (they require inline base64). Runs on the source-format body.
-import { FORMATS } from "../formats";
-import { fetchImageAsBase64, parseDataUri } from "./image";
+import { FORMATS } from "../formats.ts";
+import { fetchImageAsBase64, parseDataUri } from "./image.ts";
 
 // Targets that require inline base64 images (cannot accept remote URLs).
 const TARGETS_NEED_BASE64 = new Set([

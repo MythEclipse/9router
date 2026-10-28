@@ -2,14 +2,14 @@
  * Kiro to OpenAI Response Translator
  * Converts Kiro/AWS CodeWhisperer streaming events to OpenAI SSE format
  */
-import { register } from "../index";
-import { FORMATS } from "../formats";
-import { ROLE, OPENAI_BLOCK } from "../schema/index";
-import { buildChunk } from "../concerns/chunk";
-import { toOpenAIUsage } from "../concerns/usage";
-import { fallbackToolCallId } from "../concerns/toolCall";
-import { reasoningDelta } from "../concerns/reasoning";
-import { toOpenAIFinish } from "../concerns/finishReason";
+import { register } from "../index.ts";
+import { FORMATS } from "../formats.ts";
+import { ROLE, OPENAI_BLOCK } from "../schema/index.ts";
+import { buildChunk } from "../concerns/chunk.ts";
+import { toOpenAIUsage } from "../concerns/usage.ts";
+import { fallbackToolCallId } from "../concerns/toolCall.ts";
+import { reasoningDelta } from "../concerns/reasoning.ts";
+import { toOpenAIFinish } from "../concerns/finishReason.ts";
 
 // Build chunk meta for current kiro state
 function chunkMeta(state) {

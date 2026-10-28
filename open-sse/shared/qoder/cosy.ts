@@ -24,7 +24,7 @@ import {
   QODER_MACHINE_OS,
   QODER_MACHINE_TYPE,
   QODER_RSA_PUBLIC_KEY,
-} from "./constants";
+} from "./constants.ts";
 
 // AES-128 wants a 16-byte key. Match qodercli/Veria: take the first 16 chars
 // of a fresh UUID's canonical string (hyphens included). The key is fresh

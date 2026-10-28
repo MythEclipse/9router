@@ -1,5 +1,5 @@
-import { DefaultExecutor } from "./default";
-import { getMimoAccountCookie, invalidateMimoAccountCookieCache, resolveMimoServerBase, MIMO_API_UA } from "../shared/mimoAccount";
+import { DefaultExecutor } from "./default.ts";
+import { getMimoAccountCookie, invalidateMimoAccountCookieCache, resolveMimoServerBase, MIMO_API_UA } from "../shared/mimoAccount.ts";
 
 // Dual-route v2.6 models.
 // v2.6 models dynamically route to the account service when desktop session credentials

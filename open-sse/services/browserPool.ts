@@ -22,11 +22,11 @@
 // cost. Set NINEROUTER_BROWSER_POOL=off to fully disable.
 
 import { Buffer } from "node:buffer";
-import { loadRuntimeDep } from "./lazyRuntime";
+import { loadRuntimeDep } from "./lazyRuntime.ts";
 
-import { connectObscuraBrowser } from "./obscura";
-import { ensureVirtualDisplay, stopVirtualDisplay } from "./virtualDisplay";
-import { launchChromiumWithFallback } from "../executors/browserExecutableCheck";
+import { connectObscuraBrowser } from "./obscura.ts";
+import { ensureVirtualDisplay, stopVirtualDisplay } from "./virtualDisplay.ts";
+import { launchChromiumWithFallback } from "../executors/browserExecutableCheck.ts";
 
 export const DEFAULT_USER_AGENT =
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36";

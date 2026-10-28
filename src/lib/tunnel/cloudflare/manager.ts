@@ -1,8 +1,8 @@
-import { loadState, saveState, generateShortId } from "../shared/state";
-import { spawnQuickTunnel, killCloudflared, isCloudflaredRunning, setUnexpectedExitHandler } from "./cloudflared";
-import { clearPid } from "./pid";
-import { waitForHealth, probeUrlAlive } from "./healthCheck";
-import { WORKER_URL } from "./config";
+import { loadState, saveState, generateShortId } from "../shared/state.ts";
+import { spawnQuickTunnel, killCloudflared, isCloudflaredRunning, setUnexpectedExitHandler } from "./cloudflared.ts";
+import { clearPid } from "./pid.ts";
+import { waitForHealth, probeUrlAlive } from "./healthCheck.ts";
+import { WORKER_URL } from "./config.ts";
 import { getSettings, updateSettings } from "@/lib/localDb";
 
 const svc = {

@@ -79,8 +79,8 @@ function parseTools(text) {
 async function loadBundled() {
   if (bundled) return bundled;
   const [preamble, toolsText] = await Promise.all([
-    import("../assets/opencodeAgentPreamble").then((m) => m.OPENCODE_AGENT_PREAMBLE),
-    import("../assets/opencodeAgentTools").then((m) => m.OPENCODE_AGENT_TOOLS),
+    import("../assets/opencodeAgentPreamble.ts").then((m) => m.OPENCODE_AGENT_PREAMBLE),
+    import("../assets/opencodeAgentTools.ts").then((m) => m.OPENCODE_AGENT_TOOLS),
   ]);
   bundled = { preamble, tools: parseTools(JSON.stringify(toolsText)) };
   return bundled;

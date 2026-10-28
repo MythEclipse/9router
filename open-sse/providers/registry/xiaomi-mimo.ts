@@ -1,4 +1,4 @@
-import { CLAUDE_API_HEADERS } from "../shared";
+import { CLAUDE_API_HEADERS } from "../shared.ts";
 
 // Dual auth (same pattern as kimi):
 //   - API key (sk-...)      → cloud API on api.xiaomimimo.com

@@ -1,4 +1,4 @@
-import { SSE_DATA_PREFIX } from "./sseConstants";
+import { SSE_DATA_PREFIX } from "./sseConstants.ts";
 
 export function sseChunk(data) {
   return `${SSE_DATA_PREFIX} ${JSON.stringify(data)}\n\n`;

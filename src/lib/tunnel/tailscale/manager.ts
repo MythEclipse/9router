@@ -1,7 +1,7 @@
-import { loadState, generateShortId } from "../shared/state";
-import { startFunnel, stopFunnel, isTailscaleRunning, isTailscaleRunningStrict, isTailscaleLoggedIn, isTailscaleLoggedInStrict, startLogin, startDaemonWithPassword, provisionCert } from "./tailscale";
-import { waitForHealth } from "./healthCheck";
-import { HEALTH_CHECK } from "./config";
+import { loadState, generateShortId } from "../shared/state.ts";
+import { startFunnel, stopFunnel, isTailscaleRunning, isTailscaleRunningStrict, isTailscaleLoggedIn, isTailscaleLoggedInStrict, startLogin, startDaemonWithPassword, provisionCert } from "./tailscale.ts";
+import { waitForHealth } from "./healthCheck.ts";
+import { HEALTH_CHECK } from "./config.ts";
 import { getSettings, updateSettings } from "@/lib/localDb";
 import { getCachedPassword, loadEncryptedPassword, initDbHooks } from "@/mitm/manager";
 

@@ -9,7 +9,7 @@ import { TTS_PROVIDER_CONFIG } from "@/shared/constants/ttsProviders";
 import { translate } from "@/i18n/runtime";
 import { getTtsVoicesForModel } from "open-sse/config/ttsModels";
 import { GOOGLE_TTS_LANGUAGES } from "open-sse/config/googleTtsLanguages";
-import { Row, fetchFirstActiveApiKey, fetchTunnelPublicUrl } from "./exampleShared";
+import { Row, fetchFirstActiveApiKey, fetchTunnelPublicUrl } from "./exampleShared.tsx";
 
 const DEFAULT_TTS_RESPONSE_EXAMPLE = `// Audio will appear here after running.
 // Example JSON response (response_format=json):

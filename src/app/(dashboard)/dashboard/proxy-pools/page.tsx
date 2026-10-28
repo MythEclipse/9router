@@ -24,7 +24,7 @@ import {
   formatDateTime,
   normalizeFormData,
   parseProxyImport,
-} from "./proxyPoolParsing";
+} from "./proxyPoolParsing.ts";
 
 // One task id for the batch import, shared by the loop, the seed of `importing`
 // after a navigation, and the banner in the layout dock.

@@ -1,8 +1,8 @@
 // Grok Web image adapter — delegates to the executor, which drives the
 // Cloudflare-gated conversations/new endpoint through the wreq-js TLS client
 // and downloads the finished asset from assets.grok.com as base64.
-import { nowSec } from "./_base";
-import { getExecutor } from "../../executors/index";
+import { nowSec } from "./_base.ts";
+import { getExecutor } from "../../executors/index.ts";
 
 const GrokWeb = {
   useExecutor: true,

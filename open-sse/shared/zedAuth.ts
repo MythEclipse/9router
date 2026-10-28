@@ -10,8 +10,8 @@
 // No embedded client_id/secret - the credential is a per-login keypair.
 
 import crypto from "node:crypto";
-import { proxyAwareFetch } from "../utils/proxyFetch";
-import type { Credentials, ProxyOptions } from "../types";
+import { proxyAwareFetch } from "../utils/proxyFetch.ts";
+import type { Credentials, ProxyOptions } from "../types.ts";
 
 /** Hosted-config slice this module reads (ZED_HOSTED_CONFIG in the app). */
 export interface ZedHostedConfig {

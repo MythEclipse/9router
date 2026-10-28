@@ -7,7 +7,7 @@
  *   gateway; GLM/MiniMax/Kimi upstreams accept duplicates). First definition wins,
  *   tool_choice and message-history references are by name/id so nothing breaks.
  */
-import { isDeepSeekModel } from "../providers/models/helpers";
+import { isDeepSeekModel } from "../providers/models/helpers.ts";
 
 const DEDUP_RULES = [
   {

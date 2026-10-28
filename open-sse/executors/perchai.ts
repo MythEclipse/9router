@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { DefaultExecutor } from "./default";
-import { proxyAwareFetch } from "../utils/proxyFetch";
-import { buildStreamErrorBytes } from "../utils/streamHelpers";
-import { normalizePerchExpiry, readPerchCliSession, type PerchCliSession } from "../shared/perchCredentials";
-import type { ChatRequestBody, Credentials, ExecuteOptions, ExecutorResult } from "../types";
+import { DefaultExecutor } from "./default.ts";
+import { proxyAwareFetch } from "../utils/proxyFetch.ts";
+import { buildStreamErrorBytes } from "../utils/streamHelpers.ts";
+import { normalizePerchExpiry, readPerchCliSession, type PerchCliSession } from "../shared/perchCredentials.ts";
+import type { ChatRequestBody, Credentials, ExecuteOptions, ExecutorResult } from "../types.ts";
 
 const MODEL_OPTIONS: Record<string, string> = {
   "gemini-4-argon": "gemini-gemini-4-argon",

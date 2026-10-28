@@ -3,8 +3,8 @@
  * Auth: Bearer <apiKey>
  */
 
-import { proxyAwareFetch } from "../../utils/proxyFetch";
-import { parseResetTime, toFiniteNumber, U } from "./shared";
+import { proxyAwareFetch } from "../../utils/proxyFetch.ts";
+import { parseResetTime, toFiniteNumber, U } from "./shared.ts";
 
 const USAGE_URL = U("opencode-zen").url;
 const QUOTA_NAMES = {

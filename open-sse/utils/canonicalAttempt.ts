@@ -31,8 +31,8 @@
 // WAS observed and it is false; `null` means not applicable / not observed.
 // Never substitute false for null.
 
-import { classifyCanonicalAttempt } from "./canonicalClassification";
-import { decideAttemptPolicy } from "./canonicalPolicy";
+import { classifyCanonicalAttempt } from "./canonicalClassification.ts";
+import { decideAttemptPolicy } from "./canonicalPolicy.ts";
 
 const COMPLETION_STATES = Object.freeze(["success", "failure", "incomplete", "cancelled", "unknown"]);
 const SOURCES = Object.freeze(["provider", "cache", "bypass"]);

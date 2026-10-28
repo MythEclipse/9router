@@ -1,7 +1,7 @@
-import { OAuthService } from "./oauth";
-import { OPENAI_CONFIG } from "../constants/oauth";
-import { getServerCredentials } from "../config/index";
-import { spinner as createSpinner } from "../utils/ui";
+import { OAuthService } from "./oauth.ts";
+import { OPENAI_CONFIG } from "../constants/oauth.ts";
+import { getServerCredentials } from "../config/index.ts";
+import { spinner as createSpinner } from "../utils/ui.ts";
 
 /**
  * OpenAI OAuth Service (Native)

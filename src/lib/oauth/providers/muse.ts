@@ -1,4 +1,4 @@
-import { MUSE_CONFIG } from "../constants/oauth";
+import { MUSE_CONFIG } from "../constants/oauth.ts";
 
 // Muse Code subscription - Meta account device code flow to auth.meta.com,
 // then mint the Model API key (LLM|…) the chat transport actually uses.

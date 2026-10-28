@@ -9,10 +9,10 @@
  * 403 permission_denied is NOT auth-expired - account lacks usage feature / sub.
  */
 
-import { proxyAwareFetch } from "../../utils/proxyFetch";
-import { parseResetTime, toFiniteNumber } from "./shared";
-import type { UsageQuotaMap } from "./shared";
-import { buildKimiHeaders } from "../../config/appConstants";
+import { proxyAwareFetch } from "../../utils/proxyFetch.ts";
+import { parseResetTime, toFiniteNumber } from "./shared.ts";
+import type { UsageQuotaMap } from "./shared.ts";
+import { buildKimiHeaders } from "../../config/appConstants.ts";
 
 const USAGE_URL = "https://api.kimi.com/coding/v1/usages";
 

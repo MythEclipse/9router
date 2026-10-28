@@ -1,5 +1,5 @@
-import { CODEX_CONFIG } from "../constants/oauth";
-import { extractCodexAccountInfo, extractEmailFromAccessToken } from "../providerHelpers";
+import { CODEX_CONFIG } from "../constants/oauth.ts";
+import { extractCodexAccountInfo, extractEmailFromAccessToken } from "../providerHelpers.ts";
 
 const codex = {
   config: CODEX_CONFIG,

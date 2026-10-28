@@ -1,7 +1,7 @@
 // Gemini Web image adapter — delegates to the executor's DOM-driven image
 // generation (type the prompt, wait for the rendered image, download in-page).
-import { nowSec } from "./_base";
-import { getExecutor } from "../../executors/index";
+import { nowSec } from "./_base.ts";
+import { getExecutor } from "../../executors/index.ts";
 
 const GeminiWeb = {
   useExecutor: true,

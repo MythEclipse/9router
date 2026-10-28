@@ -11,15 +11,15 @@
  * judges the same thing the client would.
  */
 
-import { PROVIDER_MEDIA } from "../providers/index";
-import { getModelUpstreamId } from "../config/providerModels";
-import { FETCH_CONNECT_TIMEOUT_MS } from "../config/runtimeConfig";
-import { generateSessionId } from "../executors/opencode-zen";
+import { PROVIDER_MEDIA } from "../providers/index.ts";
+import { getModelUpstreamId } from "../config/providerModels.ts";
+import { FETCH_CONNECT_TIMEOUT_MS } from "../config/runtimeConfig.ts";
+import { generateSessionId } from "../executors/opencode-zen.ts";
 import {
   buildSafeguardResultsFromDecision,
   buildUnavailableResults,
-} from "./safeguardsProtocol";
-import { SAFEGUARD_STATUS_UNAVAILABLE } from "../config/safeguardsConstants";
+} from "./safeguardsProtocol.ts";
+import { SAFEGUARD_STATUS_UNAVAILABLE } from "../config/safeguardsConstants.ts";
 
 // The single question the review asks. Kept as one constant because the
 // instruction text is part of the decision contract — changing it changes what

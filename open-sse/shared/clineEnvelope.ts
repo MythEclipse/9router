@@ -1,4 +1,4 @@
-import { PROVIDERS } from "../providers/index";
+import { PROVIDERS } from "../providers/index.ts";
 
 /**
  * Unwrap Cline's non-stream envelope: {"success":true,"data":{...choices...}}.

@@ -1,4 +1,4 @@
-import { CLAUDE_API_HEADERS } from "../shared";
+import { CLAUDE_API_HEADERS } from "../shared.ts";
 
 const XiaomiTokenplan = {
   id: "xiaomi-tokenplan",

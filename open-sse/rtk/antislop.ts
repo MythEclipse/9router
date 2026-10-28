@@ -4,8 +4,8 @@
 // Same mechanism as open-sse/rtk/ponytail.js - a text instruction merged into the
 // system prompt rather than a provider parameter, because that is what the
 // antislop rules are: instructions, not API fields.
-import { injectSystemPrompt } from "./systemInject";
-import { ANTISLOP_PROMPTS, ANTISLOP_LEVELS } from "./antislopPrompt";
+import { injectSystemPrompt } from "./systemInject.ts";
+import { ANTISLOP_PROMPTS, ANTISLOP_LEVELS } from "./antislopPrompt.ts";
 
 /**
  * @param {object} body   final provider request body

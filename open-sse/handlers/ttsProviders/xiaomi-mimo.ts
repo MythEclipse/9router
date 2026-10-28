@@ -3,7 +3,7 @@
 // Message contract: target text in `role: assistant` content, style/voice
 // instructions in `role: user` content. Voice is selected via the top-level
 // `audio.voice` field (NOT embedded in the model name).
-import { parseModelVoice } from "./_base";
+import { parseModelVoice } from "./_base.ts";
 
 const DEFAULT_MODEL = "mimo-v2.5-tts";
 const DEFAULT_VOICE = "mimo_default";

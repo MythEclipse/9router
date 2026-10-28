@@ -1,8 +1,8 @@
-import { createErrorResult, parseUpstreamError, formatProviderError } from "../utils/error";
-import { HTTP_STATUS, FETCH_CONNECT_TIMEOUT_MS } from "../config/runtimeConfig";
-import { getExecutor } from "../executors/index";
-import { refreshWithRetry } from "../services/tokenRefresh";
-import { getEmbeddingAdapter } from "./embeddingProviders/index";
+import { createErrorResult, parseUpstreamError, formatProviderError } from "../utils/error.ts";
+import { HTTP_STATUS, FETCH_CONNECT_TIMEOUT_MS } from "../config/runtimeConfig.ts";
+import { getExecutor } from "../executors/index.ts";
+import { refreshWithRetry } from "../services/tokenRefresh.ts";
+import { getEmbeddingAdapter } from "./embeddingProviders/index.ts";
 
 /**
  * Core embeddings handler - orchestrator only. Provider-specific URL/headers/body/normalize

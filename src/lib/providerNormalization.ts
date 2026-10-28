@@ -1,4 +1,4 @@
-import { AI_PROVIDERS } from "../shared/constants/providers";
+import { AI_PROVIDERS } from "../shared/constants/providers.ts";
 
 /**
  * Detect xAI Grok models by id pattern (grok-*, Grok_*, etc).

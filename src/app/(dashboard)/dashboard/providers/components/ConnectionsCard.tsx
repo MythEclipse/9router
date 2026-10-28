@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { getStatusVariant as getConnectionStatusVariant } from "@/shared/utils/connectionStatus";
 import { Card, Badge, Button, Modal, Select, Toggle, EditConnectionModal, editConnectionModalKey, ConfirmModal } from "@/shared/components";
-import WebLoginButton from "./WebLoginButton";
+import WebLoginButton from "./WebLoginButton.tsx";
 
 // ── CooldownTimer ──────────────────────────────────────────────
   interface CooldownTimerProps {

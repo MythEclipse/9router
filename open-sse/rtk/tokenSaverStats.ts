@@ -18,8 +18,8 @@
  * where the removed text no longer exists.
  */
 
-import { estimateMessageTokens } from "../translator/concerns/contextSqueezer";
-import { getPricingForModel } from "../providers/pricing";
+import { estimateMessageTokens } from "../translator/concerns/contextSqueezer.ts";
+import { getPricingForModel } from "../providers/pricing.ts";
 
 const SCOPE = "tokenSaverStats";
 const MAX_DAYS = 90;

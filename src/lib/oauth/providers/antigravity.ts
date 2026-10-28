@@ -1,4 +1,4 @@
-import { ANTIGRAVITY_CONFIG, getOAuthClientMetadata } from "../constants/oauth";
+import { ANTIGRAVITY_CONFIG, getOAuthClientMetadata } from "../constants/oauth.ts";
 
 const antigravity = {
   config: ANTIGRAVITY_CONFIG,

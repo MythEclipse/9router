@@ -18,7 +18,7 @@
  * lane.
  */
 
-import { PROVIDERS } from "../config/providers";
+import { PROVIDERS } from "../config/providers.ts";
 import {
   WEB_SEARCH_TOOL_NAME,
   CLAUDE_SUPPORTED_TOOL_TYPE_RE,
@@ -26,7 +26,7 @@ import {
   findClaudeCodeSearchTool,
   clampMaxUses,
   DEFAULT_MAX_RESULTS,
-} from "../config/webSearchConstants";
+} from "../config/webSearchConstants.ts";
 
 export const LANE_PASSTHROUGH = "passthrough";
 export const LANE_BRIDGE = "bridge";

@@ -1,8 +1,8 @@
 // Shared Utils - Export all
-export { cn } from "./cn";
-export * as api from "./api";
-export { getProviderIconSrc, markProviderIconMissing, resolveProviderIconId } from "./providerIcon";
-export { parseSearchQuery, matchesSearch, filterModelsByQuery } from "./modelSearchFilter";
+export { cn } from "./cn.ts";
+export * as api from "./api.ts";
+export { getProviderIconSrc, markProviderIconMissing, resolveProviderIconId } from "./providerIcon.ts";
+export { parseSearchQuery, matchesSearch, filterModelsByQuery } from "./modelSearchFilter.ts";
 
 import { v4 as uuidv4 } from "uuid";
 

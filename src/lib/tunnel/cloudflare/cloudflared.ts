@@ -3,7 +3,7 @@ import path from "path";
 import https from "https";
 import os from "os";
 import { execSync, spawn } from "child_process";
-import { savePid, loadPid, clearPid } from "./pid";
+import { savePid, loadPid, clearPid } from "./pid.ts";
 import { DATA_DIR } from "@/lib/dataDir";
 
 const BIN_DIR = path.join(DATA_DIR, "bin");

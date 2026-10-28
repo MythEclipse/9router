@@ -1,9 +1,9 @@
-import REGISTRY from "../providers/registry/index";
+import REGISTRY from "../providers/registry/index.ts";
 // PROVIDER_MODELS now built from providers/registry (transport + models co-located)
-import { PROVIDER_MODELS } from "../providers/index";
-import { modelQuotaFamily, modelStrip, modelTargetFormat, modelSupportedFormats, normalizeModelId } from "../providers/models/schema";
-import { CODEX_REVIEW_SUFFIX, isMuseSparkModel, opencodeFamilyFormats } from "../providers/models/helpers";
-import { FORMATS } from "../translator/formats";
+import { PROVIDER_MODELS } from "../providers/index.ts";
+import { modelQuotaFamily, modelStrip, modelTargetFormat, modelSupportedFormats, normalizeModelId } from "../providers/models/schema.ts";
+import { CODEX_REVIEW_SUFFIX, isMuseSparkModel, opencodeFamilyFormats } from "../providers/models/helpers.ts";
+import { FORMATS } from "../translator/formats.ts";
 export { PROVIDER_MODELS };
 
 // OpenCode providers sharing the endpoint-family fallback for unknown model ids

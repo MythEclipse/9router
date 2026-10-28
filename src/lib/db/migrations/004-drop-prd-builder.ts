@@ -1,4 +1,4 @@
-import { TABLES } from "../schema";
+import { TABLES } from "../schema.ts";
 
 const migration = {
   version: 4,

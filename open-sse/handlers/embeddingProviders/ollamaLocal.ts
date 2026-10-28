@@ -1,4 +1,4 @@
-import { resolveOllamaLocalHost } from "../../config/providers";
+import { resolveOllamaLocalHost } from "../../config/providers.ts";
 
 const ollamaLocalEmbedding = {
   buildUrl: (_model, credentials) => {

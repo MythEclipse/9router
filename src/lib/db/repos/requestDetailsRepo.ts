@@ -1,6 +1,6 @@
-import { getAdapter } from "../driver";
-import { parseJson, stringifyJson } from "../helpers/jsonCol";
-import { buildAllowedModelsSql } from "./allowedModels";
+import { getAdapter } from "../driver.ts";
+import { parseJson, stringifyJson } from "../helpers/jsonCol.ts";
+import { buildAllowedModelsSql } from "./allowedModels.ts";
 
 const DEFAULT_MAX_RECORDS = 200;
 const DEFAULT_BATCH_SIZE = 20;
@@ -14,7 +14,7 @@ let cachedConfigTs = 0;
 async function getObservabilityConfig() {
   if (cachedConfig && (Date.now() - cachedConfigTs) < CONFIG_CACHE_TTL_MS) return cachedConfig;
   try {
-    const { getSettings } = await import("./settingsRepo");
+    const { getSettings } = await import("./settingsRepo.ts");
     const settings = await getSettings();
     const envRequestLogs = process.env.ENABLE_REQUEST_LOGS;
     if (envRequestLogs !== undefined) {

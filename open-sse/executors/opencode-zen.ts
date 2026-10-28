@@ -1,15 +1,15 @@
 import crypto from "node:crypto";
-import { DefaultExecutor } from "./default";
-import { resolveSessionId } from "../utils/sessionManager";
-import { isMuseSparkModel, isOpencodeFreeTierModel } from "../providers/models/helpers";
+import { DefaultExecutor } from "./default.ts";
+import { resolveSessionId } from "../utils/sessionManager.ts";
+import { isMuseSparkModel, isOpencodeFreeTierModel } from "../providers/models/helpers.ts";
 import {
   normalizeResponsesInput,
   clampResponsesCallId,
   coerceResponsesArguments,
   coerceResponsesOutput,
-} from "../translator/formats/responsesApi";
-import { normalizeResponsesTools, sanitizeResponsesItems } from "../utils/responsesTools";
-import { MAX_TOOL_NAME_LEN } from "../config/runtimeConfig";
+} from "../translator/formats/responsesApi.ts";
+import { normalizeResponsesTools, sanitizeResponsesItems } from "../utils/responsesTools.ts";
+import { MAX_TOOL_NAME_LEN } from "../config/runtimeConfig.ts";
 
 const SESSION_HEADER = "x-opencode-session";
 const SESSION_FIELD = "_opencodeZenSession";

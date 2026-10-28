@@ -290,7 +290,7 @@ export async function ensureServiceSession(sess) {
     return false;
   }
   try {
-    const mod = await import("../../open-sse/shared/mimoAccount");
+    const mod = await import("../../open-sse/shared/mimoAccount.ts");
     const proxyOptions = sess.proxyUrl ? { enabled: true, url: sess.proxyUrl } : null;
     log(`exchanging passToken (region=${sess.region}, egress=${sess.proxyUrl || "direct"}) ...`);
     const serviceCookie = await mod.getMimoAccountCookie(
@@ -501,7 +501,7 @@ async function loginFetch(url, init, sessionProxyUrl = null) {
   try {
     if (/^socks/i.test(sessionProxyUrl)) return await socksFetch(url, init, sessionProxyUrl);
     if (!_pafPromise) {
-      _pafPromise = import("../../open-sse/utils/proxyFetch")
+      _pafPromise = import("../../open-sse/utils/proxyFetch.ts")
         .then((m) => m.proxyAwareFetch)
         .catch((e) => {
           console.log(`${new Date().toISOString().slice(11,23)} [mimo-login] proxyAwareFetch unavailable (runtime?), direct only:`, e?.message || e);

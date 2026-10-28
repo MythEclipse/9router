@@ -12,10 +12,10 @@
 // rotated jar is re-seeded into the pooled browser context each time.
 
 import { createHash } from "node:crypto";
-import { BaseExecutor } from "./base";
-import { SSE_DONE, SSE_HEADERS_NO_BUFFER } from "../utils/sseConstants";
-import { isMissingBrowserExecutable, resolveSystemChromeExecutable } from "./browserExecutableCheck";
-import { acquireBrowserContext, releaseBrowserContext } from "../services/browserPool";
+import { BaseExecutor } from "./base.ts";
+import { SSE_DONE, SSE_HEADERS_NO_BUFFER } from "../utils/sseConstants.ts";
+import { isMissingBrowserExecutable, resolveSystemChromeExecutable } from "./browserExecutableCheck.ts";
+import { acquireBrowserContext, releaseBrowserContext } from "../services/browserPool.ts";
 import {
   NEW_THREAD_URL,
   parseCookiePairs,
@@ -25,11 +25,11 @@ import {
   MuseWebUpstreamError,
   MuseWebQuotaError,
   MuseWebTimeoutError,
-} from "./muse-web/session";
-import { flattenMessages } from "./muse-web/prompt";
-import * as dom from "./muse-web/dom";
+} from "./muse-web/session.ts";
+import { flattenMessages } from "./muse-web/prompt.ts";
+import * as dom from "./muse-web/dom.ts";
 
-export { isMissingBrowserExecutable } from "./browserExecutableCheck";
+export { isMissingBrowserExecutable } from "./browserExecutableCheck.ts";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 // SD WebUI (AUTOMATIC1111) - local, noAuth
-import { nowSec } from "./_base";
-import { PROVIDER_MEDIA } from "../../providers/index";
+import { nowSec } from "./_base.ts";
+import { PROVIDER_MEDIA } from "../../providers/index.ts";
 
 const BASE_URL = PROVIDER_MEDIA["sdwebui"]?.imageConfig?.baseUrl;
 

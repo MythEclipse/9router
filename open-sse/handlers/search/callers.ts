@@ -29,7 +29,7 @@
  * @property {Record<string,unknown>} [providerSpecificData]
  */
 
-import { assertPublicUrl } from "../../../src/shared/utils/ssrfGuard";
+import { assertPublicUrl } from "../../../src/shared/utils/ssrfGuard.ts";
 
 /** Provider entry `buildSearchRequest` dispatches on. */
 export interface SearchProviderConfig {

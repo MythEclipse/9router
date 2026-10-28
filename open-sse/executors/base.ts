@@ -1,11 +1,11 @@
-import { HTTP_STATUS, DEFAULT_RETRY_CONFIG, resolveRetryEntry, FETCH_CONNECT_TIMEOUT_MS } from "../config/runtimeConfig";
-import type { RetryEntry } from "../config/runtimeConfig";
-import { shouldRefreshCredentials } from "../services/oauthCredentialManager";
-import { proxyAwareFetch } from "../utils/proxyFetch";
-import { dbg } from "../utils/debugLog";
-import { ANTHROPIC_API_VERSION, OPENAI_COMPAT_BASE, ANTHROPIC_COMPAT_BASE } from "../providers/shared";
-import { resolveOpenAICompatibleApiType } from "../services/provider";
-import type { TransportConfig } from "../providers/schema";
+import { HTTP_STATUS, DEFAULT_RETRY_CONFIG, resolveRetryEntry, FETCH_CONNECT_TIMEOUT_MS } from "../config/runtimeConfig.ts";
+import type { RetryEntry } from "../config/runtimeConfig.ts";
+import { shouldRefreshCredentials } from "../services/oauthCredentialManager.ts";
+import { proxyAwareFetch } from "../utils/proxyFetch.ts";
+import { dbg } from "../utils/debugLog.ts";
+import { ANTHROPIC_API_VERSION, OPENAI_COMPAT_BASE, ANTHROPIC_COMPAT_BASE } from "../providers/shared.ts";
+import { resolveOpenAICompatibleApiType } from "../services/provider.ts";
+import type { TransportConfig } from "../providers/schema.ts";
 import type {
   ChatRequestBody,
   Credentials,
@@ -14,7 +14,7 @@ import type {
   ExecutorResult,
   ProxyOptions,
   ProviderOverrides,
-} from "../types";
+} from "../types.ts";
 
 /** Retry bookkeeping is per base-URL index. */
 type RetryAttempts = Record<number, number>;

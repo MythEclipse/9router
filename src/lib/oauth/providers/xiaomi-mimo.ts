@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { XIAOMI_MIMO_CONFIG } from "../constants/oauth";
+import { XIAOMI_MIMO_CONFIG } from "../constants/oauth.ts";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Xiaomi MiMo OAuth helpers

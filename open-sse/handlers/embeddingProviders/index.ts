@@ -1,10 +1,10 @@
 // Embeddings provider adapter registry
-import createOpenAIEmbeddingAdapter from "./openai";
-import gemini from "./gemini";
-import github from "./github";
-import openaiCompatNode from "./openaiCompatNode";
-import selfhostedEmbedding from "./selfhostedEmbedding";
-import ollamaLocal from "./ollamaLocal";
+import createOpenAIEmbeddingAdapter from "./openai.ts";
+import gemini from "./gemini.ts";
+import github from "./github.ts";
+import openaiCompatNode from "./openaiCompatNode.ts";
+import selfhostedEmbedding from "./selfhostedEmbedding.ts";
+import ollamaLocal from "./ollamaLocal.ts";
 
 const OPENAI_COMPAT_PROVIDERS = [
   "openai", "openrouter", "mistral", "voyage-ai", "fireworks",

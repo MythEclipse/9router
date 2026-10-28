@@ -3,9 +3,9 @@
  * Mirrors ~/cc-usage.mjs: whoami → credits + subscriptions.
  */
 
-import { proxyAwareFetch } from "../../utils/proxyFetch";
-import type { UsageQuotaMap } from "./shared";
-import { parseResetTime, toFiniteNumber } from "./shared";
+import { proxyAwareFetch } from "../../utils/proxyFetch.ts";
+import type { UsageQuotaMap } from "./shared.ts";
+import { parseResetTime, toFiniteNumber } from "./shared.ts";
 
 const BASE = (process.env.COMMAND_CODE_API_BASE_URL || "https://api.commandcode.ai").replace(/\/$/, "");
 

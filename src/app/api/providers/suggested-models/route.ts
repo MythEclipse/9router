@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { FILTERS, FALLBACK_SUGGESTIONS } from "./filters";
+import { FILTERS, FALLBACK_SUGGESTIONS } from "./filters.ts";
 import REGISTRY from "open-sse/providers/registry/index";
 import { getSyncedFreeCatalog, syncOneFreeCatalog, startFreeCatalogSync } from "@/shared/services/freeCatalogSync";
 import { fetch as undiciFetch } from "undici";

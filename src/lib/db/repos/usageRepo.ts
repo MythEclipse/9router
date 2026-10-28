@@ -1,19 +1,19 @@
 import { EventEmitter } from "events";
 import { createHash } from "crypto";
-import { getAdapter } from "../driver";
-import type { DbRow, ResolvedDbAdapter } from "../types";
-import { parseJson, stringifyJson } from "../helpers/jsonCol";
-import { labelForResolved, labelForRow, resolvedModelOf } from "../helpers/modelLabel";
-import { getMeta, setMeta } from "../helpers/metaStore";
+import { getAdapter } from "../driver.ts";
+import type { DbRow, ResolvedDbAdapter } from "../types.ts";
+import { parseJson, stringifyJson } from "../helpers/jsonCol.ts";
+import { labelForResolved, labelForRow, resolvedModelOf } from "../helpers/modelLabel.ts";
+import { getMeta, setMeta } from "../helpers/metaStore.ts";
 
-import { matchesAllowedModels as matchesModelPatterns, parseAllowedModels } from "./apiKeysRepo";
+import { matchesAllowedModels as matchesModelPatterns, parseAllowedModels } from "./apiKeysRepo.ts";
 import {
   buildApiKeyMaps,
   buildConnectionMap,
   buildProviderNodeNameMap,
   type ProviderNodeNameMap,
-} from "./usageLookups";
-import { accumulate, keepNewest, emptyTotals, sumTotals, type UsageTotals } from "./usageCounters";
+} from "./usageLookups.ts";
+import { accumulate, keepNewest, emptyTotals, sumTotals, type UsageTotals } from "./usageCounters.ts";
 
 /** Token counts as they arrive from an upstream: several spellings coexist. */
 export interface UsageTokens {
@@ -345,7 +345,7 @@ type ConnectionMap = Record<string, string>;
 async function getConnectionMapCached(): Promise<ConnectionMap> {
   if (Date.now() - connCache.ts < CONN_CACHE_TTL_MS) return connCache.map;
   try {
-    const { getProviderConnections } = await import("./connectionsRepo");
+    const { getProviderConnections } = await import("./connectionsRepo.ts");
     const all = await getProviderConnections();
     const map: ConnectionMap = {};
     for (const c of all) if (c) map[c.id] = c.name || c.email || c.id;
@@ -396,7 +396,7 @@ async function calculateCost(
 ): Promise<number> {
   if (!tokens || !provider || !model) return 0;
   try {
-    const { getPricingForModel } = await import("./pricingRepo");
+    const { getPricingForModel } = await import("./pricingRepo.ts");
     const pricing = await getPricingForModel(provider, model);
     if (!pricing) return 0;
 
@@ -775,7 +775,7 @@ export async function saveRequestUsage(
                [cost, cost, entry.apiKey]
             );
          }
-         import("./apiKeysRepo").then(({ recordApiKeyUsageInWindow }) => {
+         import("./apiKeysRepo.ts").then(({ recordApiKeyUsageInWindow }) => {
            recordApiKeyUsageInWindow(entry.apiKey, totalTokens);
          }).catch(() => {});
       }
@@ -1153,9 +1153,9 @@ export async function getUsageStats(
   const modelAllowed = (model: string) => matchesModelPatterns(patterns, model);
 
   const [{ getProviderConnections }, { getApiKeys }, { getProviderNodes }] = await Promise.all([
-    import("./connectionsRepo"),
-    import("./apiKeysRepo"),
-    import("./nodesRepo"),
+    import("./connectionsRepo.ts"),
+    import("./apiKeysRepo.ts"),
+    import("./nodesRepo.ts"),
   ]);
 
   let allConnections: Awaited<ReturnType<typeof getProviderConnections>> = [];
@@ -1862,7 +1862,7 @@ export async function getRecentLogs(limit = 200) {
 
     const connMap: Record<string, string> = {};
     try {
-      const { getProviderConnections } = await import("./connectionsRepo");
+      const { getProviderConnections } = await import("./connectionsRepo.ts");
       const connections = await getProviderConnections();
       for (const c of connections) if (c) connMap[c.id] = c.name || c.email || "";
     } catch (e) {

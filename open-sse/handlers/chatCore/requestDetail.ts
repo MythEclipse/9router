@@ -1,7 +1,7 @@
 import { saveRequestUsage, appendRequestLog, saveRequestDetail } from "@/lib/usageDb";
-import { COLORS } from "../../utils/stream";
-import { canonicalizeUsage } from "../../utils/usageTracking";
-import { formatClockTime } from "../../utils/timeFormat";
+import { COLORS } from "../../utils/stream.ts";
+import { canonicalizeUsage } from "../../utils/usageTracking.ts";
+import { formatClockTime } from "../../utils/timeFormat.ts";
 
 const OPTIONAL_PARAMS = [
   "temperature", "top_p", "top_k",

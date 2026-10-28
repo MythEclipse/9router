@@ -23,7 +23,7 @@
 // abandons work in flight. Completed records live RESULT_TTL_MS so the dashboard
 // can still show the outcome of a run the operator stopped watching.
 import { randomUUID } from "node:crypto";
-import { createJobStore, touchJob } from "./jobStore";
+import { createJobStore, touchJob } from "./jobStore.ts";
 
 const RESULT_TTL_MS = 15 * 60 * 1000;
 

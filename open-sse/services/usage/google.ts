@@ -2,11 +2,11 @@
  * Google usage handlers (Gemini CLI + Antigravity)
  */
 
-import { CLIENT_METADATA } from "../../config/appConstants";
-import { ANTIGRAVITY_IDE_USER_AGENT, ANTIGRAVITY_IDE_VERSION, ANTIGRAVITY_OAUTH_CLIENT } from "../../providers/shared";
-import { U, parseResetTime, normalizeCloudCodeProjectId, fetchWithTimeout } from "./shared";
-import type { UsageQuotaRow, UsageQuotaMap } from "./shared";
-import { fetchAntigravityWeeklyQuota } from "./antigravity-weekly";
+import { CLIENT_METADATA } from "../../config/appConstants.ts";
+import { ANTIGRAVITY_IDE_USER_AGENT, ANTIGRAVITY_IDE_VERSION, ANTIGRAVITY_OAUTH_CLIENT } from "../../providers/shared.ts";
+import { U, parseResetTime, normalizeCloudCodeProjectId, fetchWithTimeout } from "./shared.ts";
+import type { UsageQuotaRow, UsageQuotaMap } from "./shared.ts";
+import { fetchAntigravityWeeklyQuota } from "./antigravity-weekly.ts";
 
 /** Per-model quota row returned by `fetchAvailableModels`. */
 interface AntigravityModelQuota {

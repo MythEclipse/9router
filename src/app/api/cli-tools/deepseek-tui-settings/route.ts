@@ -1,6 +1,6 @@
 
 import { NextResponse } from "next/server";
-import { resolveCliApiKey } from "../resolveApiKey";
+import { resolveCliApiKey } from "../resolveApiKey.ts";
 import { exec } from "child_process";
 import { promisify } from "util";
 import fs from "fs/promises";

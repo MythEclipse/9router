@@ -1,5 +1,5 @@
-import { KIRO_CONFIG, assertValidAwsRegion } from "../constants/oauth";
-import { extractEmailFromAccessToken } from "../providerHelpers";
+import { KIRO_CONFIG, assertValidAwsRegion } from "../constants/oauth.ts";
+import { extractEmailFromAccessToken } from "../providerHelpers.ts";
 
 const kiro = {
   config: KIRO_CONFIG,

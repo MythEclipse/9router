@@ -1,7 +1,7 @@
 // Built-in node:sqlite adapter - available in Node >= 22.5.0.
 // No native build, no npm install. API mirrors betterSqliteAdapter.
-import { PRAGMA_SQL } from "../schema";
-import type { ResolvedDbAdapter } from "../types";
+import { PRAGMA_SQL } from "../schema.ts";
+import type { ResolvedDbAdapter } from "../types.ts";
 
 const CHECKPOINT_INTERVAL_MS = 60 * 1000;
 

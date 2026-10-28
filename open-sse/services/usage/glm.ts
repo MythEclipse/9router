@@ -2,8 +2,8 @@
  * GLM Coding Plan usage (international + China regions)
  */
 
-import { proxyAwareFetch } from "../../utils/proxyFetch";
-import { U } from "./shared";
+import { proxyAwareFetch } from "../../utils/proxyFetch.ts";
+import { U } from "./shared.ts";
 
 // GLM quota endpoints (region-aware) - url from registry transport.usage
 const GLM_QUOTA_URLS = {

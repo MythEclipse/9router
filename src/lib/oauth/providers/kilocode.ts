@@ -1,4 +1,4 @@
-import { KILOCODE_CONFIG } from "../constants/oauth";
+import { KILOCODE_CONFIG } from "../constants/oauth.ts";
 
 const kilocode = {
   config: KILOCODE_CONFIG,

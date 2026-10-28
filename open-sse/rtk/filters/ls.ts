@@ -1,6 +1,6 @@
 // Port of compact_ls (rtk/src/cmds/system/ls.rs:154-232)
 // Input: `ls -la` style output. Output: compact "name/  (dirs)\nname  size"
-import { LS_EXT_SUMMARY_TOP, LS_NOISE_DIRS } from "../constants";
+import { LS_EXT_SUMMARY_TOP, LS_NOISE_DIRS } from "../constants.ts";
 
 // Rust LS_DATE_RE: month + day + (year|HH:MM)
 const LS_DATE_RE = /\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s+(\d{4}|\d{2}:\d{2})\s+/;

@@ -34,7 +34,7 @@ import {
   VERDICT_TYPE_EVALUATED,
   SAFEGUARDS_REQUEST_FIELD,
   SAFEGUARD_RESULTS_RESPONSE_FIELD,
-} from "../config/safeguardsConstants";
+} from "../config/safeguardsConstants.ts";
 
 // Probability at or above which a System One decision is treated as a block.
 // Jev emits { type: "noul", noul: <p> } where p is the probability that the

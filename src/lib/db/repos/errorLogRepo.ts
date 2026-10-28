@@ -1,4 +1,4 @@
-import { getAdapter } from "../driver";
+import { getAdapter } from "../driver.ts";
 
 function ensureTable(db) {
   db.run(`CREATE TABLE IF NOT EXISTS errorLogs (

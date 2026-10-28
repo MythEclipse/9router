@@ -2,18 +2,18 @@
  * Shared combo (model combo) handling with fallback support
  */
 
-import { checkFallbackError, formatRetryAfter } from "./accountFallback";
-import { unavailableResponse } from "../utils/error";
-import { getCapabilitiesForModel } from "../providers/capabilities";
-import { parseModel } from "./model";
-import { extractTextContent } from "../translator/formats/gemini";
-import { peekStreamForContent, reconstructStream, isNoRetryFinish } from "./emptyFailover";
+import { checkFallbackError, formatRetryAfter } from "./accountFallback.ts";
+import { unavailableResponse } from "../utils/error.ts";
+import { getCapabilitiesForModel } from "../providers/capabilities.ts";
+import { parseModel } from "./model.ts";
+import { extractTextContent } from "../translator/formats/gemini.ts";
+import { peekStreamForContent, reconstructStream, isNoRetryFinish } from "./emptyFailover.ts";
 import {
   getStickyComboModel,
   setStickyComboModel,
   clearStickyComboSession,
   orderModelsByChoice,
-} from "./systemoneRouter";
+} from "./systemoneRouter.ts";
 
 // Peek a 2xx combo response for real content. Returns null for non-SSE responses (leave
 // them untouched). For SSE, returns { outcome: "content"|"empty", finishReason, response }
@@ -1057,4 +1057,4 @@ export {
   setStickyComboModel,
   clearStickyComboSession,
   orderModelsByChoice,
-} from "./systemoneRouter";
+} from "./systemoneRouter.ts";

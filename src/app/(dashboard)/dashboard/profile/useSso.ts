@@ -20,8 +20,8 @@ import {
   oidcSaveMessage,
   canTestOidc,
   oidcTestSuccessMessage,
-} from "./profileHelpers";
-import { hasXmlParseError, readSamlMetadata, describeSamlImport } from "./samlMetadata";
+} from "./profileHelpers.ts";
+import { hasXmlParseError, readSamlMetadata, describeSamlImport } from "./samlMetadata.ts";
 
 export interface SsoForm {
   authMode: string;

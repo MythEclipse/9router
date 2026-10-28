@@ -1,5 +1,5 @@
-import { getAdapter } from "../driver";
-import { parseJson, stringifyJson } from "./jsonCol";
+import { getAdapter } from "../driver.ts";
+import { parseJson, stringifyJson } from "./jsonCol.ts";
 
 /** A scope-scoped key/value facade over the `kv` table. */
 export interface KvStore {

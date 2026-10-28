@@ -10,12 +10,12 @@
  *  - tool_result blocks (role=user): {type:"tool-result", toolCallId, toolName, output}
  *  - tools[*]: Anthropic plain {name, description, input_schema}
  */
-import { register } from "../index";
-import { FORMATS } from "../formats";
-import { ROLE, OPENAI_BLOCK, CLAUDE_BLOCK } from "../schema/index";
-import { DEFAULT_MAX_TOKENS } from "../../config/runtimeConfig";
-import { parseDataUri, encodeDataUri } from "../concerns/image";
-import { commandCodeThreadId } from "../../utils/commandCodeSession";
+import { register } from "../index.ts";
+import { FORMATS } from "../formats.ts";
+import { ROLE, OPENAI_BLOCK, CLAUDE_BLOCK } from "../schema/index.ts";
+import { DEFAULT_MAX_TOKENS } from "../../config/runtimeConfig.ts";
+import { parseDataUri, encodeDataUri } from "../concerns/image.ts";
+import { commandCodeThreadId } from "../../utils/commandCodeSession.ts";
 
 function flattenText(content) {
   if (content == null) return "";

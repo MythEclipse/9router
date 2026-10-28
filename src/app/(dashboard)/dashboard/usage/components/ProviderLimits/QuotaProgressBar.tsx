@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/shared/utils/cn";
-import { formatResetTime } from "./utils";
+import { formatResetTime } from "./utils.ts";
 
 // Calculate color based on remaining percentage
 const getColorClasses = (remainingPercentage) => {

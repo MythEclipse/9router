@@ -1,4 +1,4 @@
-import { calculatePercentage } from "./quotaPercentage";
+import { calculatePercentage } from "./quotaPercentage.ts";
 import { getModelsByProviderId } from "open-sse/config/providerModels";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -348,5 +348,5 @@ export function getHiddenQuotaRows(provider, quotas = [], quotaVisibility = {}) 
 // The quota parser lives on its own because it is the one part of this module that
 // knows provider payloads rather than UI state. Re-exported so existing imports of
 // `utils` keep working, and so a new caller does not have to know which file holds it.
-export { parseQuotaData, type RawQuotaPayload, type RawQuotaEntry, type NormalizedQuota } from "./quotaParsing";
-export { calculatePercentage } from "./quotaPercentage";
+export { parseQuotaData, type RawQuotaPayload, type RawQuotaEntry, type NormalizedQuota } from "./quotaParsing.ts";
+export { calculatePercentage } from "./quotaPercentage.ts";

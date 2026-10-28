@@ -3,10 +3,10 @@
 
 
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import Modal, { type ModalSize } from "./Modal";
-import ProviderIcon from "./ProviderIcon";
-import CapacityBadges from "./CapacityBadges";
-import ModelTierBadge from "./ModelTierBadge";
+import Modal, { type ModalSize } from "./Modal.tsx";
+import ProviderIcon from "./ProviderIcon.tsx";
+import CapacityBadges from "./CapacityBadges.tsx";
+import ModelTierBadge from "./ModelTierBadge.tsx";
 import { useModelCaps } from "@/shared/hooks/useModelCaps";
 import { getModelsByProviderId, getModelKind } from "@/shared/constants/models";
 import { OAUTH_PROVIDERS, APIKEY_PROVIDERS, FREE_PROVIDERS, FREE_TIER_PROVIDERS, AI_PROVIDERS, isOpenAICompatibleProvider, isAnthropicCompatibleProvider, getProviderAlias } from "@/shared/constants/providers";

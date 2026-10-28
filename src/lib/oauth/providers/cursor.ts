@@ -1,4 +1,4 @@
-import { CURSOR_CONFIG } from "../constants/oauth";
+import { CURSOR_CONFIG } from "../constants/oauth.ts";
 
 const cursor = {
   config: CURSOR_CONFIG,

@@ -1,6 +1,6 @@
-import { BaseExecutor } from "./base";
-import { proxyAwareFetch } from "../utils/proxyFetch";
-import { PROVIDERS } from "../config/providers";
+import { BaseExecutor } from "./base.ts";
+import { proxyAwareFetch } from "../utils/proxyFetch.ts";
+import { PROVIDERS } from "../config/providers.ts";
 import { randomUUID } from "node:crypto";
 
 // WindsurfExecutor - Codeium gRPC-web chat.

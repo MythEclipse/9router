@@ -1,17 +1,17 @@
 import {
   extractApiKey, isValidApiKey, apiKeyGateFailure,
   getProviderCredentials, markAccountUnavailable, shouldTryNextAccount,
-} from "../services/auth";
+} from "../services/auth.ts";
 import { getSettings } from "@/lib/localDb";
-import { getModelInfo, getComboModels } from "../services/model";
-import { getKeyAccessContext, enforceKeyAccess } from "../services/keyAccess";
+import { getModelInfo, getComboModels } from "../services/model.ts";
+import { getKeyAccessContext, enforceKeyAccess } from "../services/keyAccess.ts";
 import { handleTtsCore } from "open-sse/handlers/ttsCore";
 import { errorResponse } from "open-sse/utils/error";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig";
 import { AI_PROVIDERS } from "@/shared/constants/providers";
 import { handleComboChat } from "open-sse/services/combo";
-import * as log from "../utils/logger";
-import { unavailableCredentialResponse } from "../services/accountFallbackLoop";
+import * as log from "../utils/logger.ts";
+import { unavailableCredentialResponse } from "../services/accountFallbackLoop.ts";
 
 // Derived from providers.js: any TTS provider not noAuth requires stored credentials
 const CREDENTIALED_PROVIDERS = new Set(

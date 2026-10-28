@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { LOCALE_FLAGS } from "@/shared/constants/locales";
-import LanguageSwitcher from "./LanguageSwitcher";
+import LanguageSwitcher from "./LanguageSwitcher.tsx";
 import { notifyLocaleChanged, useLocale } from "@/shared/hooks/useLocale";
 
 export default function HeaderLanguage() {

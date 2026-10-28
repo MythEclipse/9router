@@ -5,7 +5,7 @@ import {
   HermesToolCard, OpenCodeToolCard, CoworkToolCard,
   ClineToolCard, KiloToolCard, DeepSeekTuiToolCard,
   JcodeToolCard, GrokBuildToolCard, GenericCliToolCard,
-} from "./index";
+} from "./index.ts";
 
 /**
  * Which card renders for each CLI tool id.

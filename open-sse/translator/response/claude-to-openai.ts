@@ -1,10 +1,10 @@
-import { register } from "../index";
-import { FORMATS } from "../formats";
-import { ROLE, OPENAI_BLOCK, CLAUDE_BLOCK, OPENAI_FINISH } from "../schema/index";
-import { buildChunk } from "../concerns/chunk";
-import { toOpenAIUsage } from "../concerns/usage";
-import { reasoningDelta } from "../concerns/reasoning";
-import { toOpenAIFinish } from "../concerns/finishReason";
+import { register } from "../index.ts";
+import { FORMATS } from "../formats.ts";
+import { ROLE, OPENAI_BLOCK, CLAUDE_BLOCK, OPENAI_FINISH } from "../schema/index.ts";
+import { buildChunk } from "../concerns/chunk.ts";
+import { toOpenAIUsage } from "../concerns/usage.ts";
+import { reasoningDelta } from "../concerns/reasoning.ts";
+import { toOpenAIFinish } from "../concerns/finishReason.ts";
 
 // Create OpenAI chunk helper
 function createChunk(state, delta, finishReason = null) {

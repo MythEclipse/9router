@@ -10,8 +10,8 @@
 // at the resolved token; the generic [provider]/[action] route calls
 // createProviderConnection with the real token.
 import { randomBytes } from "node:crypto";
-import { startLocalServer } from "../utils/server";
-import { KIMCHI_CONFIG } from "../constants/oauth";
+import { startLocalServer } from "../utils/server.ts";
+import { KIMCHI_CONFIG } from "../constants/oauth.ts";
 
 const sessions = new Map(); // state -> { result, close, timeout, done, resolved }
 const SESSION_TTL_MS = 5 * 60 * 1000;

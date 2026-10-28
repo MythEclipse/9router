@@ -13,7 +13,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
-import { getWritableDataDir } from "../utils/writableDataDir";
+import { getWritableDataDir } from "../utils/writableDataDir.ts";
 
 // Keep in sync with package.json devDependencies.
 const LAZY_DEP_VERSIONS = {

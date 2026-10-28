@@ -5,7 +5,7 @@ import { Card, ModelSelectModal } from "@/shared/components";
 import { getProviderIconSrc, markProviderIconMissing } from "@/shared/utils/providerIcon";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 import Image from "next/image";
-import ApiKeySelect from "./ApiKeySelect";
+import ApiKeySelect from "./ApiKeySelect.tsx";
 import { DEFAULT_LOCAL_API_KEY } from "@/shared/constants/config";
 
 export default function DefaultToolCard({ toolId, tool, isExpanded, onToggle, baseUrl, apiKeys, activeProviders = [], cloudEnabled = false, tunnelEnabled = false }) {

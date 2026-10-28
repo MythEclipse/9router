@@ -1,6 +1,6 @@
 // OpenAI-compatible embeddings adapter (most providers)
-import { bearerAuth } from "./_base";
-import { PROVIDER_MEDIA } from "../../providers/index";
+import { bearerAuth } from "./_base.ts";
+import { PROVIDER_MEDIA } from "../../providers/index.ts";
 
 // media-only providers without a registry file keep URL here; rest derive from registry media.embeddingConfig.baseUrl
 const ENDPOINTS = {

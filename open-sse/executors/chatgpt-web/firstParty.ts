@@ -6,7 +6,7 @@
 // pinned), bridge them onto `window`, and drive the request path through them.
 // The hot path never touches the composer, model picker, or bearer tokens.
 
-import type { ChatGptWebResolvedAttachment } from "./attachments";
+import type { ChatGptWebResolvedAttachment } from "./attachments.ts";
 
 const CHATGPT_ORIGIN = "https://chatgpt.com";
 const CHATGPT_ASSET_PATH_RE =

@@ -1,12 +1,12 @@
 "use client";
 import { useRouter } from "next/navigation";
-import Navigation from "./components/Navigation";
-import HeroSection from "./components/HeroSection";
-import FlowAnimation from "./components/FlowAnimation";
-import HowItWorks from "./components/HowItWorks";
-import Features from "./components/Features";
-import GetStarted from "./components/GetStarted";
-import Footer from "./components/Footer";
+import Navigation from "./components/Navigation.tsx";
+import HeroSection from "./components/HeroSection.tsx";
+import FlowAnimation from "./components/FlowAnimation.tsx";
+import HowItWorks from "./components/HowItWorks.tsx";
+import Features from "./components/Features.tsx";
+import GetStarted from "./components/GetStarted.tsx";
+import Footer from "./components/Footer.tsx";
 
 export default function LandingPage() {
   const router = useRouter();

@@ -13,8 +13,8 @@
  * Registered on the direct route by ../index.js; reached only when source
  * format is Claude and target is Kiro.
  */
-import { register } from "../index";
-import { FORMATS } from "../formats";
+import { register } from "../index.ts";
+import { FORMATS } from "../formats.ts";
 
 function stopThinkingBlock(state, results) {
   if (!state.thinkingBlockStarted) return;

@@ -1,9 +1,9 @@
 import crypto from "crypto";
 import open from "open";
-import { IFLOW_CONFIG } from "../constants/oauth";
-import { getServerCredentials } from "../config/index";
-import { startLocalServer } from "../utils/server";
-import { spinner as createSpinner } from "../utils/ui";
+import { IFLOW_CONFIG } from "../constants/oauth.ts";
+import { getServerCredentials } from "../config/index.ts";
+import { startLocalServer } from "../utils/server.ts";
+import { spinner as createSpinner } from "../utils/ui.ts";
 
 /**
  * iFlow OAuth Service

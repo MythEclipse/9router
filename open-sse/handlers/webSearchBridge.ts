@@ -21,7 +21,7 @@ import {
   SYNTHETIC_TOOL_USE_ID_PREFIX,
   RESULT_ERROR_MAX_USES,
   MAX_RESULTS_CEILING,
-} from "../config/webSearchConstants";
+} from "../config/webSearchConstants.ts";
 
 /** Deterministic, collision-resistant id in Anthropic's required shape. */
 function makeToolUseId() {

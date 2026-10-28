@@ -7,7 +7,7 @@ import crypto from "node:crypto";
 import nodeMachineId from "node-machine-id";
 
 const { machineIdSync } = nodeMachineId;
-import { makeKv } from "../helpers/kvStore";
+import { makeKv } from "../helpers/kvStore.ts";
 
 const kv = makeKv("autoBackup");
 

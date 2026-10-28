@@ -1,7 +1,7 @@
 // Strip multimodal content blocks a model cannot read, BEFORE translation.
 // Driven by getCapabilitiesForModel: vision/audioInput/pdf. Replaces removed
 // media with a short text placeholder so messages never become empty.
-import { FORMATS } from "../formats";
+import { FORMATS } from "../formats.ts";
 
 // Placeholder text inserted where a media block was removed.
 // Current turn: explain the active model can't read what the user just sent.

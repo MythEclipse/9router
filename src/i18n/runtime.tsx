@@ -1,6 +1,6 @@
 "use client";
 
-import { DEFAULT_LOCALE, LOCALE_COOKIE, normalizeLocale } from "./config";
+import { DEFAULT_LOCALE, LOCALE_COOKIE, normalizeLocale } from "./config.ts";
 
 let translationMap = {};
 let currentLocale = DEFAULT_LOCALE;

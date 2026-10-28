@@ -31,18 +31,18 @@ import {
   toArgumentsString,
   stripRanges,
   getToolNonce,
-} from "./webTools";
+} from "./webTools.ts";
 import {
   asRecord,
   finalizeBoundCalls,
   finalizeParsedToolCalls,
   validateToolArguments,
-} from "./deepseekWebToolBinding";
+} from "./deepseekWebToolBinding.ts";
 
 export {
   hasMalformedDeepSeekToolIntent,
   hasMalformedDeepSeekToolMarkup,
-} from "./deepseekWebToolBinding";
+} from "./deepseekWebToolBinding.ts";
 
 // ── Stricter, compact tool-use prompt ───────────────────────────────────────
 

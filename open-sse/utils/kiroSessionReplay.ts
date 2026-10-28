@@ -1,5 +1,5 @@
-import { MEMORY_CONFIG } from "../config/runtimeConfig";
-import type { KiroTurn } from "../translator/concerns/kiroConversation";
+import { MEMORY_CONFIG } from "../config/runtimeConfig.ts";
+import type { KiroTurn } from "../translator/concerns/kiroConversation.ts";
 
 const sessionStartStore = new Map();
 const MAX_SESSION_STARTS = 5000;

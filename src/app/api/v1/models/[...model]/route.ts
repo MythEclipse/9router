@@ -1,4 +1,4 @@
-import { buildModelsList } from "../route";
+import { buildModelsList } from "../route.ts";
 import { getKeyAccessContext, filterModelsListForKey } from "@/sse/services/keyAccess";
 
 export const dynamic = "force-dynamic";

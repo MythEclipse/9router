@@ -7,18 +7,18 @@ import {
   apiKeyGateFailure,
   isValidApiKey,
   shouldLogAuthFailure,
-} from "../services/auth";
+} from "../services/auth.ts";
 import { getSettings, getCombos } from "@/lib/localDb";
 import { getClientIp } from "@/lib/auth/loginLimiter";
 import { AI_PROVIDERS, resolveProviderId } from "@/shared/constants/providers";
 import { handleSearchCore } from "open-sse/handlers/search/index";
 import { errorResponse } from "open-sse/utils/error";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig";
-import * as log from "../utils/logger";
-import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh";
+import * as log from "../utils/logger.ts";
+import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh.ts";
 import { handleComboChat, getComboModelsFromData } from "open-sse/services/combo";
-import { getKeyAccessContext, enforceKeyAccessProvider } from "../services/keyAccess";
-import { unavailableCredentialResponse } from "../services/accountFallbackLoop";
+import { getKeyAccessContext, enforceKeyAccessProvider } from "../services/keyAccess.ts";
+import { unavailableCredentialResponse } from "../services/accountFallbackLoop.ts";
 
 /** The error arm of a searchCore result. */
 interface SearchFailure {

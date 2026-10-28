@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { TUNNEL_DIR, ensureTunnelDir } from "../shared/state";
+import { TUNNEL_DIR, ensureTunnelDir } from "../shared/state.ts";
 
 const PID_FILE = path.join(TUNNEL_DIR, "cloudflared.pid");
 

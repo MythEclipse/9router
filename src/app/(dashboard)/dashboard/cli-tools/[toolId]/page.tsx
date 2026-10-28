@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { CLI_TOOLS } from "@/shared/constants/cliTools";
 import { getMachineId } from "@/shared/utils/machine";
-import ToolDetailClient from "./ToolDetailClient";
+import ToolDetailClient from "./ToolDetailClient.tsx";
 
 export default async function ToolDetailPage({ params }) {
   const { toolId } = await params;

@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { GLM_OAUTH_CONFIG } from "../constants/oauth";
+import { GLM_OAUTH_CONFIG } from "../constants/oauth.ts";
 
 // Zai GLM Coding OAuth - CLI polling flow (mirrors the official
 // ZCode CLI, apps/zcode-cli packages/adapters/src/auth/cli-oauth.ts +

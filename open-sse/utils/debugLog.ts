@@ -1,6 +1,6 @@
 // Debug logging utility - only active in dev mode (NODE_ENV !== "production")
 // Outputs are tagged with [DBG:tag] for easy grep/filter
-import { formatClockTime } from "./timeFormat";
+import { formatClockTime } from "./timeFormat.ts";
 
 const isDev = process.env.NODE_ENV !== "production";
 

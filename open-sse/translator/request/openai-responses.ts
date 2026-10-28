@@ -4,16 +4,16 @@
  * Responses API uses: { input: [...], instructions: "..." }
  * Chat API uses: { messages: [...] }
  */
-import { register } from "../index";
-import { FORMATS } from "../formats";
+import { register } from "../index.ts";
+import { FORMATS } from "../formats.ts";
 import {
   normalizeResponsesInput,
   clampResponsesCallId,
   coerceResponsesArguments,
   coerceResponsesOutput,
-} from "../formats/responsesApi";
-import { ROLE, OPENAI_BLOCK, RESPONSES_ITEM } from "../schema/index";
-import { MAX_TOOL_NAME_LEN } from "../../config/runtimeConfig";
+} from "../formats/responsesApi.ts";
+import { ROLE, OPENAI_BLOCK, RESPONSES_ITEM } from "../schema/index.ts";
+import { MAX_TOOL_NAME_LEN } from "../../config/runtimeConfig.ts";
 
 
 /**

@@ -10,9 +10,9 @@
  * treated as the full amount and the usage bar stays at 100%.
  */
 
-import { fetchWithTimeout, toFiniteNumber } from "./shared";
-import type { UsageProviderData } from "./shared";
-import type { ProxyOptions } from "../../types";
+import { fetchWithTimeout, toFiniteNumber } from "./shared.ts";
+import type { UsageProviderData } from "./shared.ts";
+import type { ProxyOptions } from "../../types.ts";
 
 const DEFAULT_QUOTA_PATH = "/credits";
 const CUSTOM_COMPATIBLE_PREFIXES = ["openai-compatible-", "anthropic-compatible-"];

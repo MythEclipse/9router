@@ -15,7 +15,7 @@
 
 import {
   NO_RETRY_EMPTY_FINISH, OPENAI_FINISH, RESPONSES_STATUS, RESPONSES_INCOMPLETE_REASON,
-} from "../translator/schema/finishReasons";
+} from "../translator/schema/finishReasons.ts";
 import {
   CLAUDE_BLOCK,
   RESPONSES_ITEM,
@@ -23,11 +23,11 @@ import {
   CLAUDE_DELTA,
   RESPONSES_EVENT,
   RESPONSES_EVENT_PREFIX,
-} from "../translator/schema/blocks";
-import { toOpenAIFinish } from "../translator/concerns/finishReason";
-import { FORMATS } from "../translator/formats";
-import { EMPTY_PEEK_DEADLINE_MS } from "../config/runtimeConfig";
-import { parseSSELine } from "../utils/streamHelpers";
+} from "../translator/schema/blocks.ts";
+import { toOpenAIFinish } from "../translator/concerns/finishReason.ts";
+import { FORMATS } from "../translator/formats.ts";
+import { EMPTY_PEEK_DEADLINE_MS } from "../config/runtimeConfig.ts";
+import { parseSSELine } from "../utils/streamHelpers.ts";
 
 // OpenAI chat content test. A chunk counts as content only if it carries
 // assistant output the caller can consume:

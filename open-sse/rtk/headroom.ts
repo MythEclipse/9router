@@ -1,10 +1,10 @@
-import { FORMATS } from "../translator/formats";
-import { ROLE, OPENAI_BLOCK, COMMANDCODE_BLOCK, RESPONSES_ITEM } from "../translator/schema/index";
-import { HEADROOM_TOOL_OUTPUT_MAX_DEPTH } from "./constants";
+import { FORMATS } from "../translator/formats.ts";
+import { ROLE, OPENAI_BLOCK, COMMANDCODE_BLOCK, RESPONSES_ITEM } from "../translator/schema/index.ts";
+import { HEADROOM_TOOL_OUTPUT_MAX_DEPTH } from "./constants.ts";
 import {
   openaiResponsesToOpenAIRequest,
   openaiToOpenAIResponsesRequest,
-} from "../translator/request/openai-responses";
+} from "../translator/request/openai-responses.ts";
 
 const DEFAULT_TIMEOUT_MS = 3000;
 

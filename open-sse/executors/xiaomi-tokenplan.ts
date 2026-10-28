@@ -1,5 +1,5 @@
-import { DefaultExecutor } from "./default";
-import { resolveXiaomiTokenplanBaseUrl } from "../config/providers";
+import { DefaultExecutor } from "./default.ts";
+import { resolveXiaomiTokenplanBaseUrl } from "../config/providers.ts";
 // import { getModelTargetFormat } from "../config/providerModels";
 // import { FORMATS } from "../translator/formats";
 

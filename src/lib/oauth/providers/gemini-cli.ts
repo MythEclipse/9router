@@ -1,4 +1,4 @@
-import { GEMINI_CONFIG, getOAuthClientMetadata } from "../constants/oauth";
+import { GEMINI_CONFIG, getOAuthClientMetadata } from "../constants/oauth.ts";
 
 const geminiCli = {
   config: GEMINI_CONFIG,

@@ -1,5 +1,5 @@
-import { WINDSURF_CONFIG } from "../constants/oauth";
-import { extractJsonPath } from "./_shared";
+import { WINDSURF_CONFIG } from "../constants/oauth.ts";
+import { extractJsonPath } from "./_shared.ts";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Windsurf OAuth helpers

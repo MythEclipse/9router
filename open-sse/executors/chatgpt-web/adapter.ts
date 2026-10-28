@@ -9,15 +9,15 @@ import { createHash, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
-import { acquireBrowserContext, openPage } from "../../services/browserPool";
+import { acquireBrowserContext, openPage } from "../../services/browserPool.ts";
 import {
   extractChatGptWebAttachmentSources,
   isChatGptWebAttachmentContentPart,
   resolveChatGptWebAttachments,
-} from "./attachments";
-import { PlaywrightChatGptWebBrowserSession, runChatGptWebBrowserTurn } from "./browserSession";
-import { prepareToolMessages } from "../../translator/webTools";
-import { buildToolModeResponse } from "../chatgptWebTools";
+} from "./attachments.ts";
+import { PlaywrightChatGptWebBrowserSession, runChatGptWebBrowserTurn } from "./browserSession.ts";
+import { prepareToolMessages } from "../../translator/webTools.ts";
+import { buildToolModeResponse } from "../chatgptWebTools.ts";
 
 const CHATGPT_WEB_PAGE_URL = "https://chatgpt.com/?temporary-chat=true";
 const MAX_PROMPT_BYTES = 4 * 1024 * 1024;

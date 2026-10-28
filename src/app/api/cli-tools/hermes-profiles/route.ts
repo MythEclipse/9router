@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listProfiles } from "../hermes-settings/hermesProfiles";
+import { listProfiles } from "../hermes-settings/hermesProfiles.ts";
 
 export const dynamic = "force-dynamic";
 

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import Card from "./Card";
+import Card from "./Card.tsx";
 
 // Only show fields user actually cares about
 type ProviderInfoValue = string | number | readonly string[];

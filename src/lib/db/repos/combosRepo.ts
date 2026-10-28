@@ -1,8 +1,8 @@
 import { v4 as uuidv4 } from "uuid";
-import { getAdapter } from "../driver";
-import { parseJson, stringifyJson } from "../helpers/jsonCol";
+import { getAdapter } from "../driver.ts";
+import { parseJson, stringifyJson } from "../helpers/jsonCol.ts";
 import { normalizeAllowList } from "@/shared/utils/keyAccess";
-import { invalidateApiKeyCache } from "./apiKeysRepo";
+import { invalidateApiKeyCache } from "./apiKeysRepo.ts";
 
 function rowToCombo(row) {
   if (!row) return null;

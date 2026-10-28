@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
-import { PRAGMA_SQL } from "../schema";
-import type { ResolvedDbAdapter } from "../types";
+import { PRAGMA_SQL } from "../schema.ts";
+import type { ResolvedDbAdapter } from "../types.ts";
 
 // Periodic checkpoint to keep WAL file small (avoid huge -wal/-shm growth)
 const CHECKPOINT_INTERVAL_MS = 60 * 1000;

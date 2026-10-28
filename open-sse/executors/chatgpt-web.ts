@@ -5,16 +5,16 @@
 // turn runs over the direct /f/conversation SSE path. Tools are not supported
 // (the adapter rejects them upstream, matching the current upstream protocol).
 
-import { BaseExecutor } from "./base";
+import { BaseExecutor } from "./base.ts";
 import { randomUUID } from "node:crypto";
-import { executeChatGptWebCleanRoom, createDefaultSession, readStorageState, resolveChatGptWebChromeExecutable, buildChatGptWebOpenAiResponse } from "./chatgpt-web/adapter";
-import { generateChatGptWebImage } from "./chatgpt-web/imageGen";
-import { generateChatGptWebImageHttp, cookieHeader } from "./chatgpt-web/imageGenHttp";
-import { runChatGptWebHttpTurn } from "./chatgpt-web/chatHttp";
-import { buildToolModeResponse } from "./chatgptWebTools";
-import { isMissingBrowserExecutable } from "./browserExecutableCheck";
+import { executeChatGptWebCleanRoom, createDefaultSession, readStorageState, resolveChatGptWebChromeExecutable, buildChatGptWebOpenAiResponse } from "./chatgpt-web/adapter.ts";
+import { generateChatGptWebImage } from "./chatgpt-web/imageGen.ts";
+import { generateChatGptWebImageHttp, cookieHeader } from "./chatgpt-web/imageGenHttp.ts";
+import { runChatGptWebHttpTurn } from "./chatgpt-web/chatHttp.ts";
+import { buildToolModeResponse } from "./chatgptWebTools.ts";
+import { isMissingBrowserExecutable } from "./browserExecutableCheck.ts";
 
-export { isMissingBrowserExecutable } from "./browserExecutableCheck";
+export { isMissingBrowserExecutable } from "./browserExecutableCheck.ts";
 
 const CHATGPT_WEB_URL = "https://chatgpt.com";
 const DEFAULT_USER_AGENT =

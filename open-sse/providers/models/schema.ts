@@ -1,4 +1,4 @@
-import { deriveModelName } from "./namePatterns";
+import { deriveModelName } from "./namePatterns.ts";
 
 // Normalize version separators in a model id: hyphen between two digits becomes a dot.
 // Registry ids use dots for versions ("claude-sonnet-4.5") but clients (CLIs, aliases)

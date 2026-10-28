@@ -2,9 +2,9 @@
 
 import { useSyncExternalStore, useState } from "react";
 import Image from "next/image";
-import Modal from "./Modal";
-import Button from "./Button";
-import ChangelogModal from "./ChangelogModal";
+import Modal from "./Modal.tsx";
+import Button from "./Button.tsx";
+import ChangelogModal from "./ChangelogModal.tsx";
 import { GITHUB_CONFIG } from "@/shared/constants/config";
 
 // Post-login welcome dialog.

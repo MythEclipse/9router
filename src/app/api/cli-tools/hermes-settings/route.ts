@@ -24,8 +24,8 @@ import {
   is9RouterStt,
   upsertStt9Router,
   removeStt9Router,
-} from "./hermesYaml";
-import { resolveHermesHome, listProfiles, dirExists } from "./hermesProfiles";
+} from "./hermesYaml.ts";
+import { resolveHermesHome, listProfiles, dirExists } from "./hermesProfiles.ts";
 
 export const dynamic = "force-dynamic";
 

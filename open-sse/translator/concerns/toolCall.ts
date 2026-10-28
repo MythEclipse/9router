@@ -1,6 +1,6 @@
 // Tool call helper functions for translator
 
-import { FORMATS } from "../formats";
+import { FORMATS } from "../formats.ts";
 
 // Anthropic tool_use.id must match: ^[a-zA-Z0-9_-]+$
 const TOOL_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;

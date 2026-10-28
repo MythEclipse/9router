@@ -1,19 +1,19 @@
 // Public API barrel - all DB functions
-import { getAdapter } from "./driver";
-import { stringifyJson, parseJson } from "./helpers/jsonCol";
-import { invalidateSettingsCache } from "./repos/settingsRepo";
-import { invalidatePricingCache } from "./repos/pricingRepo";
-import { invalidateApiKeyCache } from "./repos/apiKeysRepo";
-import { invalidateNodeCache } from "./repos/nodesRepo";
+import { getAdapter } from "./driver.ts";
+import { stringifyJson, parseJson } from "./helpers/jsonCol.ts";
+import { invalidateSettingsCache } from "./repos/settingsRepo.ts";
+import { invalidatePricingCache } from "./repos/pricingRepo.ts";
+import { invalidateApiKeyCache } from "./repos/apiKeysRepo.ts";
+import { invalidateNodeCache } from "./repos/nodesRepo.ts";
 import { keyAccessFromColumns, keyAccessToColumns, validateKeyAccessInput } from "@/shared/utils/keyAccess";
 import { KEY_ACCESS_UNRESTRICTED } from "@/shared/constants/keyAccess";
 import { normalizeAllowedEndpoints } from "@/shared/constants/keyEndpoints";
-import { sectionsPresent } from "./restoreSections";
+import { sectionsPresent } from "./restoreSections.ts";
 
 // Settings
 export {
   getSettings, updateSettings, isCloudEnabled, getCloudUrl, exportSettings,
-} from "./repos/settingsRepo";
+} from "./repos/settingsRepo.ts";
 
 // Provider connections
 export {
@@ -21,54 +21,54 @@ export {
   createProviderConnection, updateProviderConnection,
   deleteProviderConnection, deleteProviderConnectionsByProvider,
   reorderProviderConnections, cleanupProviderConnections,
-} from "./repos/connectionsRepo";
+} from "./repos/connectionsRepo.ts";
 
 // Provider nodes
 export {
   getProviderNodes, getProviderNodeById,
   createProviderNode, updateProviderNode, deleteProviderNode,
-} from "./repos/nodesRepo";
+} from "./repos/nodesRepo.ts";
 
 // Proxy pools
 export {
   getProxyPools, getProxyPoolById,
   createProxyPool, updateProxyPool, deleteProxyPool,
   deleteProxyPools,
-} from "./repos/proxyPoolsRepo";
+} from "./repos/proxyPoolsRepo.ts";
 
 // API keys
 export {
   getApiKeys, getApiKeyById, getApiKeyByKey, createApiKey, updateApiKey, deleteApiKey, validateApiKey, recordApiKeyUsageInWindow,
-} from "./repos/apiKeysRepo";
+} from "./repos/apiKeysRepo.ts";
 
 // Combos
 export {
   getCombos, getComboById, getComboByName,
   createCombo, updateCombo, deleteCombo,
-} from "./repos/combosRepo";
+} from "./repos/combosRepo.ts";
 
 // Aliases (model + custom + mitm)
 export {
   getModelAliases, setModelAlias, deleteModelAlias,
   getCustomModels, addCustomModel, deleteCustomModel,
   getMitmAlias, setMitmAliasAll,
- } from "./repos/aliasRepo";
+ } from "./repos/aliasRepo.ts";
 
  // Model overrides + custom model (studio) virtual models
 export {
   getStudioModels, getStudioModel, setStudioModel, deleteStudioModel,
   getModelOverrides, setModelOverride, deleteModelOverride,
-} from "./repos/modelEditorRepo";
+} from "./repos/modelEditorRepo.ts";
 
 // Pricing
 export {
   getPricing, getPricingForModel, updatePricing, resetPricing, resetAllPricing,
-} from "./repos/pricingRepo";
+} from "./repos/pricingRepo.ts";
 
 // Disabled models
 export {
   getDisabledModels, getDisabledByProvider, disableModels, enableModels,
-} from "./repos/disabledModelsRepo";
+} from "./repos/disabledModelsRepo.ts";
 
 // Usage
 export {
@@ -76,17 +76,17 @@ export {
   saveRequestUsage, getUsageHistory, getUsageStats, getChartData,
   getSparks, flushDayRollup,
   appendRequestLog, getRecentLogs,
-} from "./repos/usageRepo";
+} from "./repos/usageRepo.ts";
 
 // Request details
 export {
   saveRequestDetail, getRequestDetails, getRequestDetailById, getDistinctProviders,
-} from "./repos/requestDetailsRepo";
+} from "./repos/requestDetailsRepo.ts";
 
 // Error Logs
 export {
   recordErrorLog, getErrorLogs, clearErrorLogs,
-} from "./repos/errorLogRepo";
+} from "./repos/errorLogRepo.ts";
 
 /** Raw providerConnections row. */
 interface ProviderConnectionRow {
@@ -300,7 +300,7 @@ export interface ImportProgress {
 // Export/import full DB
 export async function exportDb(options: ExportScope = null): Promise<DbExportPayload> {
   const db = await getAdapter();
-  const { exportSettings } = await import("./repos/settingsRepo");
+  const { exportSettings } = await import("./repos/settingsRepo.ts");
 
   const isIncluded = (key: string): boolean => {
     if (!options) return true;

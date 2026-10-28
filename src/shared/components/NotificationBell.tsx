@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import ChangelogModal from "./ChangelogModal";
-import BellMenu from "./BellMenu";
-import NotifToast, { mergeLiveTasks } from "./NotifToast";
+import ChangelogModal from "./ChangelogModal.tsx";
+import BellMenu from "./BellMenu.tsx";
+import NotifToast, { mergeLiveTasks } from "./NotifToast.tsx";
 import { useSessionStore } from "@/store/sessionStore";
 import { useTaskStore } from "@/store/taskStore";
 

@@ -4,7 +4,7 @@
 // Independent of the built-in savers (caveman, ponytail): it has its own toggle
 // and text, so it works whether or not those are enabled.
 
-import { injectSystemPrompt } from "./systemInject";
+import { injectSystemPrompt } from "./systemInject.ts";
 
 export function injectCustomPrompt(body, format, text) {
   if (typeof text !== "string" || !text.trim()) return false;

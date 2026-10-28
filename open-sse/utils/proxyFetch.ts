@@ -1,7 +1,7 @@
-import { normalizeConfigString as normalizeString } from "../../src/lib/network/normalizeConfigString";
+import { normalizeConfigString as normalizeString } from "../../src/lib/network/normalizeConfigString.ts";
 import { Readable } from "stream";
-import { MEMORY_CONFIG } from "../config/runtimeConfig";
-import { dbg } from "./debugLog";
+import { MEMORY_CONFIG } from "../config/runtimeConfig.ts";
+import { dbg } from "./debugLog.ts";
 
 const originalFetch = globalThis.fetch;
 const proxyDispatchers = new Map();

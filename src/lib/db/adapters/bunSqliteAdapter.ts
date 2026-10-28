@@ -1,7 +1,7 @@
 // Bun runtime adapter - uses built-in bun:sqlite (native, fastest under Bun).
 // Loaded only when process.versions.bun is present.
-import { PRAGMA_SQL } from "../schema";
-import type { ResolvedDbAdapter } from "../types";
+import { PRAGMA_SQL } from "../schema.ts";
+import type { ResolvedDbAdapter } from "../types.ts";
 
 const CHECKPOINT_INTERVAL_MS = 60 * 1000;
 

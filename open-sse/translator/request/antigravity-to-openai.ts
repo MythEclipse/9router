@@ -1,10 +1,10 @@
-import { register } from "../index";
-import { FORMATS } from "../formats";
-import { adjustMaxTokens } from "../formats/maxTokens";
-import { encodeDataUri } from "../concerns/image";
-import { ROLE, GEMINI_ROLE, OPENAI_BLOCK } from "../schema/index";
-import { budgetToEffort } from "../concerns/thinking";
-import { collapseTextParts } from "../concerns/message";
+import { register } from "../index.ts";
+import { FORMATS } from "../formats.ts";
+import { adjustMaxTokens } from "../formats/maxTokens.ts";
+import { encodeDataUri } from "../concerns/image.ts";
+import { ROLE, GEMINI_ROLE, OPENAI_BLOCK } from "../schema/index.ts";
+import { budgetToEffort } from "../concerns/thinking.ts";
+import { collapseTextParts } from "../concerns/message.ts";
 
 // Convert Antigravity request to OpenAI format
 // Antigravity body: { project, model, userAgent, requestType, requestId, request: { contents, systemInstruction, tools, toolConfig, generationConfig, sessionId } }

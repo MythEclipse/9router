@@ -1,6 +1,6 @@
 import { platform, arch, hostname } from "os";
-import { PROVIDERS, PROVIDER_OAUTH } from "./providers";
-import { ANTIGRAVITY_IDE_USER_AGENT } from "../providers/shared";
+import { PROVIDERS, PROVIDER_OAUTH } from "./providers.ts";
+import { ANTIGRAVITY_IDE_USER_AGENT } from "../providers/shared.ts";
 import packageJson from "../../package.json";
 
 // Nous Portal requires attribution for some API-key models. Use a neutral

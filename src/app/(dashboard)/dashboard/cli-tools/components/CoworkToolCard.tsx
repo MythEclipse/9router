@@ -3,9 +3,9 @@
 import { useState, useEffect, useRef } from "react";
 import { Card, Button, ManualConfigModal, ComboFormModal, McpMarketplaceModal, ModelSelectModal } from "@/shared/components";
 import Image from "next/image";
-import BaseUrlSelect from "./BaseUrlSelect";
-import { rememberEndpoint } from "./cliEndpointPresets";
-import ApiKeySelect from "./ApiKeySelect";
+import BaseUrlSelect from "./BaseUrlSelect.tsx";
+import { rememberEndpoint } from "./cliEndpointPresets.ts";
+import ApiKeySelect from "./ApiKeySelect.tsx";
 import { DEFAULT_LOCAL_API_KEY } from "@/shared/constants/config";
 
 const ENDPOINT = "/api/cli-tools/cowork-settings";

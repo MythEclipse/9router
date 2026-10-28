@@ -1,16 +1,16 @@
-import { translateResponse, initState } from "../translator/index";
-import { indexDeclaredTools, rescueStreamedNames } from "../translator/concerns/toolCallRescue";
-import { FORMATS } from "../translator/formats";
-import { HTTP_STATUS } from "../config/runtimeConfig";
-import { PROVIDERS } from "../config/providers";
-import { liftReasoningAliases } from "../translator/concerns/reasoning";
+import { translateResponse, initState } from "../translator/index.ts";
+import { indexDeclaredTools, rescueStreamedNames } from "../translator/concerns/toolCallRescue.ts";
+import { FORMATS } from "../translator/formats.ts";
+import { HTTP_STATUS } from "../config/runtimeConfig.ts";
+import { PROVIDERS } from "../config/providers.ts";
+import { liftReasoningAliases } from "../translator/concerns/reasoning.ts";
 import { trackPendingRequest, appendRequestLog } from "@/lib/usageDb";
-import { extractUsage, mergeUsage, hasValidUsage, estimateUsage, logUsage, addBufferToUsage, filterUsageForFormat, COLORS } from "./usageTracking";
-import { parseSSELine, hasValuableContent, fixInvalidId, formatSSE, ensureStreamToolCallIds, buildStreamErrorBytes } from "./streamHelpers";
-import { restoreToolNames } from "./opencodeFingerprint";
-import { getOpenAIResponsesEventName, isOpenAIResponsesTerminalEvent, formatIncompleteOpenAIResponsesStreamFailure } from "./responsesStreamHelpers";
-import { dbg, isDebugEnabled } from "./debugLog";
-import { applyModelAlias } from "./modelAlias";
+import { extractUsage, mergeUsage, hasValidUsage, estimateUsage, logUsage, addBufferToUsage, filterUsageForFormat, COLORS } from "./usageTracking.ts";
+import { parseSSELine, hasValuableContent, fixInvalidId, formatSSE, ensureStreamToolCallIds, buildStreamErrorBytes } from "./streamHelpers.ts";
+import { restoreToolNames } from "./opencodeFingerprint.ts";
+import { getOpenAIResponsesEventName, isOpenAIResponsesTerminalEvent, formatIncompleteOpenAIResponsesStreamFailure } from "./responsesStreamHelpers.ts";
+import { dbg, isDebugEnabled } from "./debugLog.ts";
+import { applyModelAlias } from "./modelAlias.ts";
 import type {
   ChatRequestBody,
   Credentials,
@@ -19,9 +19,9 @@ import type {
   StreamRequestLogger,
   StreamState,
   TokenUsage,
-} from "../types";
+} from "../types.ts";
 
-import { SSE_DONE, SSE_HEADERS, SSE_HEADERS_NO_BUFFER, SSE_DATA_PREFIX, SSE_DONE_DATA } from "./sseConstants";
+import { SSE_DONE, SSE_HEADERS, SSE_HEADERS_NO_BUFFER, SSE_DATA_PREFIX, SSE_DONE_DATA } from "./sseConstants.ts";
 
 export { COLORS, formatSSE };
 export { SSE_DONE, SSE_HEADERS, SSE_HEADERS_NO_BUFFER };

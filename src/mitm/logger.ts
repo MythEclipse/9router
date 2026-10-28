@@ -1,8 +1,8 @@
 import fs from "fs";
 import path from "path";
 import zlib from "zlib";
-import { DATA_DIR } from "./paths";
-import { LOG_BLACKLIST_URL_PARTS } from "./config";
+import { DATA_DIR } from "./paths.ts";
+import { LOG_BLACKLIST_URL_PARTS } from "./config.ts";
 
 function time() {
   return new Date().toLocaleTimeString("en-US", { hour12: false });

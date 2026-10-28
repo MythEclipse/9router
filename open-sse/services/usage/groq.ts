@@ -12,8 +12,8 @@
  * Docs: https://console.groq.com/docs/rate-limits
  */
 
-import { proxyAwareFetch } from "../../utils/proxyFetch";
-import { U } from "./shared";
+import { proxyAwareFetch } from "../../utils/proxyFetch.ts";
+import { U } from "./shared.ts";
 
 const MODELS_URL = U("groq").url;
 

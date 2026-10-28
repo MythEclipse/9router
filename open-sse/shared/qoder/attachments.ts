@@ -15,18 +15,18 @@
 import { createHash } from "crypto";
 import { v4 as uuidv4 } from "uuid";
 
-import type { Credentials, EngineLogger, ProxyOptions } from "../../types";
-import { proxyAwareFetch } from "../../utils/proxyFetch";
-import { parseDataUri } from "../../translator/concerns/image";
-import { OPENAI_BLOCK, CLAUDE_BLOCK } from "../../translator/schema/blocks";
-import { MAX_IMAGE_BYTES } from "../../config/mediaConfig";
-import { buildCosyHeaders } from "./cosy";
+import type { Credentials, EngineLogger, ProxyOptions } from "../../types.ts";
+import { proxyAwareFetch } from "../../utils/proxyFetch.ts";
+import { parseDataUri } from "../../translator/concerns/image.ts";
+import { OPENAI_BLOCK, CLAUDE_BLOCK } from "../../translator/schema/blocks.ts";
+import { MAX_IMAGE_BYTES } from "../../config/mediaConfig.ts";
+import { buildCosyHeaders } from "./cosy.ts";
 import {
   QODER_IMAGE_UPLOAD_SIG_PATH,
   QODER_INLINE_FALLBACK_MAX_BYTES,
   QODER_MAX_PAYLOAD_BYTES,
   qoderInferenceBase,
-} from "./constants";
+} from "./constants.ts";
 
 const IMAGE_MIME_RE = /^image\//i;
 const DATA_URI_RE = /data:[^;]+;base64,[A-Za-z0-9+/=\s]+/g;

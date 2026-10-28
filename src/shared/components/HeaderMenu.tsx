@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import ChangelogModal from "./ChangelogModal";
-import { ConfirmModal } from "./Modal";
-import ThemeModal from "./ThemeModal";
+import ChangelogModal from "./ChangelogModal.tsx";
+import { ConfirmModal } from "./Modal.tsx";
+import ThemeModal from "./ThemeModal.tsx";
 import { useSessionStore } from "@/store/sessionStore";
 
 interface MenuItemProps {

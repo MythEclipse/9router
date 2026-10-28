@@ -16,7 +16,7 @@
 // The key "abc" was typed as a throwaway for a LOCAL server and left the network.
 // A self-hosted provider must never have a cloud fallback, so this one refuses
 // instead: no baseUrl means a configuration error, reported as such.
-import createOpenAIEmbeddingAdapter from "./openai";
+import createOpenAIEmbeddingAdapter from "./openai.ts";
 
 const baseAdapter = createOpenAIEmbeddingAdapter("openai");
 

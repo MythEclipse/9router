@@ -4,7 +4,7 @@ import "open-sse/index";
 import { getProviderConnectionById } from "@/lib/localDb";
 import { consumeCodexRateLimitResetCredit, getCodexRateLimitResetCredits } from "open-sse/services/usage";
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy";
-import { refreshAndUpdateCredentials } from "../route";
+import { refreshAndUpdateCredentials } from "../route.ts";
 
 export const dynamic = "force-dynamic";
 

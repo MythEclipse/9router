@@ -1,5 +1,5 @@
-import { PROVIDERS } from "../config/providers";
-import { OAUTH_ENDPOINTS, REFRESH_LEAD_MS } from "../config/appConstants";
+import { PROVIDERS } from "../config/providers.ts";
+import { OAUTH_ENDPOINTS, REFRESH_LEAD_MS } from "../config/appConstants.ts";
 import {
   refreshXaiToken,
   refreshAccessToken,
@@ -20,7 +20,7 @@ import {
   refreshMiniMaxCodeToken,
   refreshNousToken,
   classifyOAuthRefreshError,
-} from "./tokenRefresh/providers";
+} from "./tokenRefresh/providers.ts";
 
 // Re-export all provider refresh functions (preserves public API for all consumers)
 export {

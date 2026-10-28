@@ -1,6 +1,6 @@
 import crypto from "crypto";
-import { TRAE_CONFIG } from "../constants/oauth";
-import { extractJsonPath } from "./_shared";
+import { TRAE_CONFIG } from "../constants/oauth.ts";
+import { extractJsonPath } from "./_shared.ts";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Trae (ByteDance marscode) OAuth helpers

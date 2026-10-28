@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
-import { getAdapter } from "../driver";
+import { getAdapter } from "../driver.ts";
 import { DEFAULT_PERMISSIONS } from "@/lib/auth/permissionPaths";
 import {
   keyAccessFromColumns,
@@ -7,13 +7,13 @@ import {
   validateKeyAccessInput,
   type KeyAccess,
 } from "@/shared/utils/keyAccess";
-import type { DbRow, ResolvedDbAdapter } from "../types";
+import type { DbRow, ResolvedDbAdapter } from "../types.ts";
 import { normalizeAllowedEndpoints } from "@/shared/constants/keyEndpoints";
 // The allowed-model pattern language lives in a dependency-free module of its own:
 // the request gate, the /v1/models listing and the usage dashboards all read it, and
 // the self-check loads it without dragging in the database driver and uuid. Re-exported
 // here so the existing `from "./apiKeysRepo"` importers are unaffected.
-import { parseAllowedModels, matchesAllowedModels, buildAllowedModelsSql, applyModelChangesToAllowList } from "./allowedModels";
+import { parseAllowedModels, matchesAllowedModels, buildAllowedModelsSql, applyModelChangesToAllowList } from "./allowedModels.ts";
 
 export { parseAllowedModels, matchesAllowedModels, buildAllowedModelsSql };
 

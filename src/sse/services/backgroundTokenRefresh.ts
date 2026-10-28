@@ -1,7 +1,7 @@
 // Background proactive OAuth token refresh - independent of inbound requests.
 // Fail-open everywhere: tick errors and per-connection failures never kill the interval.
 
-import * as log from "../utils/logger";
+import * as log from "../utils/logger.ts";
 import { getRefreshLeadMs } from "open-sse/services/tokenRefresh";
 import { getCredentialExpiryMs } from "open-sse/services/oauthCredentialManager";
 
@@ -74,12 +74,12 @@ export function selectConnectionsNeedingRefresh(connections, nowMs = Date.now())
 
 async function loadActiveConnections() {
   // Dynamic import avoids circular load with db / app graph at module eval time.
-  const { getProviderConnections } = await import("../../lib/db/repos/connectionsRepo");
+  const { getProviderConnections } = await import("../../lib/db/repos/connectionsRepo.ts");
   return getProviderConnections({ isActive: true });
 }
 
 async function refreshOne(connection) {
-  const { checkAndRefreshToken } = await import("./tokenRefresh");
+  const { checkAndRefreshToken } = await import("./tokenRefresh.ts");
   return checkAndRefreshToken(connection.provider, connection, { force: true });
 }
 

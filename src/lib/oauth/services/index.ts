@@ -2,15 +2,15 @@
  * Export all services
  */
 
-export { OAuthService } from "./oauth";
-export { ClaudeService } from "./claude";
-export { CodexService } from "./codex";
-export { GeminiCLIService } from "./gemini";
-export { IFlowService } from "./iflow";
-export { QoderService } from "./qoder";
-export { AntigravityService } from "./antigravity";
-export { OpenAIService } from "./openai";
-export { GitHubService } from "./github";
-export { KiroService } from "./kiro";
-export { CursorService } from "./cursor";
+export { OAuthService } from "./oauth.ts";
+export { ClaudeService } from "./claude.ts";
+export { CodexService } from "./codex.ts";
+export { GeminiCLIService } from "./gemini.ts";
+export { IFlowService } from "./iflow.ts";
+export { QoderService } from "./qoder.ts";
+export { AntigravityService } from "./antigravity.ts";
+export { OpenAIService } from "./openai.ts";
+export { GitHubService } from "./github.ts";
+export { KiroService } from "./kiro.ts";
+export { CursorService } from "./cursor.ts";
 

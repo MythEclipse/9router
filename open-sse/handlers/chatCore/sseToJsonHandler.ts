@@ -1,19 +1,19 @@
-import { attachWebSearchToClaudeBody } from "../webSearchBody";
-import { convertResponsesStreamToJson } from "../../transformer/streamToJsonConverter";
-import { restoreToolNames } from "../../utils/opencodeFingerprint";
-import { createErrorResult } from "../../utils/error";
-import { HTTP_STATUS } from "../../config/runtimeConfig";
-import { FORMATS } from "../../translator/formats";
-import { openAICompletionToClaudeMessage } from "../../translator/concerns/claudeMessage";
-import { PROVIDERS } from "../../config/providers";
-import { buildRequestDetail, extractRequestConfig, saveUsageStats, formatDoneLine } from "./requestDetail";
-import { translateResponse, initState } from "../../translator/index";
-import { toOpenAIFinish } from "../../translator/concerns/finishReason";
-import { collectJsonFrames } from "../../transformer/jsonToStreamConverter";
-import { applyModelAlias, calledModelName } from "../../utils/modelAlias";
-import { applyUsageMultipliers } from "../../utils/usageTracking";
-import { extractReasoningText } from "../../translator/concerns/reasoning";
-import { ROLE, RESPONSES_ITEM, OPENAI_BLOCK, CLAUDE_BLOCK, CLAUDE_EVENT, RESPONSES_EVENT, OPENAI_FINISH, MODEL_FALLBACK } from "../../translator/schema/index";
+import { attachWebSearchToClaudeBody } from "../webSearchBody.ts";
+import { convertResponsesStreamToJson } from "../../transformer/streamToJsonConverter.ts";
+import { restoreToolNames } from "../../utils/opencodeFingerprint.ts";
+import { createErrorResult } from "../../utils/error.ts";
+import { HTTP_STATUS } from "../../config/runtimeConfig.ts";
+import { FORMATS } from "../../translator/formats.ts";
+import { openAICompletionToClaudeMessage } from "../../translator/concerns/claudeMessage.ts";
+import { PROVIDERS } from "../../config/providers.ts";
+import { buildRequestDetail, extractRequestConfig, saveUsageStats, formatDoneLine } from "./requestDetail.ts";
+import { translateResponse, initState } from "../../translator/index.ts";
+import { toOpenAIFinish } from "../../translator/concerns/finishReason.ts";
+import { collectJsonFrames } from "../../transformer/jsonToStreamConverter.ts";
+import { applyModelAlias, calledModelName } from "../../utils/modelAlias.ts";
+import { applyUsageMultipliers } from "../../utils/usageTracking.ts";
+import { extractReasoningText } from "../../translator/concerns/reasoning.ts";
+import { ROLE, RESPONSES_ITEM, OPENAI_BLOCK, CLAUDE_BLOCK, CLAUDE_EVENT, RESPONSES_EVENT, OPENAI_FINISH, MODEL_FALLBACK } from "../../translator/schema/index.ts";
 
 // Frames whose `type` is a provider event name, mapped to the translator format
 // that can decode that event stream into OpenAI chunks.

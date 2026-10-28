@@ -18,8 +18,8 @@ function isLLMProvider(id) {
   if (!p?.serviceKinds) return true;
   return p.serviceKinds.includes("llm");
 }
-import Badge from "./Badge";
-import Card from "./Card";
+import Badge from "./Badge.tsx";
+import Card from "./Card.tsx";
 import OverviewCards from "@/app/(dashboard)/dashboard/usage/components/OverviewCards";
 import { ActivityHeatmap, bucketTimestampsByDowHour } from "@/app/(dashboard)/dashboard/usage/components/UsageChartsBits";
 import KeyQuotaCard from "@/app/(dashboard)/dashboard/usage/components/KeyQuotaCard";

@@ -1,4 +1,4 @@
-import { getCapabilitiesForModel } from "../../providers/capabilities";
+import { getCapabilitiesForModel } from "../../providers/capabilities.ts";
 
 // Strip request params a given provider/model rejects upstream (e.g. HTTP 400).
 // Config-driven: add a rule instead of scattering `delete body.x` across executors.

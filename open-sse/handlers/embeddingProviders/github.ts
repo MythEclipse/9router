@@ -1,7 +1,7 @@
 // GitHub Copilot embeddings — api.githubcopilot.com/embeddings with the short-lived Copilot token.
 // The GitHub Models inference API (models.github.ai) was retired on 2026-07-30.
-import createOpenAIEmbeddingAdapter from "./openai";
-import { GITHUB_COPILOT } from "../../config/appConstants";
+import createOpenAIEmbeddingAdapter from "./openai.ts";
+import { GITHUB_COPILOT } from "../../config/appConstants.ts";
 
 const baseAdapter = createOpenAIEmbeddingAdapter("github");
 

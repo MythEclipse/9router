@@ -1,4 +1,4 @@
-import { SEARXNG_URL } from "../../config/runtimeConfig";
+import { SEARXNG_URL } from "../../config/runtimeConfig.ts";
 
 const Searxng = {
   id: "searxng",

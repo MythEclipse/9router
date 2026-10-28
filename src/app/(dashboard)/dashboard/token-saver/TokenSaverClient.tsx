@@ -9,7 +9,7 @@ import {
   PRUNING_PRESETS,
   CAVEMAN_LEVELS,
   PONYTAIL_LEVELS,
-} from "../endpoint/endpointConstants";
+} from "../endpoint/endpointConstants.ts";
 
 export default function TokenSaverClient() {
   const [contextPruningEnabled, setContextPruningEnabled] = useState(false);

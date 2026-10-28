@@ -1,8 +1,8 @@
-import { register } from "../index";
-import { FORMATS } from "../formats";
-import { DEFAULT_THINKING_AG_SIGNATURE, DEFAULT_THINKING_GEMINI_CLI_SIGNATURE } from "../../config/defaultThinkingSignature";
-import { openaiToClaudeRequestForAntigravity } from "./openai-to-claude";
-import { getGeminiThoughtSignatureSync } from "../../services/thoughtSignatureStore";
+import { register } from "../index.ts";
+import { FORMATS } from "../formats.ts";
+import { DEFAULT_THINKING_AG_SIGNATURE, DEFAULT_THINKING_GEMINI_CLI_SIGNATURE } from "../../config/defaultThinkingSignature.ts";
+import { openaiToClaudeRequestForAntigravity } from "./openai-to-claude.ts";
+import { getGeminiThoughtSignatureSync } from "../../services/thoughtSignatureStore.ts";
 function generateUUID() {
   return crypto.randomUUID();
 }
@@ -17,10 +17,10 @@ import {
   generateProjectId,
   cleanJSONSchemaForAntigravity,
   normalizeGeminiContents
-} from "../formats/gemini";
-import { deriveSessionId, toNumericSessionId } from "../../utils/sessionManager";
-import { ROLE, GEMINI_ROLE, OPENAI_BLOCK, CLAUDE_BLOCK } from "../schema/index";
-import { isGemini4Model } from "../../providers/capabilities";
+} from "../formats/gemini.ts";
+import { deriveSessionId, toNumericSessionId } from "../../utils/sessionManager.ts";
+import { ROLE, GEMINI_ROLE, OPENAI_BLOCK, CLAUDE_BLOCK } from "../schema/index.ts";
+import { isGemini4Model } from "../../providers/capabilities.ts";
 
 // Sanitize function names for Gemini API.
 // Gemini requires: starts with [a-zA-Z_], followed by [a-zA-Z0-9_.:\-], max 64 chars.

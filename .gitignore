@@ -124,3 +124,4 @@ debug.log
 tsc_out.txt
 tsconfig.tsbuildinfo
 eslint.tmp.mjs
+.codebuddy-tools/

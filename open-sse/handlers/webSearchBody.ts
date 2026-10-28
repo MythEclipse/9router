@@ -15,14 +15,14 @@
  * transcript dangling and Claude Code retries the turn forever.
  */
 
-import { buildSearchBlocks, buildSearchErrorBlocks } from "./webSearchBridge";
-import { normalizeToolUseId } from "./webSearchStream";
+import { buildSearchBlocks, buildSearchErrorBlocks } from "./webSearchBridge.ts";
+import { normalizeToolUseId } from "./webSearchStream.ts";
 import {
   SERVER_TOOL_USE_BLOCK,
   WEB_SEARCH_RESULT_BLOCK,
   WEB_SEARCH_TOOL_NAME,
   isClaudeCodeSearchTool,
-} from "../config/webSearchConstants";
+} from "../config/webSearchConstants.ts";
 
 /** True when this assistant turn already carries upstream search output. */
 export function hasUpstreamSearch(content) {

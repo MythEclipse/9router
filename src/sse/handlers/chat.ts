@@ -8,11 +8,11 @@ import {
   extractApiKey,
   isValidApiKey,
   shouldLogAuthFailure,
-} from "../services/auth";
-import { handleAntigravityQuotaError, clearAntigravityStrikes } from "../services/antigravityQuota";
+} from "../services/auth.ts";
+import { handleAntigravityQuotaError, clearAntigravityStrikes } from "../services/antigravityQuota.ts";
 import { getSettings } from "@/lib/localDb";
 import { getClientIp } from "@/lib/auth/loginLimiter";
-import { getModelInfo, getComboModels } from "../services/model";
+import { getModelInfo, getComboModels } from "../services/model.ts";
 import { handleChatCore } from "open-sse/handlers/chatCore";
 import { DEFAULT_HEADROOM_URL } from "@/lib/headroom/detect";
 import { getTransform as getPxpipeTransform } from "@/lib/pxpipe/loader";
@@ -25,15 +25,15 @@ import { handleBypassRequest } from "open-sse/utils/bypassHandler";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig";
 import { OPENCODE_FALLBACK_BUDGET_MS, GENERIC_FALLBACK_BUDGET_MS } from "open-sse/config/errorConfig";
 import { detectFormatByEndpoint } from "open-sse/translator/formats";
-import { isClaudeEndpoint, validateClaudeMessageBody } from "../protocol/claudeValidation";
-import { isResponsesEndpoint, validateResponsesBody } from "../protocol/responsesValidation";
+import { isClaudeEndpoint, validateClaudeMessageBody } from "../protocol/claudeValidation.ts";
+import { isResponsesEndpoint, validateResponsesBody } from "../protocol/responsesValidation.ts";
 import { resolveSessionIdentity } from "open-sse/utils/sessionManager";
-import * as log from "../utils/logger";
-import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh";
+import * as log from "../utils/logger.ts";
+import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh.ts";
 import { getProjectIdForConnection } from "open-sse/services/projectId";
 import { stripModelContextMarker } from "open-sse/utils/modelMarkers";
-import { getKeyAccessContext, enforceKeyAccess, filterAdapterModels } from "../services/keyAccess";
-import { resolveSmartChoice } from "../services/systemoneRouter";
+import { getKeyAccessContext, enforceKeyAccess, filterAdapterModels } from "../services/keyAccess.ts";
+import { resolveSmartChoice } from "../services/systemoneRouter.ts";
 
 /**
  * Build the `onEmptyResponse` callback for a combo run.

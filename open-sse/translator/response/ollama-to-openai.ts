@@ -1,10 +1,10 @@
-import { register } from "../index";
-import { FORMATS } from "../formats";
-import { ROLE, OPENAI_BLOCK, OPENAI_FINISH } from "../schema/index";
-import { buildChunk } from "../concerns/chunk";
-import { toOpenAIUsage } from "../concerns/usage";
-import { fallbackToolCallId } from "../concerns/toolCall";
-import { toOpenAIFinish } from "../concerns/finishReason";
+import { register } from "../index.ts";
+import { FORMATS } from "../formats.ts";
+import { ROLE, OPENAI_BLOCK, OPENAI_FINISH } from "../schema/index.ts";
+import { buildChunk } from "../concerns/chunk.ts";
+import { toOpenAIUsage } from "../concerns/usage.ts";
+import { fallbackToolCallId } from "../concerns/toolCall.ts";
+import { toOpenAIFinish } from "../concerns/finishReason.ts";
 
 /**
  * Convert Ollama NDJSON response to OpenAI SSE format

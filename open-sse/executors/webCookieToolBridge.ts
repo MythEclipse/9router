@@ -32,7 +32,7 @@ const RESULT_MARKER = "<<TOOL_RESULT>>";
 const FENCE_OPEN = "```tool_call";
 const FENCE_CLOSE = "```";
 
-import type { AssistantCompletionMessage } from "../types";
+import type { AssistantCompletionMessage } from "../types.ts";
 
 // ---------------------------------------------------------------- tool schema
 

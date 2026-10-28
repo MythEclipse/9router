@@ -10,9 +10,9 @@ import { Card, Button, Input, Select, Modal, CardSkeleton, Toggle, ConfirmModal,
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 import { nextResetAt, formatDuration } from "@/shared/utils/interval";
 import { useNow } from "@/shared/hooks/useNow";
-import { TUNNEL_BENEFITS } from "./endpointConstants";
-import { useTunnelExposure } from "./useTunnelExposure";
-import ExposureControl, { exposureStateOf } from "./components/ExposureControl";
+import { TUNNEL_BENEFITS } from "./endpointConstants.ts";
+import { useTunnelExposure } from "./useTunnelExposure.ts";
+import ExposureControl, { exposureStateOf } from "./components/ExposureControl.tsx";
 import {
   limitKindOf,
   limitCapOf,
@@ -21,13 +21,13 @@ import {
 
 import { cn } from "@/shared/utils/cn";
 import useSettingsStore from "@/store/settingsStore";
-import EndpointRow from "./components/EndpointRow";
-import BulkEditKeys from "./components/BulkEditKeys";
-import StatusAlert from "./components/StatusAlert";
-import Tooltip from "./components/Tooltip";
-import SecurityWarning from "./components/SecurityWarning";
-import AllowedEndpointControls from "./components/AllowedEndpointControls";
-import { formatTokensNumber, formatLimitValue, limitFieldLabel, limitHint, limitPlaceholder } from "./limitPresentation";
+import EndpointRow from "./components/EndpointRow.tsx";
+import BulkEditKeys from "./components/BulkEditKeys.tsx";
+import StatusAlert from "./components/StatusAlert.tsx";
+import Tooltip from "./components/Tooltip.tsx";
+import SecurityWarning from "./components/SecurityWarning.tsx";
+import AllowedEndpointControls from "./components/AllowedEndpointControls.tsx";
+import { formatTokensNumber, formatLimitValue, limitFieldLabel, limitHint, limitPlaceholder } from "./limitPresentation.ts";
 
 // One budget per key: the owner picks tokens, money or request count, and the UI
 // shows whichever one is selected. All three caps can stay stored so switching

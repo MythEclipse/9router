@@ -6,9 +6,9 @@
 // web session). A probe answers three things — ok / rejected / unknown — so a
 // flaky network never flips a healthy connection to "error".
 import https from "node:https";
-import { extractCookieValue, normalizeSessionCookieHeader } from "../utils/webCookieAuth";
-import { normalizeGeminiValidationCookie } from "../utils/geminiCookies";
-import { grokTlsFetch, GROK_TLS_USER_AGENT } from "./grokTlsClient";
+import { extractCookieValue, normalizeSessionCookieHeader } from "../utils/webCookieAuth.ts";
+import { normalizeGeminiValidationCookie } from "../utils/geminiCookies.ts";
+import { grokTlsFetch, GROK_TLS_USER_AGENT } from "./grokTlsClient.ts";
 
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36";

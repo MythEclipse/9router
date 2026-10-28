@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Modal from "./Modal";
-import Button from "./Button";
-import Badge from "./Badge";
+import Modal from "./Modal.tsx";
+import Button from "./Button.tsx";
+import Badge from "./Badge.tsx";
 
 const QUICK_THRESHOLDS = [60, 70, 75, 80, 85, 90];
 

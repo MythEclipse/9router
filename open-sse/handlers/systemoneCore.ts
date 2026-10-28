@@ -1,8 +1,8 @@
-import { createErrorResult, parseUpstreamError, formatProviderError } from "../utils/error";
-import { HTTP_STATUS, FETCH_CONNECT_TIMEOUT_MS } from "../config/runtimeConfig";
-import { PROVIDER_MEDIA } from "../providers/index";
-import { getModelUpstreamId } from "../config/providerModels";
-import { generateSessionId } from "../executors/opencode-zen";
+import { createErrorResult, parseUpstreamError, formatProviderError } from "../utils/error.ts";
+import { HTTP_STATUS, FETCH_CONNECT_TIMEOUT_MS } from "../config/runtimeConfig.ts";
+import { PROVIDER_MEDIA } from "../providers/index.ts";
+import { getModelUpstreamId } from "../config/providerModels.ts";
+import { generateSessionId } from "../executors/opencode-zen.ts";
 
 const OPENCODE_PROVIDERS = new Set(["opencode", "opencode-zen"]);
 

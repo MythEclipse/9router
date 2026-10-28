@@ -1,5 +1,5 @@
 // OpenRouter TTS - via chat completions + audio modality (SSE stream)
-import { PROVIDER_MEDIA } from "../../providers/index";
+import { PROVIDER_MEDIA } from "../../providers/index.ts";
 
 const TTS_CFG = PROVIDER_MEDIA["openrouter"]?.ttsConfig || {};
 

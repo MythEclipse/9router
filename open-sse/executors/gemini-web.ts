@@ -19,7 +19,7 @@
 //    into standard tool_calls (see webCookieToolBridge.js). Previously this
 //    executor answered 400 "Gemini Web does not support OpenAI function tools".
 
-import { BaseExecutor } from "./base";
+import { BaseExecutor } from "./base.ts";
 import { createHash } from "node:crypto";
 import {
   buildToolInstructions,
@@ -29,7 +29,7 @@ import {
   hasTools,
   parseToolCallReply,
   renderToolTranscript,
-} from "./webCookieToolBridge";
+} from "./webCookieToolBridge.ts";
 
 const GEMINI_URL = "https://gemini.google.com/app";
 const STREAM_URL = "https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate";

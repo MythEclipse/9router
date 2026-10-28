@@ -1,7 +1,7 @@
 // PXPIPE: render bulky Claude-format context as dense PNGs via pxpipe-proxy's
 // library API (transformAnthropicMessages). Fail-open like every token saver:
 // any error/timeout returns { body: null, summary } and leaves the request untouched.
-import { FORMATS } from "../translator/formats";
+import { FORMATS } from "../translator/formats.ts";
 
 const DEFAULT_TIMEOUT_MS = 15000;
 const DEFAULT_MIN_CHARS = 25000;

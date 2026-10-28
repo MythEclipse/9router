@@ -1,9 +1,9 @@
-import { register } from "../index";
-import { FORMATS } from "../formats";
-import { adjustMaxTokens } from "../formats/maxTokens";
-import { encodeDataUri } from "../concerns/image";
-import { ROLE, OPENAI_BLOCK, CLAUDE_BLOCK } from "../schema/index";
-import { collapseTextParts } from "../concerns/message";
+import { register } from "../index.ts";
+import { FORMATS } from "../formats.ts";
+import { adjustMaxTokens } from "../formats/maxTokens.ts";
+import { encodeDataUri } from "../concerns/image.ts";
+import { ROLE, OPENAI_BLOCK, CLAUDE_BLOCK } from "../schema/index.ts";
+import { collapseTextParts } from "../concerns/message.ts";
 
 function stripAnthropicBillingHeader(text) {
   if (typeof text !== "string") return "";
