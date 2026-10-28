@@ -1,5 +1,7 @@
 # Unreleased
 
+- Default dashboard password is now `123456` (was `seren123`). Changed in the login route, the session helper, the first-time password guard in `PATCH /api/settings`, the login page hint, and the CLI `Reset Password to Default` menu. Password reset still clears the stored hash, so a reset account falls back to this value.
+
 - Added **Copy Full** to each combo card on the Combos page: duplicates the combo's models, kind, context window and routing strategy under the first free `<name>-N` name (`probe` → `probe-1`, `probe-2`, …), like copying a file. `POST /api/combos/[id]/duplicate` owns the name so combos hidden by the page's LLM-only filter still count as taken.
 
 - Split OpenCode Free into a fetch-backed `opencode`/`oc1` provider and a CLI/native-session `opencode-v2`/`oc2` provider. The fetch route uses OpenCode-compatible TLS transport when available and retains the configured proxy path.
