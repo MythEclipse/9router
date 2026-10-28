@@ -15,10 +15,22 @@ export function copyStandaloneAssets({
 	}
 
 	const buildDir = resolve(projectRoot, distDir)
-	const standaloneDir = resolve(buildDir, "standalone")
+	const standaloneRoot = resolve(buildDir, "standalone")
 
-	if (!existsSync(standaloneDir)) {
-		console.log(`[standalone-assets] No standalone build found at ${standaloneDir}`)
+	if (!existsSync(standaloneRoot)) {
+		console.log(`[standalone-assets] No standalone build found at ${standaloneRoot}`)
+		return
+	}
+
+	// `outputFileTracingRoot` is the workspace root, so `next build` mirrors the
+	// repository layout inside `standalone/`: the app lands in
+	// `standalone/apps/web`, not in `standalone/` itself. Staging into
+	// `standalone/` would put src/ and scripts/ beside that directory, where the
+	// running server — whose __dirname is `standalone/apps/web` — never looks.
+	// Resolve the directory that actually holds server.js and stage there.
+	const standaloneDir = findAppDir(standaloneRoot)
+	if (!standaloneDir) {
+		console.log(`[standalone-assets] No server.js under ${standaloneRoot}; nothing to stage`)
 		return
 	}
 
@@ -125,6 +137,19 @@ export function copyStandaloneAssets({
 			console.log(`[standalone-assets] Mirrored ${runtimeModule} to ${moduleDestination}`)
 		}
 	}
+}
+
+/**
+ * The directory inside `standalone/` that holds the built app.
+ *
+ * With a workspace `outputFileTracingRoot` Next mirrors the repo layout, so the
+ * app sits at `standalone/apps/web`; without one it sits at `standalone/`.
+ * Finding `server.js` covers both without duplicating the config's knowledge of
+ * the tracing root.
+ */
+function findAppDir(standaloneRoot) {
+	const candidates = [standaloneRoot, resolve(standaloneRoot, "apps", "web")]
+	return candidates.find((dir) => existsSync(resolve(dir, "server.js"))) ?? null
 }
 
 if (
