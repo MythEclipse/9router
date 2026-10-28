@@ -14,9 +14,13 @@ import { describe, expect, it } from "vitest"
 //
 // Keeping the package external preserves the real `import.meta.url` at runtime.
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
+// The Next app and its manifest moved to apps/web during the monorepo split;
+// `open` is declared there now, so reading the repo root would assert against
+// a file that no longer describes the server build.
+const appRoot = path.join(repoRoot, "apps", "web")
 
 describe("open must not be bundled into the server build", () => {
-	const config = readFileSync(path.join(repoRoot, "next.config.mjs"), "utf8")
+	const config = readFileSync(path.join(appRoot, "next.config.mjs"), "utf8")
 
 	it("is declared in serverExternalPackages", () => {
 		const match = config.match(/serverExternalPackages:\s*\[([^\]]*)\]/)
@@ -26,7 +30,7 @@ describe("open must not be bundled into the server build", () => {
 	})
 
 	it("stays a runtime dependency so the standalone output can resolve it", async () => {
-		const pkg = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"))
+		const pkg = JSON.parse(readFileSync(path.join(appRoot, "package.json"), "utf8"))
 		expect(pkg.dependencies?.open).toBeTruthy()
 	})
 

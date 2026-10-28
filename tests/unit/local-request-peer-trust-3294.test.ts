@@ -36,7 +36,7 @@ vi.mock("@9router/auth/dashboardSession", () => ({
 }))
 
 const { proxy } = await import("../../apps/web/src/dashboardGuard.js")
-const { getClientIp } = await import("../../apps/web/src/lib/auth/loginLimiter.js")
+const { getClientIp } = await import("../../packages/auth/src/loginLimiter")
 
 const PEER_TOKEN = "peer-token-fixture"
 

@@ -6,7 +6,7 @@ import {
 	buildRecap,
 	estimateConversationTokens,
 	squeezeContext,
-} from "../../apps/web/open-sse/translator/concerns/contextSqueezer.js"
+} from "../apps/web/open-sse/translator/concerns/contextSqueezer.ts"
 import {
 	applyJsonGuard,
 	closeTruncatedJson,
@@ -16,7 +16,7 @@ import {
 	filterArguments,
 	repairJsonText,
 	scanBalancedJson,
-} from "../../apps/web/open-sse/translator/concerns/jsonGuard.js"
+} from "../apps/web/open-sse/translator/concerns/jsonGuard.js"
 
 describe("jsonGuard: coerceJsonOutput", () => {
 	it("leaves valid JSON untouched", () => {

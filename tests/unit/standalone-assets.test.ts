@@ -2,17 +2,29 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { copyStandaloneAssets } from "../../scripts/copy-standalone-assets.mjs"
+import { copyStandaloneAssets } from "../../apps/web/scripts/copy-standalone-assets.mjs"
 
+// The script stages beside whichever directory holds `server.js`, because
+// `outputFileTracingRoot` is the workspace root and `next build` mirrors that
+// layout into standalone/ — the app lands in `standalone/apps/web`, not in
+// `standalone/` itself. A fixture without a server.js is therefore a build the
+// script correctly declines to touch, which is not what these tests measure.
 function createBuildFixture(distDir) {
 	const projectRoot = mkdtempSync(join(tmpdir(), "9router-standalone-assets-"))
 	const buildRoot = join(projectRoot, distDir)
-	mkdirSync(join(buildRoot, "standalone"), { recursive: true })
+	const appRoot = join(buildRoot, "standalone", "apps", "web")
+	mkdirSync(appRoot, { recursive: true })
 	mkdirSync(join(buildRoot, "static", "chunks"), { recursive: true })
 	mkdirSync(join(projectRoot, "public"), { recursive: true })
+	writeFileSync(join(appRoot, "server.js"), "// standalone server entry")
 	writeFileSync(join(buildRoot, "static", "chunks", "app.js"), "static asset")
 	writeFileSync(join(projectRoot, "public", "favicon.svg"), "public asset")
 	return projectRoot
+}
+
+/** Where the script stages: beside the traced app, not beside standalone/. */
+function stagedPath(projectRoot, distDir, ...rest) {
+	return join(projectRoot, distDir, "standalone", "apps", "web", ...rest)
 }
 
 describe("standalone build assets", () => {
@@ -22,14 +34,11 @@ describe("standalone build assets", () => {
 		copyStandaloneAssets({ projectRoot, distDir: ".next" })
 
 		expect(
-			readFileSync(
-				join(projectRoot, ".next", "standalone", ".next", "static", "chunks", "app.js"),
-				"utf8",
-			),
+			readFileSync(stagedPath(projectRoot, ".next", ".next", "static", "chunks", "app.js"), "utf8"),
 		).toBe("static asset")
-		expect(
-			readFileSync(join(projectRoot, ".next", "standalone", "public", "favicon.svg"), "utf8"),
-		).toBe("public asset")
+		expect(readFileSync(stagedPath(projectRoot, ".next", "public", "favicon.svg"), "utf8")).toBe(
+			"public asset",
+		)
 	})
 
 	it("uses a custom Next dist directory", () => {
@@ -39,15 +48,7 @@ describe("standalone build assets", () => {
 
 		expect(
 			readFileSync(
-				join(
-					projectRoot,
-					".next-cli-build",
-					"standalone",
-					".next-cli-build",
-					"static",
-					"chunks",
-					"app.js",
-				),
+				stagedPath(projectRoot, ".next-cli-build", ".next-cli-build", "static", "chunks", "app.js"),
 				"utf8",
 			),
 		).toBe("static asset")
@@ -60,9 +61,9 @@ describe("standalone build assets", () => {
 
 		copyStandaloneAssets({ projectRoot, distDir: ".next" })
 
-		expect(
-			readFileSync(join(projectRoot, ".next", "standalone", "custom-server.js"), "utf8"),
-		).toContain("export const wrapper = true;")
+		expect(readFileSync(stagedPath(projectRoot, ".next", "custom-server.js"), "utf8")).toContain(
+			"export const wrapper = true;",
+		)
 		expect(readFileSync(join(projectRoot, "custom-server.js"), "utf8")).toContain(
 			"export const wrapper = true;",
 		)
@@ -81,20 +82,17 @@ describe("standalone build assets", () => {
 
 		copyStandaloneAssets({ projectRoot, distDir: ".next" })
 
-		expect(
-			readFileSync(join(projectRoot, ".next", "standalone", "src", "dashboardGuard.js"), "utf8"),
-		).toBe("guard")
+		expect(readFileSync(stagedPath(projectRoot, ".next", "src", "dashboardGuard.js"), "utf8")).toBe(
+			"guard",
+		)
 		expect(
 			readFileSync(
-				join(projectRoot, ".next", "standalone", "src", "lib", "db", "repos", "securityLogRepo.js"),
+				stagedPath(projectRoot, ".next", "src", "lib", "db", "repos", "securityLogRepo.js"),
 				"utf8",
 			),
 		).toBe("repo")
 		expect(
-			readFileSync(
-				join(projectRoot, ".next", "standalone", "scripts", "auth-guard-hooks.mjs"),
-				"utf8",
-			),
+			readFileSync(stagedPath(projectRoot, ".next", "scripts", "auth-guard-hooks.mjs"), "utf8"),
 		).toBe("hooks")
 	})
 
@@ -109,10 +107,7 @@ describe("standalone build assets", () => {
 		copyStandaloneAssets({ projectRoot, distDir: ".next" })
 
 		expect(
-			readFileSync(
-				join(projectRoot, ".next", "standalone", "open-sse", "executors", "opencode.js"),
-				"utf8",
-			),
+			readFileSync(stagedPath(projectRoot, ".next", "open-sse", "executors", "opencode.js"), "utf8"),
 		).toBe("export class OpenCodeExecutor {}")
 	})
 
@@ -126,29 +121,20 @@ describe("standalone build assets", () => {
 		writeFileSync(join(projectRoot, "node_modules", "next", "server.js"), "full server")
 		mkdirSync(join(projectRoot, "node_modules", "typescript"), { recursive: true })
 		writeFileSync(join(projectRoot, "node_modules", "typescript", "index.js"), "TypeScript compiler")
-		mkdirSync(join(projectRoot, ".next", "standalone", "node_modules", "next"), { recursive: true })
-		writeFileSync(
-			join(projectRoot, ".next", "standalone", "node_modules", "next", "package.json"),
-			"partial",
-		)
+		mkdirSync(stagedPath(projectRoot, ".next", "node_modules", "next"), { recursive: true })
+		writeFileSync(stagedPath(projectRoot, ".next", "node_modules", "next", "package.json"), "partial")
 
 		copyStandaloneAssets({ projectRoot, distDir: ".next" })
 
 		expect(
-			readFileSync(
-				join(projectRoot, ".next", "standalone", "node_modules", "next", "server.js"),
-				"utf8",
-			),
+			readFileSync(stagedPath(projectRoot, ".next", "node_modules", "next", "server.js"), "utf8"),
 		).toBe("full server")
 		expect(
-			readFileSync(
-				join(projectRoot, ".next", "standalone", "node_modules", "typescript", "index.js"),
-				"utf8",
-			),
+			readFileSync(stagedPath(projectRoot, ".next", "node_modules", "typescript", "index.js"), "utf8"),
 		).toBe("TypeScript compiler")
 		// The mirror replaces the traced directory instead of merging into it.
 		expect(() =>
-			readFileSync(join(projectRoot, ".next", "standalone", "node_modules", "next", "package.json")),
+			readFileSync(stagedPath(projectRoot, ".next", "node_modules", "next", "package.json")),
 		).toThrow()
 	})
 
@@ -170,28 +156,17 @@ describe("standalone build assets", () => {
 		copyStandaloneAssets({ projectRoot, distDir: ".next" })
 
 		expect(
-			readFileSync(
-				join(projectRoot, ".next", "standalone", "node_modules", "sharp", "package.json"),
-				"utf8",
-			),
+			readFileSync(stagedPath(projectRoot, ".next", "node_modules", "sharp", "package.json"), "utf8"),
 		).toContain('"name":"sharp"')
 		expect(
 			readFileSync(
-				join(
-					projectRoot,
-					".next",
-					"standalone",
-					"node_modules",
-					"@img",
-					"sharp-linux-x64",
-					"package.json",
-				),
+				stagedPath(projectRoot, ".next", "node_modules", "@img", "sharp-linux-x64", "package.json"),
 				"utf8",
 			),
 		).toContain('"name":"@img/sharp-linux-x64"')
 		expect(
 			readFileSync(
-				join(projectRoot, ".next", "standalone", "node_modules", "detect-libc", "package.json"),
+				stagedPath(projectRoot, ".next", "node_modules", "detect-libc", "package.json"),
 				"utf8",
 			),
 		).toContain('"name":"detect-libc"')
@@ -211,15 +186,7 @@ describe("standalone build assets", () => {
 
 		expect(() =>
 			readFileSync(
-				join(
-					projectRoot,
-					".next-cli-build",
-					"standalone",
-					".next-cli-build",
-					"static",
-					"chunks",
-					"app.js",
-				),
+				stagedPath(projectRoot, ".next-cli-build", ".next-cli-build", "static", "chunks", "app.js"),
 			),
 		).toThrow()
 	})

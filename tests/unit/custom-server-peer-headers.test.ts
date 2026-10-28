@@ -10,7 +10,7 @@ let baseUrl
 let seenHeaders
 
 beforeAll(async () => {
-	await import("../../custom-server.ts")
+	await import("../../apps/web/custom-server")
 	server = http.createServer((req, res) => {
 		seenHeaders = req.headers
 		res.end("ok")

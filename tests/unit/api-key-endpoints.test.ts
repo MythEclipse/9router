@@ -5,7 +5,7 @@ import {
 	classifyApiKeyEndpoint,
 	isApiKeyEndpointAllowed,
 	normalizeAllowedEndpoints,
-} from "../../apps/web/src/shared/constants/keyEndpoints"
+} from "../../packages/db/src/shared/keyEndpoints"
 
 describe("API key endpoint scopes", () => {
 	it.each([

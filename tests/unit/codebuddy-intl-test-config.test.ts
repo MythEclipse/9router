@@ -12,14 +12,18 @@
 
 import fs from "node:fs"
 import path from "node:path"
+import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
 
 // Read the source file and verify the config entry is present.
 // testUtils.js is a Next.js server file so we inspect the source text
 // rather than importing it (avoids next/server bootstrap requirements).
 
+const HERE = path.dirname(fileURLToPath(import.meta.url))
+const REPO_ROOT = path.resolve(HERE, "../..")
+
 const src = fs.readFileSync(
-	path.resolve("../../apps/web/src/app/api/providers/[id]/test/testUtils.ts"),
+	path.resolve(HERE, "../../apps/web/src/app/api/providers/[id]/test/testUtils.ts"),
 	"utf-8",
 )
 

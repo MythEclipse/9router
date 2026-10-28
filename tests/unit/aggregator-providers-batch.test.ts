@@ -81,14 +81,15 @@ describe("Atria Dawn specifics", () => {
 })
 
 describe("provider icons", () => {
-	// This file lives in tests/unit/, so resolve icons against the repo root.
-	const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..")
+	// Icons ship with the Next app, which owns /public after the monorepo split;
+	// the repo root has no public/ directory at all.
+	const APP_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "apps", "web")
 
 	it("ships a /public/providers/{id}.png for every provider in the batch", () => {
 		// getProviderIconSrc() resolves /providers/{id}.png and falls back to the
 		// textIcon tile when the file 404s, so a missing icon is silent in the UI.
 		for (const p of BATCH.map((x) => x.id)) {
-			expect(existsSync(join(REPO_ROOT, "public", "providers", `${p}.png`))).toBe(true)
+			expect(existsSync(join(APP_ROOT, "public", "providers", `${p}.png`))).toBe(true)
 		}
 	})
 })
@@ -98,6 +99,8 @@ describe("authenticated model discovery", () => {
 		dirname(fileURLToPath(import.meta.url)),
 		"..",
 		"..",
+		"apps",
+		"web",
 		"src",
 		"app",
 		"api",

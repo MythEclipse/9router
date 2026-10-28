@@ -19,37 +19,44 @@ import { describe, expect, it } from "vitest"
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..")
 const repo = readFileSync(join(REPO_ROOT, "packages/db/src/repos/usageRepo.ts"), "utf8")
-const chatCore = readFileSync(join(REPO_ROOT, "open-sse/handlers/chatCore.ts"), "utf8")
+const chatCore = readFileSync(join(REPO_ROOT, "apps/web/open-sse/handlers/chatCore.ts"), "utf8")
 
 describe("lifecycle rows keep the resolved model", () => {
 	it("accepts an alias on the lifecycle entry", () => {
 		const entry = repo.match(/interface RequestLogEntry \{[\s\S]*?\n\}/)
 		expect(entry).not.toBeNull()
-		expect(entry?.[0]).toContain("requestedModel?: string | null;")
+		expect(entry?.[0]).toMatch(/requestedModel\?: string \| null\s*;?/)
 	})
 
 	it("hands saveRequestUsage the real model plus the alias", () => {
 		// Passing only `model: trackedModel` stored the combo with meta={}, which is
 		// the exact row shape that made the dashboard regress to the combo name.
-		expect(repo).toContain("const realModel = requestedModel || model;")
-		expect(repo).toContain("const aliasModelName = requestedModel ? model : undefined;")
+		expect(repo).toMatch(/const realModel = requestedModel \|\| model\s*;?/)
+		expect(repo).toMatch(/const aliasModelName = requestedModel \? model : undefined\s*;?/)
 		expect(repo).toContain("requestedModel: aliasModelName,")
 	})
 
 	it("threads the alias from every lifecycle call site in chatCore", () => {
 		// `trackedModel` is the requested (combo) name; `model` is the real target.
-		const lifecycleLines = chatCore
-			.split("\n")
-			.filter((l) => l.includes("appendRequestLog(") && l.includes("status:"))
-		expect(lifecycleLines.length).toBeGreaterThan(0)
-		for (const line of lifecycleLines) {
-			expect(line).toContain("requestedModel: model")
+		//
+		// Scanned as whole call expressions, not per line: the formatter spreads
+		// these calls over several lines, so a line filter matches nothing and
+		// the assertion would silently pass on zero call sites.
+		const lifecycleCalls = [...chatCore.matchAll(/appendRequestLog\(\{[\s\S]*?\}\)/g)]
+			.map((m) => m[0])
+			.filter((call) => /status:\s*["'](?:PENDING|FAILED)["']/.test(call))
+		expect(lifecycleCalls.length).toBeGreaterThan(0)
+		for (const call of lifecycleCalls) {
+			expect(call).toMatch(/requestedModel:\s*model/)
 		}
 	})
 
 	it("also threads the alias through the shared appendLog helper", () => {
-		expect(chatCore).toContain(
-			"appendRequestLog({ model: trackedModel, provider, connectionId, requestedModel: model,",
+		// Same call, whitespace-insensitive for the reason above.
+		const appendLog = chatCore.match(/appendRequestLog\(\{[\s\S]*?\}\)/g) ?? []
+		const helperCall = appendLog.find(
+			(call) => /model:\s*trackedModel/.test(call) && /requestedModel:\s*model/.test(call),
 		)
+		expect(helperCall).toBeDefined()
 	})
 })

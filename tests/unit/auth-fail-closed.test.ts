@@ -2,8 +2,9 @@ import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 
+// custom-server moved under apps/web with the rest of the Next app.
 const root = resolve(__dirname, "../..")
-const server = readFileSync(resolve(root, "custom-server.ts"), "utf8")
+const server = readFileSync(resolve(root, "apps", "web", "custom-server.ts"), "utf8")
 
 // Reproduces the finding that made a viewUsage-only key capable of listing and
 // deleting every key: a crafted Cookie header made decodeURIComponent throw in

@@ -33,8 +33,10 @@ vi.mock("@/sse/utils/logger.js", () => ({
 
 const engine = await import("../../apps/web/src/sse/services/keyAccess.js")
 const helpers = await import("@9router/db/shared/keyAccess")
+// The message builder and limit live with the shared constants, not with the
+// engine — importing them from the engine silently yields `undefined`.
 const { keyAccessDeniedMessage, KEY_ACCESS_MAX_ENTRIES } = await import(
-	"../../apps/web/src/shared/constants/keyAccess.js"
+	"@9router/db/shared/keyAccessConstants"
 )
 
 function key(id, access) {
