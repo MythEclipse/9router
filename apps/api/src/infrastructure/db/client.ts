@@ -5,6 +5,11 @@
  * `better-sqlite3` → `node:sqlite` → `sql.js`) because it ships to hosts where
  * each of those may be the only one available. Keep that property here rather
  * than assuming bun, so `apps/api` runs on a plain Node image too.
+ *
+ * `bun:sqlite` stays a static import because `drizzle-orm/bun-sqlite` needs the
+ * handle synchronously; the runtime guard in {@link createDb} keeps non-Bun
+ * hosts from ever constructing one. Tests that only need the surrounding
+ * modules stub this file rather than load it.
  */
 
 import { Database } from "bun:sqlite"
@@ -28,6 +33,13 @@ export function databaseFile(dataDir: string): string {
 }
 
 export function createDb(dataDir: string) {
+	if (!process.versions.bun) {
+		throw new Error(
+			"apps/api opens its own handle with bun:sqlite, so it needs the Bun runtime. " +
+				"On Node, open the database through @9router/db's driver, which owns the " +
+				"fallback chain (better-sqlite3 → node:sqlite → sql.js).",
+		)
+	}
 	const sqlite = new Database(databaseFile(dataDir), { create: true })
 	// WAL keeps the dashboard's reads from blocking the gateway's writes.
 	sqlite.exec("PRAGMA journal_mode = WAL")
