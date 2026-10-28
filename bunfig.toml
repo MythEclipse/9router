@@ -1,6 +1,13 @@
 # Turbopack resolves `next` from the project directory upward and refuses a
 # package that lives outside the workspace root it detects. bun's default is
-# per-package node_modules; `hoist` puts every workspace dependency in the root
-# node_modules so apps/web/node_modules/next no longer symlinks out of the tree.
+# per-package node_modules, so without hoisting apps/web/node_modules/next
+# symlinks out of the tree and the build fails.
+#
+# `linker = "hoisted"` is documented but had NO effect on bun 1.3.14 — the root
+# stayed at 6 devDependency entries while each app kept its own tree, so Next's
+# standalone tracer emitted `next` with zero transitive dependencies and the CLI
+# payload died on `Cannot find module '@swc/helpers/_/_interop_require_default'`.
+# `publicHoistPattern` is what actually moves the tree (root went 6 → 416).
+# Verified by installing from a clean tree and resolving @swc/helpers from apps/web.
 [install]
-linker = "hoisted"
+publicHoistPattern = ["*"]

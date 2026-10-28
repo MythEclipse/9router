@@ -24,8 +24,16 @@
         "name": "next"
       }
     ],
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "types": ["node"]
   },
-  "include": ["src/**/*", "open-sse/**/*", ".next/types/**/*.ts", ".next/dev/types/**/*.ts"],
-  "exclude": ["node_modules", ".next"]
+  "include": [
+    "src/**/*",
+    "open-sse/**/*",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
+    ".next-cli-build/types/**/*.ts",
+    ".next-cli-build/dev/types/**/*.ts"
+  ],
+  "exclude": ["node_modules", ".next", ".next-cli-build"]
 }
