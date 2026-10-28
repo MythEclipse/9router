@@ -83,12 +83,22 @@ export async function resolve(specifier, context, next) {
 export async function load(url, context, next) {
 	if (url.startsWith("file:") && /\.tsx?$/.test(new URL(url).pathname)) {
 		const source = fs.readFileSync(fileURLToPath(url), "utf8")
+		// `.tsx` may contain JSX; `.ts` may not. Forcing ReactJSX on a plain `.ts`
+		// makes TypeScript parse generics as JSX tags — `function f<T>(…)`,
+		// `as ResolvedDbAdapter<T>`, an interface extending `<T>` — and the whole
+		// module dies with "JSX element 'T' has no corresponding closing tag".
+		// That took down the auth guard, which answers 503 to every route.
+		const isTsx = new URL(url).pathname.endsWith(".tsx")
 		const result = ts.transpileModule(source, {
 			compilerOptions: {
 				module: ts.ModuleKind.ESNext,
 				target: ts.ScriptTarget.ES2022,
-				jsx: ts.JsxEmit.ReactJSX,
+				// `Preserve` (not `None`): with a fileName supplied, TypeScript
+				// rejects an empty jsx setting, and for a plain .ts nothing is
+				// transformed either way.
+				jsx: isTsx ? ts.JsxEmit.ReactJSX : ts.JsxEmit.Preserve,
 			},
+			fileName: fileURLToPath(url),
 			reportDiagnostics: true,
 		})
 		const errors =
