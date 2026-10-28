@@ -7,8 +7,13 @@ import { fileURLToPath } from "node:url"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const cliDir = path.resolve(__dirname, "..")
-const appDir = path.resolve(cliDir, "..")
-const rootDir = path.resolve(appDir, "..")
+// The Next app moved from the repo root to apps/web in the monorepo migration.
+// This used to be `path.resolve(cliDir, "..")`, which still resolves — to the
+// workspace root — so the build silently looked for custom-server.js and
+// .next-cli-build in a directory that no longer holds either.
+const workspaceRoot = path.resolve(cliDir, "..")
+const appDir = path.join(workspaceRoot, "apps", "web")
+const rootDir = workspaceRoot
 const cliAppDir = process.env.NINEROUTER_CLI_APP_DIR || path.join(cliDir, "app")
 const buildHomeDir = path.join(cliDir, ".build-home")
 const buildDistDirName = ".next-cli-build"
@@ -85,33 +90,51 @@ function copyRecursive(src, dest) {
 function resolveStandaloneBuild(appDir, buildDistDir) {
 	const legacyStandaloneRoot = path.join(appDir, ".next", "standalone")
 	const resolvedStandaloneRoot = path.join(buildDistDir, "standalone")
-	let standaloneRoot = fs.existsSync(resolvedStandaloneRoot)
+	const standaloneRoot = fs.existsSync(resolvedStandaloneRoot)
 		? resolvedStandaloneRoot
 		: legacyStandaloneRoot
 
-	// Next.js 16 nests standalone output under the project name when
-	// NEXT_TRACING_ROOT_MODE=workspace, e.g. standalone/9router/server.js.
-	const pkgName = path.basename(appDir)
-	const nestedRoot = path.join(standaloneRoot, pkgName)
-	if (
-		fs.existsSync(path.join(nestedRoot, "server.js")) &&
-		!fs.existsSync(path.join(standaloneRoot, "server.js"))
-	) {
-		console.log(`ℹ️  Detected nested standalone output: ${pkgName}/`)
-		standaloneRoot = nestedRoot
-	}
+	// The entry point is not at a fixed depth. Next nests standalone output under
+	// the tracing root plus the project's workspace-relative path, so the layout
+	// has been standalone/server.js, standalone/app/, standalone/9router/, and now
+	// standalone/apps/web/ once the app moved to apps/web. Adding a fifth shape to
+	// a list of guesses is what produced this bug, so search for the entry instead
+	// and take the shallowest match.
+	const entryFile = fs.existsSync(legacyStandaloneRoot) ? "server.js" : "custom-server.js"
 
-	const standaloneApp = fs.existsSync(path.join(standaloneRoot, "server.js"))
-		? standaloneRoot
-		: path.join(standaloneRoot, "app")
-	if (!fs.existsSync(standaloneApp)) {
+	const found = findEntryDir(standaloneRoot, entryFile)
+	if (!found) {
 		throw new Error(
-			"Next.js standalone build not found under .next/standalone; " +
-				"expected either .next/standalone/server.js or .next/standalone/app/",
+			`Next.js standalone build not found under ${standaloneRoot}; ` +
+				`no ${entryFile} anywhere in the traced output.`,
 		)
 	}
 
-	return { standaloneApp, standaloneRoot }
+	if (found !== standaloneRoot) {
+		console.log(`ℹ️  Detected standalone entry at ${path.relative(standaloneRoot, found) || "."}/`)
+	}
+
+	return { standaloneApp: found, standaloneRoot }
+}
+
+/** Bounded breadth-first search for a directory holding `entryFile`. */
+function findEntryDir(root: string, entryFile: string): string | null {
+	let level = [root]
+	for (let depth = 0; depth < 6 && level.length > 0; depth += 1) {
+		const hit = level.find((dir) => fs.existsSync(path.join(dir, entryFile)))
+		if (hit) return hit
+		level = level.flatMap((dir: string): string[] => {
+			try {
+				return fs
+					.readdirSync(dir, { withFileTypes: true })
+					.filter((e) => e.isDirectory() && e.name !== "node_modules" && e.name !== ".next")
+					.map((e) => path.join(dir, e.name))
+			} catch {
+				return []
+			}
+		})
+	}
+	return null
 }
 
 function copyStandaloneBuild(appDir, buildDistDir, cliAppDir) {
@@ -122,6 +145,38 @@ function copyStandaloneBuild(appDir, buildDistDir, cliAppDir) {
 	const standaloneNodeModules = path.join(standaloneRoot, "node_modules")
 	if (standaloneApp !== standaloneRoot && fs.existsSync(standaloneNodeModules)) {
 		copyRecursive(standaloneNodeModules, path.join(cliAppDir, "node_modules"))
+	}
+
+	// custom-server.js loads several modules by absolute path under its own
+	// __dirname (dashboardGuard, auth-guard-hooks, the security repo). Next only
+	// traces what reached the webpack graph, so none of them are in standalone/
+	// — the server boots, then answers 503 "Authorization check unavailable" to
+	// everything, including its own dashboard. scripts/copy-standalone-assets.mjs
+	// normally fills this in, but it deliberately no-ops when
+	// NEXT_TRACING_ROOT_MODE=workspace (which this build sets) and defers to the
+	// CLI packaging. That is this function.
+	for (const dir of ["src", "scripts", "open-sse"]) {
+		const from = path.join(appDir, dir)
+		if (!fs.existsSync(from)) continue
+		const to = path.join(cliAppDir, dir)
+		fs.rmSync(to, { recursive: true, force: true })
+		copyRecursive(from, to)
+	}
+
+	// The guard copies in above import `next/server`, which tracing never saw —
+	// it is a runtime import from a file that did not exist at build time. Mirror
+	// the whole package, or the guard dies on ENOENT node_modules/next/server.js
+	// and every route answers 503 again.
+	for (const base of [
+		path.join(appDir, "node_modules"),
+		path.join(appDir, "..", "..", "node_modules"),
+	]) {
+		const from = path.join(base, "next")
+		if (!fs.existsSync(from)) continue
+		const to = path.join(cliAppDir, "node_modules", "next")
+		fs.rmSync(to, { recursive: true, force: true })
+		copyRecursive(from, to)
+		break
 	}
 }
 
@@ -172,7 +227,9 @@ function buildCliPackage() {
 	// Step 1: Build app with Next.js (workspace tracing root → traced node_modules in standalone).
 	console.log("1️⃣  Building Next.js app...")
 	try {
-		execSync("npm run build", {
+		// bun, not npm: the workspace is bun-only, and npm here would install a
+		// second tree and lose the hoisted node_modules Turbopack needs.
+		execSync("bun run build", {
 			stdio: "inherit",
 			cwd: appDir,
 			env: {
@@ -212,7 +269,9 @@ function buildCliPackage() {
 	console.log("✅ Copied standalone build\n")
 
 	// Step 3a: Copy custom server (injects real socket IP, strips spoofable XFF).
-	const customServerSrc = path.join(appDir, "custom-server")
+	// The extension is required: joining "custom-server" without it never matches,
+	// and the failure looked like a missing file rather than a wrong path.
+	const customServerSrc = path.join(appDir, "custom-server.js")
 	if (fs.existsSync(customServerSrc)) {
 		fs.copyFileSync(customServerSrc, path.join(cliAppDir, "custom-server"))
 		console.log("✅ Copied custom-server.js\n")
@@ -317,7 +376,10 @@ function buildCliPackage() {
 	// Step 8: Build MITM server (config driven - see app/cli/scripts/buildMitm.js)
 	console.log("8️⃣  Building MITM server...")
 	try {
-		execSync("node scripts/buildMitm", { stdio: "inherit", cwd: cliDir })
+		// buildMitm is a .ts entrypoint; run-ts.mjs is the launcher that already
+		// exists for cli/ scripts. The bare "scripts/buildMitm" name stopped
+		// resolving when the file was renamed to .ts.
+		execSync("node scripts/run-ts.mjs scripts/buildMitm.ts", { stdio: "inherit", cwd: cliDir })
 		console.log("✅ MITM server build completed\n")
 	} catch (_error) {
 		console.error("❌ MITM build failed")

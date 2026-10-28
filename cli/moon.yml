@@ -12,14 +12,28 @@ project:
 tasks:
   build:
     command: "bun run build"
+    # Packages the whole Next app into cli/app, so apps/web is an input even
+    # though it lives outside this project. Without these the task graph sees no
+    # change when the web app changes and serves a cached payload — which is how
+    # a fix to apps/web/scripts/auth-guard-hooks.mjs silently never shipped.
     inputs:
       - "cli.ts"
       - "src/**/*"
       - "hooks/**/*"
       - "scripts/**/*"
+      - "/apps/web/src/**/*"
+      - "/apps/web/open-sse/**/*"
+      - "/apps/web/scripts/**/*"
+      - "/apps/web/public/**/*"
+      - "/apps/web/custom-server.js"
+      - "/apps/web/next.config.mjs"
+      - "/apps/web/package.json"
     outputs:
       - "cli.js"
       - "hooks"
+      - "app"
+    deps:
+      - "web:build"
     options:
       runInCI: true
   pack:

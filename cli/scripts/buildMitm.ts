@@ -13,7 +13,10 @@ const BUILD_CONFIG = {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const cliDir = path.resolve(__dirname, "..")
-const appDir = path.resolve(cliDir, "..")
+// The Next app lives in apps/web since the monorepo migration. This used to be
+// path.resolve(cliDir, "..") — the workspace root — so it looked for
+// src/mitm/server in a directory that no longer holds it.
+const appDir = path.join(path.resolve(cliDir, ".."), "apps", "web")
 const cliAppDir = process.env.NINEROUTER_CLI_APP_DIR || path.join(cliDir, "app")
 const cliMitmDir = path.join(cliAppDir, "src", "mitm")
 // Bundle everything - no externals. This keeps MITM runtime self-contained so
