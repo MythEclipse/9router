@@ -1,0 +1,25 @@
+/**
+ * Global state this package keeps across module reloads.
+ *
+ * Next's dev server re-evaluates modules on every edit, so live counters,
+ * timers and the stats emitter have to survive on `globalThis` or the dashboard
+ * resets them mid-request. The declarations here are the single place that says
+ * what those keys hold; each module reads them with the type it needs.
+ *
+ * Declaring them is also what lets `noImplicitAny` pass: without it every
+ * `global._pendingRequests` is an index into `typeof globalThis`, which has no
+ * index signature.
+ */
+import type { EventEmitter } from "node:events"
+
+declare global {
+	var _pendingRequests:
+		| { byModel: Record<string, number>; byAccount: Record<string, Record<string, number>> }
+		| undefined
+	var _lastErrorProvider: { provider: string; ts: number } | undefined
+	var _statsEmitter: EventEmitter | undefined
+	var _pendingTimers: Record<string, NodeJS.Timeout | undefined> | undefined
+	var _recentRing: { items: unknown[]; initialized: boolean } | undefined
+	var _connectionMapCache: { map: Record<string, unknown>; ts: number } | undefined
+	var _statsEmitTimers: { pending: NodeJS.Timeout | null; update: NodeJS.Timeout | null } | undefined
+}

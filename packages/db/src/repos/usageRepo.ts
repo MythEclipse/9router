@@ -57,10 +57,14 @@ export interface UsageCounter {
 	completionTokens: number
 	cachedTokens: number
 	cost: number
+	lastUsed?: string
 	rawModel?: string | null
 	provider?: string | null
 	resolvedModel?: string | null
 	apiKey?: string | null
+	apiKeyMasked?: string | null
+	keyName?: string
+	apiKeyKey?: string
 	endpoint?: string | null
 	[key: string]: unknown
 }
@@ -112,7 +116,12 @@ function apiKeyBucketId(key: string): string {
 const PENDING_TIMEOUT_MS = 60 * 1000
 const RING_CAP = 50
 const CONN_CACHE_TTL_MS = 30 * 1000
-const PERIOD_MS = { "24h": 86400000, "7d": 604800000, "30d": 2592000000, "60d": 5184000000 }
+const PERIOD_MS: Record<string, number> = {
+	"24h": 86400000,
+	"7d": 604800000,
+	"30d": 2592000000,
+	"60d": 5184000000,
+}
 
 // In-memory state shared across Next.js modules
 if (!global._pendingRequests) global._pendingRequests = { byModel: {}, byAccount: {} }
@@ -515,15 +524,12 @@ export interface UsageBucket {
 }
 
 /** Per-model stats gain the raw/resolved model and a last-used stamp. */
-export interface ModelUsageCounter extends UsageCounter {
-	lastUsed?: string
-}
+export type ModelUsageCounter = UsageCounter
 
 /** Per-account stats also carry the connection they belong to. */
 export interface AccountUsageCounter extends UsageCounter {
 	connectionId?: string | null
 	accountName?: string
-	lastUsed?: string
 }
 
 /** One bar on the usage chart. */
@@ -1037,7 +1043,7 @@ function periodCutoff(period: string): string | null {
 		startOfDay.setHours(0, 0, 0, 0)
 		return startOfDay.toISOString()
 	}
-	const span = PERIOD_MS[period]
+	const span = PERIOD_MS[String(period)]
 	return span ? new Date(Date.now() - span).toISOString() : null
 }
 
@@ -1191,7 +1197,7 @@ function accumulateHistoryRow(
 		const keyRow = accumulate(
 			buckets.byApiKey as Record<string, CounterRow>,
 			`${apiKeyMasked}|${rawModel}|${rawProvider || "unknown"}`,
-			() => ({
+			(): CounterRow => ({
 				...emptyTotals(),
 				rawModel,
 				provider: providerName,
@@ -1207,7 +1213,7 @@ function accumulateHistoryRow(
 		const keyRow = accumulate(
 			buckets.byApiKey as Record<string, CounterRow>,
 			"local-no-key",
-			() => ({
+			(): CounterRow => ({
 				...emptyTotals(),
 				rawModel,
 				provider: providerName,
@@ -1290,7 +1296,7 @@ export async function getUsageStats(
 	const recentRows = db.all<DbRow>(recentSql, recentParams)
 	const recentRequests = mapRecentRequests(recentRows, { limit: 20, isModelAllowed: modelAllowed })
 
-	const stats = {
+	const stats: UsageStats = {
 		totalRequests: 0,
 		totalPromptTokens: 0,
 		totalCompletionTokens: 0,
@@ -1541,19 +1547,16 @@ export async function getUsageStats(
 				const accountName =
 					connectionMap[histConnectionId] || `Account ${histConnectionId.slice(0, 8)}...`
 				const accountKey = `${histModel} (${histProvider} - ${accountName})`
-				if (
-					stats.byAccount[accountKey] &&
-					new Date(ts) > new Date(stats.byAccount[accountKey].lastUsed)
-				)
-					stats.byAccount[accountKey].lastUsed = ts
+				const account = stats.byAccount[accountKey]
+				if (account && new Date(ts) > new Date(account.lastUsed ?? 0)) account.lastUsed = ts
 			}
 
 			const rawHistKey = e.apiKey && typeof e.apiKey === "string" ? e.apiKey : null
 			const apiKeyKey = rawHistKey
 				? `${apiKeyBucketId(rawHistKey)}|${histModel}|${histProvider || "unknown"}`
 				: "local-no-key"
-			if (stats.byApiKey[apiKeyKey] && new Date(ts) > new Date(stats.byApiKey[apiKeyKey].lastUsed))
-				stats.byApiKey[apiKeyKey].lastUsed = ts
+			const keyCounter = stats.byApiKey[apiKeyKey]
+			if (keyCounter && new Date(ts) > new Date(keyCounter.lastUsed ?? 0)) keyCounter.lastUsed = ts
 
 			const endpoint = String(e.endpoint ?? "") || "Unknown"
 			const endpointKey = `${endpoint}|${histModel}|${histProvider || "unknown"}`
@@ -1593,7 +1596,11 @@ export async function getUsageStats(
 	return stats
 }
 
-export async function getChartData(period = "7d", filterApiKey = null, allowedModels = "*") {
+export async function getChartData(
+	period = "7d",
+	filterApiKey: string | null = null,
+	allowedModels = "*",
+) {
 	const db = await getAdapter()
 	// Same rule as getUsageStats: fold staged rollup deltas in before reading.
 	// ("24h"/"today" read usageHistory, where the row is already written; the
@@ -1795,7 +1802,11 @@ export async function getChartData(period = "7d", filterApiKey = null, allowedMo
  * scoping matches the rest of the Overview, so a key user sees their own
  * pattern and not the whole server's.
  */
-export async function getSparks(period = "30d", filterApiKey = null, allowedModels = "*") {
+export async function getSparks(
+	period = "30d",
+	filterApiKey: string | null = null,
+	allowedModels = "*",
+) {
 	const db = await getAdapter()
 
 	const patterns = parseAllowedModels(allowedModels)
@@ -1803,7 +1814,13 @@ export async function getSparks(period = "30d", filterApiKey = null, allowedMode
 
 	const DAYS = { today: 1, "24h": 1, "7d": 7, "30d": 30, "60d": 60, all: 60 }[period] || 30
 
-	const totals = { requests: [], input: [], output: [], cost: [], cached: [] }
+	const totals: Record<"requests" | "input" | "output" | "cost" | "cached", number[]> = {
+		requests: [],
+		input: [],
+		output: [],
+		cost: [],
+		cached: [],
+	}
 	const rows = db.all<{ dateKey: string; data: string }>(
 		`SELECT dateKey, data FROM usageDaily WHERE dateKey >= ? ORDER BY dateKey ASC`,
 		[localCutoffKey(DAYS)],
@@ -1869,22 +1886,22 @@ export async function getSparks(period = "30d", filterApiKey = null, allowedMode
 	return { days: DAYS, totals, heatTimestamps }
 }
 
-function toLocalKey(d) {
+function toLocalKey(d: Date): string {
 	return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
 }
 
-function offsetKey(daysAgo) {
+function offsetKey(daysAgo: number): string {
 	const d = new Date()
 	d.setDate(d.getDate() - daysAgo)
 	return toLocalKey(d)
 }
 
-function localCutoffKey(n) {
+function localCutoffKey(n: number): string {
 	return offsetKey(n - 1)
 }
 
-function formatLogDate(date = new Date()) {
-	const pad = (n) => String(n).padStart(2, "0")
+function formatLogDate(date: Date = new Date()): string {
+	const pad = (n: number): string => String(n).padStart(2, "0")
 	return `${pad(date.getDate())}-${pad(date.getMonth() + 1)}-${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
 }
 
@@ -1896,7 +1913,10 @@ function formatLogDate(date = new Date()) {
  * successful request fell through all three checks and rendered as a pulsing
  * PENDING row, so a finished request looked like it was still in flight forever.
  */
-function normalizeLogStatus(status, timestamp) {
+function normalizeLogStatus(
+	status: unknown,
+	timestamp: string | number | Date | null | undefined,
+): string {
 	const raw = typeof status === "string" ? status.trim() : ""
 	if (!raw) return "-"
 	const upper = raw.toUpperCase()
@@ -1905,7 +1925,7 @@ function normalizeLogStatus(status, timestamp) {
 		// A pending row older than the request timeout has no live request behind
 		// it — the process died or the write never completed. Rendering it as
 		// PENDING would pulse forever, so surface it as the stale marker instead.
-		const startedMs = timestamp ? new Date(timestamp).getTime() : NaN
+		const startedMs = timestamp ? new Date(timestamp).getTime() : Number.NaN
 		if (Number.isFinite(startedMs) && Date.now() - startedMs > PENDING_TIMEOUT_MS) return "STALE"
 		return "PENDING"
 	}
@@ -2081,7 +2101,7 @@ export async function getRecentLogs(limit = 200) {
 			const sent = r.promptTokens != null ? Number(r.promptTokens) : (tk.prompt_tokens ?? "-")
 			const received =
 				r.completionTokens != null ? Number(r.completionTokens) : (tk.completion_tokens ?? "-")
-			return `${ts} | ${m} | ${p} | ${account} | ${sent} | ${received} | ${normalizeLogStatus(r.status, r.timestamp)}`
+			return `${ts} | ${m} | ${p} | ${account} | ${sent} | ${received} | ${normalizeLogStatus(r.status, r.timestamp == null ? null : String(r.timestamp))}`
 		})
 	} catch (e) {
 		console.error("[usageRepo] getRecentLogs failed:", e instanceof Error ? e.message : e)
