@@ -1,109 +1,31 @@
+/**
+ * Combo presets for a client (Cursor, Claude).
+ *
+ * Which presets exist is a catalog question answered by `apps/web`; creating
+ * them is a combo rule owned by `9router-api`. This route joins the two, and the
+ * create path goes through the normal `createCombo`, so a preset cannot
+ * introduce a name or a cycle the API would reject.
+ */
 import { NextResponse } from "next/server"
-import { resolveCursorModels } from "open-sse/services/cursorModels"
-import { buildPresetItems, PRESET_SOURCES } from "@/lib/comboPresets"
-import { createCombo, getCombos, getProviderConnections } from "@/lib/localDb"
+import { getUseCases } from "@/lib/useCases"
+import { toResponse } from "../response"
 
 export const dynamic = "force-dynamic"
 
-/** A combo preset source accepted by `buildPresetItems`. */
-type PresetSource = "cursor" | "claude"
-
-/**
- * Resolve live Cursor catalog from the first active cursor connection, if any.
- * @returns {Promise<Array<{id: string, name?: string}>|null>}
- */
-async function fetchCursorLiveModels() {
+export async function GET(request: Request) {
 	try {
-		const connections = await getProviderConnections()
-		const conn = (connections || []).find((c) => c.provider === "cursor" && c.isActive !== false)
-		if (!conn) return null
-		const result = await resolveCursorModels(
-			{
-				accessToken: typeof conn.accessToken === "string" ? conn.accessToken : "",
-				providerSpecificData:
-					(conn.providerSpecificData as Record<string, unknown> | null | undefined) || {},
-			},
-			{ log: console },
-		)
-		return result?.models?.length ? result.models : null
+		const source = new URL(request.url).searchParams.get("source")
+		return NextResponse.json(await getUseCases().previewComboPresets(source))
 	} catch (error) {
-		console.log("combo presets: cursor live catalog failed", error?.message || error)
-		return null
+		return toResponse(error)
 	}
 }
 
-/**
- * @param {string} source
- * @returns {Promise<{ name: string, models: string[], exists: boolean }[]>}
- */
-async function resolvePresetItems(source: PresetSource) {
-	const combos = await getCombos()
-	const existingNames = (combos || []).map((c) => String(c.name))
-	const liveModels = source === "cursor" ? await fetchCursorLiveModels() : null
-	return buildPresetItems(source, {
-		liveModels: liveModels || undefined,
-		existingNames,
-	})
-}
-
-function parseSource(value: unknown): PresetSource | null {
-	if (typeof value !== "string" || !PRESET_SOURCES.has(value)) return null
-	return value as PresetSource
-}
-
-// GET /api/combos/presets?source=cursor|claude - preview items
-export async function GET(request) {
-	try {
-		const { searchParams } = new URL(request.url)
-		const source = parseSource(searchParams.get("source"))
-		if (!source) {
-			return NextResponse.json({ error: "source must be 'cursor' or 'claude'" }, { status: 400 })
-		}
-
-		const items = await resolvePresetItems(source)
-		return NextResponse.json({
-			source,
-			items,
-			toCreate: items.filter((i) => !i.exists).length,
-			toSkip: items.filter((i) => i.exists).length,
-		})
-	} catch (error) {
-		console.log("Error previewing combo presets:", error)
-		return NextResponse.json({ error: "Failed to preview combo presets" }, { status: 500 })
-	}
-}
-
-// POST /api/combos/presets - create missing combos for a source
-export async function POST(request) {
+export async function POST(request: Request) {
 	try {
 		const body = await request.json().catch(() => ({}))
-		const source = parseSource(body?.source)
-		if (!source) {
-			return NextResponse.json({ error: "source must be 'cursor' or 'claude'" }, { status: 400 })
-		}
-
-		const items = await resolvePresetItems(source)
-		const created = []
-		const skipped = []
-
-		for (const item of items) {
-			if (item.exists) {
-				skipped.push(item.name)
-				continue
-			}
-			const combo = await createCombo({ name: item.name, models: item.models })
-			created.push(combo)
-		}
-
-		return NextResponse.json({
-			source,
-			created,
-			skipped,
-			createdCount: created.length,
-			skippedCount: skipped.length,
-		})
+		return NextResponse.json(await getUseCases().createComboPresets(body?.source))
 	} catch (error) {
-		console.log("Error creating combo presets:", error)
-		return NextResponse.json({ error: "Failed to create combo presets" }, { status: 500 })
+		return toResponse(error)
 	}
 }

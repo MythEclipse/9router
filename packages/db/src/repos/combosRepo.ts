@@ -111,9 +111,13 @@ export async function updateCombo(id: string, data: ComboInput): Promise<Combo |
 	db.transaction(() => {
 		const row = db.get<ComboRow>(`SELECT * FROM combos WHERE id = ?`, [id])
 		if (!row) return
-		const previousName = String(row.name ?? "")
+		// rowToCombo can return null for a row it cannot read; spreading that
+		// would leave `id` undefined and the merged combo half-formed.
+		const current = rowToCombo(row)
+		if (!current) return
+		const previousName = current.name
 		const merged: Combo = {
-			...rowToCombo(row),
+			...current,
 			...data,
 			contextWindow: Number(data.contextWindow ?? row.contextWindow) || 0,
 			updatedAt: new Date().toISOString(),

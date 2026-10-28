@@ -247,8 +247,12 @@ export async function updateApiKey(
 	db.transaction(() => {
 		const row = db.get<ApiKeyRow>(`SELECT * FROM apiKeys WHERE id = ?`, [id])
 		if (!row) return
-		const merged = { ...rowToKey(row), ...data }
-		merged.access = normalizeAccess(data.access === undefined ? rowToKey(row).access : data.access)
+		// Mapped once: rowToKey returns null for a row it cannot read, and calling
+		// it twice both wasted work and hid that case behind a possible-null.
+		const current = rowToKey(row)
+		if (!current) return
+		const merged = { ...current, ...data }
+		merged.access = normalizeAccess(data.access === undefined ? current.access : data.access)
 		const permStr =
 			typeof merged.permissions === "string"
 				? merged.permissions

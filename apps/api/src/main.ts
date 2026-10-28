@@ -1,38 +1,26 @@
 /**
- * Composition root — the one file that knows every concrete implementation.
+ * Serving entry point.
  *
- * Wires: env → database → repositories → use-cases → HTTP app. Everything above
- * this line depends on interfaces; everything below it is a detail.
+ * Wiring lives in `infrastructure/use-cases-factory.ts` so that `apps/web` can
+ * build the same use-cases over the same database; this file only listens.
  */
-import { randomUUID } from "node:crypto"
-import type { Dependencies } from "./application/dependencies.ts"
-import { buildUseCases } from "./application/use-cases.ts"
-import { createChangelogSourceFromDisk } from "./infrastructure/changelog-source.ts"
-import { createDb, resolveDataDir } from "./infrastructure/db/client.ts"
-import { runMigrations } from "./infrastructure/db/migrate.ts"
-import { createActivityRepository } from "./infrastructure/db/repositories/activity-repository.ts"
-import { createApiKeyRepository } from "./infrastructure/db/repositories/api-key-repository.ts"
 import { loadEnv } from "./infrastructure/env.ts"
-import { createSettingsPort } from "./infrastructure/settings-port.ts"
+import { createUnavailablePresetPort } from "./infrastructure/unavailable-preset-port.ts"
+import { createUseCases } from "./infrastructure/use-cases-factory.ts"
 import { createApp } from "./presentation/http/app.ts"
 
 const env = loadEnv()
-const dataDir = resolveDataDir(env.DATA_DIR)
 
-const { db, sqlite } = createDb(dataDir)
-runMigrations(sqlite, dataDir)
+const { useCases, close } = createUseCases({
+	dataDir: env.DATA_DIR,
+	webAppDir: env.WEB_APP_DIR,
+	gatewayUrl: env.GATEWAY_URL,
+	// A failed fan-out is not worth failing the request, but it must not be
+	// invisible either: the next request would resume a stale rotation.
+	onRotationError: (error) => console.warn("combo rotation reset failed:", error),
+	comboPresets: createUnavailablePresetPort(),
+})
 
-const deps: Dependencies = {
-	apiKeys: createApiKeyRepository(db),
-	activity: createActivityRepository(db, () => randomUUID()),
-	// CHANGELOG.md ships beside the app, not inside the API bundle.
-	changelog: createChangelogSourceFromDisk(env.WEB_APP_DIR),
-	settings: createSettingsPort(),
-	now: () => new Date(),
-	randomId: () => randomUUID(),
-}
-
-const useCases = buildUseCases(deps)
 const { app } = createApp({ webOrigin: env.WEB_ORIGIN })
 
 // The auth middleware reads `context.session`; until better-auth owns this
@@ -50,13 +38,12 @@ const server = Bun.serve({
 })
 
 console.log(`9router-api listening on http://${server.hostname}:${server.port}`)
-console.log(`  data dir: ${dataDir}`)
 console.log(`  docs:     http://${server.hostname}:${server.port}/api/docs`)
 
 function shutdown(signal: string): void {
 	console.log(`${signal} received, closing`)
 	server.stop()
-	sqlite.close()
+	close()
 	process.exit(0)
 }
 process.on("SIGINT", () => shutdown("SIGINT"))

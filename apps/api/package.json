@@ -3,6 +3,12 @@
   "version": "4.2.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./application/use-cases": "./src/application/use-cases.ts",
+    "./application/dependencies": "./src/application/dependencies.ts",
+    "./infrastructure/use-cases-factory": "./src/infrastructure/use-cases-factory.ts",
+    "./domain/*": "./src/domain/*.ts"
+  },
   "scripts": {
     "dev": "bun --watch src/main.ts",
     "build": "bun run scripts/build.ts",

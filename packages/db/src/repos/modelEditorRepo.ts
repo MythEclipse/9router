@@ -125,7 +125,9 @@ export async function getStudioModels() {
 	const models = Object.entries(rows)
 		.filter(([key]) => !key.includes("|"))
 		.map(([key, value]) => toModel(key, value))
-		.filter(Boolean)
+		// A type predicate, not `filter(Boolean)`: only a predicate narrows away
+		// the null that toModel returns, so `a`/`b` below are known models.
+		.filter((m): m is NonNullable<typeof m> => m !== null && m !== undefined)
 		.sort((a, b) => a.callName.localeCompare(b.callName))
 
 	// Migration: older builds wrote a display alias for every studio name into the

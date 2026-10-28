@@ -28,7 +28,12 @@ export function makeKv(scope: string): KvStore {
 				[scope],
 			)
 			const out: Record<string, T> = {}
-			for (const r of rows) out[r.key] = parseJson<T>(r.value)
+			for (const r of rows) {
+				// A row written by an older shape can fail to parse; dropping it keeps
+				// the declared Record<string, T> honest instead of storing null.
+				const parsed = parseJson<T>(r.value)
+				if (parsed !== null && parsed !== undefined) out[r.key] = parsed
+			}
 			return out
 		},
 		async set(key: string, value: unknown) {
