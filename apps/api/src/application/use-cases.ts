@@ -22,7 +22,9 @@ import {
 } from "./combos/manage-combos.ts"
 import type { Dependencies } from "./dependencies.ts"
 import { makeClearErrorLogs, makeListErrorLogs } from "./error-logs/read-error-logs.ts"
+import { assertSupportedLocale } from "./settings/locale.ts"
 import { readLoginGate } from "./settings/login-gate.ts"
+import { makeGetTheme, makeSetTheme } from "./settings/theme.ts"
 
 export interface UseCases {
 	readonly createApiKey: ReturnType<typeof makeCreateApiKey>
@@ -41,6 +43,13 @@ export interface UseCases {
 	readonly createComboPresets: ReturnType<typeof makeCreateComboPresets>
 	readonly listErrorLogs: ReturnType<typeof makeListErrorLogs>
 	readonly clearErrorLogs: ReturnType<typeof makeClearErrorLogs>
+	readonly getTheme: ReturnType<typeof makeGetTheme>
+	readonly setTheme: ReturnType<typeof makeSetTheme>
+	/**
+	 * Rejects an unsupported locale with VALIDATION. The supported list comes
+	 * from the caller because the dashboard owns the translations.
+	 */
+	readonly assertLocale: (requested: unknown, supported: readonly string[]) => string
 }
 
 /** The combo use-cases share one dependency slice, so it is built once. */
@@ -73,5 +82,8 @@ export function buildUseCases(deps: Dependencies): UseCases {
 		createComboPresets: makeCreateComboPresets(combos),
 		listErrorLogs: makeListErrorLogs(deps.errorLogs),
 		clearErrorLogs: makeClearErrorLogs(deps.errorLogs),
+		getTheme: makeGetTheme(deps.settings),
+		setTheme: makeSetTheme(deps.settings),
+		assertLocale: assertSupportedLocale,
 	}
 }

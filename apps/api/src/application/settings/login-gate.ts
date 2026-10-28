@@ -18,6 +18,8 @@ export interface LoginGateSettings {
 	readonly tunnelDashboardAccess?: boolean
 	readonly tunnelUrl?: string
 	readonly tailscaleUrl?: string
+	/** Unvalidated on read: `domain/theme.ts` decides what an unknown value means. */
+	readonly theme?: string
 }
 
 export interface LoginGate {
@@ -30,6 +32,14 @@ export interface LoginGate {
 export interface SettingsPort {
 	/** Rejects when the row cannot be read; the caller decides what that means. */
 	read(): Promise<LoginGateSettings>
+	/**
+	 * Merge the given fields into the stored row.
+	 *
+	 * The theme is the only setting written through the API so far, but it goes
+	 * through the same port as the login gate because they are one row: two
+	 * ports over one table would let a concurrent write discard the other's.
+	 */
+	update(changes: Record<string, unknown>): Promise<void>
 }
 
 /** Absent means "enabled": an older row predates the flag and keeps the gate on. */

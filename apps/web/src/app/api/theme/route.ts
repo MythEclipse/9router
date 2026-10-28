@@ -1,49 +1,46 @@
+/**
+ * The site-wide theme.
+ *
+ * Delegates: normalisation and the "a key may read but not write" rule live in
+ * `9router-api`. This file keeps only the transport concerns — the cookie the
+ * dashboard session is decoded from, and the no-store header, because the value
+ * changes the appearance of every page.
+ */
 import { getDashboardAuthSession } from "@9router/auth/dashboardSession"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
-import { getSettings, updateSettings } from "@/lib/localDb"
+import { getUseCases } from "@/lib/useCases"
+import { toResponse } from "../response"
 
-// The site-wide mode. Reading is public on purpose: ThemeProvider applies it to
-// every visitor before they sign in, and it is one non-sensitive value.
 export const dynamic = "force-dynamic"
 
+// Public on purpose: ThemeProvider applies it before anyone signs in, and it is
+// one non-sensitive value.
 export async function GET() {
 	try {
-		const settings = await getSettings()
-		return NextResponse.json(
-			{ theme: settings.theme === "dark" ? "dark" : "glass" },
-			{ headers: { "Cache-Control": "no-store" } },
-		)
-	} catch (_error) {
+		const { theme } = await getUseCases().getTheme()
+		return NextResponse.json({ theme }, { headers: { "Cache-Control": "no-store" } })
+	} catch {
+		// A settings read must never blank the site; the use-case default stands.
 		return NextResponse.json({ theme: "glass" }, { status: 200 })
 	}
 }
 
-// Writing is the administrator's: a key-signed session is refused here even if
-// it somehow reached this route, because the mode is a site-wide setting rather
-// than a per-browser preference.
-export async function POST(request) {
+export async function POST(request: Request) {
 	try {
 		const cookieStore = await cookies()
 		const session = await getDashboardAuthSession(cookieStore.get("auth_token")?.value)
-		if (!session) {
-			return NextResponse.json({ error: "Sign in to change the theme" }, { status: 401 })
-		}
-		if (session.role === "apikey") {
-			return NextResponse.json(
-				{
-					error: "The theme applies to the whole site and can only be changed from a password sign-in",
-				},
-				{ status: 403 },
-			)
-		}
-
 		const body = await request.json().catch(() => ({}))
-		const theme = body.theme === "dark" ? "dark" : "glass"
-		await updateSettings({ theme })
-		return NextResponse.json({ theme, ok: true })
+		// The role travels with the call because the dashboard cookie is the only
+		// place it exists; the use-case decides what the role is allowed to do.
+		//
+		// `getDashboardAuthSession` returns the raw JWT payload, so `role` arrives
+		// as `unknown`. Narrow it here, at the boundary, rather than casting: a
+		// non-string claim means no usable role, which the use-case reads as
+		// "not signed in".
+		const role = typeof session?.role === "string" ? session.role : null
+		return NextResponse.json(await getUseCases().setTheme({ role }, body?.theme))
 	} catch (error) {
-		console.log("Error setting theme:", error)
-		return NextResponse.json({ error: "Failed to set theme" }, { status: 500 })
+		return toResponse(error)
 	}
 }
