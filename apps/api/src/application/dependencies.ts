@@ -7,6 +7,7 @@
  */
 import type { IApiKeyRepository } from "../domain/api-key.ts"
 import type { ChangelogSource } from "./changelog.ts"
+import type { SettingsPort } from "./settings/login-gate.ts"
 
 export interface IActivityRepository {
 	record(entry: {
@@ -21,6 +22,7 @@ export interface Dependencies {
 	readonly apiKeys: IApiKeyRepository
 	readonly activity: IActivityRepository
 	readonly changelog: ChangelogSource
+	readonly settings: SettingsPort
 	readonly now: () => Date
 	/** Injected so tests can pin key material instead of hoping. */
 	readonly randomId: () => string

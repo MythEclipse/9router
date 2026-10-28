@@ -12,10 +12,12 @@
  */
 import { base } from "./base.ts"
 import { apiKeysRouter } from "./routers/api-keys.ts"
+import { settingsRouter } from "./routers/settings.ts"
 import { systemRouter } from "./routers/system.ts"
 
 export const appRouter = base.router({
 	system: systemRouter,
+	settings: settingsRouter,
 	apiKeys: apiKeysRouter,
 })
 

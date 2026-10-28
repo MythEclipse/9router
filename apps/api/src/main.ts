@@ -13,6 +13,7 @@ import { runMigrations } from "./infrastructure/db/migrate.ts"
 import { createActivityRepository } from "./infrastructure/db/repositories/activity-repository.ts"
 import { createApiKeyRepository } from "./infrastructure/db/repositories/api-key-repository.ts"
 import { loadEnv } from "./infrastructure/env.ts"
+import { createSettingsPort } from "./infrastructure/settings-port.ts"
 import { createApp } from "./presentation/http/app.ts"
 
 const env = loadEnv()
@@ -26,6 +27,7 @@ const deps: Dependencies = {
 	activity: createActivityRepository(db, () => randomUUID()),
 	// CHANGELOG.md ships beside the app, not inside the API bundle.
 	changelog: createChangelogSourceFromDisk(env.WEB_APP_DIR),
+	settings: createSettingsPort(),
 	now: () => new Date(),
 	randomId: () => randomUUID(),
 }

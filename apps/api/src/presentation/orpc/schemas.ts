@@ -44,3 +44,16 @@ export const ChangelogSchema = z.object({
 	official: z.string().nullable(),
 	custom: z.string().nullable(),
 })
+
+/**
+ * The login gate. Public by design: the login screen has to ask whether a
+ * password is required before anyone can authenticate.
+ */
+export const LoginGateSchema = z.object({
+	requireLogin: z.boolean(),
+	tunnelDashboardAccess: z.boolean(),
+	tunnelUrl: z.string(),
+	tailscaleUrl: z.string(),
+	/** True when the settings row could not be read and defaults were used. */
+	degraded: z.boolean(),
+})
