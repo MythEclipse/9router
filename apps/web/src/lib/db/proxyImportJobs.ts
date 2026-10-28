@@ -20,7 +20,30 @@ import { createJobStore, touchJob } from "@9router/db/jobStore"
 
 const RESULT_TTL_MS = 15 * 60 * 1000
 
-const { getStore, scheduleResultCleanup } = createJobStore({
+/** How far one bulk import got; shown in the progress banner. */
+export interface ProxyImportCounts {
+	created: number
+	skipped: number
+	failed: number
+	processed: number
+	total: number
+}
+
+/** One bulk proxy import. Process-local; see the header comment. */
+export interface ProxyImportJob {
+	id: string
+	status: "queued" | "running" | "done" | "error" | "cancelled"
+	progress: number
+	message: string
+	counts: ProxyImportCounts
+	error: string | null
+	entries: { name?: string; proxyUrl?: string }[] | null
+	cancelRequested: boolean
+	createdAt: string
+	updatedAt: string
+}
+
+const { getStore, scheduleResultCleanup } = createJobStore<ProxyImportJob>({
 	globalKey: "proxyImportJobs",
 	resultTtlMs: RESULT_TTL_MS,
 })

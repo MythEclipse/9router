@@ -9,33 +9,66 @@
  * mechanics live here once.
  */
 
+/**
+ * The one field the store itself owns.
+ *
+ * A job record is whatever its own store needs; this is the only shape the
+ * shared layer touches, so the store is generic over the job instead of pinned
+ * to one caller's record.
+ */
+export interface TouchableJob {
+	updatedAt: string
+}
+
 /** Stamp `job.updatedAt` in place. */
-export function touchJob(job) {
+export function touchJob(job: TouchableJob): void {
 	job.updatedAt = new Date().toISOString()
+}
+
+/** What one caller must supply: the global key and the TTL. */
+interface JobStoreOptions {
+	/** unique `globalThis` key prefix for this store */
+	globalKey: string
+	/** how long a finished job stays readable */
+	resultTtlMs: number
+}
+
+/** The accessors one store gets back. */
+export interface JobStore<TJob extends TouchableJob> {
+	getStore(): Map<string, TJob>
+	getTimers(): Map<string, ReturnType<typeof setTimeout>>
+	clearResultTimer(jobId: string): void
+	scheduleResultCleanup(jobId: string): void
 }
 
 /**
  * Build the accessors for one job store.
  *
- * @param globalKey   unique `globalThis` key prefix for this store
- * @param resultTtlMs how long a finished job stays readable
+ * `globalThis` carries no index signature, so the two maps are asserted once
+ * here — at the point that owns the key — rather than at every read in every
+ * caller.
  */
-export function createJobStore({ globalKey, resultTtlMs }) {
+export function createJobStore<TJob extends TouchableJob>(
+	options: JobStoreOptions,
+): JobStore<TJob> {
+	const { globalKey, resultTtlMs } = options
 	const storeKey = `_${globalKey}`
 	const timersKey = `_${globalKey}Timers`
 
-	function getStore() {
-		if (!globalThis[storeKey]) globalThis[storeKey] = new Map()
-		return globalThis[storeKey]
+	function getStore(): Map<string, TJob> {
+		const holder = globalThis as Record<string, unknown>
+		if (!holder[storeKey]) holder[storeKey] = new Map<string, TJob>()
+		return holder[storeKey] as Map<string, TJob>
 	}
 
-	function getTimers() {
-		if (!globalThis[timersKey]) globalThis[timersKey] = new Map()
-		return globalThis[timersKey]
+	function getTimers(): Map<string, ReturnType<typeof setTimeout>> {
+		const holder = globalThis as Record<string, unknown>
+		if (!holder[timersKey]) holder[timersKey] = new Map<string, ReturnType<typeof setTimeout>>()
+		return holder[timersKey] as Map<string, ReturnType<typeof setTimeout>>
 	}
 
 	/** Cancel a pending cleanup so an updated job keeps its record. */
-	function clearResultTimer(jobId) {
+	function clearResultTimer(jobId: string): void {
 		const timers = getTimers()
 		const timer = timers.get(jobId)
 		if (timer) {
@@ -49,7 +82,7 @@ export function createJobStore({ globalKey, resultTtlMs }) {
 	 * holding the process open — the record is a convenience, not a reason to
 	 * stay alive.
 	 */
-	function scheduleResultCleanup(jobId) {
+	function scheduleResultCleanup(jobId: string): void {
 		const timers = getTimers()
 		if (timers.has(jobId)) return
 		const timer = setTimeout(() => {

@@ -104,9 +104,9 @@ export async function GET(request: Request) {
 		}
 
 		const PAYLOAD_FIELDS = ["request", "providerRequest", "providerResponse", "response"]
-		const details = (result.details || []).map((d) => {
+		const details = (result.details || []).map((d: Record<string, unknown>) => {
 			if (includePayloads) return d
-			const out = { ...d }
+			const out: Record<string, unknown> = { ...d }
 			for (const key of PAYLOAD_FIELDS) {
 				if (out[key] !== undefined) out[key] = withheldMarker(key, out[key])
 			}

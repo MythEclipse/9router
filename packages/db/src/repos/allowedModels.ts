@@ -6,11 +6,58 @@
 // dragging in the database driver.
 
 /**
+ * Patterns parsed from a key's allowlist, or `null` for "unrestricted".
+ *
+ * A pattern is already lower-cased and trimmed by `parseAllowedModels`, and may
+ * carry one `*` as a leading or trailing wildcard.
+ */
+export type AllowedModelPatterns = readonly string[]
+
+/**
+ * What a key may reach: parsed patterns, or `null`/`undefined` for every model.
+ *
+ * Callers hold this as a raw `string` from a session or a row, so the functions
+ * below take `unknown` and narrow it rather than demanding a pre-parsed value.
+ */
+export type AllowedModelScope = AllowedModelPatterns | null | undefined
+
+/** The outcome of folding a model change into one key's allowlist. */
+export interface AllowListReconcile {
+	/** The rewritten list, or the original when nothing applied. */
+	value: string
+	/** Whether `value` differs from what came in. */
+	changed: boolean
+	/** True when every entry was removed — the caller must keep the old list. */
+	emptied: boolean
+}
+
+/** A model rename: old id, in any case, to its replacement id. */
+export type ModelRenames = Readonly<Record<string, unknown>>
+
+/**
+ * Narrow an untyped session or row value to parsed patterns.
+ *
+ * JSON columns and dashboard session payloads arrive as `unknown`; this is the
+ * one place that decides whether such a value may be treated as patterns, so
+ * call sites do not each invent a cast. An empty array is a valid (deny-all)
+ * result and is kept.
+ */
+export function isAllowedModelPatterns(value: unknown): value is AllowedModelPatterns {
+	return Array.isArray(value) && value.every((p) => typeof p === "string")
+}
+
+/** The models a caller reports as deleted or renamed. */
+export interface ModelChanges {
+	removed?: readonly unknown[]
+	renamed?: ModelRenames
+}
+
+/**
  * Allowed-model patterns of a key, or null when the key may use every model.
  * One definition for both the request gate and the /v1/models listing, so a key
  * can never see a model it would be refused at request time.
  */
-export function parseAllowedModels(allowedModels) {
+export function parseAllowedModels(allowedModels: unknown): string[] | null {
 	const raw = String(allowedModels ?? "").trim()
 	if (!raw || raw === "*") return null
 	const patterns = raw
@@ -21,7 +68,10 @@ export function parseAllowedModels(allowedModels) {
 }
 
 /** Exact, `prefix*` and `*suffix` patterns, matched case-insensitively. */
-export function matchesAllowedModels(patterns, requestedModel) {
+export function matchesAllowedModels(
+	patterns: AllowedModelScope,
+	requestedModel: unknown,
+): boolean {
 	if (!patterns) return true
 	const req = String(requestedModel || "")
 		.trim()
@@ -35,15 +85,24 @@ export function matchesAllowedModels(patterns, requestedModel) {
 	})
 }
 
+/** A WHERE fragment admitting the allowed models, plus its bound parameters. */
+export interface AllowedModelsSql {
+	sql: string
+	params: string[]
+}
+
 /**
  * Same pattern language as matchesAllowedModels, expressed as a SQL condition so
  * row counts stay correct under pagination. Returns null when every model is
  * allowed, which lets the caller skip the WHERE clause entirely.
  */
-export function buildAllowedModelsSql(patterns, column = "model") {
+export function buildAllowedModelsSql(
+	patterns: AllowedModelScope,
+	column = "model",
+): AllowedModelsSql | null {
 	if (!patterns) return null
-	const clauses = []
-	const params = []
+	const clauses: string[] = []
+	const params: string[] = []
 	for (const allowed of patterns) {
 		if (allowed === "*") return null
 		if (allowed.endsWith("*")) {
@@ -75,7 +134,10 @@ export function buildAllowedModelsSql(patterns, column = "model") {
  * quietly turn a locked key into an unlocked one. The caller keeps the old value
  * and surfaces it instead.
  */
-export function applyModelChangesToAllowList(allowList, { removed = [], renamed = {} } = {}) {
+export function applyModelChangesToAllowList(
+	allowList: unknown,
+	{ removed = [], renamed = {} }: ModelChanges = {},
+): AllowListReconcile {
 	const original = String(allowList ?? "").trim()
 	if (!original || original === "*") return { value: original, changed: false, emptied: false }
 
@@ -84,7 +146,7 @@ export function applyModelChangesToAllowList(allowList, { removed = [], renamed 
 		.split(",")
 		.map((t) => t.trim())
 		.filter(Boolean)
-	const kept = []
+	const kept: string[] = []
 	let touched = false
 
 	for (const token of tokens) {

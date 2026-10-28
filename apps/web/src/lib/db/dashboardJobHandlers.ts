@@ -108,7 +108,11 @@ registerDashboardJobHandler("deploy-relay", async (job, { report }) => {
 	const label = provider.charAt(0).toUpperCase() + provider.slice(1)
 	report({ progress: 10, message: `Deploying ${label} relay` })
 
-	const form = { ...(job.payload?.form || {}) }
+	const rawForm = job.payload?.form
+	const form: Record<string, unknown> =
+		rawForm && typeof rawForm === "object" && !Array.isArray(rawForm)
+			? { ...(rawForm as Record<string, unknown>) }
+			: {}
 	delete form.provider
 
 	const { POST: deploy } = await importer()

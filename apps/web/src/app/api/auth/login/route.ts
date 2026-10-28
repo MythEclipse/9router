@@ -187,7 +187,7 @@ export async function POST(request) {
 			}
 		}
 
-		let isValid = false
+		let isValid: boolean
 		if (storedHash) {
 			isValid = await bcrypt.compare(password, storedHash)
 		} else {

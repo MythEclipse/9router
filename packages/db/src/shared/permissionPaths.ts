@@ -1,7 +1,28 @@
 // Pure permission helpers, safe to import from middleware and the proxy wrapper.
 // Anything that needs the request cookie lives in dashboardPermissions.js.
 
-export const PERMISSION_KEYS = [
+/**
+ * The permission vocabulary: one key per dashboard capability.
+ *
+ * A stored key or session carries this object, often read back from a JSON
+ * column, so a key minted before a permission existed simply lacks it.
+ */
+export interface PermissionSet {
+	manageApiKeys: boolean
+	manageModels: boolean
+	manageProviders: boolean
+	manageTools: boolean
+	manageAdvanced: boolean
+	managePlugins: boolean
+	manageMediaProviders: boolean
+	viewUsage: boolean
+}
+
+/** The keys of {@link PermissionSet}; the rule tables below are typed by it. */
+export type PermissionKey = keyof PermissionSet
+
+/** Every permission, in the order the UI lists them. */
+export const PERMISSION_KEYS: readonly PermissionKey[] = [
 	"manageApiKeys",
 	"manageModels",
 	"manageProviders",
@@ -12,7 +33,7 @@ export const PERMISSION_KEYS = [
 	"viewUsage",
 ]
 
-export const DEFAULT_PERMISSIONS = {
+export const DEFAULT_PERMISSIONS: PermissionSet = {
 	manageApiKeys: false,
 	manageModels: false,
 	manageProviders: false,
@@ -23,7 +44,7 @@ export const DEFAULT_PERMISSIONS = {
 	viewUsage: true,
 }
 
-export const FULL_PERMISSIONS = {
+export const FULL_PERMISSIONS: PermissionSet = {
 	manageApiKeys: true,
 	manageModels: true,
 	manageProviders: true,
@@ -34,9 +55,16 @@ export const FULL_PERMISSIONS = {
 	viewUsage: true,
 }
 
-export function normalizePermissions(input) {
-	const source = input && typeof input === "object" ? input : {}
-	const out = {}
+/**
+ * Coerce whatever a session or a key stored into a complete {@link PermissionSet}.
+ *
+ * Anything that is not an object yields the defaults, and a missing `viewUsage`
+ * keeps its default instead of being read as `false`.
+ */
+export function normalizePermissions(input: unknown): PermissionSet {
+	const source: Record<string, unknown> =
+		input && typeof input === "object" ? (input as Record<string, unknown>) : {}
+	const out = { ...DEFAULT_PERMISSIONS }
 	for (const key of PERMISSION_KEYS) {
 		out[key] =
 			key === "viewUsage"
@@ -48,7 +76,13 @@ export function normalizePermissions(input) {
 	return out
 }
 
-export function canGrantPermissions(granter, requested) {
+/**
+ * Whether a grantor holds every permission it is about to hand out.
+ *
+ * Both sides are normalized first, so a key that never had a permission cannot
+ * pass it on just because its stored blob does not mention it.
+ */
+export function canGrantPermissions(granter: unknown, requested: unknown): boolean {
 	const have = normalizePermissions(granter)
 	const want = normalizePermissions(requested)
 	for (const key of PERMISSION_KEYS) {
@@ -57,10 +91,11 @@ export function canGrantPermissions(granter, requested) {
 	return true
 }
 
-export function clampPermissions(granter, requested) {
+/** The intersection of `requested` with what `granter` holds. */
+export function clampPermissions(granter: unknown, requested: unknown): PermissionSet {
 	const have = normalizePermissions(granter)
 	const want = normalizePermissions(requested)
-	const out = {}
+	const out = { ...DEFAULT_PERMISSIONS }
 	for (const key of PERMISSION_KEYS) out[key] = want[key] && have[key]
 	return out
 }
@@ -69,9 +104,17 @@ export function clampPermissions(granter, requested) {
 // a new route is closed to restricted sessions until it is named here on purpose.
 // A rule without `methods` covers every method; a rule with `methods` only covers
 // the ones it names, and later rules win when both match the same path.
-const READ_METHODS = ["GET", "HEAD"]
+const READ_METHODS: readonly string[] = ["GET", "HEAD"]
 
-const API_PERMISSION_RULES = [
+/** One API rule: the path prefix it guards, and any subset of methods. */
+interface ApiPermissionRule {
+	prefix: string
+	permissions: readonly PermissionKey[]
+	/** Absent means every method; present means only the verbs it names. */
+	methods?: readonly string[]
+}
+
+const API_PERMISSION_RULES: readonly ApiPermissionRule[] = [
 	{ prefix: "/api/keys", permissions: ["manageApiKeys"] },
 	// The provider page needs the model catalog to render a connection, so reading it
 	// is shared with manageProviders while every write stays on manageModels. Reading is
@@ -142,8 +185,15 @@ const API_PERMISSION_RULES = [
 // Longest prefix first, so /api/model-editor is not swallowed by a /api/models style
 // rule and /api/keys/x is not matched by a shorter sibling. Within one prefix the
 // most specific method rule wins, which is why the read rules sit above the write ones.
-export function requiredPermissionsForApiPath(pathname, method = "GET") {
-	let best = null
+/**
+ * The permissions that open `pathname` for `method`, or `null` when no rule
+ * matches — which callers read as "closed to a restricted session".
+ */
+export function requiredPermissionsForApiPath(
+	pathname: string,
+	method: string = "GET",
+): readonly PermissionKey[] | null {
+	let best: readonly PermissionKey[] | null = null
 	let bestScore = -1
 	for (const rule of API_PERMISSION_RULES) {
 		if (pathname !== rule.prefix && !pathname.startsWith(`${rule.prefix}/`)) continue
@@ -160,7 +210,16 @@ export function requiredPermissionsForApiPath(pathname, method = "GET") {
 // Dashboard pages an API key session may open. A rule with an empty list closes the
 // page to restricted sessions on purpose, so every admin-only page is named here
 // and anything added later stays admin-only until it is opened up.
-const PAGE_PERMISSION_RULES = [
+/** One dashboard page rule: the path prefix it guards. */
+interface PagePermissionRule {
+	prefix: string
+	/** Held is "any of these"; an empty list keeps the page closed. */
+	permissions: readonly PermissionKey[]
+	/** Match the prefix exactly instead of also matching paths below it. */
+	exact?: boolean
+}
+
+const PAGE_PERMISSION_RULES: readonly PagePermissionRule[] = [
 	{ prefix: "/dashboard/endpoint", permissions: ["manageApiKeys"] },
 	{ prefix: "/dashboard/usage", permissions: ["viewUsage"] },
 	{ prefix: "/dashboard/api-key-usage", permissions: ["viewUsage", "manageApiKeys"] },
@@ -195,8 +254,9 @@ const PAGE_PERMISSION_RULES = [
 // closed to restricted sessions: canOpenPage asks whether ANY listed permission is
 // held, and an empty list has none to ask about. Write the permission name a page
 // needs; leaving [] is only a way to keep a page shut.
-export function requiredPermissionsForPage(pathname) {
-	let best = null
+/** The permissions that open dashboard `pathname`, or `null` when no rule matches. */
+export function requiredPermissionsForPage(pathname: string): readonly PermissionKey[] | null {
+	let best: readonly PermissionKey[] | null = null
 	let bestLength = -1
 	for (const rule of PAGE_PERMISSION_RULES) {
 		const matches = rule.exact
@@ -210,7 +270,7 @@ export function requiredPermissionsForPage(pathname) {
 	return best
 }
 
-export function canOpenPage(pathname, permissions) {
+export function canOpenPage(pathname: string, permissions: unknown): boolean {
 	const needed = requiredPermissionsForPage(pathname)
 	if (needed === null) return false
 	const have = normalizePermissions(permissions)
@@ -221,8 +281,8 @@ export function canOpenPage(pathname, permissions) {
 // away from a page it has no permission for. Null when the key holds nothing usable.
 // Ordered so a broader permission is tried first: a full admin still lands on the
 // endpoint page even though every later candidate would also open.
-export function firstAllowedPage(permissions) {
-	const candidates = [
+export function firstAllowedPage(permissions: unknown): string | null {
+	const candidates: readonly { path: string; permissions: readonly PermissionKey[] }[] = [
 		{ path: "/dashboard/endpoint", permissions: ["manageApiKeys"] },
 		{ path: "/dashboard/usage", permissions: ["viewUsage"] },
 		{ path: "/dashboard/providers", permissions: ["manageProviders"] },

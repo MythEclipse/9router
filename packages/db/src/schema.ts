@@ -256,7 +256,8 @@ export const TABLES: SchemaTables = {
 	},
 }
 
-export function buildCreateTableSql(name, def) {
+/** `CREATE TABLE IF NOT EXISTS` for one table of {@link TABLES}. */
+export function buildCreateTableSql(name: string, def: TableDef): string {
 	const cols = Object.entries(def.columns).map(([k, v]) => `${k} ${v}`)
 	if (def.primaryKey) cols.push(def.primaryKey)
 	return `CREATE TABLE IF NOT EXISTS ${name} (${cols.join(", ")})`

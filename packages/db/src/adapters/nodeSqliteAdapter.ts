@@ -1,9 +1,17 @@
 // Built-in node:sqlite adapter - available in Node >= 22.5.0.
 // No native build, no npm install. API mirrors betterSqliteAdapter.
 import { PRAGMA_SQL } from "../schema.ts"
-import type { ResolvedDbAdapter } from "../types.ts"
+import type { DbParams, DbRow, ResolvedDbAdapter } from "../types.ts"
 
 const CHECKPOINT_INTERVAL_MS = 60 * 1000
+
+// node:sqlite exports no type names, so the two it needs are mirrored from
+// @types/node at this boundary. The adapter is the only place that has to know;
+// the rest of the package sees the driver-neutral DbAdapter.
+type SqliteDb = InstanceType<typeof import("node:sqlite").DatabaseSync>
+type PreparedStatement = ReturnType<SqliteDb["prepare"]>
+/** One positional bind value: what `run(...)`/`get(...)`/`all(...)` accept. */
+type SqliteValue = Exclude<Parameters<PreparedStatement["run"]>[number], Record<string, unknown>>
 
 export async function createNodeSqliteAdapter(filePath: string): Promise<ResolvedDbAdapter> {
 	// Suppress "ExperimentalWarning: SQLite is an experimental feature" from node:sqlite.
@@ -34,12 +42,12 @@ export async function createNodeSqliteAdapter(filePath: string): Promise<Resolve
 	// Dynamic import - fails on Node < 22.5 → driver.js falls back to sql.js
 	const sqlite = await import("node:sqlite")
 	const Database = sqlite.DatabaseSync
-	const db = new Database(filePath)
+	const db = new Database(filePath) as SqliteDb
 
 	db.exec(PRAGMA_SQL)
 
-	const stmtCache = new Map()
-	function prepare(sql) {
+	const stmtCache = new Map<string, PreparedStatement>()
+	function prepare(sql: string): PreparedStatement {
 		let stmt = stmtCache.get(sql)
 		if (!stmt) {
 			stmt = db.prepare(sql)
@@ -52,9 +60,9 @@ export async function createNodeSqliteAdapter(filePath: string): Promise<Resolve
 	// statements are name-parameterised by depth (0 = outermost).
 	const TX_MAX_DEPTH = 16
 	let txDepth = 0
-	const txSavepointStmts = []
-	const txReleaseStmts = []
-	const txRollbackStmts = []
+	const txSavepointStmts: PreparedStatement[] = []
+	const txReleaseStmts: PreparedStatement[] = []
+	const txRollbackStmts: PreparedStatement[] = []
 	for (let i = 0; i < TX_MAX_DEPTH; i++) {
 		txSavepointStmts.push(db.prepare(`SAVEPOINT sp_${i}`))
 		txReleaseStmts.push(db.prepare(`RELEASE sp_${i}`))
@@ -63,11 +71,12 @@ export async function createNodeSqliteAdapter(filePath: string): Promise<Resolve
 
 	// Overflows past TX_MAX_DEPTH (16 nested) fall back to a one-off exec rather
 	// than failing: nest depth is a perf detail, not a correctness condition.
-	const txSavepoint = (d) =>
-		(txSavepointStmts[d] || { run: () => db.exec(`SAVEPOINT sp_${d}`) }).run()
-	const txRelease = (d) => (txReleaseStmts[d] || { run: () => db.exec(`RELEASE sp_${d}`) }).run()
-	const txRollbackTo = (d) =>
-		(txRollbackStmts[d] || { run: () => db.exec(`ROLLBACK TO sp_${d}`) }).run()
+	const txSavepoint = (depth: number) =>
+		(txSavepointStmts[depth] ?? { run: () => db.exec(`SAVEPOINT sp_${depth}`) }).run()
+	const txRelease = (depth: number) =>
+		(txReleaseStmts[depth] ?? { run: () => db.exec(`RELEASE sp_${depth}`) }).run()
+	const txRollbackTo = (depth: number) =>
+		(txRollbackStmts[depth] ?? { run: () => db.exec(`ROLLBACK TO sp_${depth}`) }).run()
 
 	// Periodic WAL checkpoint to keep -wal/-shm small
 	const checkpointTimer = setInterval(() => {
@@ -114,14 +123,14 @@ export async function createNodeSqliteAdapter(filePath: string): Promise<Resolve
 	return {
 		driver: "node:sqlite",
 		run(sql, params = []) {
-			const r = prepare(sql).run(...params)
+			const r = prepare(sql).run(...(params as SqliteValue[]))
 			return { changes: Number(r.changes ?? 0), lastInsertRowid: Number(r.lastInsertRowid ?? 0) }
 		},
-		get(sql, params = []) {
-			return prepare(sql).get(...params)
+		get<T = DbRow>(sql: string, params: DbParams = []) {
+			return prepare(sql).get(...(params as SqliteValue[])) as T | undefined
 		},
-		all(sql, params = []) {
-			return prepare(sql).all(...params)
+		all<T = DbRow>(sql: string, params: DbParams = []) {
+			return prepare(sql).all(...(params as SqliteValue[])) as T[]
 		},
 		exec(sql) {
 			return db.exec(sql)

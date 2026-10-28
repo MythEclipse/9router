@@ -5,6 +5,145 @@ import { parseJson, stringifyJson } from "../helpers/jsonCol.ts"
 const DEFAULT_MITM_ROUTER_BASE = "http://localhost:20128"
 const DEFAULT_HEADROOM_URL = process.env.HEADROOM_URL || "http://localhost:8787"
 
+/** One capacity class (vision, pdf, ...) and the models routed through it. */
+export interface CapacityAdapterEntry {
+	enabled: boolean
+	roundRobin: boolean
+	/** Models may carry legacy ids; `mergeWithDefaults` upgrades them. */
+	models: unknown[]
+}
+
+/** Per-plugin enablement, keyed by `CUSTOM_PLUGIN_KEYS`. */
+export interface CustomPluginSetting {
+	enabled: boolean
+	/** The model ids this plugin is applied to. */
+	models: string[]
+	[key: string]: unknown
+}
+
+/**
+ * A combo's routing strategy, keyed by combo name in `comboStrategies`.
+ *
+ * Open-ended because providers and combos can carry tuning this module never
+ * reads; only the fields the gateway and the dashboards branch on are named.
+ */
+export interface ComboStrategy {
+	fallbackStrategy?: string
+	judgeModel?: string
+	fusionTuning?: unknown
+	smartPolicy?: string
+	sessionSticky?: boolean
+	confidenceThreshold?: number
+	routerModel?: string
+	[key: string]: unknown
+}
+
+/** A provider's account-rotation strategy, keyed by provider id. */
+export interface ProviderStrategy {
+	rotateStrategy?: string
+	proxyPoolId?: string | null
+	[key: string]: unknown
+}
+
+/** Per-provider auto-ping configuration (claude / codex). */
+export interface AutoPingSettings {
+	connections?: Record<string, unknown>
+	schedules?: Record<string, { enabled?: boolean }>
+}
+
+/**
+ * The settings object the app reads.
+ *
+ * Deliberately open (`[key: string]: unknown`): the raw row is operator data and
+ * may hold keys this build does not know — `quotaAutoPing` reaches providers
+ * through a dynamic `settingsKey`, and `getCloudUrl` reads `cloudUrl`, which no
+ * default declares. Naming the fields the code actually touches keeps property
+ * access typed without pretending the row is closed.
+ */
+export interface Settings {
+	cloudEnabled: boolean
+	cloudUrl?: string
+	tunnelEnabled: boolean
+	tunnelUrl: string
+	tailscaleEnabled: boolean
+	tailscaleUrl: string
+	stickyRoundRobinLimit: number
+	providerStrategies: Record<string, ProviderStrategy>
+	quotaVisibility: Record<string, unknown>
+	comboStrategy: string
+	comboStickyRoundRobinLimit: number
+	comboStrategies: Record<string, ComboStrategy>
+	capacityAdapter: Record<string, CapacityAdapterEntry>
+	customPlugins: Record<string, CustomPluginSetting>
+	requireLogin: boolean
+	antiProbeMetadata: boolean
+	requireApiKey: boolean
+	theme: string
+	tunnelDashboardAccess: boolean
+	authMode: string
+	ssoType: string
+	oidcIssuerUrl: string
+	oidcClientId: string
+	oidcClientSecret: string
+	oidcScopes: string
+	oidcLoginLabel: string
+	samlEntryPoint: string
+	samlIssuer: string
+	samlCert: string
+	samlLoginLabel: string
+	samlAttributeEmail: string
+	samlAttributeName: string
+	enableObservability: boolean
+	observabilityMaxRecords: number
+	observabilityBatchSize: number
+	observabilityFlushIntervalMs: number
+	observabilityMaxJsonSize: number
+	observabilityIncludePayloads: boolean
+	outboundProxyEnabled: boolean
+	outboundProxyUrl: string
+	outboundProxyNoProxy?: string
+	outboundNoProxy: string
+	mitmRouterBaseUrl: string
+	dnsToolEnabled: Record<string, unknown>
+	rtkEnabled: boolean
+	headroomEnabled: boolean
+	headroomUrl: string
+	headroomCompressUserMessages: boolean
+	headroomTimeoutMs: number
+	cavemanEnabled: boolean
+	contextPruningLevel: string
+	semanticCacheTtlHours: number
+	semanticCacheMaxEntries: number
+	cavemanLevel: string
+	ponytailEnabled: boolean
+	ponytailLevel: string
+	customPromptEnabled: boolean
+	customPrompt: string
+	pxpipeEnabled: boolean
+	pxpipeAutoInstall: boolean
+	pxpipeMinChars: number
+	pxpipeTimeoutMs: number
+	hideError: boolean
+	providerOverrides: Record<string, unknown>
+	/** Per-provider auto-ping schedules the startup check reads. */
+	claudeAutoPing?: AutoPingSettings | null
+	codexAutoPing?: AutoPingSettings | null
+	/** The dashboard password hash (`bcrypt`); absent on a passwordless install. */
+	password?: string
+	/** The MITM proxy toggle; the startup path resumes it when set. */
+	mitmEnabled?: boolean
+	[key: string]: unknown
+}
+
+/** A settings patch: any subset of the known keys, plus operator-only extras. */
+export type SettingsUpdate = Partial<Settings> & Record<string, unknown>
+
+/** A memoised value with the instant it goes stale. */
+interface CacheEntry<T> {
+	value: T | null
+	expiresAt: number
+}
+
 const DEFAULT_SETTINGS = {
 	cloudEnabled: false,
 	tunnelEnabled: false,
@@ -22,15 +161,15 @@ const DEFAULT_SETTINGS = {
 	comboStickyRoundRobinLimit: 1,
 	comboStrategies: {},
 	capacityAdapter: {
-		vision: { enabled: true, roundRobin: false, models: [] },
-		pdf: { enabled: false, roundRobin: false, models: [] },
-		audioInput: { enabled: true, roundRobin: false, models: [] },
-		videoInput: { enabled: false, roundRobin: false, models: [] },
+		vision: { enabled: true, roundRobin: false, models: [] as string[] },
+		pdf: { enabled: false, roundRobin: false, models: [] as string[] },
+		audioInput: { enabled: true, roundRobin: false, models: [] as string[] },
+		videoInput: { enabled: false, roundRobin: false, models: [] as string[] },
 	},
 	// Keys come from CUSTOM_PLUGIN_KEYS so a new plugin cannot be missing here;
 	// this literal had five entries while six plugins existed.
 	customPlugins: Object.fromEntries(
-		CUSTOM_PLUGIN_KEYS.map((key) => [key, { enabled: false, models: [] }]),
+		CUSTOM_PLUGIN_KEYS.map((key) => [key, { enabled: false, models: [] as string[] }]),
 	),
 	requireLogin: true,
 	// Custom-model editor: warn about name/owned_by that claim a vendor the
@@ -128,13 +267,13 @@ async function readRaw() {
  * behind our back.
  */
 const RAW_CACHE_TTL_MS = 2000
-let rawCache = { value: null, expiresAt: 0 }
+let rawCache: CacheEntry<SettingsUpdate> = { value: null, expiresAt: 0 }
 
 function invalidateRawCache() {
 	rawCache = { value: null, expiresAt: 0 }
 }
 
-async function readRawCached() {
+async function readRawCached(): Promise<SettingsUpdate> {
 	const now = Date.now()
 	if (rawCache.value && rawCache.expiresAt > now) return rawCache.value
 	const value = await readRaw()
@@ -143,8 +282,8 @@ async function readRawCached() {
 }
 
 // Merge raw settings with defaults; backward-compat for missing keys
-export function mergeWithDefaults(raw) {
-	const merged = { ...DEFAULT_SETTINGS, ...(raw || {}) }
+export function mergeWithDefaults(raw: unknown): Settings {
+	const merged = { ...DEFAULT_SETTINGS, ...(raw as SettingsUpdate | null | undefined) } as Settings
 	for (const [key, defVal] of Object.entries(DEFAULT_SETTINGS)) {
 		if (merged[key] === undefined) {
 			if (
@@ -171,18 +310,18 @@ export function mergeWithDefaults(raw) {
 	return merged
 }
 
-export async function getSettings() {
+export async function getSettings(): Promise<Settings> {
 	const raw = await readRawCached()
 	return mergeWithDefaults(raw)
 }
 
 // Atomic read-merge-write inside transaction (prevents losing concurrent updates)
-export async function updateSettings(updates) {
+export async function updateSettings(updates: SettingsUpdate): Promise<Settings> {
 	const db = await getAdapter()
-	let next
+	let next: SettingsUpdate = {}
 	db.transaction(() => {
-		const row = db.get(`SELECT data FROM settings WHERE id = 1`)
-		const current = row ? parseJson(row.data, {}) : {}
+		const row = db.get<{ data?: string | null }>(`SELECT data FROM settings WHERE id = 1`)
+		const current = (row ? parseJson(row.data, {}) : {}) as SettingsUpdate
 		next = { ...current, ...updates }
 		db.run(
 			`INSERT INTO settings(id, data) VALUES(1, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data`,

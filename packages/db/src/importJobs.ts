@@ -28,16 +28,37 @@ export interface PostImportHooks {
 
 let postImportHooks: PostImportHooks = {}
 
+/** Progress a running import reports, as the dashboard polls it. */
+export interface ImportProgress {
+	done: number
+	total: number
+	percent: number
+	currentSection: string
+}
+
+/** One background import job. Process-local; see the header comment. */
+export interface ImportJob {
+	id: string
+	status: "queued" | "running" | "done" | "error"
+	progress: ImportProgress | null
+	message: string
+	error: string | null
+	payload: Record<string, unknown> | null
+	pollTokenHash: string | null
+	createdAt: string
+	updatedAt: string
+}
+
 export function registerPostImportHooks(hooks: PostImportHooks): void {
 	postImportHooks = { ...postImportHooks, ...hooks }
 }
 
-const { getStore, scheduleResultCleanup } = createJobStore({
+const { getStore, scheduleResultCleanup } = createJobStore<ImportJob>({
 	globalKey: "importJobs",
 	resultTtlMs: RESULT_TTL_MS,
 })
 
-async function runImportJob(jobId) {
+async function runImportJob(jobId: string): Promise<void> {
 	const store = getStore()
 	const job = store.get(jobId)
 	if (!job || job.status !== "queued") return
@@ -99,7 +120,11 @@ async function runImportJob(jobId) {
 	}
 }
 
-export function createImportJob(payload) {
+export function createImportJob(payload: Record<string, unknown>): {
+	jobId: string
+	status: string
+	pollToken: string
+} {
 	if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
 		throw new Error("Invalid database payload")
 	}
@@ -126,7 +151,7 @@ export function createImportJob(payload) {
 	return { jobId, status: "queued", pollToken: token }
 }
 
-export function getImportJob(jobId) {
+export function getImportJob(jobId: string | null | undefined): ImportJob | null {
 	if (!jobId) return null
 	return getStore().get(jobId) || null
 }

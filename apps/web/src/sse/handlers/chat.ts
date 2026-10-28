@@ -855,7 +855,7 @@ async function handleSingleModelChat(
 			ccFilterNaming: !!chatSettings.ccFilterNaming,
 			rtkEnabled: !!chatSettings.rtkEnabled,
 			contextPruningEnabled: !!chatSettings.contextPruningEnabled,
-			maxMessagesLimit: chatSettings.maxMessagesLimit || 20,
+			maxMessagesLimit: Number(chatSettings.maxMessagesLimit) || 20,
 			contextPruningLevel: chatSettings.contextPruningLevel || "full",
 			semanticCacheEnabled: !!chatSettings.semanticCacheEnabled,
 			semanticCacheTtlHours: chatSettings.semanticCacheTtlHours ?? 3,

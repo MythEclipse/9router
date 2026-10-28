@@ -12,6 +12,21 @@
  */
 import type { EventEmitter } from "node:events"
 
+/** One rate-limited request in a key's sliding window. */
+export interface ApiKeyRateEvent {
+	ts: number
+	tokens: number
+}
+
+/** Per-key RPM/TPM sliding windows: API key string to its recent events. */
+export type ApiKeyRateLimits = Record<string, ApiKeyRateEvent[]>
+
+/**
+ * Memoised API-key list. `null` means "not cached"; the reader re-queries when
+ * it sees `null`, so the payload shape is left to the module that fills it.
+ */
+export type ApiKeyListCache = unknown
+
 declare global {
 	var _pendingRequests:
 		| { byModel: Record<string, number>; byAccount: Record<string, Record<string, number>> }
@@ -22,4 +37,6 @@ declare global {
 	var _recentRing: { items: unknown[]; initialized: boolean } | undefined
 	var _connectionMapCache: { map: Record<string, unknown>; ts: number } | undefined
 	var _statsEmitTimers: { pending: NodeJS.Timeout | null; update: NodeJS.Timeout | null } | undefined
+	var _apiKeyRateLimits: ApiKeyRateLimits | undefined
+	var _apiKeyListCache: ApiKeyListCache | undefined
 }

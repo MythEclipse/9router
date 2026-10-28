@@ -79,7 +79,7 @@ export async function verifyDashboardPassword(password) {
 	if (typeof password !== "string" || !password) return false
 	const settings = await getSettings()
 	const storedHash = settings?.password
-	if (storedHash) return bcrypt.compare(password, storedHash)
+	if (storedHash) return await bcrypt.compare(password, storedHash)
 	const initialPassword = process.env.INITIAL_PASSWORD || DEFAULT_PASSWORD
 	return password === initialPassword
 }

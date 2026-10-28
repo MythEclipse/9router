@@ -1,3 +1,4 @@
+import type { Settings } from "@9router/db/repos/settingsRepo"
 import { NextResponse } from "next/server"
 import { getCapabilitiesForModel } from "open-sse/providers/capabilities"
 import { fetchSuggestedModelsServer, onlyFree } from "@/app/api/providers/suggested-models/filters"
@@ -43,12 +44,10 @@ export async function GET() {
 	try {
 		const modelAliases = await getModelAliases()
 		const disabled = await getDisabledModels()
-		const settings: {
-			customPlugins?: Record<string, { enabled?: boolean; models?: string[] }>
-		} = await getSettings().catch(() => ({}))
+		const settings: Pick<Settings, "customPlugins"> | null = await getSettings().catch(() => null)
 		const customPlugins = settings?.customPlugins || {}
 		const atEnabled = Boolean(customPlugins.adaptiveThinking?.enabled)
-		const atModels = new Set(customPlugins.adaptiveThinking?.models || [])
+		const atModels = new Set<string>(customPlugins.adaptiveThinking?.models || [])
 
 		// One resolver for every branch below.
 		type PluginSource = [

@@ -325,8 +325,13 @@ export async function runQuotaAutoPingTick(deps = createDefaultDeps(), state = g
 			const handler = providerHandlers[provider]
 			if (!handler) continue
 
-			const enabledMap = settings?.[providerConfig.settingsKey]?.connections || {}
-			const scheduleMap = settings?.[providerConfig.settingsKey]?.schedules || {}
+			// A provider's settingsKey is dynamic, so the row value is unknown here;
+			// both maps default to empty, which is what the `continue` below expects.
+			const providerSettings = settings?.[providerConfig.settingsKey] as
+				| { connections?: Record<string, unknown>; schedules?: Record<string, unknown> }
+				| undefined
+			const enabledMap = providerSettings?.connections || {}
+			const scheduleMap = providerSettings?.schedules || {}
 			if (Object.keys(enabledMap).length === 0 && Object.keys(scheduleMap).length === 0) continue
 
 			const conns = await deps.getProviderConnections({ provider, isActive: true })

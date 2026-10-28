@@ -8,6 +8,7 @@ import { normalizeAllowedEndpoints } from "@9router/db/shared/keyEndpoints"
 import { DEFAULT_PERMISSIONS } from "@9router/db/shared/permissionPaths"
 import { v4 as uuidv4 } from "uuid"
 import { getAdapter } from "../driver.ts"
+import type { ApiKeyRateEvent, ApiKeyRateLimits } from "../globals.d.ts"
 import type { DbRow } from "../types.ts"
 // The allowed-model pattern language lives in a dependency-free module of its own:
 // the request gate, the /v1/models listing and the usage dashboards all read it, and
@@ -16,6 +17,7 @@ import type { DbRow } from "../types.ts"
 import {
 	applyModelChangesToAllowList,
 	buildAllowedModelsSql,
+	type ModelChanges,
 	matchesAllowedModels,
 	parseAllowedModels,
 } from "./allowedModels.ts"
@@ -291,7 +293,7 @@ export async function updateApiKey(
 	return result
 }
 
-export async function deleteApiKey(id) {
+export async function deleteApiKey(id: string): Promise<boolean> {
 	const db = await getAdapter()
 	const res = db.run(`DELETE FROM apiKeys WHERE id = ?`, [id])
 	invalidateApiKeyCache()
@@ -300,7 +302,7 @@ export async function deleteApiKey(id) {
 
 // In-memory sliding window rate limiter state for RPM/TPM per API key
 if (!global._apiKeyRateLimits) global._apiKeyRateLimits = {}
-const rateLimits = global._apiKeyRateLimits
+const rateLimits: ApiKeyRateLimits = global._apiKeyRateLimits
 
 // Process-wide memo cache for the api-key list, invalidated on writes so the
 // next request re-reads from SQLite instead of serving stale rows.
@@ -309,7 +311,12 @@ export function invalidateApiKeyCache() {
 	global._apiKeyListCache = null
 }
 
-function checkRateLimits(key, rpmLimit, tpmLimit) {
+/** Why a key was refused, or `true` when it may proceed. */
+export type RateLimitVerdict = true | "RPM_EXCEEDED" | "TPM_EXCEEDED"
+
+const RATE_WINDOW_MS = 60000
+
+function checkRateLimits(key: string, rpmLimit: number, tpmLimit: number): RateLimitVerdict {
 	if (rpmLimit <= 0 && tpmLimit <= 0) return true
 	const now = Date.now()
 	if (!rateLimits[key]) {
@@ -317,7 +324,7 @@ function checkRateLimits(key, rpmLimit, tpmLimit) {
 	}
 
 	// Filter out events older than 60 seconds (1 minute window)
-	rateLimits[key] = rateLimits[key].filter((req) => now - req.ts < 60000)
+	rateLimits[key] = rateLimits[key].filter((req: ApiKeyRateEvent) => now - req.ts < RATE_WINDOW_MS)
 	const recent = rateLimits[key]
 
 	if (rpmLimit > 0 && recent.length >= rpmLimit) {
@@ -325,7 +332,10 @@ function checkRateLimits(key, rpmLimit, tpmLimit) {
 	}
 
 	if (tpmLimit > 0) {
-		const totalTokensInWindow = recent.reduce((sum, r) => sum + (r.tokens || 0), 0)
+		const totalTokensInWindow = recent.reduce(
+			(sum: number, r: ApiKeyRateEvent) => sum + (r.tokens || 0),
+			0,
+		)
 		if (totalTokensInWindow >= tpmLimit) {
 			return "TPM_EXCEEDED"
 		}
@@ -334,7 +344,7 @@ function checkRateLimits(key, rpmLimit, tpmLimit) {
 	return true
 }
 
-export function recordApiKeyUsageInWindow(key, tokens = 0) {
+export function recordApiKeyUsageInWindow(key: string, tokens = 0): void {
 	if (!key) return
 	const now = Date.now()
 	if (!rateLimits[key]) rateLimits[key] = []
@@ -342,7 +352,7 @@ export function recordApiKeyUsageInWindow(key, tokens = 0) {
 }
 
 /** Patterns of the key used by a request; null when there is no key or it allows all. */
-export async function getAllowedModelsOfKey(key) {
+export async function getAllowedModelsOfKey(key: unknown): Promise<string[] | null> {
 	const raw = typeof key === "string" ? key.trim() : ""
 	if (!raw) return null
 	try {
@@ -504,7 +514,10 @@ export async function validateApiKey(
  * a throw anywhere below leaves every key as it was, and the mutation that
  * triggered this has already been committed.
  */
-export async function reconcileAllowedModels({ removed = [], renamed = {} } = {}) {
+export async function reconcileAllowedModels({
+	removed = [],
+	renamed = {},
+}: ModelChanges = {}): Promise<{ updated: number; emptied: string[] }> {
 	if (!removed.length && !Object.keys(renamed).length) {
 		return { updated: 0, emptied: [] }
 	}

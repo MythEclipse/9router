@@ -1,6 +1,7 @@
 import { getAdapter } from "../driver.ts"
 import { parseJson, stringifyJson } from "../helpers/jsonCol.ts"
-import { buildAllowedModelsSql } from "./allowedModels.ts"
+import type { DbRow } from "../types.ts"
+import { buildAllowedModelsSql, isAllowedModelPatterns } from "./allowedModels.ts"
 
 const DEFAULT_MAX_RECORDS = 200
 const DEFAULT_BATCH_SIZE = 20
@@ -8,54 +9,83 @@ const DEFAULT_FLUSH_INTERVAL_MS = 5000
 const DEFAULT_MAX_JSON_SIZE = 5 * 1024
 const CONFIG_CACHE_TTL_MS = 5000
 
-let cachedConfig = null
+/** The batching thresholds the observability writer works to. */
+interface ObservabilityConfig {
+	enabled: boolean
+	maxRecords: number
+	batchSize: number
+	flushIntervalMs: number
+	maxJsonSize: number
+}
+
+/**
+ * A request-detail record, as handed to `saveRequestDetail`.
+ *
+ * Everything but `id` is optional: callers build these incrementally on the
+ * request path, and the flush fills in the id and timestamp.
+ */
+export interface RequestDetail {
+	id?: string
+	provider?: string | null
+	model?: string | null
+	connectionId?: string | null
+	timestamp?: string
+	status?: string | null
+	latency?: unknown
+	tokens?: unknown
+	request?: { headers?: Record<string, string> | null; [key: string]: unknown } | null
+	providerRequest?: unknown
+	providerResponse?: unknown
+	response?: unknown
+	pxpipe?: unknown
+	resolvedModel?: string
+	[key: string]: unknown
+}
+
+/** A field replaced by a preview when it exceeds `maxJsonSize`. */
+interface TruncatedField {
+	_truncated: true
+	_originalSize: number
+	_preview: string
+}
+
+let cachedConfig: ObservabilityConfig | null = null
 let cachedConfigTs = 0
 
-async function getObservabilityConfig() {
-	if (cachedConfig && Date.now() - cachedConfigTs < CONFIG_CACHE_TTL_MS) return cachedConfig
-	try {
-		const { getSettings } = await import("./settingsRepo.ts")
-		const settings = await getSettings()
-		const envRequestLogs = process.env.ENABLE_REQUEST_LOGS
-		if (envRequestLogs !== undefined) {
-			const enabled = envRequestLogs.toLowerCase() === "true"
-			cachedConfig = {
-				enabled,
-				maxRecords:
-					settings.observabilityMaxRecords ||
-					parseInt(process.env.OBSERVABILITY_MAX_RECORDS || String(DEFAULT_MAX_RECORDS), 10),
-				batchSize:
-					settings.observabilityBatchSize ||
-					parseInt(process.env.OBSERVABILITY_BATCH_SIZE || String(DEFAULT_BATCH_SIZE), 10),
-				flushIntervalMs:
-					settings.observabilityFlushIntervalMs ||
-					parseInt(process.env.OBSERVABILITY_FLUSH_INTERVAL_MS || String(DEFAULT_FLUSH_INTERVAL_MS), 10),
-				maxJsonSize:
-					(settings.observabilityMaxJsonSize ||
-						parseInt(process.env.OBSERVABILITY_MAX_JSON_SIZE || "5", 10)) * 1024,
-			}
-			cachedConfigTs = Date.now()
-			return cachedConfig
-		}
+/** Read the batch thresholds from settings, falling back to the environment then the defaults. */
+async function readConfigFromSettings(): Promise<ObservabilityConfig> {
+	const { getSettings } = await import("./settingsRepo.ts")
+	const settings = await getSettings()
+	const envRequestLogs = process.env.ENABLE_REQUEST_LOGS
+	let enabled: boolean
+	if (envRequestLogs !== undefined) {
+		enabled = envRequestLogs.toLowerCase() === "true"
+	} else {
 		const envFallback = process.env.OBSERVABILITY_ENABLED !== "false"
 		const uiFlag = typeof settings.enableObservability === "boolean"
-		const enabled = uiFlag ? settings.enableObservability : envFallback
+		enabled = uiFlag ? settings.enableObservability : envFallback
+	}
+	return {
+		enabled,
+		maxRecords:
+			settings.observabilityMaxRecords ||
+			parseInt(process.env.OBSERVABILITY_MAX_RECORDS || String(DEFAULT_MAX_RECORDS), 10),
+		batchSize:
+			settings.observabilityBatchSize ||
+			parseInt(process.env.OBSERVABILITY_BATCH_SIZE || String(DEFAULT_BATCH_SIZE), 10),
+		flushIntervalMs:
+			settings.observabilityFlushIntervalMs ||
+			parseInt(process.env.OBSERVABILITY_FLUSH_INTERVAL_MS || String(DEFAULT_FLUSH_INTERVAL_MS), 10),
+		maxJsonSize:
+			(settings.observabilityMaxJsonSize ||
+				parseInt(process.env.OBSERVABILITY_MAX_JSON_SIZE || "5", 10)) * 1024,
+	}
+}
 
-		cachedConfig = {
-			enabled,
-			maxRecords:
-				settings.observabilityMaxRecords ||
-				parseInt(process.env.OBSERVABILITY_MAX_RECORDS || String(DEFAULT_MAX_RECORDS), 10),
-			batchSize:
-				settings.observabilityBatchSize ||
-				parseInt(process.env.OBSERVABILITY_BATCH_SIZE || String(DEFAULT_BATCH_SIZE), 10),
-			flushIntervalMs:
-				settings.observabilityFlushIntervalMs ||
-				parseInt(process.env.OBSERVABILITY_FLUSH_INTERVAL_MS || String(DEFAULT_FLUSH_INTERVAL_MS), 10),
-			maxJsonSize:
-				(settings.observabilityMaxJsonSize ||
-					parseInt(process.env.OBSERVABILITY_MAX_JSON_SIZE || "5", 10)) * 1024,
-		}
+async function getObservabilityConfig(): Promise<ObservabilityConfig> {
+	if (cachedConfig && Date.now() - cachedConfigTs < CONFIG_CACHE_TTL_MS) return cachedConfig
+	try {
+		cachedConfig = await readConfigFromSettings()
 	} catch {
 		cachedConfig = {
 			enabled: false,
@@ -69,14 +99,14 @@ async function getObservabilityConfig() {
 	return cachedConfig
 }
 
-const writeBuffer = []
-let flushTimer = null
+const writeBuffer: RequestDetail[] = []
+let flushTimer: NodeJS.Timeout | null = null
 let isFlushing = false
 
-function sanitizeHeaders(headers) {
+function sanitizeHeaders(headers: unknown): Record<string, string> {
 	if (!headers || typeof headers !== "object") return {}
 	const sensitiveKeys = ["authorization", "x-api-key", "cookie", "token", "api-key"]
-	const sanitized = { ...headers }
+	const sanitized: Record<string, string> = { ...(headers as Record<string, string>) }
 	for (const key of Object.keys(sanitized)) {
 		if (sensitiveKeys.some((s) => key.toLowerCase().includes(s))) delete sanitized[key]
 	}
@@ -85,22 +115,77 @@ function sanitizeHeaders(headers) {
 
 export const __test__ = { sanitizeHeaders }
 
-function generateDetailId(model) {
+function generateDetailId(model: string | null | undefined): string {
 	const timestamp = new Date().toISOString()
 	const random = Math.random().toString(36).substring(2, 8)
 	const modelPart = model ? model.replace(/[^a-zA-Z0-9-]/g, "-") : "unknown"
 	return `${timestamp}-${random}-${modelPart}`
 }
 
-function truncateField(obj, maxSize) {
+function truncateField(obj: unknown, maxSize: number): unknown {
 	const str = JSON.stringify(obj || {})
 	if (str.length > maxSize) {
-		return { _truncated: true, _originalSize: str.length, _preview: str.substring(0, 200) }
+		const truncated: TruncatedField = {
+			_truncated: true,
+			_originalSize: str.length,
+			_preview: str.substring(0, 200),
+		}
+		return truncated
 	}
 	return obj || {}
 }
 
-async function flushToDatabase() {
+/** Persist one batch of buffered details, then trim the table to `maxRecords`. */
+async function flushBatch(items: RequestDetail[], config: ObservabilityConfig): Promise<void> {
+	const db = await getAdapter()
+	db.transaction(() => {
+		for (const item of items) {
+			if (!item.id) item.id = generateDetailId(item.model)
+			if (!item.timestamp) item.timestamp = new Date().toISOString()
+			if (item.request?.headers) item.request.headers = sanitizeHeaders(item.request.headers)
+
+			const record = {
+				id: item.id,
+				provider: item.provider || null,
+				model: item.model || null,
+				connectionId: item.connectionId || null,
+				timestamp: item.timestamp,
+				status: item.status || null,
+				latency: item.latency || {},
+				tokens: item.tokens || {},
+				request: truncateField(item.request, config.maxJsonSize),
+				providerRequest: truncateField(item.providerRequest, config.maxJsonSize),
+				providerResponse: truncateField(item.providerResponse, config.maxJsonSize),
+				response: truncateField(item.response, config.maxJsonSize),
+				pxpipe: item.pxpipe || undefined,
+				resolvedModel: item.resolvedModel || undefined,
+			}
+
+			db.run(
+				`INSERT INTO requestDetails(id, timestamp, provider, model, connectionId, status, data) VALUES(?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET timestamp = excluded.timestamp, provider = excluded.provider, model = excluded.model, connectionId = excluded.connectionId, status = excluded.status, data = excluded.data`,
+				[
+					record.id,
+					record.timestamp,
+					record.provider,
+					record.model,
+					record.connectionId,
+					record.status,
+					stringifyJson(record),
+				],
+			)
+		}
+
+		const cnt = db.get<{ c: number }>(`SELECT COUNT(*) as c FROM requestDetails`)
+		if (cnt && cnt.c > config.maxRecords) {
+			db.run(
+				`DELETE FROM requestDetails WHERE id IN (SELECT id FROM requestDetails ORDER BY timestamp ASC LIMIT ?)`,
+				[cnt.c - config.maxRecords],
+			)
+		}
+	})
+}
+
+async function flushToDatabase(): Promise<void> {
 	if (isFlushing) return
 	if (writeBuffer.length === 0) return
 	isFlushing = true
@@ -108,54 +193,8 @@ async function flushToDatabase() {
 		// Drain entire buffer (loop in case more pushed during await)
 		while (writeBuffer.length > 0) {
 			const items = writeBuffer.splice(0, writeBuffer.length)
-			const db = await getAdapter()
 			const config = await getObservabilityConfig()
-
-			db.transaction(() => {
-				for (const item of items) {
-					if (!item.id) item.id = generateDetailId(item.model)
-					if (!item.timestamp) item.timestamp = new Date().toISOString()
-					if (item.request?.headers) item.request.headers = sanitizeHeaders(item.request.headers)
-
-					const record = {
-						id: item.id,
-						provider: item.provider || null,
-						model: item.model || null,
-						connectionId: item.connectionId || null,
-						timestamp: item.timestamp,
-						status: item.status || null,
-						latency: item.latency || {},
-						tokens: item.tokens || {},
-						request: truncateField(item.request, config.maxJsonSize),
-						providerRequest: truncateField(item.providerRequest, config.maxJsonSize),
-						providerResponse: truncateField(item.providerResponse, config.maxJsonSize),
-						response: truncateField(item.response, config.maxJsonSize),
-						pxpipe: item.pxpipe || undefined,
-						resolvedModel: item.resolvedModel || undefined,
-					}
-
-					db.run(
-						`INSERT INTO requestDetails(id, timestamp, provider, model, connectionId, status, data) VALUES(?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET timestamp = excluded.timestamp, provider = excluded.provider, model = excluded.model, connectionId = excluded.connectionId, status = excluded.status, data = excluded.data`,
-						[
-							record.id,
-							record.timestamp,
-							record.provider,
-							record.model,
-							record.connectionId,
-							record.status,
-							stringifyJson(record),
-						],
-					)
-				}
-
-				const cnt = db.get<{ c: number }>(`SELECT COUNT(*) as c FROM requestDetails`)
-				if (cnt && cnt.c > config.maxRecords) {
-					db.run(
-						`DELETE FROM requestDetails WHERE id IN (SELECT id FROM requestDetails ORDER BY timestamp ASC LIMIT ?)`,
-						[cnt.c - config.maxRecords],
-					)
-				}
-			})
+			await flushBatch(items, config)
 		}
 	} catch (e) {
 		console.error("[requestDetailsRepo] Batch write failed:", e)
@@ -164,7 +203,7 @@ async function flushToDatabase() {
 	}
 }
 
-export async function saveRequestDetail(detail) {
+export async function saveRequestDetail(detail: RequestDetail): Promise<void> {
 	const config = await getObservabilityConfig()
 	if (!config.enabled) {
 		return
@@ -196,12 +235,28 @@ export interface RequestDetailsFilter {
 	status?: string
 	startDate?: string | number | Date
 	endDate?: string | number | Date
+	/** `null`/`undefined` (or a pattern list containing `*`) means every model. */
 	allowedModelPatterns?: unknown
 	page?: number
 	pageSize?: number
 }
 
-export async function getRequestDetails(filter: RequestDetailsFilter = {}) {
+/** One page of request details, plus the counts the dashboard paginates with. */
+export interface RequestDetailsPage {
+	details: unknown[]
+	pagination: {
+		page: number
+		pageSize: number
+		totalItems: number
+		totalPages: number
+		hasNext: boolean
+		hasPrev: boolean
+	}
+}
+
+export async function getRequestDetails(
+	filter: RequestDetailsFilter = {},
+): Promise<RequestDetailsPage> {
 	const db = await getAdapter()
 	const conds: string[] = []
 	const params: unknown[] = []
@@ -231,7 +286,10 @@ export async function getRequestDetails(filter: RequestDetailsFilter = {}) {
 		params.push(new Date(filter.endDate).toISOString())
 	}
 	// Scoped sessions narrow the listing to the models their key may actually use.
-	const allowed = buildAllowedModelsSql(filter.allowedModelPatterns)
+	const allowedPatterns = isAllowedModelPatterns(filter.allowedModelPatterns)
+		? filter.allowedModelPatterns
+		: null
+	const allowed = buildAllowedModelsSql(allowedPatterns)
 	if (allowed) {
 		conds.push(allowed.sql)
 		params.push(...allowed.params)
@@ -246,7 +304,7 @@ export async function getRequestDetails(filter: RequestDetailsFilter = {}) {
 	const totalPages = Math.ceil(totalItems / pageSize)
 	const offset = (page - 1) * pageSize
 
-	const rows = db.all(
+	const rows = db.all<DbRow>(
 		`SELECT data FROM requestDetails ${where} ORDER BY timestamp DESC LIMIT ? OFFSET ?`,
 		[...params, pageSize, offset],
 	)
@@ -265,20 +323,24 @@ export async function getRequestDetails(filter: RequestDetailsFilter = {}) {
 	}
 }
 
-export async function getDistinctProviders(allowedModelPatterns = null) {
+export async function getDistinctProviders(
+	allowedModelPatterns: unknown = null,
+): Promise<unknown[]> {
 	const db = await getAdapter()
-	const allowed = buildAllowedModelsSql(allowedModelPatterns)
+	// The dashboard passes a session value it cannot vouch for, so narrow it here.
+	const patterns = isAllowedModelPatterns(allowedModelPatterns) ? allowedModelPatterns : null
+	const allowed = buildAllowedModelsSql(patterns)
 	const where = allowed ? `provider IS NOT NULL AND ${allowed.sql}` : "provider IS NOT NULL"
-	const rows = db.all(
+	const rows = db.all<DbRow>(
 		`SELECT DISTINCT provider FROM requestDetails WHERE ${where} ORDER BY provider ASC`,
 		allowed ? allowed.params : [],
 	)
 	return rows.map((r) => r.provider)
 }
 
-export async function getRequestDetailById(id) {
+export async function getRequestDetailById(id: string): Promise<unknown> {
 	const db = await getAdapter()
-	const row = db.get(`SELECT data FROM requestDetails WHERE id = ?`, [id])
+	const row = db.get<DbRow>(`SELECT data FROM requestDetails WHERE id = ?`, [id])
 	return row ? parseJson(row.data, null) : null
 }
 

@@ -1,9 +1,10 @@
 import fs from "node:fs"
-import initSqlJs from "sql.js"
+import initSqlJs, { type SqlJsStatic, type SqlJsValue } from "sql.js"
 import { PRAGMA_SQL } from "../schema.ts"
 import type { DbParams, DbRow, DbRunResult, ResolvedDbAdapter } from "../types.ts"
 
-let SQL = null
+/** The wasm runtime, loaded once per process. */
+let SQL: SqlJsStatic | null = null
 
 // One process-hook registration for all sql.js adapters. Each adapter adds its
 // flush function here and the single hook fans out to the live set, so opening
@@ -35,7 +36,7 @@ function unregisterShutdownFlush(flush: () => void) {
 	shutdownFlushes.delete(flush)
 }
 
-async function loadSql() {
+async function loadSql(): Promise<SqlJsStatic> {
 	if (SQL) return SQL
 	SQL = await initSqlJs()
 	return SQL
@@ -49,11 +50,11 @@ export async function createSqlJsAdapter(filePath: string): Promise<ResolvedDbAd
 	// Schema is created/synced by migrate.js after adapter init
 
 	let dirty = false
-	let saveTimer = null
+	let saveTimer: ReturnType<typeof setTimeout> | null = null
 	let transactionDepth = 0
 	const SAVE_DEBOUNCE_MS = 100
 
-	function persist() {
+	function persist(): void {
 		try {
 			const data = db.export()
 			fs.writeFileSync(filePath, Buffer.from(data))
@@ -63,7 +64,7 @@ export async function createSqlJsAdapter(filePath: string): Promise<ResolvedDbAd
 		}
 	}
 
-	function scheduleSave(immediate = false) {
+	function scheduleSave(immediate: boolean = false): void {
 		dirty = true
 		if (saveTimer) {
 			clearTimeout(saveTimer)
@@ -79,9 +80,16 @@ export async function createSqlJsAdapter(filePath: string): Promise<ResolvedDbAd
 		}, SAVE_DEBOUNCE_MS)
 	}
 
-	function paramsObj(params?: DbParams): DbParams | undefined {
-		if (!params || (Array.isArray(params) && params.length === 0)) return undefined
-		return params
+	/**
+	 * The binds to hand sql.js, or `undefined` to leave the statement unbound.
+	 *
+	 * `DbParams` is `unknown[]` because every driver accepts every column type;
+	 * sql.js only takes a narrowed value list, so this is the boundary that
+	 * narrows it — the same place the other adapters call their driver.
+	 */
+	function paramsObj(params?: DbParams): SqlJsValue[] | undefined {
+		if (!params || params.length === 0) return undefined
+		return params as SqlJsValue[]
 	}
 
 	function run(sql: string, params: DbParams = []): DbRunResult {
@@ -90,7 +98,9 @@ export async function createSqlJsAdapter(filePath: string): Promise<ResolvedDbAd
 			stmt.bind(paramsObj(params))
 			stmt.step()
 			const changes = db.getRowsModified()
-			const lastInsertRowid = db.exec("SELECT last_insert_rowid() as id")[0]?.values?.[0]?.[0] ?? null
+			const lastInsertRowid = Number(
+				db.exec("SELECT last_insert_rowid() as id")[0]?.values?.[0]?.[0] ?? 0,
+			)
 			scheduleSave(true)
 			return { changes, lastInsertRowid }
 		} finally {

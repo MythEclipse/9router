@@ -28,7 +28,7 @@ function isDisabled(disabled, provider, model) {
 // are applied here from the same stored settings, keyed by every shape a row can
 // be addressed by (its full id, the routed id, the bare id, and the combo name).
 async function pluginMarkResolver() {
-	const settings = await getSettings().catch(() => ({}))
+	const settings = await getSettings().catch(() => null)
 	const plugins = settings?.customPlugins || {}
 	// Each entry is [pluginKey, enabled, modelSet]; the tuple is typed so the
 	// filter/callback below can rely on `models` being a Set rather than a union

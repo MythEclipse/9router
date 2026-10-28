@@ -16,7 +16,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto"
 export const PASSWORD_HEADER = "x-9r-password"
 export const POLL_TOKEN_HEADER = "x-9r-poll-token"
 
-export function hashPollToken(token) {
+export function hashPollToken(token: string | null | undefined): string {
 	return createHash("sha256")
 		.update(String(token || ""), "utf8")
 		.digest("hex")
@@ -27,12 +27,12 @@ export function hashPollToken(token) {
  * digest to store on the job. The token is single-use in intent: it is
  * dropped from the job record once the job finishes.
  */
-export function issuePollToken() {
+export function issuePollToken(): { token: string; hash: string } {
 	const token = randomBytes(32).toString("base64url")
 	return { token, hash: hashPollToken(token) }
 }
 
-function safeEqualHex(a, b) {
+function safeEqualHex(a: string | null | undefined, b: string | null | undefined): boolean {
 	const left = Buffer.from(String(a || ""), "utf8")
 	const right = Buffer.from(String(b || ""), "utf8")
 	if (left.length !== right.length) return false
@@ -44,7 +44,10 @@ function safeEqualHex(a, b) {
  * rather than throwing, so a job created before this existed falls back to
  * password authentication instead of becoming unpolled.
  */
-export function verifyPollToken(job, token) {
+export function verifyPollToken(
+	job: { pollTokenHash?: unknown } | null | undefined,
+	token: string | null | undefined,
+): boolean {
 	if (!job || typeof job !== "object") return false
 	const stored = job.pollTokenHash
 	if (typeof stored !== "string" || !stored) return false
@@ -53,7 +56,7 @@ export function verifyPollToken(job, token) {
 }
 
 /** Read the poll token out of a request header bag, tolerating a null bag. */
-export function pollTokenFromHeaders(headers) {
+export function pollTokenFromHeaders(headers: Headers | null | undefined): string {
 	if (!headers || typeof headers.get !== "function") return ""
 	return String(headers.get(POLL_TOKEN_HEADER) || "")
 }

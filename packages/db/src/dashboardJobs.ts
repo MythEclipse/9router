@@ -27,7 +27,56 @@ import { createJobStore, touchJob } from "./jobStore.ts"
 
 const RESULT_TTL_MS = 15 * 60 * 1000
 
-const { getStore, scheduleResultCleanup } = createJobStore({
+/** How one job stands. `cancelled` is set by the handler, not by the store. */
+export type DashboardJobStatus = "queued" | "running" | "done" | "error" | "cancelled"
+
+/** Progress report a running handler publishes. */
+export interface DashboardJobReport {
+	progress?: number
+	message?: string
+	section?: string
+}
+
+/**
+ * What a handler receives: its own job plus the reporter. A handler is expected
+ * to check `cancelRequested` between units of work and to end by setting
+ * `status`, or by throwing (which becomes an error status).
+ */
+export interface DashboardJobContext {
+	report(update: DashboardJobReport): void
+}
+
+/** One dashboard operation running (or finished) server-side. */
+export interface DashboardJob {
+	id: string
+	kind: string
+	title: string
+	status: DashboardJobStatus
+	progress: number
+	message: string
+	section: string
+	error: string | null
+	result: unknown
+	/** Server-side only: may carry proxy URLs or provider tokens. */
+	payload: Record<string, unknown>
+	cancelRequested: boolean
+	createdAt: string
+	updatedAt: string
+}
+
+/** A handler runs one job of its kind. Fail by throwing; that becomes `error`. */
+export type DashboardJobHandler = (job: DashboardJob, ctx: DashboardJobContext) => Promise<void>
+
+/** A job as a reader gets it: everything but the payload. */
+export type DashboardJobView = Omit<DashboardJob, "payload">
+
+/** Strip the payload, which must never leave the server. */
+function toView(job: DashboardJob): DashboardJobView {
+	const { payload: _payload, ...rest } = job
+	return rest
+}
+
+const { getStore, scheduleResultCleanup } = createJobStore<DashboardJob>({
 	globalKey: "dashboardJobs",
 	resultTtlMs: RESULT_TTL_MS,
 })
@@ -38,9 +87,9 @@ export const DASHBOARD_JOB_POLL_MS = 1000
  * is expected to check `job.cancelRequested` between units of work and to end
  * by setting job.status itself, or by throwing (which becomes an error status).
  */
-const handlers = new Map()
+const handlers = new Map<string, DashboardJobHandler>()
 
-export function registerDashboardJobHandler(kind, handler) {
+export function registerDashboardJobHandler(kind: string, handler: DashboardJobHandler): void {
 	handlers.set(kind, handler)
 }
 
@@ -49,9 +98,9 @@ export function registerDashboardJobHandler(kind, handler) {
  * relay deploys share the same provider rate limits, so running two of either
  * side by side produced confusing partial results.
  */
-const perKindRunning = new Map()
+const perKindRunning = new Map<string, boolean>()
 
-async function runJob(job) {
+async function runJob(job: DashboardJob): Promise<void> {
 	const handler = handlers.get(job.kind)
 	if (!handler) {
 		job.status = "error"
@@ -76,7 +125,7 @@ async function runJob(job) {
 	} catch (err) {
 		job.status = "error"
 		job.message = job.message || "Failed"
-		job.error = err?.message || String(err)
+		job.error = err instanceof Error ? err.message : String(err)
 		touchJob(job)
 	} finally {
 		if (typeof job.progress !== "number") job.progress = 100
@@ -91,7 +140,7 @@ async function runJob(job) {
 	}
 }
 
-async function drainQueue() {
+async function drainQueue(): Promise<void> {
 	for (const [kind, _handler] of handlers) {
 		if (perKindRunning.get(kind)) continue
 		const next = [...getStore().values()].find((j) => j.kind === kind && j.status === "queued")
@@ -106,7 +155,11 @@ async function drainQueue() {
  * Queue an operation. `payload` is handed back to the registered handler; like
  * the import job's `entries`, it never appears in a status response.
  */
-export function createDashboardJob(kind, payload = {}, title = "") {
+export function createDashboardJob(
+	kind: string,
+	payload: Record<string, unknown> = {},
+	title = "",
+): { jobId: string; status: DashboardJobStatus } {
 	if (!handlers.has(kind)) throw new Error(`Unknown operation: ${kind}`)
 
 	const now = new Date().toISOString()
@@ -134,16 +187,15 @@ export function createDashboardJob(kind, payload = {}, title = "") {
 	return { jobId, status: "queued" }
 }
 
-export function getDashboardJob(jobId) {
+/** One job, payload stripped. `null` when the record expired or never existed. */
+export function getDashboardJob(jobId: string | null | undefined): DashboardJobView | null {
 	if (!jobId) return null
 	const job = getStore().get(jobId)
 	if (!job) return null
-	// The payload can carry proxy URLs or provider tokens, so it stays server-side.
-	const { payload, ...rest } = job
-	return rest
+	return toView(job)
 }
 
-export function cancelDashboardJob(jobId) {
+export function cancelDashboardJob(jobId: string): boolean {
 	const job = getStore().get(jobId)
 	if (!job) return false
 	if (job.status === "queued" || job.status === "running") {
@@ -154,8 +206,6 @@ export function cancelDashboardJob(jobId) {
 }
 
 /** Every job the bell may want to list, newest first. */
-export function listDashboardJobs() {
-	return [...getStore().values()]
-		.map(({ payload, ...rest }) => rest)
-		.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+export function listDashboardJobs(): DashboardJobView[] {
+	return [...getStore().values()].map(toView).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
 }
