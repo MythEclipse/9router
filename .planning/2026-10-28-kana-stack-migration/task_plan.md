@@ -22,12 +22,40 @@ gateway serving traffic at every phase boundary.
 
 ## Next Step
 
-Phase 1 — write `findings.md` with the discovery inventory (entry points,
-runtime surfaces, LOC hotspots) before touching config.
+Phase 8 is authorised: **port every dashboard route handler to oRPC in `apps/api`**,
+once, accepting a red build until it completes (user decision, 2026-10-28).
+
+Scope measured before writing any code:
+
+| Set                                      | Count | Notes                                                     |
+| ---------------------------------------- | ----- | --------------------------------------------------------- |
+| Next route handlers in total             | 199   |                                                           |
+| **Port targets**                         | 162   | 18 919 LOC                                                |
+| Excluded: `v1/`, `v1beta/`               | 25    | public OpenAI/Gemini contract, must stay REST             |
+| Excluded: streaming / binary bodies      | 12    | oRPC JSON serialisation destroys both                     |
+
+Dependency closure of those 162 routes: **304 files, 51 640 LOC**, including
+`open-sse/` (43 files). Porting is therefore a backend relocation, not a
+transport swap. Progress ledger lives in `progress.md`; per-resource status in
+the table below. The `packages/db` strict-typing prerequisite is closed: all
+three packages report 0 `tsc` errors and `biome check` is clean.
+
+| Resource       | Routes | Status |
+| -------------- | ------ | ------ |
+| `system`       | 2      | done — `health`, `changelog` |
+| `settings`     | 1      | done — login gate as a use-case with a port |
+| (160 more)     | 159    | pending |
+
+### Prerequisite delivered: shared packages
+
+`packages/db` (SQLite layer), `packages/auth` (session/permissions/OIDC/SAML)
+and `packages/pricing` now hold what both apps need. `apps/web` and `apps/api`
+consume them through workspace deps, so a ported handler and its unported twin
+read the same data through the same code. See `progress.md` for the traps.
 
 ## Current Phase
 
-Phase 1
+Phase 8 — porting route handlers to oRPC (in progress)
 
 ## Phases
 
@@ -45,7 +73,7 @@ Phase 1
 
 - [x] Byte-preserving Babel rewriter over TS's own resolver (`.codebuddy-tools/`)
 - [x] 2 033 specifiers across 540 files rewritten, tsc still 0 errors
-- [ ] Convert the `@/` and `open-sse/*` aliases usage check (aliases stay, but verify)
+- [x] Bare `@/` and `open-sse/*` aliases left intact (npm-package-shaped, resolve from the app dir)
 - **Status:** complete
 
 ### Phase 3: tsconfig hygiene (unblock TS 7)
@@ -56,34 +84,42 @@ Phase 1
 
 ### Phase 4: bun workspace skeleton (`apps/*`, `packages/*`)
 
-- [ ] Root `package.json` → private workspace root, `workspaces: ["apps/*", "packages/*"]`
-- [ ] Move Next app to `apps/web`, gateway engine to `apps/api` (staged, not yet rewritten)
-- [ ] Root `bun.lock` regenerated once, from the workspace root
-- [ ] CI + Dockerfiles updated to the new paths (`assemble.sh`, `Dockerfile`, workflows)
-- **Status:** pending
+- [x] Root `package.json` → private workspace root with `apps/*`, `packages/*`, `cli`
+- [x] Move Next app + `open-sse` engine to `apps/web`
+- [x] `bun.lock` regenerated from the workspace root; `pnpm-workspace.yaml` deleted
+- [x] CI / Dockerfile / `assemble.sh` updated to `apps/web` paths; YAML validated
+- [x] Standalone server boots from the nested build, all 5 migrations apply
+- **Status:** complete
 
 ### Phase 5: Biome replaces ESLint + Prettier
 
-- [ ] `biome.json` — tabs, double quotes, semicolons as needed, `!payload`, `!**/dist`
-- [ ] Delete `eslint.config.mjs`, `eslint.tmp.mjs`, `.prettierrc.json`, `.prettierignore`
-- [ ] `lefthook.yml` + `lint-staged` → biome on staged files
-- [ ] Keep the diff at formatting-only in a dedicated commit
-- **Status:** pending
+- [x] `biome.json` — tabs, double quotes, semicolons as needed, `!payload`, `!**/dist`
+- [x] Delete `eslint.config.mjs`, `eslint.tmp.mjs`, `.prettierrc.json`, `.prettierignore`
+- [x] `lefthook.yml` → biome autofix + regression baseline gate
+- [x] 4 030 errors → 424 (all baselined a11y debt), tsc still 0
+- **Status:** complete
 
 ### Phase 6: moon task graph
 
-- [ ] `.moon/workspace.yml`, `tasks.yml`, `toolchain.yml`; one `moon.yml` per project
-- [ ] Prove with a **cold** run: `moon clean --all` + remove every `dist/`
-- **Status:** pending
+- [x] `.moon/workspace.yml`, `tasks.yml`, `toolchain.yml`; `moon.yml` per project
+- [x] bun 1.3.14 pinned in `toolchain.yml` — no pnpm anywhere
+- [x] Cold proof: `moon clean --all` + rm `.next` → 2 tasks → `.next` (486M)
+- **Status:** complete
 
 ### Phase 7: `apps/api` — Hono + oRPC + Drizzle + better-auth
 
-- [ ] Hono server with Zod-validated env at startup
-- [ ] oRPC 1.15.5 routers: `.input()` → `.use()` → `.handler()`, per-procedure middleware
-- [ ] Drizzle schema + migration journal + bundled migrator with `.sql` beside it
+- [x] Hono server with Zod-validated env at startup
+- [x] oRPC routers: `.input()` → `.use()` → `.handler()`; auth middleware attached
+      before the schema so an anonymous caller gets 401, never a 400 that leaks
+      the shape of a schema it has no right to probe
+- [x] Drizzle schema + migration journal + bundled migrator with `.sql` beside it
+      — `scripts/build.ts` copies it and asserts non-empty; the runner finds it by
+      walking up from `import.meta.url` and refuses to start when absent
+- [x] Four layers wired through `buildUseCases(deps)`; 10 tests over real HTTP
 - [ ] better-auth single-tenant session replacing the JWT cookie guard
 - [ ] Port `open-sse` behind the four layers (domain ports, application use-cases)
-- **Status:** pending
+- **Status:** partial — one vertical slice end-to-end; better-auth and open-sse
+  remain on the Next side
 
 ### Phase 8: `apps/web` — TanStack Router/Query/Form/Table
 
@@ -108,6 +144,11 @@ Phase 1
 | Phase 2 before Phase 4                          | explicit extensions make the app dir relocatable without a resolver rewrite |
 | Babel generator source from Next's bundled copy | adds no dependency; repo is offline and must stay bun-lock stable           |
 | `strict` stays `false` for now                  | flipping it opens 13 281 errors; that is its own phase, not a config line   |
+| a11y debt baselined, not autofixed              | each of the ~425 needs real markup (htmlFor target, keyboard handler) — an autofix would change behaviour silently |
+| `turbopack.root` == `outputFileTracingRoot`     | Next prefers the tracer value and they must match; only the workspace root resolves the hoisted `next` symlink |
+| Standalone entry found by search, not layout    | the layout has been `server.js`, `app/`, `<pkg>/`, `apps/web/`; each move added one more guess and one more break |
+| `cli:build` depends on `web:build`              | it packages the Next app; a cache hit on unchanged `cli/` inputs silently shipped a stale app |
+| Migrator throws on a missing journal            | an empty schema that reports success is worse than a refused start |
 
 ## Errors Encountered
 
@@ -116,3 +157,15 @@ Phase 1
 | Directory-index specifiers got double-suffixed (`/index.ts` → `/index.ts.ts`… 3 broken paths) | 1       | Resolver now returns `/index.ts` when the target file is an index and the specifier is not already one; reverted the tree and re-ran clean |
 | `npx tsc` silently reported 0 errors including in `open-sse`                                  | 1       | `open-sse/**` was never in `include`; now included, baseline still 0                                                                       |
 | Lifecycle guard refused `./node_modules/.bin/tsc` (bundled `_tsc.js` > 1 MiB scan cap)        | 1       | Invoke `node node_modules/typescript/bin/tsc` instead                                                                                      |
+| Turbopack: "Could not find the Next.js package" after the move                                | 1       | `turbopack.root` was one level short (`apps`); then root ≠ `outputFileTracingRoot`. Both set to the workspace root                          |
+| Biome refused to run: nested `apps/web/biome.json`                                            | 1       | One root config only; deleted the copy                                                                                                     |
+| Biome treated Tailwind v4 as invalid CSS                                                      | 1       | `css.parser.tailwindDirectives: true`                                                                                                      |
+| `node:test`-less biome autofix renamed two params to the same `_model`/`_stream` (bedrock.ts) | 1       | Renamed the params explicitly; the destructure-renames that exclude keys from `rest` must keep their names                                  |
+| Pre-commit hook failed on 408 pre-existing a11y errors                                        | 1       | Added `scripts/biome-baseline.mjs`, proven to fail on a NEW violation and pass on the known set                                            |
+| api: every authenticated call 401 despite a session                                           | 1       | `/api` handler read `c.get("context")` after a `c.set` no-op; Hono's `env` **is** the context. `main.ts` also wrapped it as `{ context }` |
+| api bundle: migrator resolved the journal two levels too high                                 | 1       | `../../../migrations` is right unbundled from `src/infrastructure/db/`, wrong in `dist/`. Now walks up from `import.meta.url`, throws if absent |
+| cli payload: `Cannot find module '@swc/helpers/_/_interop_require_default'`                   | 1       | `linker = "hoisted"` is ignored on bun 1.3.14 (root stuck at 6 pkgs). `publicHoistPattern = ["*"]` works — root 6 → 413                    |
+| hoisting exposed 3 type errors (`preconnect`, 2× `ReadableStream` → `BodyInit`)               | 1       | `@types/bun` auto-included made `typeof fetch` mean Bun's fetch. Scoped `types: ["node"]` in `apps/web`                                     |
+| cli payload answered 503 to every route                                                       | 3       | (a) `appDir` was the repo root; (b) `custom-server` joined without `.js`; (c) guard loader used `jsx: ReactJSX` on plain `.ts`, so `<T>` parsed as JSX. All three fixed; `Preserve`, not `None` (rejected with a fileName) |
+| a fix to the guard loader never reached the payload                                           | 1       | `cli:build` listed only `cli/` inputs, so moon served a cache hit. Added the `apps/web` inputs it consumes and `deps: web:build`             |
+| `web:typecheck` failed on `.next-cli-build/types`                                             | 1       | tsconfig excluded `.next` but not the CLI build dir, while still *including* its types. Removed both                                                |
