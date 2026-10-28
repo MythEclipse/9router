@@ -7,7 +7,8 @@
     "./application/use-cases": "./src/application/use-cases.ts",
     "./application/dependencies": "./src/application/dependencies.ts",
     "./infrastructure/use-cases-factory": "./src/infrastructure/use-cases-factory.ts",
-    "./domain/*": "./src/domain/*.ts"
+    "./domain/*": "./src/domain/*.ts",
+    "./infrastructure/db/repositories/*": "./src/infrastructure/db/repositories/*.ts"
   },
   "scripts": {
     "dev": "bun --watch src/main.ts",

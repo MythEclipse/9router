@@ -7,6 +7,9 @@
  */
 import type { IApiKeyRepository } from "../domain/api-key.ts"
 import type { PricingResetTarget, PricingUpdate } from "../domain/pricing.ts"
+import type { BulkEditPort } from "./api-keys/bulk-edit-api-keys.ts"
+import type { ApiKeyManagementPort } from "./api-keys/manage-api-keys-dashboard.ts"
+import type { SingleKeyAuditPort, SingleKeyPort } from "./api-keys/manage-single-key.ts"
 import type { ChangelogSource } from "./changelog.ts"
 import type { SettingsPort } from "./settings/login-gate.ts"
 
@@ -121,8 +124,32 @@ export interface PricingPort {
 	reset(target: PricingResetTarget): Promise<PricingMap>
 }
 
+/**
+ * The dashboard's key-management ports. Separate from `apiKeys` because the two
+ * answer different questions: `apiKeys` is about authenticating a request with a
+ * key, this is about the table an operator edits.
+ */
 export interface Dependencies {
 	readonly apiKeys: IApiKeyRepository
+	readonly dashboardApiKeys: ApiKeyManagementPort
+	readonly bulkApiKeys: BulkEditPort
+	readonly singleApiKeys: SingleKeyPort
+	readonly singleKeyAudit: SingleKeyAuditPort
+	readonly apiKeyAudit: {
+		recordKeyCreated(event: {
+			readonly actor: string
+			readonly keyName: string
+			readonly permissions: unknown
+		}): Promise<void>
+		recordBulkUpdate(event: {
+			readonly updatedCount: number
+			readonly fields: readonly string[]
+		}): Promise<void>
+	}
+	/** The pattern language, injected so the domain never re-implements it. */
+	readonly matchesAllowedModels: (patterns: readonly string[], model: string) => boolean
+	/** The endpoint kinds this deployment serves, from `packages/db`. */
+	readonly endpointKinds: readonly string[]
 	readonly activity: IActivityRepository
 	readonly changelog: ChangelogSource
 	readonly settings: SettingsPort

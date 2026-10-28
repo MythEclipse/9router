@@ -13,6 +13,7 @@
 import { base } from "./base.ts"
 import { apiKeysRouter } from "./routers/api-keys.ts"
 import { combosRouter } from "./routers/combos.ts"
+import { dashboardKeysRouter } from "./routers/dashboard-keys.ts"
 import { errorLogsRouter } from "./routers/error-logs.ts"
 import { pricingRouter } from "./routers/pricing.ts"
 import { settingsRouter } from "./routers/settings.ts"
@@ -23,6 +24,7 @@ export const appRouter = base.router({
 	system: systemRouter,
 	settings: settingsRouter,
 	apiKeys: apiKeysRouter,
+	dashboardKeys: dashboardKeysRouter,
 	combos: combosRouter,
 	errorLogs: errorLogsRouter,
 	theme: themeRouter,

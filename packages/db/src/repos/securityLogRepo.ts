@@ -124,7 +124,7 @@ export async function recordSecurityEvent(input: SecurityEventInput = {}): Promi
 		)
 	} catch (error) {
 		// Never let audit bookkeeping break the request it is describing.
-		console.error("[security-log] write failed:", error && error.message)
+		console.error("[security-log] write failed:", error instanceof Error ? error.message : error)
 	}
 	return event
 }

@@ -17,6 +17,16 @@ import { createComboRotationPort } from "./combo-rotation-port.ts"
 import { createDb, resolveDataDir } from "./db/client.ts"
 import { runMigrations } from "./db/migrate.ts"
 import { createActivityRepository } from "./db/repositories/activity-repository.ts"
+import {
+	API_KEY_ENDPOINT_KINDS,
+	type ApiKeyStore,
+	makeApiKeyAuditPort,
+	makeApiKeyManagementPort,
+	makeBulkEditPort,
+	makeSingleKeyAuditPort,
+	makeSingleKeyPort,
+	matchesAllowedModels,
+} from "./db/repositories/api-key-dashboard-repository.ts"
 import { createApiKeyRepository } from "./db/repositories/api-key-repository.ts"
 import {
 	createComboRepository,
@@ -43,6 +53,12 @@ export interface UseCaseOptions {
 	readonly migrationsDir?: string
 	/** Supplied by the host that owns the client catalogs (`apps/web`). */
 	readonly comboPresets: ComboPresetPort
+	/**
+	 * Supplied by the host that owns `localDb`. Absent means the key-table
+	 * use-cases are unavailable, which is the API-server case: it serves the
+	 * secrets gate, not the dashboard's editor.
+	 */
+	readonly apiKeyStore?: ApiKeyStore
 }
 
 export interface UseCasesHandle {
@@ -60,6 +76,13 @@ export function createUseCases(
 
 	const useCases = buildUseCases({
 		apiKeys: createApiKeyRepository(db),
+		dashboardApiKeys: makeApiKeyManagementPort(options.apiKeyStore ?? unavailableApiKeyStore()),
+		bulkApiKeys: makeBulkEditPort(options.apiKeyStore ?? unavailableApiKeyStore()),
+		singleApiKeys: makeSingleKeyPort(options.apiKeyStore ?? unavailableApiKeyStore()),
+		singleKeyAudit: makeSingleKeyAuditPort(),
+		apiKeyAudit: makeApiKeyAuditPort(),
+		matchesAllowedModels,
+		endpointKinds: API_KEY_ENDPOINT_KINDS,
 		activity: createActivityRepository(db, () => randomUUID()),
 		changelog: createChangelogSourceFromDisk(options.webAppDir ?? "apps/web"),
 		settings: createSettingsPort(),
@@ -78,4 +101,32 @@ export function createUseCases(
 	})
 
 	return { useCases, close: () => sqlite.close() }
+}
+
+/**
+ * Stands in when the host has no `localDb`. Every call fails loudly: silently
+ * returning an empty list would make the dashboard look like a fresh install.
+ */
+function unavailableApiKeyStore(): ApiKeyStore {
+	const message = "API-key store is not available in this process"
+	return {
+		async list() {
+			throw new Error(message)
+		},
+		async create() {
+			throw new Error(message)
+		},
+		async findById() {
+			throw new Error(message)
+		},
+		async update() {
+			throw new Error(message)
+		},
+		async remove() {
+			throw new Error(message)
+		},
+		async consistentMachineId() {
+			throw new Error(message)
+		},
+	}
 }

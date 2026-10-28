@@ -6,8 +6,11 @@
  * the same shape from fakes.
  */
 
+import { makeBulkEditApiKeys } from "./api-keys/bulk-edit-api-keys.ts"
 import { makeCreateApiKey } from "./api-keys/create-api-key.ts"
 import { makeListApiKeys, makeRevokeApiKey } from "./api-keys/manage-api-keys.ts"
+import { makeManageApiKeys } from "./api-keys/manage-api-keys-dashboard.ts"
+import { makeManageSingleKey } from "./api-keys/manage-single-key.ts"
 import { loadChangelog } from "./changelog.ts"
 import {
 	makeCheckComboCycle,
@@ -31,6 +34,10 @@ export interface UseCases {
 	readonly createApiKey: ReturnType<typeof makeCreateApiKey>
 	readonly listApiKeys: ReturnType<typeof makeListApiKeys>
 	readonly revokeApiKey: ReturnType<typeof makeRevokeApiKey>
+	/** The dashboard's key table: list, create with scoping, bulk edit. */
+	readonly dashboardKeys: ReturnType<typeof makeManageApiKeys>
+	readonly bulkEditKeys: ReturnType<typeof makeBulkEditApiKeys>
+	readonly singleKey: ReturnType<typeof makeManageSingleKey>
 	readonly getChangelog: () => ReturnType<typeof loadChangelog>
 	readonly getLoginGate: () => ReturnType<typeof readLoginGate>
 	readonly listCombos: ReturnType<typeof makeListCombos>
@@ -73,6 +80,23 @@ export function buildUseCases(deps: Dependencies): UseCases {
 		createApiKey: makeCreateApiKey(deps),
 		listApiKeys: makeListApiKeys(deps),
 		revokeApiKey: makeRevokeApiKey(deps),
+		dashboardKeys: makeManageApiKeys({
+			keys: deps.dashboardApiKeys,
+			audit: deps.apiKeyAudit,
+			matchesAllowedModels: deps.matchesAllowedModels,
+			endpointKinds: deps.endpointKinds,
+		}),
+		bulkEditKeys: makeBulkEditApiKeys({
+			keys: deps.bulkApiKeys,
+			audit: deps.apiKeyAudit,
+		}),
+		singleKey: makeManageSingleKey({
+			keys: deps.singleApiKeys,
+			audit: deps.singleKeyAudit,
+			endpointKinds: deps.endpointKinds,
+			matchesAllowedModels: deps.matchesAllowedModels,
+			defaultPermissions: { viewUsage: true, manageApiKeys: false },
+		}),
 		getChangelog: () => loadChangelog(deps.changelog),
 		getLoginGate: () => readLoginGate(deps.settings),
 		listCombos: makeListCombos(combos),
