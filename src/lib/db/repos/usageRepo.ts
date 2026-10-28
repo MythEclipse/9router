@@ -13,6 +13,7 @@ import {
   buildProviderNodeNameMap,
   type ProviderNodeNameMap,
 } from "./usageLookups";
+import { accumulate, keepNewest, emptyTotals, sumTotals, type UsageTotals } from "./usageCounters";
 
 /** Token counts as they arrive from an upstream: several spellings coexist. */
 export interface UsageTokens {
@@ -1002,6 +1003,143 @@ export function mapRecentRequests(
     .slice(0, limit);
 }
 
+/**
+ * Add one usageHistory row to every bucket of the report.
+ *
+ * The filter-by-api-key branch and the 24h/today branch each had their own copy of
+ * this, byte for byte identical apart from how they handled a row with no key. One
+ * function covers both: `includeUnkeyedRows` decides whether a keyless row lands in a
+ * "local-no-key" bucket (the live view, where local traffic is real) or is skipped
+ * (a single key's own report, where it is not that key's traffic).
+ *
+ * `buckets` is the report being built — passed in rather than returned because the
+ * daily-rollup path also writes to it and the caller already holds the reference.
+ */
+/**
+ * Add one row's numbers to the report's flat total fields.
+ *
+ * The response shape keeps `totalPromptTokens` &c. at the top level, so this writes
+ * them directly rather than through a nested object that would have to be flattened
+ * again — the wire shape is the report's contract and a refactor must not move it.
+ */
+function addFlatTotals(stats: UsageStats, add: Partial<UsageTotals>): void {
+  stats.totalPromptTokens += add.promptTokens || 0;
+  stats.totalCompletionTokens += add.completionTokens || 0;
+  stats.totalCachedTokens += add.cachedTokens || 0;
+  stats.totalCost += add.cost || 0;
+}
+
+interface BucketRowKeys {
+  connectionMap: ConnectionMap;
+  providerNodeNameMap: ProviderNodeNameMap;
+  apiKeyMap: Record<string, { name?: string } | undefined>;
+}
+
+type CounterRow = UsageCounter & Record<string, unknown>;
+
+function accumulateHistoryRow(
+  buckets: UsageStats,
+  row: DbRow,
+  { connectionMap, providerNodeNameMap, apiKeyMap }: BucketRowKeys,
+  opts: { includeUnkeyedRows: boolean }
+): void {
+  const rawProvider = String(row.provider ?? "");
+  const providerName = providerNodeNameMap[rawProvider] || rawProvider;
+  const rawModel = String(row.model ?? "");
+  const rawTimestamp = String(row.timestamp ?? "");
+  const rawApiKey = String(row.apiKey ?? "");
+  const connectionId = row.connectionId ? String(row.connectionId) : null;
+  const tokens = parseJson<UsageTokens>(row.tokens as string | null, {});
+  const promptTokens = Number(row.promptTokens) || tokens.prompt_tokens || tokens.input_tokens || 0;
+  const completionTokens =
+    Number(row.completionTokens) || tokens.completion_tokens || tokens.output_tokens || 0;
+  const add = {
+    promptTokens,
+    completionTokens,
+    cachedTokens: tokens.cached_tokens || tokens.cache_read_input_tokens || 0,
+    cost: Number(row.cost) || 0,
+  };
+
+  addFlatTotals(buckets, add);
+  accumulate(buckets.byProvider, rawProvider, () => ({ ...emptyTotals() }), add);
+
+  const modelKey = rawProvider ? `${rawModel} (${rawProvider})` : rawModel;
+  const modelRow = accumulate(
+    buckets.byModel as Record<string, CounterRow>,
+    modelKey,
+    () => ({
+      ...emptyTotals(),
+      rawModel,
+      provider: providerName,
+      resolvedModel: resolvedModelOf(row.meta) ?? undefined,
+      lastUsed: rawTimestamp,
+    }),
+    add
+  );
+  keepNewest(modelRow, "lastUsed", rawTimestamp);
+
+  if (connectionId) {
+    const accountName = connectionMap[connectionId] || `Account ${connectionId.slice(0, 8)}...`;
+    const accountKey = `${rawModel} (${rawProvider} - ${accountName})`;
+    const accountRow = accumulate(
+      buckets.byAccount as Record<string, CounterRow>,
+      accountKey,
+      () => ({ ...emptyTotals(), rawModel, provider: providerName, connectionId, accountName, lastUsed: rawTimestamp }),
+      add
+    );
+    keepNewest(accountRow, "lastUsed", rawTimestamp);
+  }
+
+  // The two views key a keyless row differently, and that difference is load-bearing:
+  // a single key's report falls through here with an empty key (it filtered by key, so
+  // the column is authoritative) and lands under `<null>|model|provider`; the live view
+  // groups every keyless row under one visible "local-no-key" bucket instead.
+  if (rawApiKey || !opts.includeUnkeyedRows) {
+    const apiKeyMasked = maskApiKey(rawApiKey);
+    const keyRow = accumulate(
+      buckets.byApiKey as Record<string, CounterRow>,
+      `${apiKeyMasked}|${rawModel}|${rawProvider || "unknown"}`,
+      () => ({
+        ...emptyTotals(),
+        rawModel,
+        provider: providerName,
+        apiKeyMasked,
+        keyName: apiKeyMap[rawApiKey]?.name || rawApiKey.slice(0, 8) + "...",
+        apiKeyKey: apiKeyMasked,
+        lastUsed: rawTimestamp,
+      }),
+      add
+    );
+    keepNewest(keyRow, "lastUsed", rawTimestamp);
+  } else {
+    const keyRow = accumulate(
+      buckets.byApiKey as Record<string, CounterRow>,
+      "local-no-key",
+      () => ({
+        ...emptyTotals(),
+        rawModel,
+        provider: providerName,
+        apiKeyMasked: null,
+        keyName: "Local (No API Key)",
+        apiKeyKey: "local-no-key",
+        lastUsed: rawTimestamp,
+      }),
+      add
+    );
+    keepNewest(keyRow, "lastUsed", rawTimestamp);
+  }
+
+  const endpoint = String(row.endpoint ?? "") || "Unknown";
+  const epKey = `${endpoint}|${rawModel}|${rawProvider || "unknown"}`;
+  const epRow = accumulate(
+    buckets.byEndpoint as Record<string, CounterRow>,
+    epKey,
+    () => ({ ...emptyTotals(), endpoint, rawModel, provider: providerName, lastUsed: rawTimestamp }),
+    add
+  );
+  keepNewest(epRow, "lastUsed", rawTimestamp);
+}
+
 export async function getUsageStats(
   period = "all",
   filterApiKey: string | null = null,
@@ -1103,91 +1241,9 @@ export async function getUsageStats(
     );
 
     for (const r of filtered) {
-      const rawProvider = String(r.provider ?? "");
-      const rawModel = String(r.model ?? "");
-      const rawApiKey = String(r.apiKey ?? "");
-      const rawTimestamp = String(r.timestamp ?? "");
-      const rawEndpoint = String(r.endpoint ?? "");
-      const connectionId = r.connectionId ? String(r.connectionId) : null;
-      if (!modelAllowed(rawModel)) continue;
-      const tokens = parseJson<UsageTokens>(r.tokens as string | null, {});
-      const promptTokens = Number(r.promptTokens) || tokens.prompt_tokens || tokens.input_tokens || 0;
-      const completionTokens =
-        Number(r.completionTokens) || tokens.completion_tokens || tokens.output_tokens || 0;
-      const cachedTokens = tokens.cached_tokens || tokens.cache_read_input_tokens || 0;
-      const entryCost = Number(r.cost) || 0;
-      const providerDisplayName = providerNodeNameMap[rawProvider] || rawProvider;
-
-      stats.totalPromptTokens += promptTokens;
-      stats.totalCompletionTokens += completionTokens;
-      stats.totalCachedTokens += cachedTokens;
-      stats.totalCost += entryCost;
-
-      stats.byProvider[rawProvider] ||= { requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0 };
-      stats.byProvider[rawProvider].requests++;
-      stats.byProvider[rawProvider].promptTokens += promptTokens;
-      stats.byProvider[rawProvider].completionTokens += completionTokens;
-      stats.byProvider[rawProvider].cachedTokens += cachedTokens;
-      stats.byProvider[rawProvider].cost += entryCost;
-
-      const modelKey = rawProvider ? `${rawModel} (${rawProvider})` : rawModel;
-      stats.byModel[modelKey] ||= {
-        requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0,
-        rawModel, provider: providerDisplayName,
-        resolvedModel: resolvedModelOf(r.meta) ?? undefined,
-        lastUsed: rawTimestamp,
-      };
-      stats.byModel[modelKey].requests++;
-      stats.byModel[modelKey].promptTokens += promptTokens;
-      stats.byModel[modelKey].completionTokens += completionTokens;
-      stats.byModel[modelKey].cachedTokens += cachedTokens;
-      stats.byModel[modelKey].cost += entryCost;
-      if (new Date(rawTimestamp) > new Date(String(stats.byModel[modelKey].lastUsed))) {
-        stats.byModel[modelKey].lastUsed = rawTimestamp;
-      }
-
-      if (connectionId) {
-        const accountName = connectionMap[connectionId] || `Account ${connectionId.slice(0, 8)}...`;
-        const accountKey = `${rawModel} (${rawProvider} - ${accountName})`;
-        stats.byAccount[accountKey] ||= {
-          requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0,
-          rawModel, provider: providerDisplayName, connectionId, accountName,
-          lastUsed: rawTimestamp,
-        };
-        stats.byAccount[accountKey].requests++;
-        stats.byAccount[accountKey].promptTokens += promptTokens;
-        stats.byAccount[accountKey].completionTokens += completionTokens;
-        stats.byAccount[accountKey].cachedTokens += cachedTokens;
-        stats.byAccount[accountKey].cost += entryCost;
-        if (new Date(rawTimestamp) > new Date(String(stats.byAccount[accountKey].lastUsed))) {
-          stats.byAccount[accountKey].lastUsed = rawTimestamp;
-        }
-      }
-
-      const keyInfo = apiKeyMap[rawApiKey];
-      const keyName = keyInfo?.name || rawApiKey.slice(0, 8) + "...";
-      const apiKeyMasked = maskApiKey(rawApiKey);
-      const akKey = `${apiKeyMasked}|${rawModel}|${rawProvider || "unknown"}`;
-      stats.byApiKey[akKey] ||= {
-        requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0,
-        rawModel, provider: providerDisplayName, apiKeyMasked, keyName,
-        apiKeyKey: apiKeyMasked, lastUsed: rawTimestamp,
-      };
-      const ake = stats.byApiKey[akKey];
-      ake.requests++; ake.promptTokens += promptTokens; ake.completionTokens += completionTokens; ake.cachedTokens += cachedTokens; ake.cost += entryCost;
-      if (new Date(rawTimestamp) > new Date(String(ake.lastUsed))) ake.lastUsed = rawTimestamp;
-
-      const endpoint = rawEndpoint || "Unknown";
-      const epKey = `${endpoint}|${rawModel}|${rawProvider || "unknown"}`;
-      stats.byEndpoint[epKey] ||= {
-        requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0,
-        endpoint, rawModel, provider: providerDisplayName, lastUsed: rawTimestamp,
-      };
-      const epe = stats.byEndpoint[epKey];
-      epe.requests++; epe.promptTokens += promptTokens; epe.completionTokens += completionTokens; epe.cachedTokens += cachedTokens; epe.cost += entryCost;
-      if (new Date(rawTimestamp) > new Date(String(epe.lastUsed))) epe.lastUsed = rawTimestamp;
+      if (!modelAllowed(String(r.model ?? ""))) continue;
+      accumulateHistoryRow(stats, r, { connectionMap, providerNodeNameMap, apiKeyMap }, { includeUnkeyedRows: false });
     }
-
     stats.totalRequests = (Object.values(stats.byProvider) as UsageCounter[]).reduce(
       (sum, p) => sum + (p.requests || 0),
       0
@@ -1212,12 +1268,7 @@ export async function getUsageStats(
         stats.totalCost += day.cost || 0;
 
         for (const [prov, p] of Object.entries(day.byProvider || {}) as Array<[string, UsageCounter]>) {
-          if (!stats.byProvider[prov]) stats.byProvider[prov] = { requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0 };
-          stats.byProvider[prov].requests += p.requests || 0;
-          stats.byProvider[prov].promptTokens += p.promptTokens || 0;
-          stats.byProvider[prov].completionTokens += p.completionTokens || 0;
-          stats.byProvider[prov].cachedTokens += p.cachedTokens || 0;
-          stats.byProvider[prov].cost += p.cost || 0;
+          accumulate(stats.byProvider as Record<string, CounterRow>, prov, () => ({ ...emptyTotals() }), p);
         }
       }
 
@@ -1227,15 +1278,13 @@ export async function getUsageStats(
         const provider = m.provider || mk.split("|")[1] || "";
         const statsKey = provider ? `${rawModel} (${provider})` : rawModel;
         const providerDisplayName = providerNodeNameMap[provider] || provider;
-        if (!stats.byModel[statsKey]) {
-        stats.byModel[statsKey] = { requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0, rawModel, provider: providerDisplayName, resolvedModel: m.resolvedModel || undefined, lastUsed: dateKey };
-        }
-        stats.byModel[statsKey].requests += m.requests || 0;
-        stats.byModel[statsKey].promptTokens += m.promptTokens || 0;
-        stats.byModel[statsKey].completionTokens += m.completionTokens || 0;
-        stats.byModel[statsKey].cachedTokens += m.cachedTokens || 0;
-        stats.byModel[statsKey].cost += m.cost || 0;
-        if (dateKey > (stats.byModel[statsKey].lastUsed || "")) stats.byModel[statsKey].lastUsed = dateKey;
+        const modelCounter = accumulate(
+          stats.byModel as Record<string, CounterRow>,
+          statsKey,
+          () => ({ ...emptyTotals(), rawModel, provider: providerDisplayName, resolvedModel: m.resolvedModel || undefined, lastUsed: dateKey }),
+          m
+        );
+        keepNewest(modelCounter, "lastUsed", dateKey);
 
         // Day totals and provider buckets carry no model dimension, so in
         // restricted mode they are rebuilt from the matching model buckets.
@@ -1246,12 +1295,7 @@ export async function getUsageStats(
           stats.totalCost += m.cost || 0;
 
           if (provider) {
-            if (!stats.byProvider[provider]) stats.byProvider[provider] = { requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0 };
-            stats.byProvider[provider].requests += m.requests || 0;
-            stats.byProvider[provider].promptTokens += m.promptTokens || 0;
-            stats.byProvider[provider].completionTokens += m.completionTokens || 0;
-            stats.byProvider[provider].cachedTokens += m.cachedTokens || 0;
-            stats.byProvider[provider].cost += m.cost || 0;
+            accumulate(stats.byProvider as Record<string, CounterRow>, provider, () => ({ ...emptyTotals() }), m);
           }
         }
       }
@@ -1268,15 +1312,13 @@ export async function getUsageStats(
         const provider = a.provider || "";
         const providerDisplayName = providerNodeNameMap[provider] || provider;
         const accountKey = `${rawModel} (${provider} - ${accountName})`;
-        if (!stats.byAccount[accountKey]) {
-          stats.byAccount[accountKey] = { requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0, rawModel, provider: providerDisplayName, connectionId: connId, accountName, lastUsed: dateKey };
-        }
-        stats.byAccount[accountKey].requests += a.requests || 0;
-        stats.byAccount[accountKey].promptTokens += a.promptTokens || 0;
-        stats.byAccount[accountKey].completionTokens += a.completionTokens || 0;
-        stats.byAccount[accountKey].cachedTokens += a.cachedTokens || 0;
-        stats.byAccount[accountKey].cost += a.cost || 0;
-        if (dateKey > (stats.byAccount[accountKey].lastUsed || "")) stats.byAccount[accountKey].lastUsed = dateKey;
+        const accountCounter = accumulate(
+          stats.byAccount as Record<string, CounterRow>,
+          accountKey,
+          () => ({ ...emptyTotals(), rawModel, provider: providerDisplayName, connectionId: connId, accountName, lastUsed: dateKey }),
+          a
+        );
+        keepNewest(accountCounter, "lastUsed", dateKey);
       }
 
       for (const [akKey, ak] of Object.entries(day.byApiKey || {})) {
@@ -1299,15 +1341,13 @@ export async function getUsageStats(
           : null;
         const keyName = keyInfo?.name || apiKeyMasked || "Local (No API Key)";
         const apiKeyKey = apiKeyMasked || "local-no-key";
-        if (!stats.byApiKey[akKey]) {
-          stats.byApiKey[akKey] = { requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0, rawModel, provider: providerDisplayName, apiKeyMasked, keyName, apiKeyKey, lastUsed: dateKey };
-        }
-        stats.byApiKey[akKey].requests += ak.requests || 0;
-        stats.byApiKey[akKey].promptTokens += ak.promptTokens || 0;
-        stats.byApiKey[akKey].completionTokens += ak.completionTokens || 0;
-        stats.byApiKey[akKey].cachedTokens += ak.cachedTokens || 0;
-        stats.byApiKey[akKey].cost += ak.cost || 0;
-        if (dateKey > (stats.byApiKey[akKey].lastUsed || "")) stats.byApiKey[akKey].lastUsed = dateKey;
+        const apiKeyCounter = accumulate(
+          stats.byApiKey as Record<string, CounterRow>,
+          akKey,
+          () => ({ ...emptyTotals(), rawModel, provider: providerDisplayName, apiKeyMasked, keyName, apiKeyKey, lastUsed: dateKey }),
+          ak
+        );
+        keepNewest(apiKeyCounter, "lastUsed", dateKey);
       }
 
       for (const [epKey, ep] of Object.entries(day.byEndpoint || {})) {
@@ -1316,15 +1356,13 @@ export async function getUsageStats(
         if (!modelAllowed(rawModel)) continue;
         const provider = ep.provider || "";
         const providerDisplayName = providerNodeNameMap[provider] || provider;
-        if (!stats.byEndpoint[epKey]) {
-          stats.byEndpoint[epKey] = { requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0, endpoint, rawModel, provider: providerDisplayName, lastUsed: dateKey };
-        }
-        stats.byEndpoint[epKey].requests += ep.requests || 0;
-        stats.byEndpoint[epKey].promptTokens += ep.promptTokens || 0;
-        stats.byEndpoint[epKey].completionTokens += ep.completionTokens || 0;
-        stats.byEndpoint[epKey].cachedTokens += ep.cachedTokens || 0;
-        stats.byEndpoint[epKey].cost += ep.cost || 0;
-        if (dateKey > (stats.byEndpoint[epKey].lastUsed || "")) stats.byEndpoint[epKey].lastUsed = dateKey;
+        const endpointCounter = accumulate(
+          stats.byEndpoint as Record<string, CounterRow>,
+          epKey,
+          () => ({ ...emptyTotals(), endpoint, rawModel, provider: providerDisplayName, lastUsed: dateKey }),
+          ep
+        );
+        keepNewest(endpointCounter, "lastUsed", dateKey);
       }
     }
 
@@ -1382,108 +1420,12 @@ export async function getUsageStats(
     );
 
     for (const r of filtered) {
-      const rawProvider = String(r.provider ?? "");
-      const rawModel = String(r.model ?? "");
-      const rawTimestamp = String(r.timestamp ?? "");
-      const rawApiKey = String(r.apiKey ?? "");
-      const connectionId = r.connectionId ? String(r.connectionId) : null;
-      if (!modelAllowed(rawModel)) continue;
-      const tokens = parseJson<UsageTokens>(r.tokens as string | null, {});
-      const promptTokens = Number(r.promptTokens) || tokens.prompt_tokens || tokens.input_tokens || 0;
-      const completionTokens =
-        Number(r.completionTokens) || tokens.completion_tokens || tokens.output_tokens || 0;
-      const cachedTokens = tokens.cached_tokens || tokens.cache_read_input_tokens || 0;
-      const entryCost = Number(r.cost) || 0;
-      const providerDisplayName = providerNodeNameMap[rawProvider] || rawProvider;
-
-      stats.totalPromptTokens += promptTokens;
-      stats.totalCompletionTokens += completionTokens;
-      stats.totalCachedTokens += cachedTokens;
-      stats.totalCost += entryCost;
-
-      stats.byProvider[rawProvider] ||= { requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0 };
-      stats.byProvider[rawProvider].requests++;
-      stats.byProvider[rawProvider].promptTokens += promptTokens;
-      stats.byProvider[rawProvider].completionTokens += completionTokens;
-      stats.byProvider[rawProvider].cachedTokens += cachedTokens;
-      stats.byProvider[rawProvider].cost += entryCost;
-
-      const modelKey = rawProvider ? `${rawModel} (${rawProvider})` : rawModel;
-      stats.byModel[modelKey] ||= {
-        requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0,
-        rawModel, provider: providerDisplayName,
-        resolvedModel: resolvedModelOf(r.meta) ?? undefined,
-        lastUsed: rawTimestamp,
-      };
-      stats.byModel[modelKey].requests++;
-      stats.byModel[modelKey].promptTokens += promptTokens;
-      stats.byModel[modelKey].completionTokens += completionTokens;
-      stats.byModel[modelKey].cachedTokens += cachedTokens;
-      stats.byModel[modelKey].cost += entryCost;
-      if (new Date(rawTimestamp) > new Date(String(stats.byModel[modelKey].lastUsed))) {
-        stats.byModel[modelKey].lastUsed = rawTimestamp;
-      }
-
-      if (connectionId) {
-        const accountName = connectionMap[connectionId] || `Account ${connectionId.slice(0, 8)}...`;
-        const accountKey = `${rawModel} (${rawProvider} - ${accountName})`;
-        stats.byAccount[accountKey] ||= {
-          requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0,
-          rawModel, provider: providerDisplayName, connectionId, accountName,
-          lastUsed: rawTimestamp,
-        };
-        stats.byAccount[accountKey].requests++;
-        stats.byAccount[accountKey].promptTokens += promptTokens;
-        stats.byAccount[accountKey].completionTokens += completionTokens;
-        stats.byAccount[accountKey].cachedTokens += cachedTokens;
-        stats.byAccount[accountKey].cost += entryCost;
-        if (new Date(rawTimestamp) > new Date(String(stats.byAccount[accountKey].lastUsed))) {
-          stats.byAccount[accountKey].lastUsed = rawTimestamp;
-        }
-      }
-
-      if (rawApiKey) {
-        const keyInfo = apiKeyMap[rawApiKey];
-        const keyName = keyInfo?.name || rawApiKey.slice(0, 8) + "...";
-        const apiKeyMasked = maskApiKey(rawApiKey);
-        // Key by the FULL api key (same as the daily rollup + lastUsed overlay)
-        // - masking here collided all keys sharing a prefix into one bucket.
-        const akKey = `${apiKeyMasked}|${rawModel}|${rawProvider || "unknown"}`;
-        stats.byApiKey[akKey] ||= {
-          requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0,
-          rawModel, provider: providerDisplayName, apiKeyMasked, keyName,
-          apiKeyKey: apiKeyMasked, lastUsed: rawTimestamp,
-        };
-        const ake = stats.byApiKey[akKey];
-        ake.requests++; ake.promptTokens += promptTokens; ake.completionTokens += completionTokens; ake.cachedTokens += cachedTokens; ake.cost += entryCost;
-        if (new Date(rawTimestamp) > new Date(String(ake.lastUsed))) ake.lastUsed = rawTimestamp;
-      } else {
-        stats.byApiKey["local-no-key"] ||= {
-          requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0,
-          rawModel, provider: providerDisplayName, apiKeyMasked: null,
-          keyName: "Local (No API Key)", apiKeyKey: "local-no-key", lastUsed: rawTimestamp,
-        };
-        const ake = stats.byApiKey["local-no-key"];
-        ake.requests++; ake.promptTokens += promptTokens; ake.completionTokens += completionTokens; ake.cachedTokens += cachedTokens; ake.cost += entryCost;
-        if (new Date(rawTimestamp) > new Date(String(ake.lastUsed))) ake.lastUsed = rawTimestamp;
-      }
-
-      const endpoint = String(r.endpoint ?? "") || "Unknown";
-      const epKey = `${endpoint}|${rawModel}|${rawProvider || "unknown"}`;
-      stats.byEndpoint[epKey] ||= {
-        requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0,
-        endpoint, rawModel, provider: providerDisplayName, lastUsed: rawTimestamp,
-      };
-      const epe = stats.byEndpoint[epKey];
-      epe.requests++; epe.promptTokens += promptTokens; epe.completionTokens += completionTokens; epe.cachedTokens += cachedTokens; epe.cost += entryCost;
-      if (new Date(rawTimestamp) > new Date(String(epe.lastUsed))) epe.lastUsed = rawTimestamp;
+      if (!modelAllowed(String(r.model ?? ""))) continue;
+      accumulateHistoryRow(stats, r, { connectionMap, providerNodeNameMap, apiKeyMap }, { includeUnkeyedRows: true });
     }
   }
 
-  stats.totalRequests = (Object.values(stats.byProvider) as UsageCounter[]).reduce(
-    (sum, p) => sum + (p.requests || 0),
-    0
-  );
+  stats.totalRequests = sumTotals(Object.values(stats.byProvider) as UsageCounter[]).requests;
   return stats;
 }
 

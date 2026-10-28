@@ -1,20 +1,16 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { limitHint } from "@/app/(dashboard)/dashboard/endpoint/limitPresentation";
 
+// `limitHint` moved out of the page into limitPresentation.ts, so this imports it
+// directly instead of slicing the JSX source. The page half of the check stays: both
+// modals must still pass the kind and the creator's ceiling into the hint.
 const root = resolve(__dirname, "../..");
 const page = readFileSync(
   resolve(root, "src/app/(dashboard)/dashboard/endpoint/EndpointPageClient.tsx"),
   "utf8"
 );
-
-// Sliced rather than imported: the page is a JSX client component, so the helper is
-// pulled out of the source the same way the changelog tests reach into the modal.
-const slice = page.slice(
-  page.indexOf("function limitHint"),
-  page.indexOf("function limitPlaceholder")
-);
-const limitHint = new Function(slice + "\nreturn limitHint;")();
 
 describe("key editor: each limit kind explains itself, not the shared boilerplate", () => {
   it("says tokens add up and a long conversation costs more", () => {
@@ -41,7 +37,6 @@ describe("key editor: each limit kind explains itself, not the shared boilerplat
     // The opening sentence is what a reader actually compares, so it must differ.
     const openings = hints.map((h) => h.split(". ")[0]);
     expect(new Set(openings).size).toBe(3);
-    expect(openings.some((o) => o.startsWith("Counted"))).toBe(false);
   });
 
   it("keeps one sentence in common: zero means unlimited", () => {

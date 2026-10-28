@@ -38,18 +38,14 @@ describe("AUDIT-002: API key masking", () => {
       path.resolve(REPO_ROOT, "src/lib/db/repos/usageRepo.ts"),
       "utf-8"
     );
-    // Both code paths (daily summary + 24h live) should use apiKeyMasked
-    const maskedCount = (source.match(/apiKeyMasked/g) || []).length;
-    expect(maskedCount).toBeGreaterThanOrEqual(4); // function def + 3 usage sites
+    // Both the daily-rollup path and the history path feed one accumulator, so the
+    // check is that the shared bucket builder labels every entry with the mask.
+    const bucketBuilders = source.match(/apiKeyMasked[^;]*keyName/g) || [];
+    expect(bucketBuilders.length).toBeGreaterThanOrEqual(2);
 
-    // The byApiKey stats entries should use apiKeyMasked, not raw apiKey
-    // Check the daily summary path
-    const dailyPath = source.match(/stats\.byApiKey\[akKey\] = \{[^}]*apiKeyMasked[^}]*\}/);
-    expect(dailyPath).not.toBeNull();
-    // Check the 24h live path
-    const livePath = source.match(/stats\.byApiKey\[akKey\] = \{[^}]*apiKeyMasked[^}]*\}/g);
-    expect(livePath).not.toBeNull();
-    expect(livePath.length).toBeGreaterThanOrEqual(1);
+    // Whatever builds an entry must take apiKeyMasked from maskApiKey, never from the
+    // stored value directly.
+    expect(source).toContain("const apiKeyMasked = maskApiKey(rawApiKey)");
   });
 
   it("byApiKey object keys should use masked key, not raw key", () => {
@@ -57,12 +53,15 @@ describe("AUDIT-002: API key masking", () => {
       path.resolve(REPO_ROOT, "src/lib/db/repos/usageRepo.ts"),
       "utf-8"
     );
-    // The 24h path builds the bucket key from the masked key — the raw key must
-    // never appear as a JSON object key, since /api/usage/stats returns byApiKey
-    // verbatim (AUDIT-002).
-    expect(source).toMatch(/const akKey = `\$\{apiKeyMasked\}\|\$\{rawModel\}\|\$\{rawProvider/);
+    // The bucket key is built from the masked key — the raw key must never appear as a
+    // JSON object key, since /api/usage/stats returns byApiKey verbatim (AUDIT-002).
+    // The key may be built inline or through a template helper, so assert on the
+    // composition rather than one exact expression.
+    expect(source).toMatch(/`\$\{apiKeyMasked\}\|\$\{rawModel\}\|\$\{rawProvider/);
     // Should NOT use raw r.apiKey in the key
     expect(source).not.toContain("${r.apiKey}|${r.model}|${r.provider");
+    // And the raw key must not be stored as a value either.
+    expect(source).not.toMatch(/apiKey:\s*r\.apiKey\b/);
   });
 });
 
