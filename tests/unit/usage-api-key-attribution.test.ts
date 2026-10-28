@@ -10,7 +10,7 @@ beforeEach(async () => {
 	tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "9router-api-key-"))
 	process.env.DATA_DIR = tempDir
 	vi.resetModules()
-	db = await import("@/lib/db/index.js")
+	db = await import("@9router/db")
 	await db.initDb()
 })
 

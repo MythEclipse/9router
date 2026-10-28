@@ -44,8 +44,8 @@ let authService
 beforeAll(async () => {
 	;({ POST } = await import("@/app/api/providers/route.js"))
 	;({ handleEmbeddings } = await import("@/sse/handlers/embeddings.js"))
-	;({ getProviderConnections } = await import("@/lib/db/repos/connectionsRepo.js"))
-	;({ updateSettings } = await import("@/lib/db/repos/settingsRepo.js"))
+	;({ getProviderConnections } = await import("@9router/db/repos/connectionsRepo"))
+	;({ updateSettings } = await import("@9router/db/repos/settingsRepo"))
 	authService = await import("@/sse/services/auth.js")
 	await updateSettings({ requireApiKey: false })
 })

@@ -28,13 +28,13 @@ vi.mock("@/lib/localDb", () => ({
 	getCustomModels: async () => [],
 }))
 vi.mock("@/lib/disabledModelsDb", () => ({ getDisabledModels: async () => ({}) }))
-vi.mock("@/lib/db/repos/combosRepo.js", () => ({ getCombos: async () => fx.combos }))
-vi.mock("@/lib/db/repos/modelEditorRepo.js", () => ({
+vi.mock("@9router/db/repos/combosRepo", () => ({ getCombos: async () => fx.combos }))
+vi.mock("@9router/db/repos/modelEditorRepo", () => ({
 	getStudioModel: async (name) => fx.studios[name] || null,
 	getModelOverride: async () => null,
 }))
-vi.mock("@/lib/db/repos/aliasRepo.js", () => ({ getModelAliases: async () => ({}) }))
-vi.mock("@/lib/db/repos/apiKeysRepo.js", () => ({
+vi.mock("@9router/db/repos/aliasRepo", () => ({ getModelAliases: async () => ({}) }))
+vi.mock("@9router/db/repos/apiKeysRepo", () => ({
 	getApiKeyByKey: async (k) => fx.keys[k] || null,
 	getAllowedModelsOfKey: async (k) =>
 		fx.keys[k]?.access?.restricted ? fx.keys[k].access.allow : null,

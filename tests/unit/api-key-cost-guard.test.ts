@@ -48,7 +48,7 @@ async function seedKey({
 	requestLimit = 0,
 	usedRequests = 0,
 } = {}) {
-	const { getAdapter } = await import("@/lib/db/driver.js")
+	const { getAdapter } = await import("@9router/db/driver")
 	const db = await getAdapter()
 	const now = new Date().toISOString()
 	db.run(
@@ -81,7 +81,7 @@ async function seedKey({
 describe("API key daily cost limit", () => {
 	it("adds the cost of a logged request to today's counter", async () => {
 		const db = await seedKey({ limitKind: "cost", dailyCostLimit: 10 })
-		const { saveRequestUsage } = await import("@/lib/db/repos/usageRepo.js")
+		const { saveRequestUsage } = await import("@9router/db/repos/usageRepo")
 
 		await saveRequestUsage({ ...EXPENSIVE_CALL, apiKey: KEY, timestamp: "2026-10-20T01:00:00.000Z" })
 
@@ -92,8 +92,8 @@ describe("API key daily cost limit", () => {
 
 	it("refuses with COST_LIMIT_EXCEEDED once the day's spend reaches the cap", async () => {
 		await seedKey({ limitKind: "cost", dailyCostLimit: 0.1 })
-		const { saveRequestUsage } = await import("@/lib/db/repos/usageRepo.js")
-		const { validateApiKey } = await import("@/lib/db/repos/apiKeysRepo.js")
+		const { saveRequestUsage } = await import("@9router/db/repos/usageRepo")
+		const { validateApiKey } = await import("@9router/db/repos/apiKeysRepo")
 
 		await saveRequestUsage({ ...EXPENSIVE_CALL, apiKey: KEY, timestamp: "2026-10-20T02:00:00.000Z" })
 
@@ -102,8 +102,8 @@ describe("API key daily cost limit", () => {
 
 	it("lets the key through while today's spend is still below the cap", async () => {
 		await seedKey({ limitKind: "cost", dailyCostLimit: 1 })
-		const { saveRequestUsage } = await import("@/lib/db/repos/usageRepo.js")
-		const { validateApiKey } = await import("@/lib/db/repos/apiKeysRepo.js")
+		const { saveRequestUsage } = await import("@9router/db/repos/usageRepo")
+		const { validateApiKey } = await import("@9router/db/repos/apiKeysRepo")
 
 		await saveRequestUsage({ ...EXPENSIVE_CALL, apiKey: KEY, timestamp: "2026-10-20T03:00:00.000Z" })
 
@@ -112,7 +112,7 @@ describe("API key daily cost limit", () => {
 
 	it("ignores the cap when it is zero, even with spend already recorded", async () => {
 		await seedKey({ limitKind: "cost", dailyCostLimit: 0, costSpent: 99, costDay: today() })
-		const { validateApiKey } = await import("@/lib/db/repos/apiKeysRepo.js")
+		const { validateApiKey } = await import("@9router/db/repos/apiKeysRepo")
 
 		expect(await validateApiKey(KEY)).toBe(true)
 	})
@@ -124,8 +124,8 @@ describe("API key daily cost limit", () => {
 			costSpent: 5,
 			costDay: "2000-01-01",
 		})
-		const { saveRequestUsage } = await import("@/lib/db/repos/usageRepo.js")
-		const { validateApiKey } = await import("@/lib/db/repos/apiKeysRepo.js")
+		const { saveRequestUsage } = await import("@9router/db/repos/usageRepo")
+		const { validateApiKey } = await import("@9router/db/repos/apiKeysRepo")
 
 		// Yesterday's 5 USD must not block today's first request.
 		expect(await validateApiKey(KEY)).toBe(true)
@@ -139,8 +139,8 @@ describe("API key daily cost limit", () => {
 	})
 
 	it("counts logged requests and refuses at the request cap", async () => {
-		const { saveRequestUsage } = await import("@/lib/db/repos/usageRepo.js")
-		const { validateApiKey } = await import("@/lib/db/repos/apiKeysRepo.js")
+		const { saveRequestUsage } = await import("@9router/db/repos/usageRepo")
+		const { validateApiKey } = await import("@9router/db/repos/apiKeysRepo")
 		await seedKey({ limitKind: "requests", requestLimit: 1 })
 
 		await saveRequestUsage({ ...EXPENSIVE_CALL, apiKey: KEY, timestamp: "2026-10-20T05:00:00.000Z" })
@@ -149,8 +149,8 @@ describe("API key daily cost limit", () => {
 	})
 
 	it("lets requests through below the cap while a stale token cap stays ignored", async () => {
-		const { saveRequestUsage } = await import("@/lib/db/repos/usageRepo.js")
-		const { validateApiKey } = await import("@/lib/db/repos/apiKeysRepo.js")
+		const { saveRequestUsage } = await import("@9router/db/repos/usageRepo")
+		const { validateApiKey } = await import("@9router/db/repos/apiKeysRepo")
 		// The token budget is already exhausted, but requests is the selected kind.
 		await seedKey({ limitKind: "requests", requestLimit: 3, tokenLimit: 10, usedTokens: 999 })
 
@@ -160,7 +160,7 @@ describe("API key daily cost limit", () => {
 	})
 
 	it("enforces only the selected kind, and switching kind switches the budget", async () => {
-		const { validateApiKey, updateApiKey } = await import("@/lib/db/repos/apiKeysRepo.js")
+		const { validateApiKey, updateApiKey } = await import("@9router/db/repos/apiKeysRepo")
 		const db = await seedKey({
 			limitKind: "cost",
 			dailyCostLimit: 5,

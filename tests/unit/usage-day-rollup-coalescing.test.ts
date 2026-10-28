@@ -31,7 +31,7 @@ beforeEach(async () => {
 	delete global._statsEmitTimers
 	delete global._lastErrorProvider
 	vi.resetModules()
-	db = await import("@/lib/db/index.js")
+	db = await import("@9router/db")
 	await db.initDb()
 })
 
@@ -60,7 +60,7 @@ function localDateKey(d = new Date()) {
 }
 
 async function adapter() {
-	const { getAdapter } = await import("@/lib/db/driver.js")
+	const { getAdapter } = await import("@9router/db/driver")
 	return getAdapter()
 }
 

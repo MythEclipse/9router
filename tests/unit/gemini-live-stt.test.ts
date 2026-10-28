@@ -406,7 +406,7 @@ describe("Custom-model transport persistence via POST /api/models/custom", () =>
 	}
 
 	async function customRows() {
-		const { getCustomModels } = await import("@/lib/db/repos/aliasRepo.js")
+		const { getCustomModels } = await import("@9router/db/repos/aliasRepo")
 		return getCustomModels()
 	}
 

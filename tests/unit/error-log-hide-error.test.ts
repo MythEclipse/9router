@@ -1,10 +1,6 @@
+import { clearErrorLogs, getErrorLogs, recordErrorLog } from "@9router/db/repos/errorLogRepo"
 import { beforeEach, describe, expect, it } from "vitest"
 import { buildErrorBody, errorResponse } from "../../apps/web/open-sse/utils/error.js"
-import {
-	clearErrorLogs,
-	getErrorLogs,
-	recordErrorLog,
-} from "../../apps/web/src/lib/db/repos/errorLogRepo.js"
 
 describe("Error Log & Hide Error System", () => {
 	beforeEach(async () => {

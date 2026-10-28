@@ -1,4 +1,3 @@
-import { describe, expect, it } from "vitest"
 import {
 	accumulate,
 	addToCounter,
@@ -6,7 +5,8 @@ import {
 	emptyTotals,
 	keepNewest,
 	sumTotals,
-} from "@/lib/db/repos/usageCounters"
+} from "@9router/db/repos/usageCounters"
+import { describe, expect, it } from "vitest"
 
 describe("emptyTotals", () => {
 	it("starts every total at zero", () => {

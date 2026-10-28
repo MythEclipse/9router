@@ -14,7 +14,7 @@ import { describe, expect, it } from "vitest"
  */
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..")
-const repo = readFileSync(join(REPO_ROOT, "src/lib/db/repos/usageRepo.ts"), "utf8")
+const repo = readFileSync(join(REPO_ROOT, "packages/db/src/repos/usageRepo.ts"), "utf8")
 
 /** Every `SELECT ... FROM usageHistory` that yields rows carrying a model name. */
 function displayQueries(source: string): string[] {

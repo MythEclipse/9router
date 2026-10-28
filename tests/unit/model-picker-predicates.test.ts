@@ -1,5 +1,5 @@
+import { matchesAllowedModels, parseAllowedModels } from "@9router/db/repos/allowedModels"
 import { describe, expect, it } from "vitest"
-import { matchesAllowedModels, parseAllowedModels } from "@/lib/db/repos/allowedModels"
 import { isOrphanCompatAlias, matchesModelScope } from "@/shared/utils/modelPickerPredicates"
 
 /**

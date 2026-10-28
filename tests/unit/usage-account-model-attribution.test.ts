@@ -30,7 +30,7 @@ beforeEach(async () => {
 	delete global._statsEmitTimers
 	delete global._lastErrorProvider
 	vi.resetModules()
-	db = await import("@/lib/db/index.js")
+	db = await import("@9router/db")
 	await db.initDb()
 })
 
@@ -132,7 +132,7 @@ describe("usage stats — per-account rows keep the model dimension", () => {
 
 	it("reads a legacy connectionId-keyed bucket without losing its model", async () => {
 		// Pre-fix rows: bucket key is the bare connectionId, model lives only in meta.
-		const { getAdapter } = await import("@/lib/db/driver.js")
+		const { getAdapter } = await import("@9router/db/driver")
 		const adapter = await getAdapter()
 		const legacy = {
 			requests: 5,
@@ -181,7 +181,7 @@ describe("usageDaily aggregate — secret hygiene", () => {
 		// this test inspects the persisted blob directly).
 		await db.flushDayRollup()
 
-		const { getAdapter } = await import("@/lib/db/driver.js")
+		const { getAdapter } = await import("@9router/db/driver")
 		const adapter = await getAdapter()
 		const raw = adapter.get(`SELECT data FROM usageDaily`)?.data || ""
 

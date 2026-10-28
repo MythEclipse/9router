@@ -19,8 +19,8 @@ vi.mock("@/lib/localDb", () => ({
 	getProviderNodes: async (filter = {}) =>
 		fx.nodes.filter((n) => !filter.type || n.type === filter.type),
 }))
-vi.mock("@/lib/db/repos/combosRepo.js", () => ({ getCombos: async () => fx.combos }))
-vi.mock("@/lib/db/repos/apiKeysRepo.js", () => ({
+vi.mock("@9router/db/repos/combosRepo", () => ({ getCombos: async () => fx.combos }))
+vi.mock("@9router/db/repos/apiKeysRepo", () => ({
 	getApiKeyByKey: async (k) => fx.keys[k] || null,
 }))
 vi.mock("@/sse/utils/logger.js", () => ({

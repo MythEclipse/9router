@@ -29,7 +29,7 @@ describe("opencode session rotation on FreeUsageLimitError", () => {
 	})
 
 	it("the chat fallback rotates before moving to the next account", () => {
-		const chat = read("src/sse/handlers/chat.ts")
+		const chat = read("apps/web/src/sse/handlers/chat.ts")
 		expect(chat).toContain("rotateOpencodeSession")
 		expect(chat).toContain('provider === "opencode"')
 		expect(chat).toMatch(/free\\s\*usage\\s\*limit/)

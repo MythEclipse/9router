@@ -1,8 +1,8 @@
+import type { ImportProgress } from "@9router/db"
 import { beforeEach, describe, expect, it } from "vitest"
-import type { ImportProgress } from "@/lib/db/index.js"
 
 // Loaded in beforeEach-adjacent fashion because the db module keeps process-wide state.
-const db = await import("@/lib/db/index.js")
+const db = await import("@9router/db")
 const importDb = db.importDb as (p: Record<string, unknown>) => Promise<unknown>
 const importDbProgressive = db.importDbProgressive as (
 	p: Record<string, unknown>,

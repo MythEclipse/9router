@@ -16,7 +16,7 @@ const handleSearch = vi.fn()
 const getSettings = vi.fn()
 
 vi.mock("@/sse/handlers/search.js", () => ({ handleSearch: (...a) => handleSearch(...a) }))
-vi.mock("@/lib/db/repos/connectionsRepo.js", () => ({
+vi.mock("@9router/db/repos/connectionsRepo", () => ({
 	getProviderConnections: (...a) => getProviderConnections(...a),
 }))
 vi.mock("@/lib/localDb", () => ({ getSettings: (...a) => getSettings(...a) }))

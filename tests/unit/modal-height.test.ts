@@ -3,7 +3,7 @@ import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 
 const root = resolve(__dirname, "../..")
-const modal = readFileSync(resolve(root, "src/shared/components/Modal.tsx"), "utf8")
+const modal = readFileSync(resolve(root, "apps/web/src/shared/components/Modal.tsx"), "utf8")
 
 describe("Modal: the panel owns the height budget", () => {
 	it("caps the panel and lays it out as a column", () => {

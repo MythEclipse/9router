@@ -12,8 +12,8 @@
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
+import { stripNullBytes } from "@9router/db/helpers/nullBytes"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { stripNullBytes } from "@/lib/db/helpers/nullBytes.js"
 
 // Built at runtime so the source file itself holds no literal NUL byte.
 const NUL = String.fromCharCode(0)
@@ -63,7 +63,7 @@ describe("stripNullBytes", () => {
 
 describe("driver binds NUL-containing strings safely", () => {
 	it("stores the whole value instead of throwing or truncating", async () => {
-		const { getAdapter } = await import("@/lib/db/driver.js")
+		const { getAdapter } = await import("@9router/db/driver")
 		const db = await getAdapter()
 
 		db.run("CREATE TABLE IF NOT EXISTS nulTest (id INTEGER PRIMARY KEY, label TEXT)")
@@ -75,7 +75,7 @@ describe("driver binds NUL-containing strings safely", () => {
 	})
 
 	it("keeps a NUL out of a lookup value too", async () => {
-		const { getAdapter } = await import("@/lib/db/driver.js")
+		const { getAdapter } = await import("@9router/db/driver")
 		const db = await getAdapter()
 
 		db.run("CREATE TABLE IF NOT EXISTS nulLookup (id INTEGER PRIMARY KEY, label TEXT)")
@@ -86,7 +86,7 @@ describe("driver binds NUL-containing strings safely", () => {
 	})
 
 	it("leaves the driver identity and the other methods intact", async () => {
-		const { getAdapter } = await import("@/lib/db/driver.js")
+		const { getAdapter } = await import("@9router/db/driver")
 		const db = await getAdapter()
 
 		expect(["better-sqlite3", "node:sqlite", "sql.js", "bun:sqlite"]).toContain(db.driver)

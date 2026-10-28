@@ -18,7 +18,7 @@ import { describe, expect, it } from "vitest"
  */
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..")
-const repo = readFileSync(join(REPO_ROOT, "src/lib/db/repos/usageRepo.ts"), "utf8")
+const repo = readFileSync(join(REPO_ROOT, "packages/db/src/repos/usageRepo.ts"), "utf8")
 const chatCore = readFileSync(join(REPO_ROOT, "open-sse/handlers/chatCore.ts"), "utf8")
 
 describe("lifecycle rows keep the resolved model", () => {

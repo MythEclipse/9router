@@ -3,9 +3,15 @@ import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 
 const root = resolve(__dirname, "../..")
-const modal = readFileSync(resolve(root, "src/shared/components/ChangelogModal.tsx"), "utf8")
+const modal = readFileSync(
+	resolve(root, "apps/web/src/shared/components/ChangelogModal.tsx"),
+	"utf8",
+)
 const changelog = readFileSync(resolve(root, "CHANGELOG.md"), "utf8")
-const glyphs = readFileSync(resolve(root, "public/fonts/material-symbols-glyphs.txt"), "utf8")
+const glyphs = readFileSync(
+	resolve(root, "apps/web/public/fonts/material-symbols-glyphs.txt"),
+	"utf8",
+)
 
 // Rebuilt here rather than imported: the modal is JSX behind an alias chain, so
 // importing it needs a bundle step. The alias table and the canonicaliser are

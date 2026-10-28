@@ -3,9 +3,12 @@ import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 
 const root = resolve(__dirname, "../..")
-const modal = readFileSync(resolve(root, "src/shared/components/ChangelogModal.tsx"), "utf8")
-const globals = readFileSync(resolve(root, "src/app/globals.css"), "utf8")
-const layout = readFileSync(resolve(root, "src/app/layout.tsx"), "utf8")
+const modal = readFileSync(
+	resolve(root, "apps/web/src/shared/components/ChangelogModal.tsx"),
+	"utf8",
+)
+const globals = readFileSync(resolve(root, "apps/web/src/app/globals.css"), "utf8")
+const layout = readFileSync(resolve(root, "apps/web/src/app/layout.tsx"), "utf8")
 
 describe("changelog: every release card shows a commit count", () => {
 	it("derives the count from the heading when present", () => {
@@ -40,8 +43,8 @@ describe("changelog: every release card shows a commit count", () => {
 })
 
 describe("icon subset: 114 KB instead of the 3.96 MB package font", () => {
-	const subset = resolve(root, "public/fonts/material-symbols-subset.woff2")
-	const list = resolve(root, "public/fonts/material-symbols-glyphs.txt")
+	const subset = resolve(root, "apps/web/public/fonts/material-symbols-subset.woff2")
+	const list = resolve(root, "apps/web/public/fonts/material-symbols-glyphs.txt")
 
 	it("ships a subset well under a quarter MB", () => {
 		expect(existsSync(subset)).toBe(true)

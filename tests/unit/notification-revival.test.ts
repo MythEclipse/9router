@@ -41,7 +41,7 @@ const quota = (over = {}) => ({
 describe("a cleared notification comes back armed", () => {
 	it("retires stored updater notices after the updater is removed", async () => {
 		const { notify, clearNotificationsByKind, listNotifications } = await import(
-			"@/lib/db/repos/notificationsRepo.js"
+			"@9router/db/repos/notificationsRepo"
 		)
 
 		await notify({ kind: "update", title: "Update available", dedupeKey: "update:old-revision" })
@@ -54,7 +54,7 @@ describe("a cleared notification comes back armed", () => {
 
 	it("re-arms the badge when the same condition returns", async () => {
 		const { notify, clearNotificationByKind, listNotifications } = await import(
-			"@/lib/db/repos/notificationsRepo.js"
+			"@9router/db/repos/notificationsRepo"
 		)
 
 		await notify(quota())
@@ -80,7 +80,7 @@ describe("a cleared notification comes back armed", () => {
 
 	it("keeps a row the operator already read as read while it stays live", async () => {
 		const { notify, markRead, listNotifications } = await import(
-			"@/lib/db/repos/notificationsRepo.js"
+			"@9router/db/repos/notificationsRepo"
 		)
 
 		await notify(quota())

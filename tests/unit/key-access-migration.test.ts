@@ -33,8 +33,8 @@ function writeLegacyDb(dir) {
 async function boot() {
 	delete global._dbAdapter
 	vi.resetModules()
-	const db = await import("@/lib/db/index.js")
-	const { getAdapter } = await import("@/lib/db/driver.js")
+	const db = await import("@9router/db")
+	const { getAdapter } = await import("@9router/db/driver")
 	return { db, adapter: await getAdapter() }
 }
 

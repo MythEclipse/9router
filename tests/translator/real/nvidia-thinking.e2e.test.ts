@@ -2,8 +2,9 @@
 // unsupported "thinking" param (nvidia NIM is OpenAI-compatible).
 // Requires dev server running on NV_E2E_PORT + an active router API key in DB.
 // RUN_E2E=1 npx vitest run --config tests/vitest.config.js tests/translator/real/nvidia-thinking.e2e.test.js
+
+import { getApiKeys } from "@9router/db/repos/apiKeysRepo"
 import { beforeAll, describe, expect, it } from "vitest"
-import { getApiKeys } from "../../../apps/web/src/lib/db/repos/apiKeysRepo.js"
 
 const PORT = process.env.NV_E2E_PORT || "20127"
 const BASE = `http://localhost:${PORT}`

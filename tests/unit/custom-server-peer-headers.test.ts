@@ -2,8 +2,8 @@
 // HTTP server through it and confirm a client cannot smuggle its own peer headers in.
 
 import http from "node:http"
+import { __test__ as requestDetails } from "@9router/db/repos/requestDetailsRepo"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
-import { __test__ as requestDetails } from "@/lib/db/repos/requestDetailsRepo.js"
 
 let server
 let baseUrl

@@ -102,7 +102,7 @@ describe("resolveClineModels free-tier merge", () => {
 
 describe("cline-free namespace pricing", () => {
 	it("bills cline-free/* at zero", async () => {
-		const { getPricingForModel } = await import("../../apps/web/open-sse/providers/pricing.js")
+		const { getPricingForModel } = await import("@9router/pricing")
 		const pricing = getPricingForModel("cline", "cline-free/deepseek-v4.1-flash")
 		expect(pricing).toMatchObject({
 			input: 0,
@@ -114,12 +114,12 @@ describe("cline-free namespace pricing", () => {
 	})
 
 	it("bills cline-free/* muse-spark at zero", async () => {
-		const { getPricingForModel } = await import("../../apps/web/open-sse/providers/pricing.js")
+		const { getPricingForModel } = await import("@9router/pricing")
 		expect(getPricingForModel("cline", "cline-free/muse-spark-1.3-contributor").input).toBe(0)
 	})
 
 	it("still bills the paid twin at its published rate", async () => {
-		const { getPricingForModel } = await import("../../apps/web/open-sse/providers/pricing.js")
+		const { getPricingForModel } = await import("@9router/pricing")
 		expect(getPricingForModel("cline", "deepseek/deepseek-v4.1-flash").input).toBe(0.14)
 		// Muse's published contributor rate (added with the Muse provider in 28809807);
 		// only the cline-free/* twin is zero-priced.
@@ -127,9 +127,7 @@ describe("cline-free namespace pricing", () => {
 	})
 
 	it("zero price survives cost calculation over a large usage", async () => {
-		const { getPricingForModel, calculateCostFromTokens } = await import(
-			"../../apps/web/open-sse/providers/pricing.js"
-		)
+		const { getPricingForModel, calculateCostFromTokens } = await import("@9router/pricing")
 		const pricing = getPricingForModel("cline", "cline-free/deepseek-v4.1-flash")
 		const cost = calculateCostFromTokens(
 			{ prompt_tokens: 1_000_000, completion_tokens: 1_000_000, reasoning_tokens: 500_000 },

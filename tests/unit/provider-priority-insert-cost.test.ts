@@ -1,11 +1,10 @@
-import { describe, expect, it } from "vitest"
-
 import {
 	createProviderConnection,
 	deleteProviderConnection,
 	getProviderConnections,
 	updateProviderConnection,
-} from "../../apps/web/src/lib/db/index.js"
+} from "@9router/db"
+import { describe, expect, it } from "vitest"
 
 // #4311: POST /api/providers was O(pool) per insert. Inside one transaction it
 // read the whole pool AND renumbered every row's priority, so a 5k-key import

@@ -6,14 +6,14 @@ const root = new URL("../../", import.meta.url)
 it("documents OAuth reuse, ffmpeg limits and does not offer unsupported response formats", () => {
 	expect(codex.display.kindNotice.stt).toContain("ffmpeg")
 	const page = readFileSync(
-		new URL("src/app/(dashboard)/dashboard/media-providers/[kind]/[id]/page.tsx", root),
+		new URL("apps/web/src/app/(dashboard)/dashboard/media-providers/[kind]/[id]/page.tsx", root),
 		"utf8",
 	)
 	expect(page).toContain("OAUTH_PROVIDERS[id]")
 	expect(page).toContain("href={`/dashboard/providers/${id}`}")
 	const example = readFileSync(
 		new URL(
-			"src/app/(dashboard)/dashboard/media-providers/[kind]/[id]/components/SttExampleCard.tsx",
+			"apps/web/src/app/(dashboard)/dashboard/media-providers/[kind]/[id]/components/SttExampleCard.tsx",
 			root,
 		),
 		"utf8",

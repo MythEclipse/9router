@@ -49,13 +49,13 @@ vi.mock("@/lib/usageDb.js", () => ({
 }))
 
 vi.mock("@/lib/localDb", () => ({}))
-vi.mock("@/lib/db/repos/settingsRepo.js", () => ({
+vi.mock("@9router/db/repos/settingsRepo", () => ({
 	getSettings: vi.fn(async () => ({ ...settingsState })),
 }))
 vi.mock("@/lib/auth/dashboardPermissions", () => ({
 	getSessionContext: vi.fn(async () => ({ allowedModels: "*" })),
 }))
-vi.mock("@/lib/db/repos/allowedModels.js", () => ({
+vi.mock("@9router/db/repos/allowedModels", () => ({
 	parseAllowedModels: vi.fn(() => ["*"]),
 }))
 
@@ -133,7 +133,7 @@ describe("request-details payload policy", () => {
 	})
 
 	it("fails closed when the settings row cannot be read", async () => {
-		const settingsRepo = await import("@/lib/db/repos/settingsRepo.js")
+		const settingsRepo = await import("@9router/db/repos/settingsRepo")
 		settingsRepo.getSettings.mockRejectedValueOnce(new Error("db unavailable"))
 		const body = await callRoute()
 		expect(body.payloadsIncluded).toBe(false)

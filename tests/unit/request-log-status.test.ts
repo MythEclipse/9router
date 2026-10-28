@@ -33,7 +33,7 @@ beforeEach(async () => {
 	delete global._statsEmitTimers
 	delete global._lastErrorProvider
 	vi.resetModules()
-	db = await import("@/lib/db/index.js")
+	db = await import("@9router/db")
 	await db.initDb()
 })
 

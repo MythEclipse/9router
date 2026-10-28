@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest"
 const repoRoot = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "../..")
 const SOURCE = path.join(
 	repoRoot,
-	"src/app/(dashboard)/dashboard/usage/components/ProviderLimits/quotaParsing.ts",
+	"apps/web/src/app/(dashboard)/dashboard/usage/components/ProviderLimits/quotaParsing.ts",
 )
 
 function caseLabelsInSwitch(source: string, fnName: string): string[] {

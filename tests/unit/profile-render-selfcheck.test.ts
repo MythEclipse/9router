@@ -11,7 +11,10 @@ import { describe, expect, it } from "vitest"
  * so a dangling reference renders a blank profile and nothing else reports it.
  */
 const repoRoot = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "../..")
-const script = path.join(repoRoot, "src/app/(dashboard)/dashboard/profile/renderSelfCheck.mjs")
+const script = path.join(
+	repoRoot,
+	"apps/web/src/app/(dashboard)/dashboard/profile/renderSelfCheck.mjs",
+)
 
 describe("profile page render self-check", () => {
 	it("renders the page body without a dangling reference", () => {

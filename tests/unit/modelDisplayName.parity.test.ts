@@ -126,7 +126,7 @@ describe("modelDisplayName helper parity (ESM dashboard vs CJS CLI)", () => {
 			const end = source.indexOf("};", start)
 			return start === -1 || end === -1 ? null : source.slice(start, end + 2)
 		}
-		const esmSource = brandTable(readHelperSource("src/shared/utils/modelDisplayName.ts"))
+		const esmSource = brandTable(readHelperSource("apps/web/src/shared/utils/modelDisplayName.ts"))
 		const cliSource = brandTable(readHelperSource("cli/src/cli/utils/modelDisplayName.ts"))
 		expect(esmSource).not.toBeNull()
 		expect(cliSource).not.toBeNull()

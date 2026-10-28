@@ -20,8 +20,8 @@ beforeAll(async () => {
 	const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "9router-studio-combo-"))
 	process.env.DATA_DIR = tempDir
 	vi.resetModules()
-	const db = await import("@/lib/db/index.js")
-	const editor = await import("@/lib/db/repos/modelEditorRepo.js")
+	const db = await import("@9router/db")
+	const editor = await import("@9router/db/repos/modelEditorRepo")
 	ctx = { db, editor, tempDir }
 })
 

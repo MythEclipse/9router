@@ -8,7 +8,7 @@ import { limitHint } from "@/app/(dashboard)/dashboard/endpoint/limitPresentatio
 // modals must still pass the kind and the creator's ceiling into the hint.
 const root = resolve(__dirname, "../..")
 const page = readFileSync(
-	resolve(root, "src/app/(dashboard)/dashboard/endpoint/EndpointPageClient.tsx"),
+	resolve(root, "apps/web/src/app/(dashboard)/dashboard/endpoint/EndpointPageClient.tsx"),
 	"utf8",
 )
 

@@ -38,7 +38,7 @@ export default defineConfig({
 		setupFiles: ["./setup/isolateDataDir.js"],
 	},
 	resolve: {
-		// Use array form so subpath aliases (e.g. "@/lib/db/index.js") resolve correctly.
+		// Use array form so subpath aliases (e.g. "@9router/db") resolve correctly.
 		alias: [
 			// The engine moved to apps/web/open-sse with the monorepo split; the
 			// root open-sse/ directory is now empty, so aliasing to it resolved

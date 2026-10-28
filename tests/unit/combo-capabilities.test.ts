@@ -180,7 +180,10 @@ describe("aggregateComboCapabilities - the resolver slot cannot break the list",
 })
 
 describe("the routes that publish combos pass the arguments in the right slots", () => {
-	for (const file of ["src/app/api/models/route.ts", "src/app/api/v1/models/route.ts"]) {
+	for (const file of [
+		"apps/web/src/app/api/models/route.ts",
+		"apps/web/src/app/api/v1/models/route.ts",
+	]) {
 		it(`${file} sends null for the resolver and the combo window last`, () => {
 			const src = readFileSync(resolve(__dirname, "../..", file), "utf8")
 			expect(src).toMatch(

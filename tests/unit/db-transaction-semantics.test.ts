@@ -10,7 +10,7 @@ describe("node:sqlite transaction (savepoint by depth)", () => {
 	beforeEach(async () => {
 		vi.resetModules()
 		delete global._dbAdapter
-		const driver = await import("@/lib/db/driver.js")
+		const driver = await import("@9router/db/driver")
 		adapter = await driver.getAdapter()
 		adapter.exec("CREATE TABLE IF NOT EXISTS tx_probe(id INTEGER PRIMARY KEY, v TEXT)")
 		adapter.exec("DELETE FROM tx_probe")

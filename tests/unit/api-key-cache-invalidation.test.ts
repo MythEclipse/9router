@@ -8,12 +8,12 @@ describe("api key cache invalidation", () => {
 	beforeEach(async () => {
 		vi.resetModules()
 		delete global._dbAdapter
-		const { invalidateApiKeyCache } = await import("@/lib/db/repos/apiKeysRepo.js")
+		const { invalidateApiKeyCache } = await import("@9router/db/repos/apiKeysRepo")
 		invalidateApiKeyCache()
 	})
 
 	async function repos() {
-		return await import("@/lib/db/repos/apiKeysRepo.js")
+		return await import("@9router/db/repos/apiKeysRepo")
 	}
 
 	it("authenticates a freshly created key and drops it on deactivate", async () => {

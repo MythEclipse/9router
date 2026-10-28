@@ -1,14 +1,14 @@
+import { createNodeSqliteAdapter } from "@9router/db/adapters/nodeSqliteAdapter"
+import { buildCreateTableSql, TABLES } from "@9router/db/schema"
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
-import { createNodeSqliteAdapter } from "../../apps/web/src/lib/db/adapters/nodeSqliteAdapter.js"
-import { buildCreateTableSql, TABLES } from "../../apps/web/src/lib/db/schema.js"
 
 const fx = vi.hoisted(() => ({ db: null, aliases: {} }))
-vi.mock("@/lib/db/driver.js", () => ({ getAdapter: async () => fx.db }))
+vi.mock("@9router/db/driver", () => ({ getAdapter: async () => fx.db }))
 vi.mock("@/lib/localDb", () => ({
 	getModelAliases: async () => fx.aliases,
 	getProviderNodes: async () => [],
 	getComboByName: async (name) => {
-		const repo = await import("../../apps/web/src/lib/db/repos/combosRepo.js")
+		const repo = await import("@9router/db/repos/combosRepo")
 		return repo.getComboByName(name)
 	},
 }))
@@ -19,12 +19,8 @@ vi.mock("@/sse/utils/logger.js", () => ({
 	error: vi.fn(),
 }))
 
-const { createCombo, deleteCombo, getComboById } = await import(
-	"../../apps/web/src/lib/db/repos/combosRepo.js"
-)
-const { getApiKeyByKey, invalidateApiKeyCache } = await import(
-	"../../apps/web/src/lib/db/repos/apiKeysRepo.js"
-)
+const { createCombo, deleteCombo, getComboById } = await import("@9router/db/repos/combosRepo")
+const { getApiKeyByKey, invalidateApiKeyCache } = await import("@9router/db/repos/apiKeysRepo")
 const { getKeyAccessContext, enforceKeyAccess, enforceKeyAccessProvider, filterModelsListForKey } =
 	await import("../../apps/web/src/sse/services/keyAccess.js")
 

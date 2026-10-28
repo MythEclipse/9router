@@ -13,7 +13,7 @@ import { describe, expect, it } from "vitest"
 const repoRoot = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "../..")
 const script = path.join(
 	repoRoot,
-	"src/app/(dashboard)/dashboard/providers/[id]/renderSelfCheck.mjs",
+	"apps/web/src/app/(dashboard)/dashboard/providers/[id]/renderSelfCheck.mjs",
 )
 
 describe("provider detail page render self-check", () => {

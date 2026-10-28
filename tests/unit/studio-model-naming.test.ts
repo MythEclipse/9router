@@ -13,8 +13,8 @@ beforeEach(async () => {
 	const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "9router-studio-naming-"))
 	process.env.DATA_DIR = tempDir
 	vi.resetModules()
-	const db = await import("@/lib/db/index.js")
-	const editor = await import("@/lib/db/repos/modelEditorRepo.js")
+	const db = await import("@9router/db")
+	const editor = await import("@9router/db/repos/modelEditorRepo")
 	const node = await db.createProviderNode({
 		name: "Oss Node",
 		type: "openai-compatible",
@@ -72,7 +72,7 @@ describe("custom model resolution", () => {
 
 describe("usage naming", () => {
 	it("bills a custom name under that name and records the base model beside it", async () => {
-		const { saveRequestUsage, getUsageHistory } = await import("@/lib/db/repos/usageRepo.js")
+		const { saveRequestUsage, getUsageHistory } = await import("@9router/db/repos/usageRepo")
 		await saveRequestUsage({
 			provider: ctx.nodeId,
 			model: "gpt-oss-120b",
@@ -88,7 +88,7 @@ describe("usage naming", () => {
 	})
 
 	it("keeps an ordinary call named exactly as it was made", async () => {
-		const { saveRequestUsage, getUsageHistory } = await import("@/lib/db/repos/usageRepo.js")
+		const { saveRequestUsage, getUsageHistory } = await import("@9router/db/repos/usageRepo")
 		await saveRequestUsage({
 			provider: ctx.nodeId,
 			model: "gpt-oss-120b",
@@ -130,7 +130,7 @@ describe("two custom names on one model", () => {
 	}
 
 	it("keeps a leftover display alias from renaming its sibling", async () => {
-		const { setModelAlias, getModelAliases } = await import("@/lib/db/repos/aliasRepo.js")
+		const { setModelAlias, getModelAliases } = await import("@9router/db/repos/aliasRepo")
 		await addNamed("model-1")
 		await addNamed("model-2")
 		// an older build stored one alias per studio name, and the first match won
@@ -140,7 +140,7 @@ describe("two custom names on one model", () => {
 		const aliases = await getModelAliases()
 		expect(aliases["model-1"]).toBeUndefined()
 		expect(aliases["model-2"]).toBeUndefined()
-		const { getStudioModel } = await import("@/lib/db/repos/modelEditorRepo.js")
+		const { getStudioModel } = await import("@9router/db/repos/modelEditorRepo")
 		const one = await getStudioModel("model-1")
 		const two = await getStudioModel("model-2")
 		expect(one.callName).toBe("model-1")
@@ -149,7 +149,7 @@ describe("two custom names on one model", () => {
 	})
 
 	it("bills each name under itself, with the shared model beside it", async () => {
-		const { saveRequestUsage, getUsageHistory } = await import("@/lib/db/repos/usageRepo.js")
+		const { saveRequestUsage, getUsageHistory } = await import("@9router/db/repos/usageRepo")
 		const stamp = Date.now()
 		for (const [offset, name] of ["model-1", "model-2"].entries()) {
 			await saveRequestUsage({
@@ -169,7 +169,7 @@ describe("two custom names on one model", () => {
 
 describe("per-key model visibility", () => {
 	it("reads the allow list the way the request gate does", async () => {
-		const { parseAllowedModels, matchesAllowedModels } = await import("@/lib/db/repos/apiKeysRepo.js")
+		const { parseAllowedModels, matchesAllowedModels } = await import("@9router/db/repos/apiKeysRepo")
 		expect(parseAllowedModels("*")).toBeNull()
 		expect(parseAllowedModels("")).toBeNull()
 		expect(parseAllowedModels(" a , B* ")).toEqual(["a", "b*"])
@@ -199,7 +199,7 @@ describe("per-key model visibility", () => {
 			contextWindow: 0,
 			systemPrompt: "",
 		})
-		const { createApiKey } = await import("@/lib/db/repos/apiKeysRepo.js")
+		const { createApiKey } = await import("@9router/db/repos/apiKeysRepo")
 		const key = await createApiKey("restricted", "test-machine", { allowedModels: "only-me" })
 		const { buildModelsList } = await import("@/app/api/v1/models/route.js")
 		const request = new Request("http://router.test/v1/models", {

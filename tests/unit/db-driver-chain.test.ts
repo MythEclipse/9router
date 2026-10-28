@@ -26,17 +26,17 @@ afterEach(() => {
 
 describe("Driver fallback chain", () => {
 	it("default → picks better-sqlite3 when available", async () => {
-		const { getAdapter } = await import("@/lib/db/driver.js")
+		const { getAdapter } = await import("@9router/db/driver")
 		const db = await getAdapter()
 		expect(["better-sqlite3", "node:sqlite", "sql.js"]).toContain(db.driver)
 	})
 
 	it("falls back to node:sqlite when better-sqlite3 unavailable", async () => {
 		// Mock the better-sqlite3 adapter to throw
-		vi.doMock("@/lib/db/adapters/betterSqliteAdapter.js", () => {
+		vi.doMock("@9router/db/adapters/betterSqliteAdapter", () => {
 			throw new Error("simulated unavailable")
 		})
-		const { getAdapter } = await import("@/lib/db/driver.js")
+		const { getAdapter } = await import("@9router/db/driver")
 		const db = await getAdapter()
 		// Node 22.5+ should give node:sqlite, else sql.js
 		const [maj, min] = process.versions.node.split(".").map(Number)
@@ -48,13 +48,13 @@ describe("Driver fallback chain", () => {
 	})
 
 	it("falls back to sql.js when both native drivers unavailable", async () => {
-		vi.doMock("@/lib/db/adapters/betterSqliteAdapter.js", () => {
+		vi.doMock("@9router/db/adapters/betterSqliteAdapter", () => {
 			throw new Error("simulated unavailable")
 		})
-		vi.doMock("@/lib/db/adapters/nodeSqliteAdapter.js", () => {
+		vi.doMock("@9router/db/adapters/nodeSqliteAdapter", () => {
 			throw new Error("simulated unavailable")
 		})
-		const { getAdapter } = await import("@/lib/db/driver.js")
+		const { getAdapter } = await import("@9router/db/driver")
 		const db = await getAdapter()
 		expect(db.driver).toBe("sql.js")
 	})

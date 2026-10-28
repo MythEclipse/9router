@@ -109,6 +109,10 @@ describe("quota auto-ping", () => {
 			execute: vi.fn().mockResolvedValue({ response: { ok: true, text: codexResponseText } }),
 		})
 		state = { running: false, resetCache: {}, failureCache: {} }
+		// Fake timers must be installed before the clock can be moved; calling
+		// setSystemTime alone throws once another test file has already mocked
+		// the date, and vitest reports that as an unrelated failure in this file.
+		vi.useFakeTimers()
 		vi.setSystemTime(new Date("2026-01-01T12:00:00.000Z"))
 	})
 

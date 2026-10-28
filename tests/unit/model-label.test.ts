@@ -1,13 +1,13 @@
 import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { describe, expect, it } from "vitest"
 import {
 	labelForResolved,
 	labelForRow,
 	MODEL_NAME_COLUMNS,
 	resolvedModelOf,
-} from "../../apps/web/src/lib/db/helpers/modelLabel"
+} from "@9router/db/helpers/modelLabel"
+import { describe, expect, it } from "vitest"
 
 /**
  * A usage row carries two names: `model` is what the caller asked for (a combo
@@ -22,7 +22,7 @@ import {
  */
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..")
-const repo = readFileSync(join(REPO_ROOT, "src/lib/db/repos/usageRepo.ts"), "utf8")
+const repo = readFileSync(join(REPO_ROOT, "packages/db/src/repos/usageRepo.ts"), "utf8")
 
 describe("modelLabel", () => {
 	it("reads the real model out of the meta blob", () => {

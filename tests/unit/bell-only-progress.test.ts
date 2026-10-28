@@ -13,10 +13,10 @@ import { describe, expect, it } from "vitest"
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 
 const MODALS = [
-	"src/shared/components/DownloadBackupModal.tsx",
-	"src/app/(dashboard)/dashboard/providers/[id]/BulkImportGrokCliModal.tsx",
-	"src/app/(dashboard)/dashboard/providers/[id]/BulkImportCodexModal.tsx",
-	"src/app/(dashboard)/dashboard/providers/[id]/AddApiKeyModal.tsx",
+	"apps/web/src/shared/components/DownloadBackupModal.tsx",
+	"apps/web/src/app/(dashboard)/dashboard/providers/[id]/BulkImportGrokCliModal.tsx",
+	"apps/web/src/app/(dashboard)/dashboard/providers/[id]/BulkImportCodexModal.tsx",
+	"apps/web/src/app/(dashboard)/dashboard/providers/[id]/AddApiKeyModal.tsx",
 ]
 
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8")
@@ -34,8 +34,8 @@ describe("long runs live in the bell, not in the dialog", () => {
 		// The backup dialog delegates to the profile page, which mirrors its `busy` state into
 		// the store; the import/add dialogs own their loops and report directly.
 		const DRIVERS = {
-			"src/shared/components/DownloadBackupModal.tsx":
-				"src/app/(dashboard)/dashboard/profile/page.tsx",
+			"apps/web/src/shared/components/DownloadBackupModal.tsx":
+				"apps/web/src/app/(dashboard)/dashboard/profile/page.tsx",
 		}
 		for (const rel of MODALS) {
 			const src = read(DRIVERS[rel] || rel)
@@ -43,7 +43,7 @@ describe("long runs live in the bell, not in the dialog", () => {
 				/useTaskStore\s*\.\s*getState\(\)\s*\.\s*(start|update)/,
 			)
 		}
-		expect(read("src/app/(dashboard)/dashboard/profile/page.tsx")).toMatch(
+		expect(read("apps/web/src/app/(dashboard)/dashboard/profile/page.tsx")).toMatch(
 			/onDownload=\{[^}]*handleExportDatabase/,
 		)
 	})
@@ -52,10 +52,10 @@ describe("long runs live in the bell, not in the dialog", () => {
 		// A zero-call-site component is a trap: the next feature imports it and the floating box
 		// comes back. The files and the exports must not exist either.
 		expect(fs.existsSync(path.join(ROOT, "src/shared/components/LongTaskBanner.js"))).toBe(false)
-		const loading = read("src/shared/components/Loading.tsx")
+		const loading = read("apps/web/src/shared/components/Loading.tsx")
 		expect(loading).not.toMatch(/LongTaskBanner/)
 		expect(loading).not.toMatch(/export (function|const) (ProgressCard|CenterLoading|BusyOverlay)/)
-		const index = read("src/shared/components/index.ts")
+		const index = read("apps/web/src/shared/components/index.ts")
 		expect(index).not.toMatch(/LongTaskBanner|ProgressCard|CenterLoading|BusyOverlay/)
 	})
 

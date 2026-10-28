@@ -11,7 +11,10 @@ import { describe, expect, it } from "vitest"
  * documentation, not a gate.
  */
 const repoRoot = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "../..")
-const script = path.join(repoRoot, "src/app/(dashboard)/dashboard/endpoint/renderSelfCheck.mjs")
+const script = path.join(
+	repoRoot,
+	"apps/web/src/app/(dashboard)/dashboard/endpoint/renderSelfCheck.mjs",
+)
 
 describe("endpoint page render self-check", () => {
 	it("renders the page body without a dangling reference", () => {

@@ -10,7 +10,7 @@ const root = resolve(__dirname, "../..")
 // workers - "SqliteError: database is locked" surfaced as a failed export and
 // killed the build intermittently, including in CI.
 describe("SAML start route: never prerendered at build time", () => {
-	const route = readFileSync(resolve(root, "src/app/api/auth/saml/start/route.ts"), "utf8")
+	const route = readFileSync(resolve(root, "apps/web/src/app/api/auth/saml/start/route.ts"), "utf8")
 
 	it("declares force-dynamic", () => {
 		expect(route).toContain('export const dynamic = "force-dynamic";')
