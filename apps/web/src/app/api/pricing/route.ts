@@ -1,123 +1,49 @@
-import { getDefaultPricing } from "@9router/pricing"
+/**
+ * Pricing configuration.
+ *
+ * Delegates: the shape of a valid update, and what a reset target means, are
+ * rules and live in `9router-api`. This file keeps the verbs and the query
+ * parameters.
+ */
 import { NextResponse } from "next/server"
-import { getPricing, resetAllPricing, resetPricing, updatePricing } from "@/lib/localDb"
+import { getUseCases } from "@/lib/useCases"
+import { toResponse } from "../response"
 
 export const dynamic = "force-dynamic"
 
-/**
- * GET /api/pricing
- * Get current pricing configuration (merged user + defaults)
- */
+/** The catalog merged with the operator's overrides. */
 export async function GET() {
 	try {
-		const pricing = await getPricing()
-		return NextResponse.json(pricing)
+		return NextResponse.json(await getUseCases().getPricing())
 	} catch (error) {
-		console.error("Error fetching pricing:", error)
-		return NextResponse.json({ error: "Failed to fetch pricing" }, { status: 500 })
+		return toResponse(error)
 	}
 }
 
-/**
- * PATCH /api/pricing
- * Update pricing configuration
- * Body: { provider: { model: { input: number, output: number, cached: number, ... } } }
- */
-export async function PATCH(request) {
+/** Body: `{ provider: { model: { input, output, cached, reasoning, cache_creation } } }` */
+export async function PATCH(request: Request) {
 	try {
-		const body = await request.json()
-
-		// Validate body structure
-		if (typeof body !== "object" || body === null) {
-			return NextResponse.json({ error: "Invalid pricing data format" }, { status: 400 })
-		}
-
-		// Validate pricing structure
-		for (const [provider, models] of Object.entries(body)) {
-			if (typeof models !== "object" || models === null) {
-				return NextResponse.json(
-					{ error: `Invalid pricing for provider: ${provider}` },
-					{ status: 400 },
-				)
-			}
-
-			for (const [model, pricing] of Object.entries(models)) {
-				if (typeof pricing !== "object" || pricing === null) {
-					return NextResponse.json(
-						{ error: `Invalid pricing for model: ${provider}/${model}` },
-						{ status: 400 },
-					)
-				}
-
-				// Validate pricing fields
-				const validFields = ["input", "output", "cached", "reasoning", "cache_creation"]
-				for (const [key, value] of Object.entries(pricing)) {
-					if (!validFields.includes(key)) {
-						return NextResponse.json(
-							{ error: `Invalid pricing field: ${key} for ${provider}/${model}` },
-							{ status: 400 },
-						)
-					}
-					if (typeof value !== "number" || Number.isNaN(value) || value < 0) {
-						return NextResponse.json(
-							{
-								error: `Invalid pricing value for ${key} in ${provider}/${model}: must be non-negative number`,
-							},
-							{ status: 400 },
-						)
-					}
-				}
-			}
-		}
-
-		const updatedPricing = await updatePricing(body)
-		return NextResponse.json(updatedPricing)
+		const body = await request.json().catch(() => undefined)
+		return NextResponse.json(await getUseCases().updatePricing(body))
 	} catch (error) {
-		console.error("Error updating pricing:", error)
-		return NextResponse.json({ error: "Failed to update pricing" }, { status: 500 })
+		return toResponse(error)
 	}
 }
 
 /**
- * DELETE /api/pricing
- * Reset pricing to defaults
- * Query params: ?provider=xxx&model=yyy (optional)
+ * Reset overrides. `?provider=` alone resets every model for that provider;
+ * naming a model without a provider is refused rather than treated as a reset
+ * of everything.
  */
-export async function DELETE(request) {
+export async function DELETE(request: Request) {
 	try {
 		const { searchParams } = new URL(request.url)
-		const provider = searchParams.get("provider")
-		const model = searchParams.get("model")
-
-		if (provider && model) {
-			// Reset specific model
-			await resetPricing(provider, model)
-		} else if (provider) {
-			// Reset entire provider
-			await resetPricing(provider)
-		} else {
-			// Reset all pricing
-			await resetAllPricing()
-		}
-
-		const pricing = await getPricing()
+		const pricing = await getUseCases().resetPricing(
+			searchParams.get("provider"),
+			searchParams.get("model"),
+		)
 		return NextResponse.json(pricing)
 	} catch (error) {
-		console.error("Error resetting pricing:", error)
-		return NextResponse.json({ error: "Failed to reset pricing" }, { status: 500 })
-	}
-}
-
-/**
- * GET /api/pricing/defaults
- * Get default pricing configuration
- */
-export async function GET_DEFAULTS() {
-	try {
-		const defaultPricing = getDefaultPricing()
-		return NextResponse.json(defaultPricing)
-	} catch (error) {
-		console.error("Error fetching default pricing:", error)
-		return NextResponse.json({ error: "Failed to fetch default pricing" }, { status: 500 })
+		return toResponse(error)
 	}
 }

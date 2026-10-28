@@ -1248,7 +1248,7 @@ export function getPricingForModel(
 	if (isFreeModel(model)) return ZERO_PRICING
 
 	// 3. Canonical model pricing (strip vendor prefix if needed: "deepseek/deepseek-chat" → "deepseek-chat")
-	const baseModel = model.includes("/") ? model.split("/").pop() : model
+	const baseModel = (model.includes("/") ? model.split("/").pop() : model) ?? model
 	const modelTable = MODEL_PRICING as Record<string, unknown>
 	const canonical = (baseModel && modelTable[baseModel]) || modelTable[model]
 	if (canonical) return canonical as ModelPricing

@@ -24,6 +24,7 @@ import {
 } from "./db/repositories/combo-repository.ts"
 import { createComboStrategyRepository } from "./db/repositories/combo-strategy-repository.ts"
 import { createErrorLogRepository } from "./db/repositories/error-log-repository.ts"
+import { createPricingRepository } from "./db/repositories/pricing-repository.ts"
 import { createSettingsPort } from "./settings-port.ts"
 import { createUnavailablePresetPort } from "./unavailable-preset-port.ts"
 
@@ -64,6 +65,7 @@ export function createUseCases(
 		settings: createSettingsPort(),
 		combos: createComboRepository(),
 		errorLogs: createErrorLogRepository(),
+		pricing: createPricingRepository(),
 		studios: createStudioTargetRepository(),
 		comboPresets: options.comboPresets,
 		comboStrategies: createComboStrategyRepository(),

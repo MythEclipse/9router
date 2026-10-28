@@ -22,6 +22,7 @@ import {
 } from "./combos/manage-combos.ts"
 import type { Dependencies } from "./dependencies.ts"
 import { makeClearErrorLogs, makeListErrorLogs } from "./error-logs/read-error-logs.ts"
+import { makeGetPricing, makeResetPricing, makeUpdatePricing } from "./pricing/manage-pricing.ts"
 import { assertSupportedLocale } from "./settings/locale.ts"
 import { readLoginGate } from "./settings/login-gate.ts"
 import { makeGetTheme, makeSetTheme } from "./settings/theme.ts"
@@ -50,6 +51,9 @@ export interface UseCases {
 	 * from the caller because the dashboard owns the translations.
 	 */
 	readonly assertLocale: (requested: unknown, supported: readonly string[]) => string
+	readonly getPricing: ReturnType<typeof makeGetPricing>
+	readonly updatePricing: ReturnType<typeof makeUpdatePricing>
+	readonly resetPricing: ReturnType<typeof makeResetPricing>
 }
 
 /** The combo use-cases share one dependency slice, so it is built once. */
@@ -85,5 +89,8 @@ export function buildUseCases(deps: Dependencies): UseCases {
 		getTheme: makeGetTheme(deps.settings),
 		setTheme: makeSetTheme(deps.settings),
 		assertLocale: assertSupportedLocale,
+		getPricing: makeGetPricing(deps.pricing),
+		updatePricing: makeUpdatePricing(deps.pricing),
+		resetPricing: makeResetPricing(deps.pricing),
 	}
 }

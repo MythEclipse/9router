@@ -6,6 +6,7 @@
  * plain fakes and keeps the composition root the single wiring point.
  */
 import type { IApiKeyRepository } from "../domain/api-key.ts"
+import type { PricingResetTarget, PricingUpdate } from "../domain/pricing.ts"
 import type { ChangelogSource } from "./changelog.ts"
 import type { SettingsPort } from "./settings/login-gate.ts"
 
@@ -108,6 +109,18 @@ export interface ErrorLogPort {
 	clear(): Promise<boolean>
 }
 
+/** provider → model → field → rate, as the repo returns it. */
+export type PricingMap = Record<string, Record<string, Record<string, number>>>
+
+export interface PricingPort {
+	/** The catalog merged with the operator's overrides. */
+	read(): Promise<PricingMap>
+	/** Applies a validated update and returns the merged result. */
+	update(update: PricingUpdate): Promise<PricingMap>
+	/** Resets one model, one provider, or everything, per the target. */
+	reset(target: PricingResetTarget): Promise<PricingMap>
+}
+
 export interface Dependencies {
 	readonly apiKeys: IApiKeyRepository
 	readonly activity: IActivityRepository
@@ -115,6 +128,7 @@ export interface Dependencies {
 	readonly settings: SettingsPort
 	readonly combos: ComboPort
 	readonly errorLogs: ErrorLogPort
+	readonly pricing: PricingPort
 	readonly studios: StudioTargetPort
 	readonly comboRotation: ComboRotationPort
 	readonly comboPresets: ComboPresetPort
