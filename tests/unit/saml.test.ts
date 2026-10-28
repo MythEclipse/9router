@@ -1,5 +1,3 @@
-import { mergeWithDefaults } from "@9router/db/repos/settingsRepo"
-import { describe, expect, it } from "vitest"
 import {
 	formatX509Certificate,
 	generateSamlMetadata,
@@ -7,7 +5,9 @@ import {
 	pickSamlDisplayName,
 	pickSamlEmail,
 	validateSamlResponse,
-} from "../../apps/web/src/lib/auth/saml.js"
+} from "@9router/auth/saml"
+import { mergeWithDefaults } from "@9router/db/repos/settingsRepo"
+import { describe, expect, it } from "vitest"
 
 describe("SAML 2.0 Auth Engine Utilities", () => {
 	describe("formatX509Certificate", () => {

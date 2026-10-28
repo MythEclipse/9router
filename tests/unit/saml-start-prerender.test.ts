@@ -13,7 +13,7 @@ describe("SAML start route: never prerendered at build time", () => {
 	const route = readFileSync(resolve(root, "apps/web/src/app/api/auth/saml/start/route.ts"), "utf8")
 
 	it("declares force-dynamic", () => {
-		expect(route).toContain('export const dynamic = "force-dynamic";')
+		expect(route).toMatch(/export const dynamic = "force-dynamic";?/)
 	})
 
 	it("keeps the cookie-driven redirect behaviour", () => {

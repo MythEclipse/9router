@@ -8,8 +8,8 @@
 import { getAdapter } from "@9router/db/driver"
 import { createApiKey } from "@9router/db/repos/apiKeysRepo"
 import { createCombo, deleteCombo, updateCombo } from "@9router/db/repos/combosRepo"
+import { normalizeAllowList } from "@9router/db/shared/keyAccess"
 import { beforeEach, describe, expect, it } from "vitest"
-import { normalizeAllowList } from "../../apps/web/src/shared/utils/keyAccess.js"
 
 async function grantTo(keyId: string, allow: string[]) {
 	const db = await getAdapter()

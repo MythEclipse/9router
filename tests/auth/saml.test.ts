@@ -1,12 +1,12 @@
 import assert from "node:assert/strict"
-import { test } from "vitest"
 import {
 	formatX509Certificate,
 	generateSamlMetadata,
 	isSamlConfigured,
 	pickSamlDisplayName,
 	pickSamlEmail,
-} from "../../apps/web/src/lib/auth/saml.js"
+} from "@9router/auth/saml"
+import { test } from "vitest"
 
 test("formatX509Certificate normalizes Base64 strings into PEM blocks", () => {
 	const rawBase64 = "MIIC1234567890123456789012345678901234567890123456789012345678901234567890"

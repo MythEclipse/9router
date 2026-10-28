@@ -121,10 +121,13 @@ describe("modelDisplayName helper parity (ESM dashboard vs CJS CLI)", () => {
 	})
 
 	it("declares the same brand table in both copies", () => {
+		// The object closes with `}` (no semicolon) in the current style, so
+		// searching for "};" returned null and the parity guard silently failed.
 		const brandTable = (source) => {
 			const start = source.indexOf("const BRAND_TOKENS = {")
-			const end = source.indexOf("};", start)
-			return start === -1 || end === -1 ? null : source.slice(start, end + 2)
+			if (start === -1) return null
+			const end = source.indexOf("\n}", start)
+			return end === -1 ? null : source.slice(start, end + 2)
 		}
 		const esmSource = brandTable(readHelperSource("apps/web/src/shared/utils/modelDisplayName.ts"))
 		const cliSource = brandTable(readHelperSource("cli/src/cli/utils/modelDisplayName.ts"))

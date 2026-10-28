@@ -100,7 +100,7 @@ describe("Gemini 3.7 MITM tools and catalog", () => {
 
 	it("keeps the standalone CLI Antigravity catalog synchronized", () => {
 		const source = readFileSync(join(here, "../../cli/src/cli/menus/providers.ts"), "utf8")
-		const agCatalog = source.match(/\n {2}ag: \[([\s\S]*?)\n {2}\],/)?.[1] || ""
+		const agCatalog = source.match(/\n\s*ag: \[([\s\S]*?)\n\s*\],/)?.[1] || ""
 
 		expect(agCatalog).toContain("gemini-3.7-flash-high")
 		expect(agCatalog).toContain("gemini-3.7-flash-medium")

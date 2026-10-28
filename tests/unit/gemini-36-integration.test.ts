@@ -143,7 +143,10 @@ describe("Gemini 3.6 catalogs and pricing", () => {
 
 	it("keeps the standalone CLI Gemini catalog synchronized", () => {
 		const source = readFileSync(join(here, "../../cli/src/cli/menus/providers.ts"), "utf8")
-		const geminiCatalog = source.match(/\n {2}gemini: \[([\s\S]*?)\n {2}\],/)?.[1] || ""
+		// The catalog is indented with tabs, so pinning two spaces matched nothing
+		// and the assertion compared "" against the expected ids. Match any
+		// leading whitespace so the check survives reformatting.
+		const geminiCatalog = source.match(/\n\s*gemini: \[([\s\S]*?)\n\s*\],/)?.[1] || ""
 
 		expect(geminiCatalog).toContain("gemini-3.6-flash")
 		expect(geminiCatalog).toContain("gemini-3.5-flash-lite")
