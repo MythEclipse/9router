@@ -1,25 +1,21 @@
-import { DEFAULT_PERMISSIONS, getSessionContext } from "@9router/auth/dashboardPermissions"
-import { creatorNameFor, DASHBOARD_CREATOR, visibleApiKeys } from "@9router/auth/keyCreator"
-import { asKeyPermissions } from "9router-api/domain/sub-key-scope"
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { NextResponse } from "next/server"
+import { createApiClient, sessionClaimsOf } from "@/lib/orpcClient"
 import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
+async function client() {
+	return createApiClient({
+		session: sessionClaimsOf(await getSessionContext()),
+		useCases: getUseCases(),
+	})
+}
+
 // GET /api/keys - List API keys
 export async function GET() {
 	try {
-		const ctx = await getSessionContext()
-		const allKeys = [...(await getUseCases().dashboardKeys.list())]
-		// One helper answers visibility for every page, so the endpoint list and the
-		// per-key usage list show a creator session the same keys. Raw creator keys
-		// would hand a session another key's secret, so they never leave this API:
-		// the payload carries the creator's name instead.
-		const keys = visibleApiKeys(allKeys, ctx.session).map((k) => ({
-			...k,
-			createdBy: k.createdBy === DASHBOARD_CREATOR ? DASHBOARD_CREATOR : "",
-			createdByName: creatorNameFor({ createdBy: k.createdBy, keys: allKeys }),
-		}))
+		const keys = await (await client()).dashboardKeys.list()
 		return NextResponse.json({ keys })
 	} catch (error) {
 		console.log("Error fetching keys:", error)
@@ -28,34 +24,16 @@ export async function GET() {
 }
 
 // POST /api/keys - Create new API key
-export async function POST(request) {
+export async function POST(request: Request) {
 	try {
-		const ctx = await getSessionContext()
-
-		// The permission gate, the endpoint whitelist, name uniqueness, the creator's
-		// caps and the permission clamping all live in the use-case now: this route
-		// keeps the request and the reply, so the oRPC router cannot disagree with it.
 		const body = await request.json().catch(() => ({}))
-		const created = await getUseCases().dashboardKeys.create(body, {
-			role: ctx.session?.role ?? null,
-			apiKey: ctx.session?.role === "apikey" ? (ctx.session.apiKey ?? null) : null,
-			keyName: ctx.session?.keyName ?? null,
-			keyId: ctx.session?.keyId ?? null,
-			scope: {
-				tokenLimit: ctx.session?.tokenLimit ?? null,
-				dailyCostLimit: ctx.session?.dailyCostLimit ?? null,
-				allowedModels: ctx.session?.allowedModels ?? null,
-				allowedEndpoints: Array.isArray(ctx.session?.allowedEndpoints)
-					? ctx.session.allowedEndpoints
-					: null,
-			},
-			permissions: asKeyPermissions(ctx.permissions) ?? asKeyPermissions(DEFAULT_PERMISSIONS),
-		})
-
-		const { key } = created
+		const created = await (await client()).dashboardKeys.create(body)
+		const { key, secret } = created
 		return NextResponse.json(
 			{
-				key: key.key,
+				// The REST contract names the secret `key`; the procedure returns it as
+				// `secret` beside the view. Both doors, one value.
+				key: secret,
 				name: key.name,
 				id: key.id,
 				machineId: key.machineId,
@@ -75,10 +53,9 @@ export async function POST(request) {
 				// The raw creator key is a secret and never leaves the server; the client
 				// only ever needs to label who made this one.
 				createdBy: "",
-				createdByName: creatorNameFor({
-					createdBy: key.createdBy,
-					keys: [...(await getUseCases().dashboardKeys.list())],
-				}),
+				// Resolved by the router from the same key set it used for the rest of this
+				// request, so it cannot disagree with the list the user sees next.
+				createdByName: created.createdByName ?? "",
 			},
 			{ status: 201 },
 		)
@@ -95,10 +72,10 @@ export async function POST(request) {
 }
 
 /** Map a typed application error onto the reply the dashboard already expects. */
-function toRefusal(error) {
-	const code = error?.code
-	if (code === "FORBIDDEN") return { status: 403, body: { error: error.message } }
-	if (code === "CONFLICT") return { status: 409, body: { error: error.message } }
-	if (code === "VALIDATION") return { status: 400, body: { error: error.message } }
+function toRefusal(error: unknown) {
+	const { code, message } = error as { code?: string; message?: string }
+	if (code === "FORBIDDEN") return { status: 403, body: { error: message } }
+	if (code === "CONFLICT") return { status: 409, body: { error: message } }
+	if (code === "VALIDATION") return { status: 400, body: { error: message } }
 	return null
 }
