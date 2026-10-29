@@ -1,78 +1,24 @@
-import { randomUUID } from "node:crypto"
 import { NextResponse } from "next/server"
-import { fetchZedAuthenticatedUser, resolveZedOrganizationId } from "open-sse/shared/zedAuth"
-import { createProviderConnection } from "@/models"
+import { failed } from "@/lib/routeErrors"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
 /**
  * POST /api/oauth/zed/import
- * Validate + save a Zed session (typically from IDE auto-import).
  *
- * Body: { accessToken, userId, systemId? }
+ * Takes a Zed session, typically the one the IDE's keyring already holds.
+ * A token is proved against the provider before it is saved, so a bad one never becomes a
+ * row the dashboard has to explain later.
  */
-export async function POST(request) {
+export async function POST(request: Request) {
 	try {
-		const body = await request.json()
-		const accessToken = typeof body?.accessToken === "string" ? body.accessToken.trim() : ""
-		const userId = body?.userId != null ? String(body.userId).trim() : ""
-		const systemId = (typeof body?.systemId === "string" && body.systemId.trim()) || randomUUID()
-
-		if (!accessToken) {
-			return NextResponse.json({ error: "Access token is required" }, { status: 400 })
+		const result = await getUseCases().credentials.importToken("zed", await request.json())
+		if (!result.ok) {
+			return NextResponse.json({ error: result.error }, { status: result.status })
 		}
-		if (!userId) {
-			return NextResponse.json({ error: "User id is required" }, { status: 400 })
-		}
-
-		const credentials = {
-			accessToken,
-			providerSpecificData: { userId, systemId },
-		}
-
-		let userInfo = null
-		try {
-			userInfo = await fetchZedAuthenticatedUser(credentials)
-		} catch (err) {
-			return NextResponse.json(
-				{ error: err.message || "Zed token validation failed" },
-				{ status: 401 },
-			)
-		}
-
-		const organizationId = resolveZedOrganizationId(credentials, userInfo)
-		const email = userInfo?.email || null
-		const displayName =
-			userInfo?.name || userInfo?.display_name || userInfo?.username || `Zed ${userId}`
-
-		const connection = await createProviderConnection({
-			provider: "zed",
-			authType: "oauth",
-			accessToken,
-			refreshToken: null,
-			expiresAt: null,
-			email,
-			displayName,
-			providerSpecificData: {
-				authMethod: "imported",
-				userId,
-				systemId,
-				organizationId: organizationId || "",
-			},
-			testStatus: "active",
-		})
-
-		return NextResponse.json({
-			success: true,
-			connection: {
-				id: connection.id,
-				provider: connection.provider,
-				email: connection.email,
-				displayName: connection.displayName,
-			},
-		})
+		return NextResponse.json({ success: true, connection: result.connection })
 	} catch (error) {
-		console.log("Zed import token error:", error)
-		return NextResponse.json({ error: error.message }, { status: 500 })
+		return failed(error, "Zed import failed", "oauth/zed/import")
 	}
 }

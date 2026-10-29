@@ -9,6 +9,7 @@ import {
 	rewriteMimoBases,
 	SESSION_COOKIE,
 } from "@/lib/mimoLoginSession"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
@@ -21,9 +22,9 @@ export const dynamic = "force-dynamic"
  * the browser a same-origin pageUrl carrying the 9r_mimo_login session cookie.
  * All subsequent account.xiaomi.com traffic flows through src/proxy.js.
  *
- * Egress resolution: MIMO_LOGIN_PROXY env > (region=sgp: probe common LOCAL
- * HTTP proxy ports - v2rayN/clash defaults) > direct. The resolved URL rides
- * the session cookie so every hop/XHR uses the same exit.
+ * Egress resolution: MIMO_LOGIN_PROXY env > (non-CN: probe common LOCAL HTTP
+ * proxy ports - v2rayN/clash defaults) > direct. The resolved URL rides the
+ * session cookie so every hop/XHR uses the same exit.
  */
 
 const API_UA =
@@ -70,84 +71,66 @@ function probeLocalHttpProxy(timeoutMs = 500) {
 				}
 			}),
 	)
-	return Promise.any(attempts).catch(() => null)
-}
-
-async function hop(sess, url, ua) {
-	return loginUpstreamFetch(
-		url,
-		{
-			redirect: "manual",
-			headers: { "User-Agent": ua, Accept: "text/html,application/json,*/*" },
-			signal: AbortSignal.timeout(15000),
-		},
-		sess,
-	)
+	return Promise.any(attempts)
+		.then((found) => found as string | null)
+		.catch(() => null)
 }
 
 export async function POST(request) {
 	try {
-		let region = "cn"
+		let body = null
 		try {
-			const body = await request.json()
-			const r = String(body?.region || "").toLowerCase()
-			// Known MiMo Desktop clusters (cn/sgp/ams/ru/in) - default cn.
-			if (r === "cn" || r === "sgp" || r === "ams" || r === "ru" || r === "in") region = r
+			body = await request.json()
 		} catch {
 			/* empty body - default cn */
 		}
 
-		const sess = beginSession(region)
+		// The session carries the cluster base and the cookies every hop must see.
+		const session = beginSession(getUseCases().oauth.readMimoRegion(body))
+		const agents = { native: API_UA, sso: SSO_UA }
 
-		// Egress - non-CN clusters may need an overseas exit for the login page's
-		// geo-decided features (e.g. Google sign-in); CN is always direct.
-		let egress = null
-		let egressSource = "direct"
-		if (region !== "cn") {
-			const found = await probeLocalHttpProxy()
-			if (found) {
-				egress = found
-				egressSource = "local-probe"
-			}
-		}
-		sess.proxyUrl = egress
+		const started = await getUseCases().oauth.startMimoLogin(body, {
+			meUrl: `${session.upstreamBase}/api/user/xiaomi/me`,
+			probeLocalProxy: probeLocalHttpProxy,
+			hop: async (url, which) => {
+				const response = await loginUpstreamFetch(
+					url,
+					{
+						redirect: "manual",
+						headers: {
+							"User-Agent": agents[which],
+							Accept: "text/html,application/json,*/*",
+						},
+						signal: AbortSignal.timeout(15000),
+					},
+					session,
+				)
+				absorbResponseCookies(session, response, url)
+				return { status: response.status, location: response.headers.get("location") }
+			},
+		})
 
-		// Hop 1: me -> account SSO (callback carries the sts callback for THIS cluster)
-		const meRes = await hop(sess, `${sess.upstreamBase}/api/user/xiaomi/me`, API_UA)
-		absorbResponseCookies(sess, meRes, `${sess.upstreamBase}/api/user/xiaomi/me`)
-		const ssoLoc = meRes.headers.get("location")
-		if (!ssoLoc || !/account\.xiaomi\.com/.test(ssoLoc)) {
-			return NextResponse.json(
-				{ error: `Unexpected me response (${meRes.status}) - no account redirect` },
-				{ status: 502 },
-			)
-		}
+		// Every hop and XHR from here on must use the exit the probe chose.
+		session.proxyUrl = started.egress.proxyUrl
 
-		// Hop 2: serviceLogin -> /fe/service/login SPA (also seeds deviceId cookies)
-		const loginRes = await hop(sess, ssoLoc, SSO_UA)
-		absorbResponseCookies(sess, loginRes, ssoLoc)
-		const pageLoc = loginRes.headers.get("location")
-		if (!pageLoc) {
-			return NextResponse.json(
-				{ error: `Unexpected serviceLogin response (${loginRes.status})` },
-				{ status: 502 },
-			)
+		if (!started.ok) {
+			return NextResponse.json(started.body, { status: started.status })
 		}
 
-		// Same-origin path for the SPA (middleware proxies native prefixes).
-		const pageUrl = new URL(pageLoc, "https://account.xiaomi.com")
+		const pageUrl = new URL(String(started.body.pageUrl), "https://account.xiaomi.com")
 		const origin = originOf(request)
 		// Session travels ONLY in the httpOnly cookie - never in the URL (history,
 		// logs, Referer). /login/status re-arms the cookie on every poll, so a
 		// dropped-cookie browser still recovers on the next poll cycle.
 		const proxiedPath = rewriteMimoBases(pageUrl.pathname + pageUrl.search, "toProxy", origin)
-		const egressLog = egress ? egress.replace(/\/\/[^@/]+@/, "//***@") : ""
-		console.log(
-			`${new Date().toISOString().slice(11, 23)} [mimo-login] start region=${sess.region} origin=${origin} egress=${egressSource}${egressLog ? ` (${egressLog})` : ""} page=${pageUrl.pathname}`,
-		)
 
-		const res = NextResponse.json({ success: true, state: sess.state, pageUrl: proxiedPath, region })
-		res.cookies.set(SESSION_COOKIE, encodeSessionCookie(sess), {
+		const res = NextResponse.json({
+			success: true,
+			state: session.state,
+			pageUrl: proxiedPath,
+			region: started.region,
+		})
+		res.cookies.set(SESSION_COOKIE, encodeSessionCookie(session), {
 			path: "/",
 			httpOnly: true,
 			sameSite: "lax",
@@ -155,10 +138,6 @@ export async function POST(request) {
 		})
 		return res
 	} catch (error) {
-		console.log(
-			`${new Date().toISOString().slice(11, 23)} [mimo-login] start error:`,
-			error?.message || error,
-		)
 		return NextResponse.json({ error: error?.message || "login start failed" }, { status: 500 })
 	}
 }

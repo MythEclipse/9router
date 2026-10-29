@@ -1,41 +1,17 @@
 import { NextResponse } from "next/server"
-import { readZedIdeCredentials } from "@/lib/oauth/utils/zedCredentials"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
 /**
  * GET /api/oauth/zed/auto-import
- * Read the signed-in Zed IDE session from the OS keyring/keychain.
  *
- * Linux: secret-tool (url=https://zed.dev, label zed-github-account)
- * macOS: Keychain internet password (server=https://zed.dev)
- * Windows: Credential Manager target zed:url=https://zed.dev
- *
- * Also loads system_id from Zed's local kv_store when present.
+ * Reads the credential the provider's own tool already wrote on this machine. A miss is
+ * `found: false` with the action to take — "Zed token not found in Zed's keyring entry. Please log
+ * in to Zed first." — not an error status; nobody has logged in yet is a normal state.
+ * Where the search looks, and in what order, lives in `oauthImportHost`.
  */
 export async function GET() {
-	try {
-		const result = await readZedIdeCredentials()
-		if (!result.found) {
-			return NextResponse.json({
-				found: false,
-				error: result.error || "Zed IDE credentials not found",
-				credentialsUrl: result.credentialsUrl || null,
-			})
-		}
-
-		return NextResponse.json({
-			found: true,
-			userId: result.userId,
-			accessToken: result.accessToken,
-			systemId: result.systemId,
-			credentialsUrl: result.credentialsUrl,
-		})
-	} catch (error) {
-		console.log("Zed auto-import error:", error)
-		return NextResponse.json(
-			{ found: false, error: error.message || "Failed to read Zed credentials" },
-			{ status: 500 },
-		)
-	}
+	const result = await getUseCases().credentials.autoImport("zed")
+	return NextResponse.json(result)
 }

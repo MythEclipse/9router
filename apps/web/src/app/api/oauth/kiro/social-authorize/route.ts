@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { KiroService } from "@/lib/oauth/services/kiro"
 import { generatePKCE } from "@/lib/oauth/utils/pkce"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
@@ -9,33 +10,22 @@ export const dynamic = "force-dynamic"
  * Generate Google/GitHub social login URL for manual callback flow
  * Uses kiro:// custom protocol as required by AWS Cognito
  */
-export async function GET(request) {
+export async function GET(request: Request) {
 	try {
-		const { searchParams } = new URL(request.url)
-		const provider = searchParams.get("provider") // "google" or "github"
-
-		if (!provider || !["google", "github"].includes(provider)) {
-			return NextResponse.json(
-				{ error: "Invalid provider. Use 'google' or 'github'" },
-				{ status: 400 },
-			)
-		}
-
-		// Generate PKCE for social auth
-		const { codeVerifier, codeChallenge, state } = generatePKCE()
-
-		const kiroService = new KiroService()
-		const authUrl = kiroService.buildSocialLoginUrl(provider, codeChallenge, state)
-
-		return NextResponse.json({
-			authUrl,
-			state,
-			codeVerifier,
-			codeChallenge,
-			provider,
-		})
+		const service = new KiroService()
+		const answer = getUseCases().oauth.authorizeKiroSocial(
+			new URL(request.url).searchParams.get("provider"),
+			{
+				generatePkce: generatePKCE,
+				buildLoginUrl: (provider, codeChallenge, state) =>
+					service.buildSocialLoginUrl(provider, codeChallenge, state),
+			},
+		)
+		return NextResponse.json(answer.body, { status: answer.status })
 	} catch (error) {
-		console.log("Kiro social authorize error:", error)
-		return NextResponse.json({ error: error.message }, { status: 500 })
+		return NextResponse.json(
+			{ error: error instanceof Error ? error.message : "Unknown error" },
+			{ status: 500 },
+		)
 	}
 }

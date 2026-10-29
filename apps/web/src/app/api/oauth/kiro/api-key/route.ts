@@ -1,60 +1,31 @@
 import { NextResponse } from "next/server"
-import { KiroService } from "@/lib/oauth/services/kiro"
-import { createProviderConnection } from "@/models"
+import { failed } from "@/lib/routeErrors"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
 /**
  * POST /api/oauth/kiro/api-key
- * Import a Kiro API key (headless auth). The key is a long-lived bearer
- * credential - there is no refresh token. It is validated against the Amazon
- * Q model catalog, then stored with authMethod="api_key".
+ *
+ * Imports a Kiro bearer key. There is no refresh token, so the stored expiry is a long
+ * horizon and the proactive refresh path is never spent.
+ * A key that could not be checked is stored as `untested` rather than refused — the network
+ * may be the problem, not the key.
  */
-export async function POST(request) {
+export async function POST(request: Request) {
 	try {
-		const { apiKey, region } = await request.json()
-
-		if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
-			return NextResponse.json({ error: "API key is required" }, { status: 400 })
+		const result = await getUseCases().credentials.importApiKey("kiro", await request.json())
+		if (!result.ok) {
+			return NextResponse.json({ error: result.error }, { status: result.status })
 		}
-
-		const kiroService = new KiroService()
-
-		// Validate the key against the same Amazon Q surface used for inference.
-		const credential = await kiroService.validateApiKey(apiKey, region || "us-east-1")
-
-		// Extract email from JWT if the key happens to be a JWT (optional display)
-		const email = kiroService.extractEmailFromJWT(credential.accessToken)
-
-		// API keys never expire on a fixed schedule; persist a long horizon so the
-		// proactive refresh path (which requires a refreshToken anyway) is skipped.
-		const connection = await createProviderConnection({
-			provider: "kiro",
-			authType: "api_key",
-			accessToken: credential.accessToken,
-			refreshToken: null,
-			expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-			email: email || null,
-			providerSpecificData: {
-				...(credential.profileArn ? { profileArn: credential.profileArn } : {}),
-				region: credential.region,
-				authMethod: "api_key",
-				provider: "API Key",
-			},
-			testStatus: "active",
-		})
-
 		return NextResponse.json({
 			success: true,
-			connection: {
-				id: connection.id,
-				provider: connection.provider,
-				email: connection.email,
-			},
+			validated: result.validated,
+			modelCount: result.modelCount,
+			updated: result.updated,
+			connection: result.connection,
 		})
 	} catch (error) {
-		console.log("Kiro API key import error:", error)
-		// Do not reflect upstream response body to the client (SSRF hardening)
-		return NextResponse.json({ error: "API key validation failed" }, { status: 500 })
+		return failed(error, "Kiro key import failed", "oauth/kiro/api-key")
 	}
 }

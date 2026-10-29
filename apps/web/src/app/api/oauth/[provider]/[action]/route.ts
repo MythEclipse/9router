@@ -10,20 +10,11 @@ import {
 	pollForToken,
 	requestDeviceCode,
 } from "@/lib/oauth/providers"
-import { detectIdeInstalled } from "@/lib/oauth/utils/ideDetect"
 import {
-	clearCodexSession,
-	clearTraeSession,
-	clearWindsurfSession,
 	clearXaiSession,
 	clearXiaomiMimoSession,
-	clearZedSession,
-	getCodexSessionStatus,
-	getTraeSessionStatus,
-	getWindsurfSessionStatus,
 	getXaiSessionStatus,
 	getXiaomiMimoSessionStatus,
-	getZedSessionStatus,
 	registerCodexSession,
 	registerTraeSession,
 	registerWindsurfSession,
@@ -36,13 +27,10 @@ import {
 	startXaiProxy,
 	startXiaomiMimoProxy,
 	startZedProxy,
-	stopCodexProxy,
-	stopTraeProxy,
-	stopWindsurfProxy,
 	stopXaiProxy,
 	stopXiaomiMimoProxy,
-	stopZedProxy,
 } from "@/lib/oauth/utils/server"
+import { getUseCases } from "@/lib/useCases"
 import { createProviderConnection } from "@/models"
 
 export const dynamic = "force-dynamic"
@@ -232,70 +220,21 @@ export async function GET(request, { params }) {
 		}
 
 		if (action === "poll-status") {
-			const state = searchParams.get("state")
-			if (!state) {
-				return NextResponse.json({ error: "Missing state" }, { status: 400 })
-			}
-			let session
-			if (provider === "trae") session = getTraeSessionStatus(state)
-			else if (provider === "windsurf") session = getWindsurfSessionStatus(state)
-			else if (provider === "zed") session = getZedSessionStatus(state)
-			else if (provider === "xai") session = getXaiSessionStatus(state)
-			else if (provider === "codex") session = getCodexSessionStatus(state)
-			else if (provider === "xiaomi-mimo") session = getXiaomiMimoSessionStatus(state)
-			else
-				return NextResponse.json(
-					{ error: "Poll only supported for codex/xai/trae/windsurf/zed/xiaomi-mimo" },
-					{ status: 400 },
-				)
-			if (!session) return NextResponse.json({ status: "unknown" })
-			if (session.status === "done" || session.status === "error") {
-				const payload = { ...session }
-				if (provider === "xiaomi-mimo") {
-					// Unlike the others this does not auto-exchange server-side, so a
-					// finished session must survive until the client POSTs /exchange -
-					// that call clears it. A failed one is cleared here instead.
-					if (session.status === "error") {
-						clearXiaomiMimoSession(state)
-						stopXiaomiMimoProxy()
-					}
-					return NextResponse.json(payload)
-				}
-				if (provider === "trae") clearTraeSession(state)
-				else if (provider === "windsurf") clearWindsurfSession(state)
-				else if (provider === "zed") clearZedSession(state)
-				else if (provider === "xai") clearXaiSession(state)
-				else clearCodexSession(state)
-				return NextResponse.json(payload)
-			}
-			return NextResponse.json({ status: session.status })
+			const answer = await getUseCases().oauth.pollSession(provider, searchParams.get("state"))
+			if (!answer.ok) return NextResponse.json({ error: answer.error }, { status: answer.status })
+			return NextResponse.json(answer.body)
 		}
 
 		if (action === "stop-proxy") {
-			if (provider === "trae") stopTraeProxy()
-			else if (provider === "windsurf") stopWindsurfProxy()
-			else if (provider === "zed") stopZedProxy()
-			else if (provider === "xai") stopXaiProxy()
-			else if (provider === "codex") stopCodexProxy()
-			else if (provider === "xiaomi-mimo") stopXiaomiMimoProxy()
-			else
-				return NextResponse.json(
-					{ error: "Proxy only supported for codex/xai/trae/windsurf/zed/xiaomi-mimo" },
-					{ status: 400 },
-				)
-			return NextResponse.json({ success: true })
+			const answer = getUseCases().oauth.stopProxy(provider)
+			if (!answer.ok) return NextResponse.json({ error: answer.error }, { status: answer.status })
+			return NextResponse.json(answer.body)
 		}
 
 		if (action === "ide-status") {
-			// Detect whether the IDE is installed locally (used by import-token UX).
-			if (provider !== "trae" && provider !== "windsurf") {
-				return NextResponse.json(
-					{ error: "ide-status only supported for trae/windsurf" },
-					{ status: 400 },
-				)
-			}
-			const status = await detectIdeInstalled(provider)
-			return NextResponse.json(status)
+			const answer = await getUseCases().oauth.ideStatus(provider)
+			if (!answer.ok) return NextResponse.json({ error: answer.error }, { status: answer.status })
+			return NextResponse.json(answer.body)
 		}
 
 		if (action === "device-code") {
