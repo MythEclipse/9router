@@ -12,6 +12,13 @@ import { NextResponse } from "next/server"
 /** How each `AppErrorCode` maps to a status. */
 const STATUS_BY_CODE: Record<string, number> = {
 	VALIDATION: 400,
+	/**
+	 * `oRPC`'s own refusal when a procedure's input schema rejects the call. It arrives
+	 * with `code: "BAD_REQUEST"` and a readable message ("Input validation failed"), and
+	 * it is the caller's fault exactly like `VALIDATION` — without this entry a
+	 * mistyped body reaches the dashboard as a 500 and reads like a server fault.
+	 */
+	BAD_REQUEST: 400,
 	PAYLOAD_TOO_LARGE: 413,
 	UNAUTHORIZED: 401,
 	FORBIDDEN: 403,
