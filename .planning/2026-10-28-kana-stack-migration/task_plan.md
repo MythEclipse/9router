@@ -45,11 +45,28 @@ three packages report 0 `tsc` errors and `biome check` is clean.
 | `system`       | 2      | done — `health`, `changelog` |
 | `settings`     | 1      | done — login gate as a use-case with a port |
 | `combos`       | 4      | done — create/list/update/delete/duplicate/presets |
-| (164 more)     | 164    | pending |
+| `error-logs`   | 1      | done — page-size rule; failed clear no longer reports success |
+| `theme`        | 1      | done — role check as a domain rule (401 vs 403 kept distinct) |
+| `locale`       | 1      | done — matches Accept-Language tags, catalogue passed in |
+| `keys`         | 3      | done — sub-key caps, ownership, bulk whitelist + 500 cap |
+| `pricing`      | 1      | done — stray `?model=` no longer wipes the table |
+| `usage`        | 11     | done — one period rule replaces five disagreeing copies |
+| `plugins`      | 1      | done — array body no longer wipes every plugin |
+| `cache-stats`  | 1      | done — engine module installed by the owning host |
+| `dashboard-jobs` | 1    | done — unknown kind refused before a job starts |
+| `shutdown`     | 2      | done — one sequence, two gates; 403 vs 401 kept distinct |
+| `pxpipe`       | 8      | done — one list-limit rule; engine codes no longer flattened |
+| (136 more)     | 136    | pending |
 
-Next resource: pick from the remaining 164 by dependency weight. `api-keys`
-and `usage` already have repositories in `packages/db`, so they are the
-cheapest next step; both are read-heavy and have no streaming bodies.
+Done: 36 of 168 route handlers. `tags` is deliberately **not** ported: it
+returns one hardcoded catalogue with no rules, so moving it would add layers
+that extract nothing (see findings.md).
+
+Next resource: pick from the remaining 136 by dependency weight. Still inside
+`usage/` are the two large handlers that reach into `open-sse/`:
+`available-models` (360 LOC) and `api-keys` (351 LOC). They were split off from
+this batch on purpose — they need the engine behind ports, which is Phase 7's
+unfinished item, so doing them first would mean porting `open-sse` twice.
 
 ### Prerequisite delivered: shared packages
 

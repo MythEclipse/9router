@@ -11,6 +11,20 @@ import type { BulkEditPort } from "./api-keys/bulk-edit-api-keys.ts"
 import type { ApiKeyManagementPort } from "./api-keys/manage-api-keys-dashboard.ts"
 import type { SingleKeyAuditPort, SingleKeyPort } from "./api-keys/manage-single-key.ts"
 import type { ChangelogSource } from "./changelog.ts"
+import type {
+	AllowedModelReconciler,
+	CatalogueSyncPort,
+	ComboReaderPort,
+	CustomModelPort,
+	DisabledModelPort,
+	ModelAliasPort,
+	ModelCataloguePort,
+	ModelProbePort,
+	NodePrefixPort,
+	ProviderConnectionPort,
+	ProviderNodePort,
+	StudioModelPort,
+} from "./models/ports.ts"
 import type { PluginCache, PluginCatalogue, PluginSettingsPort } from "./plugins/manage-plugins.ts"
 import type { PxpipePort, PxpipeSettings } from "./pxpipe/manage-pxpipe.ts"
 import type { SettingsPort } from "./settings/login-gate.ts"
@@ -177,6 +191,41 @@ export interface Dependencies {
 	readonly shutdownEnv: ShutdownEnvironment
 	readonly pxpipe: PxpipePort
 	readonly pxpipeSettings: PxpipeSettings
+	readonly modelAliases: ModelAliasPort
+	readonly disabledModels: DisabledModelPort
+	readonly customModels: CustomModelPort
+	readonly studioModels: StudioModelPort
+	readonly allowedModelReconciler: AllowedModelReconciler
+	readonly providerConnections: ProviderConnectionPort
+	readonly providerNodes: ProviderNodePort
+	readonly modelCatalogue: ModelCataloguePort
+	/** Reads the custom-plugin settings, for the model list's badges. */
+	readonly pluginSettings: {
+		read(): Promise<{ adaptiveThinking?: { enabled?: boolean; models?: string[] } }>
+	}
+	readonly catalogueSync: CatalogueSyncPort
+	readonly modelProbe: ModelProbePort
+	readonly comboReader: ComboReaderPort
+	readonly nodePrefixes: NodePrefixPort
+	/** The studio cycle guard walks the combo graph, which lives in `apps/web`. */
+	readonly findStudioCycle: (input: {
+		callName: string
+		comboName: string
+		combosByName: Map<string, string[]>
+		studioTargets: Map<string, string>
+		extraSelfNames: string[]
+	}) => string | null
+	/** The STT transports the gateway can dial; anything else is dropped on write. */
+	readonly knownSttTransport: (value: string) => boolean
+	/** Maps a provider alias to the provider id the router uses. */
+	readonly resolveProviderAlias: (prefix: string) => string
+	/** Probes a base URL with a key, before a node is saved. */
+	readonly probeBaseUrl: (input: {
+		baseUrl: string
+		apiKey: string
+		type: string
+		modelId?: string
+	}) => Promise<Record<string, unknown>>
 	readonly now: () => Date
 	/** Injected so tests can pin key material instead of hoping. */
 	readonly randomId: () => string

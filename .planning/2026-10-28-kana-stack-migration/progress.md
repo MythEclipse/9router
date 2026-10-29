@@ -543,3 +543,184 @@ smoke on a fresh `DATA_DIR`: `/api/combos` create 200, list 200, invalid name
 400, `/login` 200, `/dashboard` 200, `/api/auth/status` 200, `/v1/models` 401.
 
 Remaining: 164 of 168 route handlers.
+
+## Session 2 — the test gate, then four more resources
+
+### The gate first
+
+Before porting anything else I fixed the twelve test files that failed at
+collection. A collection failure reports **zero tests, not a failed assertion**,
+so it passes any gate that counts failures — twelve files of coverage had been
+absent since the monorepo split and nothing said so.
+
+Three distinct causes, not one mechanical rename:
+
+- Stale module paths (`keyEndpoints`/`keyAccess` → `packages/db`, `loginLimiter`
+  → `packages/auth`, `custom-server` and `copy-standalone-assets.mjs` →
+  `apps/web`).
+- `path.resolve("../../...")` anchored to **CWD**, not the file. Under
+  `vitest --root tests` the CWD is the repo root, so the prefix escaped the
+  repository and the error named `/home/code/apps/web/...`. Now anchored on
+  `import.meta.url`.
+- Assertions written against the old formatter: two required trailing
+  semicolons (this repo formats without them) and two scanned for a
+  single-line `appendRequestLog({ … status: … })` that the formatter now
+  spreads over several lines. The line scan matched **zero call sites** and
+  asserted nothing — it would have stayed green through any regression in the
+  lifecycle rows. Now matched as whole call expressions.
+
+Result: 560 files, **0 failures**, 5522 → 5675 tests.
+
+### Resources ported
+
+| Resource | Rule extracted | Defect fixed |
+| --- | --- | --- |
+| `error-logs` | `resolveErrorLogLimit` — total, reports `adjusted` | a failed clear answered `success: true` |
+| `theme` | `refuseThemeWrite` — 401 vs 403 kept distinct | (none; the two codes were already right, just unnested) |
+| `locale` | `resolveLocale` — exact tag before primary subtag | `de-AT` was a 400; `pt-BR` could collapse to `pt` |
+| `pricing` | `parsePricingUpdate`, `parsePricingResetTarget` | **`?model=` alone reset every override**; PATCH accepted a row missing `input`/`output` |
+
+`error-logs` also cost a real move: `toResponse` lived in `api/combos/response.ts`
+and the second caller proved it belonged in `api/response.ts`.
+
+### Found while working
+
+- `apps/api` typechecked with **one** pre-existing error: `packages/pricing`
+  passed a possibly-`undefined` value from `split("/").pop()` into
+  `matchPattern`. Fixed with `?? model`; the package is now clean.
+- `pricing/route.ts` exported a `GET_DEFAULTS` handler that Next never routes —
+  dead since it was written. Removed.
+- **`tags` is deliberately not ported.** It returns one hardcoded catalogue
+  (`ollamaModels`) and has no rules; moving it would create empty layers and
+  inflate the count. Recording this so a later pass does not "finish" it.
+
+### Verification
+
+Per resource: `tsc` clean on both packages, `biome check` clean, domain +
+use-case tests with fakes, then a standalone smoke on a fresh `DATA_DIR`
+covering the happy path, each rejection, and the destructive path. Gateway
+baseline unchanged throughout (`/login` 200, `/v1/models` 401).
+
+Final: 567 files, 554 passed, 13 skipped, **0 failed**, 5726 tests.
+
+### `keys` (3 routes)
+
+- Sub-key scoping is `domain/sub-key-scope.ts`. The endpoint kinds and the
+  model-pattern matcher are injected from `packages/db`; the first version
+  reimplemented both and got both wrong (dropped `*suffix` patterns; guessed
+  an endpoint list missing `responses` and `models`).
+- `domain/key-ownership.ts` puts read and write verdicts in one place. PUT and
+  DELETE had written the same four checks twice, in a different order, so the
+  same caller saw a different error per verb.
+- `domain/bulk-key-edit.ts`: `parseBulkPatch` returns a rejection for a
+  non-object body. The route read `.error` off a `null`, so a malformed patch
+  was a 500.
+- Adapter defect caught by smoke, not by tests: `createApiKey` returns the row,
+  and the row's `key` field is the secret. The adapter assumed `{key, secret}`
+  and read `created.key.key`, so POST answered 201 with a nearly empty body.
+  The use-case tests passed because their fake returned the shape I imagined;
+  `api-key-adapter-contract.test.ts` now pins the real one.
+- `securityLogRepo` logged `error && error.message` on an `unknown` — a strict
+  type error that would itself throw inside the catch.
+
+Verification: 559 files / 5836 tests passing, both packages typecheck clean,
+biome clean, standalone smoke covering create/duplicate/empty-name/bad-endpoint
+/get/404/rename/delete/delete-again and the four bulk paths. Gateway baseline
+unchanged (`/login` 200, `/dashboard` 200, `/v1/models` 401).
+
+Remaining: 156 of 168.
+
+## 2026-10-29 — `usage` (11 handlers) + the strict-mode debt it exposed
+
+What the batch found, in the order it hurt:
+
+- **The period rule had five copies and they disagreed.** `stats` and `chart`
+  each carried their own `VALID_PERIODS` with different defaults (`7d` vs
+  `30d`), `sparks` a third, `errors` silently folded anything unrecognised into
+  `7d`, and `leaderboard` validated nothing — so `?period=banana` answered with
+  an empty leaderboard, which a dashboard renders as "no traffic". One value,
+  five opinions, two of them invisible. Now `domain/reporting-period.ts` owns
+  the accepted set, the per-endpoint default, and the refusal.
+- **`packages/db` had 48 latent errors.** `apps/web` runs `strict: false`, so
+  none of them had ever surfaced; `apps/api` runs `strict: true` and found them
+  on first import. Fixed at the source (`parseJson` overload, `lastUsed ?? 0`,
+  `apiKeyKey` nullability, the `connectionsRepo` transaction-callback return),
+  not with casts at the boundary.
+- **A generated file and the formatter were fighting.** `antislopPrompt.ts` is
+  generator output whose payload is one giant string literal, so
+  `biome --write` in the pre-commit hook rewrote the prompt itself. My commit
+  *shipped the reformatted version*, breaking parity with the `.md` sources in
+  the act of committing — `antislop-prompt-parity.test.ts` was red immediately
+  after. Fixed by scoping a `biome.json` override to that one path; every other
+  file keeps the baseline.
+  I had also reverted this same file earlier as "stray formatting". It was not;
+  it was the generator's legitimate output and the test was telling me so. Read
+  the failing test before deciding a diff is noise.
+
+Verification: 561 files / 5884 tests passing, both packages typecheck clean,
+`biome check` clean, `bun run build` green, standalone smoke confirming all 11
+`usage` routes delegate (401 without a session, `theme` 200 and `locale` 405
+unchanged from baseline). `generateAntislopPrompt.mjs --check` passes after a
+commit, not just before one.
+
+Remaining: 146 of 168. Next is not `usage`'s tail: `available-models` and
+`api-keys` need `open-sse` behind ports, which is Phase 7's open item.
+
+## 2026-10-29 — `plugins`, `cache-stats`, `dashboard-jobs`, `shutdown` (5 handlers)
+
+Four small endpoints, and one of them cost more than the whole batch.
+
+- **A silent wipe.** The plugins payload check was `typeof !== "object"`, which
+  accepts an array. `PUT [1,2,3]` normalised to "every plugin disabled" and
+  answered 200. Now `isPluginPayload` requires a plain object, unknown catalogue
+  keys are reported as 400 instead of dropped, and `enabled` must be literally
+  `true`.
+- **The unset-secret trap.** The dev shutdown hook compared the header *after*
+  the production check, so with no `SHUTDOWN_SECRET` set, `authorization` and
+  `` `Bearer ${undefined}` `` could both be absent and compare equal. Production
+  is now checked first, then the secret's existence, then the value.
+- **`role: null` is not a permission.** My first version of the dashboard gate
+  allowed a session object whose role was `null`, because the old handler did.
+  A test I wrote for the obvious case (an apikey session) passed; the one for
+  `role: null` failed and made the distinction worth keeping: an unestablished
+  role is not "unknown, allow" when the action cannot be undone.
+- **The endpoint that killed its own smoke test.** `POST
+  /api/version/shutdown` ran `ps aux` and killed every line containing
+  "9router" — and on Linux that includes argument text, so it killed the shell
+  running the smoke test, `kill -9` and all. Selection is now by executable name
+  via `ps -eo pid=,comm=`, in `appProcessSelection.ts`, with the pure functions
+  tested. Re-verified live: the shutdown answered 200, the server stopped, and
+  the calling shell kept its pid.
+
+Verification: 565 files / 5936 tests passing, both packages typecheck clean,
+`biome check` clean on every touched file, baseline 424 (from 443), build green,
+standalone smoke covering the plugin typo/array/valid paths, cache counters
+reading the real engine (`ttlMs: 10800000`, not zeros), every dashboard-jobs
+400/404 branch, and the shutdown hook's 401s plus the dashboard's 200.
+
+Remaining: 140 of 168.
+
+## 2026-10-29 — `pxpipe` (8 handlers)
+
+- **The clamp that let a negative through.** `stats` and `logs` both did
+  `Number(x) || 100`, which is fine for a typo but not for `?limit=-5`: `-5 || 100`
+  is `-5`, so a negative reached the store as a negative slice. `readListLimit`
+  now rejects anything that is not a positive integer and reports `adjusted` so
+  the panel can say the value was replaced.
+- **409 vs 500 for "not installed".** `start` returned 500 whether auto-install
+  was refused or the server genuinely broke. It is a 409 now: the operator has a
+  setting to change, and the panel words the two differently.
+- **Errors were flattened.** Every handler answered `{error: error.message}` with
+  a 500, so a real install failure reached the operator as "Failed to install
+  pxpipe". The engine's own `code` is carried through (`PxpipeError`), and live
+  verification now returns the engine's actual message: "install finished but
+  package is missing - see install.log".
+- **`install` and `start` are not on the oRPC router.** That transport accepts an
+  API key; a key that can trigger an npm install can change what runs on the host.
+  The REST routes keep them behind the password session.
+
+Verification: 566 files / 5955 tests, both packages typecheck clean, biome clean
+on every touched file, build green, and a standalone smoke covering status,
+`?limit=-5`, `?limit=abc`, health, stop, reload and the failing install path.
+
+Remaining: 132 of 168.

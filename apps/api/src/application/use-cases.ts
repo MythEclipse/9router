@@ -25,6 +25,13 @@ import {
 } from "./combos/manage-combos.ts"
 import type { Dependencies } from "./dependencies.ts"
 import { makeClearErrorLogs, makeListErrorLogs } from "./error-logs/read-error-logs.ts"
+import { makeModelCatalogue } from "./models/list-models.ts"
+import { makeCustomModels, makeModelAliases } from "./models/manage-aliases.ts"
+import { makeModelAvailability } from "./models/manage-availability.ts"
+import { makeCatalogueSync, makeModelProbe } from "./models/manage-catalogue-sync.ts"
+import { makeBaseUrlValidation, makeDisabledModels } from "./models/manage-disabled-models.ts"
+import { makeProviderNodes } from "./models/manage-provider-nodes.ts"
+import { makeStudioModels } from "./models/manage-studio-models.ts"
 import { makeReadPlugins, makeWritePlugins } from "./plugins/manage-plugins.ts"
 import { makeGetPricing, makeResetPricing, makeUpdatePricing } from "./pricing/manage-pricing.ts"
 import { makePxpipe } from "./pxpipe/manage-pxpipe.ts"
@@ -81,6 +88,17 @@ export interface UseCases {
 	readonly shutdownFromHook: ReturnType<typeof makeShutdownFromHook>
 	/** The pxpipe controls: status, start, stop, reload, install, health, stats, logs. */
 	readonly pxpipe: ReturnType<typeof makePxpipe>
+	/** Aliases and custom models, which share the key reconcile step. */
+	readonly modelAliases: ReturnType<typeof makeModelAliases>
+	readonly customModels: ReturnType<typeof makeCustomModels>
+	readonly disabledModels: ReturnType<typeof makeDisabledModels>
+	readonly studioModels: ReturnType<typeof makeStudioModels>
+	readonly providerNodes: ReturnType<typeof makeProviderNodes>
+	readonly modelCatalogue: ReturnType<typeof makeModelCatalogue>
+	readonly modelAvailability: ReturnType<typeof makeModelAvailability>
+	readonly catalogueSync: ReturnType<typeof makeCatalogueSync>
+	readonly modelProbe: ReturnType<typeof makeModelProbe>
+	readonly baseUrlValidation: ReturnType<typeof makeBaseUrlValidation>
 }
 
 /** The combo use-cases share one dependency slice, so it is built once. */
@@ -144,5 +162,54 @@ export function buildUseCases(deps: Dependencies): UseCases {
 		shutdownFromDashboard: makeShutdownFromDashboard(deps.shutdown),
 		shutdownFromHook: makeShutdownFromHook(deps.shutdown, deps.shutdownEnv),
 		pxpipe: makePxpipe(deps.pxpipe, deps.pxpipeSettings),
+		modelAliases: makeModelAliases({
+			aliases: deps.modelAliases,
+			reconciler: deps.allowedModelReconciler,
+		}),
+		customModels: makeCustomModels({
+			models: deps.customModels,
+			reconciler: deps.allowedModelReconciler,
+			capabilityKeys: deps.modelCatalogue.capabilityKeys(),
+			knownTransport: deps.knownSttTransport,
+		}),
+		disabledModels: makeDisabledModels({ disabled: deps.disabledModels }),
+		studioModels: makeStudioModels({
+			studios: deps.studioModels,
+			combos: deps.comboReader,
+			nodes: deps.nodePrefixes,
+			reconciler: deps.allowedModelReconciler,
+			resolveProviderAlias: deps.resolveProviderAlias,
+			findCycle: deps.findStudioCycle,
+		}),
+		providerNodes: makeProviderNodes({
+			nodes: deps.providerNodes,
+			connections: deps.providerConnections,
+			normalizeLogo: (value) => deps.modelCatalogue.normalizeLogo(value),
+			generateId: () => deps.modelCatalogue.generateId(),
+			prefixes: {
+				openaiCompatible: "openai-compatible-",
+				anthropicCompatible: "anthropic-compatible-",
+				customEmbedding: "custom-embedding-",
+			},
+		}),
+		modelCatalogue: makeModelCatalogue({
+			catalogue: deps.modelCatalogue,
+			aliases: deps.modelAliases,
+			customModels: deps.customModels,
+			studios: deps.studioModels,
+			combos: deps.comboReader,
+			disabledModels: deps.disabledModels,
+			plugins: deps.pluginSettings,
+		}),
+		modelAvailability: makeModelAvailability({
+			connections: deps.providerConnections,
+			now: deps.now,
+		}),
+		catalogueSync: makeCatalogueSync({ sync: deps.catalogueSync }),
+		modelProbe: makeModelProbe({ probe: deps.modelProbe }),
+		baseUrlValidation: makeBaseUrlValidation({
+			catalogue: deps.modelCatalogue,
+			probeBaseUrl: (input) => deps.probeBaseUrl(input),
+		}),
 	}
 }

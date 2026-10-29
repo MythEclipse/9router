@@ -20,6 +20,14 @@ import { getSemanticCacheStats, resetSemanticCacheStats } from "open-sse/rtk/sem
 import { createApiKeyStore } from "./apiKeyStore"
 import { killAppProcesses } from "./appProcessManager"
 import { createComboPresetPort } from "./comboPresetPort"
+import {
+	catalogueHost,
+	knownSttTransport,
+	probeBaseUrl,
+	registryHost,
+	resolveProviderAlias,
+	studioCycleRefusal,
+} from "./modelRegistryHost"
 import { clearPluginCache } from "./plugins/customPluginsRuntime"
 import { getPxpipeStats, readPxpipeEvents } from "./pxpipe/events"
 import { getInstallInfo, getInstallLogTail, installPxpipe } from "./pxpipe/install"
@@ -74,6 +82,14 @@ function cache(): Cache {
 			// journal on its own here. copy-standalone-assets.mjs stages it at
 			// <server cwd>/migrations.
 			migrationsDir: join(process.cwd(), "migrations"),
+			// The model registries and the capability tables live in this
+			// directory, so this process is the one that can answer for them.
+			registryHost,
+			catalogueHost,
+			findStudioCycle: studioCycleRefusal,
+			resolveProviderAlias,
+			knownSttTransport,
+			probeBaseUrl,
 		})
 		scope[CACHE_KEY] = { useCases }
 	}

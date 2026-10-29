@@ -36,8 +36,26 @@ import {
 } from "./db/repositories/combo-repository.ts"
 import { createComboStrategyRepository } from "./db/repositories/combo-strategy-repository.ts"
 import { createErrorLogRepository } from "./db/repositories/error-log-repository.ts"
+import {
+	createAllowedModelReconciler,
+	createComboReaderPort,
+	createCustomModelPort,
+	createDisabledModelPort,
+	createModelAliasPort,
+	createNodePrefixPort,
+	createProviderConnectionPort,
+	createProviderNodePort,
+	createStudioModelPort,
+	type RegistryHost,
+} from "./db/repositories/model-registry-repository.ts"
 import { createPricingRepository } from "./db/repositories/pricing-repository.ts"
 import { createUsageReportPort } from "./db/repositories/usage-report-repository.ts"
+import {
+	type CatalogueHost,
+	createCatalogueSyncPort,
+	createModelCataloguePort,
+	createModelProbePort,
+} from "./model-catalogue-port.ts"
 import { createPxpipePort, createPxpipeSettings } from "./pxpipe-port.ts"
 import {
 	createDashboardJobEnvironment,
@@ -89,6 +107,37 @@ export interface UseCaseOptions {
 	 * not the one this factory opened. Omitted means "close the one I opened".
 	 */
 	readonly closeDatabase?: () => Promise<void>
+	/**
+	 * The model registries. They live in `apps/web` beside the gateway's own
+	 * reads, and this package cannot import that directory, so the host passes
+	 * them in. Absent means the model endpoints are unavailable — which is the
+	 * case for the bare API server.
+	 */
+	readonly registryHost?: RegistryHost
+	/** The capability tables, free-provider registry and probe. See `registryHost`. */
+	readonly catalogueHost?: CatalogueHost
+	/**
+	 * The studio cycle guard walks the combo graph, which lives in `apps/web`.
+	 * Absent means no guard, and a cycle would only surface as a request timeout.
+	 */
+	readonly findStudioCycle?: (input: {
+		callName: string
+		comboName: string
+		combosByName: Map<string, string[]>
+		studioTargets: Map<string, string>
+		extraSelfNames: string[]
+	}) => string | null
+	/** Maps a provider alias to the provider id the router resolves. */
+	readonly resolveProviderAlias?: (prefix: string) => string
+	/** The STT transports the gateway can dial; absent means "none recognised". */
+	readonly knownSttTransport?: (value: string) => boolean
+	/** Probes a base URL with a key, before a node is saved. */
+	readonly probeBaseUrl?: (input: {
+		baseUrl: string
+		apiKey: string
+		type: string
+		modelId?: string
+	}) => Promise<Record<string, unknown>>
 }
 
 export interface UseCasesHandle {
@@ -107,6 +156,14 @@ export function createUseCases(
 	// One port over the settings row, shared by the login gate, the plugin panel
 	// and pxpipe: the same row read three ways would be three chances to disagree.
 	const settingsPort = createSettingsPort()
+	if (!options.registryHost || !options.catalogueHost) {
+		throw new Error(
+			"The model-registry use-cases need registryHost and catalogueHost; this host did not supply them",
+		)
+	}
+	const registryHost = options.registryHost
+	const catalogueHost = options.catalogueHost
+	const catalogue = createModelCataloguePort(catalogueHost)
 
 	const useCases = buildUseCases({
 		apiKeys: createApiKeyRepository(db),
@@ -157,6 +214,33 @@ export function createUseCases(
 				timeoutMs: stored.pxpipeTimeoutMs,
 			}
 		}),
+		modelAliases: createModelAliasPort(registryHost),
+		disabledModels: createDisabledModelPort(registryHost),
+		customModels: createCustomModelPort(registryHost),
+		studioModels: createStudioModelPort(registryHost),
+		allowedModelReconciler: createAllowedModelReconciler(registryHost),
+		providerConnections: createProviderConnectionPort(registryHost),
+		providerNodes: createProviderNodePort(registryHost),
+		modelCatalogue: catalogue,
+		pluginSettings: {
+			async read() {
+				const stored = await settingsPort.read()
+				const plugins = (stored.customPlugins ?? {}) as Record<string, unknown>
+				const adaptive = plugins.adaptiveThinking as
+					| { enabled?: boolean; models?: string[] }
+					| undefined
+				return { adaptiveThinking: adaptive }
+			},
+		},
+		catalogueSync: createCatalogueSyncPort(catalogueHost),
+		modelProbe: createModelProbePort(catalogueHost),
+		comboReader: createComboReaderPort(registryHost),
+		nodePrefixes: createNodePrefixPort(registryHost),
+		// The cycle guard walks the combo graph and lives beside it in `apps/web`.
+		findStudioCycle: options.findStudioCycle ?? (() => null),
+		resolveProviderAlias: options.resolveProviderAlias ?? ((prefix) => prefix),
+		knownSttTransport: options.knownSttTransport ?? (() => false),
+		probeBaseUrl: options.probeBaseUrl ?? (async () => ({ valid: false, error: "not available" })),
 		now: () => new Date(),
 		randomId: () => randomUUID(),
 	})
