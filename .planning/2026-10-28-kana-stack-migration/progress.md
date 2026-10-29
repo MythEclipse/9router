@@ -2079,3 +2079,28 @@ what turned "this looks mechanical" into "this is a privilege escalation".
 Gates: typecheck 0, 7722 passed / 0 failed (8 new), and a full CRUD cycle against a
 live dev server — 201, 200, 200, 200, 404 — plus 400/409 refusals carrying their own
 wording. Test keys created during the probe were deleted; the table is back to 5.
+
+## theme: a third shape of the same defect
+
+`error-logs` need no work — its procedures take no caller argument, so it was
+equivalent from the start and moved in one step.
+
+`theme` had two defects and neither was a constant:
+
+1. `get` was `authed` while the route is public on purpose. The login page applies the
+   theme before a session exists, so adopting the procedure would have broken the one
+   screen a signed-out user sees.
+2. `set` took `role` from the request body. `refuseThemeWrite` refuses an empty role
+   and `"apikey"` and accepts everything else, so a caller stating `role:"admin"`
+   defeated it. A key session could write the site-wide theme.
+
+Verified live: `GET /api/theme` is 200 with no cookie and `no-store`; a key session
+POSTing `role:"admin"` gets 403 with the rule's wording; anonymous POST is 401.
+
+The generalisation has now held three times: **a procedure is equivalent to its route
+only when it derives the same value from the same source.** A literal (`usage`), a
+constant caller (`keys`), an input field (`theme`) and an over-strict gate (`theme`)
+all fail that test, in different ways. Read what the procedure feeds the rule and who
+is allowed through the door — not just what the rule says.
+
+Gates: typecheck 0, 7729 passed / 0 failed (7 new).

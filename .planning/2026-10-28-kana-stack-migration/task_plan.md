@@ -34,30 +34,34 @@ no oRPC client and no reference to port 20127 — the 199 call sites are
 `fetch("/api/...")`. The defect the sweep existed to remove (rules stranded in
 routes) is gone; what is left in each handler is the parse-and-reply shell.
 
-**The transport is proven on three areas: `combos`, `usage`, `keys`** (11 routes).
-`apps/web/src/lib/orpcClient.ts` gives the dashboard an in-process client, so a route
-reaches the same procedure the HTTP server exposes without a second hop or a second
-session lookup.
+**The transport is proven on five areas: `combos`, `usage`, `keys`, `error-logs`,
+`theme`** (15 routes). `apps/web/src/lib/orpcClient.ts` gives the dashboard an
+in-process client, so a route reaches the same procedure the HTTP server exposes
+without a second hop or a second session lookup.
 
-**The lesson from those three is that the move is not uniform, and the check that
-decides it is one grep:** does a procedure pass a literal where its route passes
-something derived from the session? Two of the three answered yes —
+**The lesson is that the move is not uniform, and the check is not one grep.** A
+procedure is equivalent to its route only when it derives the same value from the same
+source. Four areas failed that test, in four shapes:
 
-  - `usage` passed `{ apiKeyFilter: null, allowedModels: "*" }`, widening a key
-    session's report from its own usage to every key's.
-  - `dashboard-keys` passed `{ role: "admin", permissions: null }`, clearing the
-    sub-key escalation gate and letting a key session grant permissions.
+  - `usage` passed a literal scope `{ apiKeyFilter: null, allowedModels: "*" }`,
+    widening a key session's report from its own usage to every key's.
+  - `keys` passed a constant caller `{ role: "admin", permissions: null }`, clearing
+    the sub-key escalation gate and letting a key session grant permissions.
+  - `theme.set` took its role from the **request body**, so a key session wrote the
+    site-wide theme by sending `role: "admin"`.
+  - `theme.get` was `authed` while the route is public, which would have broken the
+    theme on the login page — the only screen a signed-out user sees.
 
-Both docstrings justified the constant with "every caller here is a password
-session". Both were accurate about the transport that existed and wrong about the one
-being built. So each area gets: measure argument equivalence, fix the context type if
-the procedure needs claims it cannot see, *then* move the route. Evidence at the port
-— a real call with two different sessions — not a green build.
+Every one of these docstrings said the constant was safe because "every caller here is
+a password session". All four were accurate about the transport that existed and wrong
+about the one being built. So each area gets: measure argument equivalence *and* who
+may reach the door, fix the context type or the schema, *then* move the route.
 
-**Next action: sweep the remaining routers for the same literal-vs-session shape
-before moving any more routes.** The grep is cheap and the two defects it already
-found were both security-relevant. Any router that passes a constant instead of
-`context.session` is a candidate for the same fix, not a candidate for delegation.
+**Next action: `models` and `pricing` are the remaining areas with both routes and
+procedures** (7 and 1 routes, 14 and 3 procedures). Check each procedure's arguments
+against its route before moving it; `models` is large enough that it may need splitting
+by endpoint. `settings` has 9 routes but no procedures, so it is out of scope for this
+transport work rather than blocked by it.
 
 Closed earlier: the trace-blind path audit (`894eddaef`, `4dece3ecf`). Every
 runtime-built path was checked against the assembled tree rather than read:

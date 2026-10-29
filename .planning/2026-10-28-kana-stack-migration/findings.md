@@ -283,3 +283,42 @@ The second-order lesson is that the docstring is evidence about the past, not a
 guarantee about now. Both comments were accurate and both were wrong. When a
 procedure says "the X matters on the REST route", read that as "this procedure does
 not implement X", and then ask what happens when a caller arrives who needs it.
+
+## The theme router has two defects, and neither is a hardcoded constant
+
+`error-logs` matched cleanly — same arguments, nothing session-derived — so it moved
+in one step. `theme` did not, and it fails in a third shape:
+
+```ts
+// routers/theme.ts
+get: authed.handler(...)                                   // route GET is public
+set: authed.input(SetThemeInput).handler(async ({ input, context }) =>
+    context.useCases.setTheme({ role: input?.role ?? null }, input?.theme))
+```
+
+**1. `get` is `authed`, the REST route is public on purpose.** The route comment says
+why: "ThemeProvider applies it before anyone signs in". Adopting the procedure would
+make the theme fail to load on the login page — a regression in the one screen a
+signed-out user ever sees, and one no typecheck would catch.
+
+**2. `set` takes the role from the request body.** The rule it feeds is
+`refuseThemeWrite(role)`: it refuses an empty role and it refuses `"apikey"`, and
+accepts everything else. Passing `input?.role` means a caller states its own identity,
+so an API-key session writes the site-wide theme by sending `role: "admin"`. Measured:
+
+| role passed | verdict |
+| --- | --- |
+| `null` / `""` | `no-session` |
+| `"apikey"` | `api-key-session` — refused |
+| `"admin"`, `"owner"`, `"anything"` | accepted |
+
+The route itself is not vulnerable, because it reads `session.role` off the cookie and
+the domain narrows a non-string claim to `null`. The procedure is. The docstring even
+explains the design as if it were a necessity — "the dashboard role ... is only present
+in the Next cookie, so the route passes it through explicitly" — which was true before
+`SessionClaims` carried `role`, and is false now.
+
+The lesson generalises past literals: **a procedure is only equivalent to its route
+when it derives the same value from the same source.** A literal, an input field and a
+constant all fail that test, and they fail in different ways. Read what the procedure
+feeds the rule, not just what the rule says.
