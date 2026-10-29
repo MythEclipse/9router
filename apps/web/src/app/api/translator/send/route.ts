@@ -1,3 +1,4 @@
+import { translatorRefreshUsable, translatorSendStatus } from "9router-api/domain/translator"
 import { getExecutor } from "open-sse/index"
 import { getProviderConnections, updateProviderConnection } from "@/lib/localDb"
 
@@ -110,7 +111,7 @@ export async function POST(request) {
 		// Auto-refresh token on 401/403 and retry (same as chatCore.js)
 		if (response.status === 401 || response.status === 403) {
 			const newCredentials = await executor.refreshCredentials(credentials, console)
-			if (newCredentials?.accessToken || newCredentials?.copilotToken) {
+			if (translatorRefreshUsable(newCredentials)) {
 				Object.assign(credentials, newCredentials)
 				await persistRefreshedCredentials(connection, newCredentials)
 				;({ response } = await executor.execute({ model, body, stream, credentials }))
@@ -122,7 +123,7 @@ export async function POST(request) {
 			console.error(`[Translator] Provider error ${response.status}:`, errorText.slice(0, 500))
 			return Response.json(
 				{ success: false, error: `Provider error: ${response.status}`, details: errorText },
-				{ status: response.status },
+				{ status: translatorSendStatus(response.status) },
 			)
 		}
 

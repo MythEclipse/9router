@@ -1,3 +1,4 @@
+import { translatorStep, translatorTarget } from "9router-api/domain/translator"
 import { NextResponse } from "next/server"
 import { getExecutor } from "open-sse/executors/index"
 import { detectFormat, getTargetFormat } from "open-sse/services/provider"
@@ -11,12 +12,16 @@ export const dynamic = "force-dynamic"
 export async function POST(request) {
 	try {
 		const { step, body } = await request.json()
+		const stage = translatorStep(step)
 
-		if (!step || !body) {
-			return NextResponse.json({ success: false, error: "Step and body required" }, { status: 400 })
+		if (stage === null || !body) {
+			return NextResponse.json(
+				{ success: false, error: "Step (1-3) and body required" },
+				{ status: 400 },
+			)
 		}
 
-		switch (step) {
+		switch (stage) {
 			case 1: {
 				// Detect provider + formats from 1_req_client.json
 				const clientBody = body.body || body
@@ -55,15 +60,14 @@ export async function POST(request) {
 			case 3: {
 				// OpenAI intermediate → target + build URL/headers (mirrors 4_req_target.json)
 				const openaiBody = body.body || body
-				const provider = body.provider
-				const model = body.model
-
-				if (!provider || !model) {
+				const target = translatorTarget(body.provider, body.model)
+				if (target === null) {
 					return NextResponse.json(
 						{ success: false, error: "provider and model required" },
 						{ status: 400 },
 					)
 				}
+				const { provider, model } = target
 
 				const targetFormat = getTargetFormat(provider)
 				const stream = openaiBody.stream !== false
@@ -106,9 +110,6 @@ export async function POST(request) {
 
 				return NextResponse.json({ success: true, result: { url, headers, body: finalBody } })
 			}
-
-			default:
-				return NextResponse.json({ success: false, error: "Invalid step (1-3)" }, { status: 400 })
 		}
 	} catch (error) {
 		console.error("Error in translator:", error)

@@ -1,3 +1,4 @@
+import { consoleLogsPayload } from "9router-api/domain/translator"
 import { NextResponse } from "next/server"
 import { clearConsoleLogs, getConsoleLogs, initConsoleLogCapture } from "@/lib/consoleLogBuffer"
 
@@ -7,8 +8,7 @@ initConsoleLogCapture()
 
 export async function GET() {
 	try {
-		const logs = getConsoleLogs()
-		return NextResponse.json({ success: true, logs })
+		return NextResponse.json(consoleLogsPayload(getConsoleLogs()))
 	} catch (error) {
 		console.error("Error getting console logs:", error)
 		return NextResponse.json({ success: false, error: error.message }, { status: 500 })
