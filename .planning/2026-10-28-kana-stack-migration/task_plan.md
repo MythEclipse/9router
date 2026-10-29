@@ -57,19 +57,25 @@ three packages report 0 `tsc` errors and `biome check` is clean.
 | `shutdown`     | 2      | done — one sequence, two gates; 403 vs 401 kept distinct |
 | `pxpipe`       | 8      | done — one list-limit rule; engine codes no longer flattened |
 | `model-registry` | 12 | done — list/alias/availability/custom/studio/nodes/catalogue; transport whitelist now actually applied |
-| `proxy-pools`  | 9      | **4 of 9 done** — `route`, `[id]`, `bulk`, `[id]/test`; 5 remaining (deploy ×4, import-jobs) |
+| `proxy-pools`  | 9      | **done** — `route`, `[id]`, `bulk`, `[id]/test`, four `*-deploy`, `import-jobs` |
 | `providers`    | 12 | **done** — connection CRUD, overrides, kilo/free-models, test-models, test-batch, client, `[id]/test`, suggested-models, `validate`, `web-login`, `[id]/models` |
-| (136 more)     | 136    | pending |
+| `tunnel`       | 7      | **done** — `status`, `enable`/`disable`, `tailscale-{check,enable,disable,install}` |
+| (129 more)     | 129    | pending |
 
 Done: 36 of 168 route handlers. `tags` is deliberately **not** ported: it
 returns one hardcoded catalogue with no rules, so moving it would add layers
 that extract nothing (see findings.md).
 
-Next resource: pick from the remaining 136 by dependency weight. Still inside
-`usage/` are the two large handlers that reach into `open-sse/`:
-`available-models` (360 LOC) and `api-keys` (351 LOC). They were split off from
-this batch on purpose — they need the engine behind ports, which is Phase 7's
-unfinished item, so doing them first would mean porting `open-sse` twice.
+Next: finish `oauth` (8 routes left). The two families still open are the
+generic `[provider]/[action]` proxy — which is a dispatcher, not a handler, and
+needs the action table read before anything is moved — and the OAuth *login*
+flows (`kiro/social-*`, `xiaomi-mimo/login/*`), which hand a browser a redirect
+and therefore cannot become a JSON use-case without splitting the redirect out.
+
+Still parked inside `usage/`: `available-models` (360 LOC) and `api-keys`
+(351 LOC). They were split off on purpose — they need the engine behind ports,
+which is Phase 7's unfinished item, so doing them first would mean porting
+`open-sse` twice.
 
 ### Prerequisite delivered: shared packages
 
@@ -262,3 +268,7 @@ Next targets, ordered by what they teach rather than by size:
 logic). It stays a wrapper: that helper is the router's own health check, not a
 dashboard rule, and moving it would drag the whole executor graph into `apps/api`
 for one delegation.
+
+| Resource | Routes | Status |
+| -------- | ------ | ------ |
+| `oauth`  | 20 | done — dispatch actions, credential import, gitlab pat, iflow cookie, mimo login, kiro social |

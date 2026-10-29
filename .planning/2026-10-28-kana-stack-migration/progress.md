@@ -1216,5 +1216,240 @@ biome clean, `bun run build` exit 0, gateway baseline unchanged (`/login` 200,
 `includeUsage`, `/api/proxy-pools/xyz` 401, `POST /api/proxy-pools` 401,
 `DELETE /api/proxy-pools/bulk` 401).
 
-Remaining in `proxy-pools`: 5 of 9 (four deploy routes, `import-jobs`).
-Remaining overall: 124 of 174.
+Remaining in `proxy-pools`: none — the batch is closed.
+Remaining overall: 120 of 174.
+
+### Relay deploy — four providers, one use-case
+
+`application/proxy-pools/deploy-relay.ts` orders the work once: start, wait, register.
+What differs is data, not control flow, so the differences moved into
+`domain/relay-deploy.ts`:
+
+| Provider   | Token field  | Also required | URL comes from            |
+| ---------- | ------------ | ------------- | ------------------------- |
+| vercel     | vercelToken  | —             | poll `readyState` → `url` |
+| cloudflare | apiToken     | accountId     | derived from subdomain    |
+| deno       | denoToken    | orgDomain     | derived from org domain   |
+| netlify    | netlifyToken | —             | site `ssl_url` + path     |
+
+Three rules the original code stated only in its branches:
+
+- **The token field is provider-specific.** A shared `token` field would have accepted a
+  Vercel token for a Netlify deploy and failed at the provider's edge with "unauthorized"
+  — a blank form reported as an auth error.
+- **Netlify's relay lives at a path.** The site root serves a placeholder page; the relay
+  is `/.netlify/functions/relay`. A pool pointed at the root fails every request while the
+  deployment itself looks healthy.
+- **Netlify's site name becomes a subdomain.** `Netlify-Relay!!` has to be hydrated to
+  `netlify-relay` before the provider sees it, and a 422 "name taken" is a 409 the screen
+  can act on.
+
+A deployment that reports a terminal failure is refused with that state, not with
+"timed out": waiting the full two minutes to then report the wrong cause is worse than no
+report. Deno creates an app and deploys into it, so a failed deploy now discards the app
+through the port's `discard` hook rather than leaving the name occupied.
+
+The route-level Netlify test was rewritten over the use-case and the real host calls,
+because the route now only delegates — `createDb` refuses to open inside Vitest, so a test
+that imports the route tests the delegation, not the behaviour.
+
+Verification: 604 files / 6836 tests passing, both packages typecheck clean,
+`bun run build` exit 0, gateway served (health 200, `/login` 200, `/api/proxy-pools` 401,
+all four deploy routes 401 unauthenticated — the same refusal as before the port).
+
+### Bulk proxy import — the job outlives the browser
+
+`domain/proxy-import.ts` holds the row rules; `application/proxy-pools/import-proxy-pools.ts`
+owns start/poll/cancel. Two mistakes were worth stating:
+
+- **A bare `host:port` is refused.** The pool table would store it happily and the first
+  request routed through it would fail — the worst place to discover a typo.
+- **An empty list is not an invalid one.** `Nothing to import` and `Invalid entries: …` are
+  different mistakes, and telling them apart is what tells the operator which field to fix.
+
+The poll answers `no-store`, and an unknown id is 404 rather than an empty page: the
+dashboard polls while a job runs, so "gone" must not read as "nothing to report yet". The
+recent list is paged to 10 — the screen reattaches to a page, not a history.
+
+The port shape was corrected against the real store twice: `create` answers a summary
+(`jobId`/`status`/`total`), and a job row carries `counts`, not flat counters. Guessing the
+shape cost a round trip each time; reading `proxyImportJobs.ts` first would not have.
+
+Verification: 606 files / 6860 tests passing, both packages typecheck clean,
+`bun run build` exit 0, gateway served (`/login` 200, `/api/health` 200), and all three
+verbs of `/api/proxy-pools/import-jobs` answer 401 unauthenticated.
+
+### A flaky file was a timeout, not a wrong answer
+
+One background run reported six failures across four files — three of them in
+`suggested-models-sync.test.ts` — while the same files passed twice standalone and the same
+full suite passed three times. The reported duration was the tell: 4008ms, 4101ms against
+Vitest's 5000ms default. The message read `expected 'https://…' to be 'https://…/.netlify/…'`,
+which looks like a wrong answer but was the per-request `withTimeout` ceiling returning the
+built-in catalogue before the stubbed fetch settled.
+
+No production code changed. Each case in that file binds its answer to a stubbed fetch or a
+stubbed store, so a slow run can only be the machine's — the file now sets its own 30s
+timeout rather than sitting one second from the global default. A test that reports a wrong
+answer when it actually timed out sends the next reader into the wrong file, which is worse
+than the flake itself.
+
+Verified afterwards: 606 files / 6860 tests passing under the full parallel suite.
+
+### Tunnel — seven routes, three shapes
+
+`domain/tunnel.ts` holds the rules; `application/tunnel/manage-tunnel.ts` owns the order.
+The seven routes were never seven behaviours:
+
+- **`status`** — probe cache (`STATUS_CACHE_TTL_MS`), with download progress deliberately
+  uncached because it is the number the operator watches move. A clock that moved backwards
+  counts as stale: reusing an entry timestamped in the future freezes the panel, and the
+  cause is nowhere near the symptom.
+- **four toggles** — one function, because they differ in two ways only: which switch, and
+  whether the answer waits for DNS. Only a Cloudflare *enable* waits (`DNS_WARMUP_DELAY_MS`);
+  an enable that is slow because the watchdog failed to start would read as "the tunnel did
+  not come up", so monitoring is re-armed fire-and-forget.
+- **`tailscale-check`** — three probes in parallel, none of them run when Tailscale is not
+  installed: probing a daemon that cannot exist costs a timeout per poll and reports "not
+  running" for something that was never there. The two daemons are reported separately *and*
+  as a union, so a machine where the bundled one failed but the system one lives does not
+  read as a plain success.
+- **`tailscale-install`** — the gate (password needed? which password?) runs **before** the
+  stream opens, so a refusal is a 400 the form can show rather than an event nobody styled.
+  The stream itself stays in the route: a use-case cannot own a `ReadableStream` without
+  owning a framework. A typed password beats the cached one — the operator typed it because
+  the cached one was wrong — and `sudo`'s own "Sorry, try again." is translated to
+  "Wrong sudo password" rather than sent to a screen that cannot act on it.
+
+Smoke against the standalone build: `/api/tunnel/status` answered the real probe payload
+(both services disabled, download 0%) and `/api/tunnel/tailscale-check` found the machine's
+actual Tailscale — `installed: true`, both daemons running. The guard still refuses
+unauthenticated callers, and refuses the six machine-touching routes from non-localhost with
+403 (they are on `LOCAL_ONLY_PATHS`), which is the behaviour the routes had before the port.
+
+Fixed on the way: `apps/api/package.json` had no `./application/tunnel/*` subpath export, so
+`apps/web` could not import the use-case at all. `tunnelStatusCache()` also needed a home —
+it now hangs off `globalThis` so a hot reload reuses it instead of re-probing per request.
+
+Verification: 608 files / 6897 tests passing, both packages typecheck clean,
+`bun run build` exit 0, gateway served (`/login` 200, `/api/health` 200).
+
+## 2026-10-29 — `oauth` batch, 12 of 20
+
+The batch is one pattern in three shapes: **read a credential the operator already has,
+prove it works, then write one row.** Porting it found three defects that the old routes
+had been carrying.
+
+**A port the host never supplied reached production as a 500.** `cursorImport` was declared
+on the graph, called by the route, and wired in neither place — every unit test on either
+side passed because each one stubbed the other. It surfaced in the smoke test, not the
+suite. The guard is `required()`, so `required()` now has its own test
+(`tests/unit/use-case-graph-ports.test.ts`) asserting it names the missing port instead of
+returning `undefined`. The same class of bug is why `importToken`/`importApiKey` resolve
+their verifier from a host table *before* the graph is built: a missing entry is a refusal
+at assembly, not a crash per request.
+
+**`apps/web` compiles with `strict: false`, which silently disables union narrowing.** A
+correct `{ ok: true } | { ok: false, error }` union cannot be read with `if (!result.ok)`
+there — TypeScript keeps the union and rejects `result.error`. Rather than cast in every
+route, the use-case exposes `ImportAnswer`, a flat shape with optional fields. `apps/api`
+keeps the union internally; only the boundary flattens.
+
+**Cursor's auto-import was already a three-strategy ladder, and the tests knew it.** The
+first version of the port read the database one way and answered "not found" for the rest,
+which failed ten existing tests that asserted the paste-box fallback and the Linux
+"config exists but the IDE is not installed" check. The ladder is now explicit: bundled
+`better-sqlite3` → `sqlite3` binary → `windowsManual`, with each failure silent and the
+next strategy tried. Restored, not simplified.
+
+Other decisions worth keeping:
+
+- **Codex import does not call OpenAI.** Its access token is a JWT the operator created in
+  ChatGPT's settings, and the claims inside it are what the row needs. It is stored as
+  `authType: "access_token"`, not `oauth` — there is no refresh token, and recording it as
+  OAuth would make the refresh path try to renew what it cannot.
+- **A key that could not be checked is `untested`, not refused.** The network may be the
+  problem, not the key. Kiro is the exception: its validation failure is terminal because
+  the upstream body names an endpoint and must not be reflected back.
+- **MiMo re-imports over its own row.** It is the one provider importable from a session
+  cookie with no key, so a second import of the same account updates rather than
+  duplicates — otherwise rotation spends the same account twice.
+- **Provider names are not slugs.** The not-found message read "log in to xiaomi-mimo first"
+  until `providerNameOf` mapped slugs to display names.
+
+Verification: 613 files / 6991 tests passing, both packages typecheck clean, `bun run build`
+exit 0. Smoke against the standalone build: all four `auto-import` routes answer 200 with
+real probe data, all four `import` routes answer 400 (not 500) on an empty body with the
+field they want named, `api-key` refuses both an empty key and a wrong prefix, `bulk-import`
+refuses an empty batch, and a synthetic Codex JWT imported successfully and wrote a real row
+(removed afterwards).
+
+### oauth dispatcher — `[provider]/[action]` ported
+
+The last three actions in the OAuth dispatcher now run as a use-case instead of three
+`if/else if` chains inside the route:
+
+- **`domain/oauth-dispatch.ts`** — one table answers *which provider runs which action*:
+  `SESSION_PROVIDERS` (codex, xai, trae, windsurf, zed, xiaomi-mimo), `IDE_PROVIDERS`
+  (trae, windsurf), `MANUAL_CODE_PROVIDER` (xai). `sessionSurvivesPoll()` carries the one
+  exception that matters: a finished MiMo session must outlive the poll because `/exchange`
+  has not run yet. Clearing it there would break every MiMo login — a regression the suite
+  now pins from both sides (finished → survives, failed → cleared).
+- **`application/oauth/dispatch-actions.ts`** — `pollSessionStatus`, `stopProviderProxy`,
+  `readIdeStatus`. A poll with no `state` is a 400, not an "unknown" answer: the two mean
+  different things to a waiting screen. `stop-proxy` succeeds when nothing is running,
+  because the dashboard calls it on cancel and unmount and an error there would surface
+  over a login that already worked.
+- **`apps/web/src/lib/oauthSessionHost.ts`** — a `SESSIONS` table with `read`/`clear`/
+  `stopProxy`/`detectIde` per provider replaces six `if (provider === ...)` branches.
+
+`DispatchAnswer` is a flat interface rather than a discriminated union on purpose: `apps/web`
+compiles with `strict: false`, where TypeScript refuses to narrow a union, so the union form
+does not compile in the route that consumes it.
+
+Tests: 21 new cases in `tests/unit/use-case-oauth-dispatch.test.ts`, plus the six MiMo
+lifecycle cases in `xiaomi-mimo-oauth-session.test.ts` rewired onto the use-case with every
+original assertion intact (they guard a real past regression, so they were re-pointed, not
+weakened). Smoke against the standalone build: `poll-status` → `{"status":"unknown"}`,
+`ide-status` on trae → 200 `{installed:false,path:null}`, on kiro → 400 naming trae/windsurf.
+
+Verification: 614 files / 7012 tests passing, both packages typecheck clean, `bun run build`
+exit 0.
+
+### oauth batch closed — 20 of 20 routes ported
+
+The five remaining OAuth routes now delegate. Each one gained a domain file that names the
+rule the route used to spell inline, and a use-case that owns the order of operations.
+
+- **`gitlab/pat`** — `domain/gitlab-pat.ts` + `application/oauth/gitlab-pat.ts`. Verify, then
+  write: the token is stored only after GitLab confirms it, so a connection row never exists
+  in a state that silently cannot authenticate. The three failure kinds are kept apart —
+  401 (refused token), 400 (base URL the SSRF guard blocks), 500 (anything else) — because
+  collapsing them tells the operator to try a new token when the host was the problem.
+- **`iflow/cookie`** — `domain/iflow-cookie.ts` + `application/oauth/iflow-cookie.ts`. Two
+  calls in a fixed order (read the key's name, then refresh it), only `BXAuth` is stored out
+  of the pasted jar, and the key is masked in the answer. The platform's own status passes
+  through, so an expired session reads as 403 rather than as our bug.
+- **`xiaomi-mimo/login/start`** — `domain/mimo-login.ts` + `application/oauth/mimo-login.ts`.
+  Region decides the cluster *and* whether an egress probe runs at all; CN never probes, so
+  the common login never waits on a socket scan. `readMimoRegion` is now also used by the
+  route that begins the session, so the region there and the region the use-case acts on
+  cannot drift apart.
+- **`xiaomi-mimo/login/status`** — `mimoLoginStatus()` replaces the inline condition chain.
+  `expired` outranks everything (a session the browser lost cannot be reported pending, or
+  the modal spins forever), and `done` requires an identity so nothing is persisted empty.
+- **`kiro/social-authorize` + `social-exchange`** — `domain/kiro-social.ts` +
+  `application/oauth/kiro-social.ts`. Authorize and exchange have separate dep interfaces on
+  purpose; the first draft had one interface, which forced each route to supply a function it
+  never called (`throw new Error("not used")`) — a trap for whoever wires the next provider.
+
+Fixed while porting: `tests/unit/gitlab-pat-ssrf-guard.test.ts` could not resolve its own
+route import (`@/...route.js` has no matching `route.ts` under the alias) and stubbed
+`global.fetch`, which the route no longer used for remote callers. The three SSRF cases are
+unchanged in intent and now spy on the fetch the route actually injects. Also: the route
+resolves `globalThis.fetch` at call time, so a test that replaces it is honoured.
+
+Verification: 617 files / 7077 tests passing, both packages typecheck clean, `bun run build`
+exit 0, and the standalone build answered — gitlab without token 400, gitlab loopback base
+400 `URL not allowed` (guard refuses before fetching), iflow without cookie 400, kiro
+social-authorize with a bad provider 400 and with `google` a real `kiro://` PKCE URL.
