@@ -1,87 +1,47 @@
 import { NextResponse } from "next/server"
-import {
-	cancelProxyImportJob,
-	createProxyImportJob,
-	getProxyImportJob,
-	listProxyImportJobs,
-	PROXY_IMPORT_POLL_MS,
-} from "@/lib/db/proxyImportJobs"
+import { failed } from "@/lib/routeErrors"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-// POST /api/proxy-pools/import-jobs - start a server-side bulk import.
-//
-// The pasted list is parsed and validated on the client, so by the time it
-// arrives here it is trusted data, not raw text. The job runs on the server
-// and survives the browser closing; the dashboard polls for progress.
-export async function POST(request) {
-	let body
+/** No-store: a progress poll must never be answered from a cache. */
+const NO_STORE = { "Cache-Control": "no-store" }
+
+/**
+ * POST /api/proxy-pools/import-jobs — start a server-side bulk import.
+ *
+ * 202, not 200: the job has been accepted, not finished. The dashboard polls for progress
+ * and survives the browser closing.
+ */
+export async function POST(request: Request) {
 	try {
-		body = await request.json()
-	} catch {
-		return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
-	}
-
-	const entries = Array.isArray(body?.entries) ? body.entries : []
-	const clean = []
-	const errors = []
-
-	for (let i = 0; i < entries.length; i += 1) {
-		const e = entries[i] || {}
-		const name = typeof e.name === "string" ? e.name.trim() : ""
-		const proxyUrl = typeof e.proxyUrl === "string" ? e.proxyUrl.trim() : ""
-		if (!name || !/^https?:\/\//i.test(proxyUrl)) {
-			errors.push(`Entry ${i + 1}: missing name or http(s) proxyUrl`)
-			continue
-		}
-		clean.push({ name, proxyUrl })
-	}
-
-	if (errors.length > 0) {
-		return NextResponse.json(
-			{ error: `Invalid entries:\n${errors.slice(0, 10).join("\n")}` },
-			{ status: 400 },
-		)
-	}
-	if (clean.length === 0) {
-		return NextResponse.json({ error: "Nothing to import" }, { status: 400 })
-	}
-
-	try {
-		const job = createProxyImportJob(clean)
-		return NextResponse.json(
-			{ jobId: job.jobId, status: job.status, total: job.total, pollMs: PROXY_IMPORT_POLL_MS },
-			{ status: 202 },
-		)
-	} catch (err) {
-		return NextResponse.json({ error: err?.message || "Could not start the import" }, { status: 400 })
+		const body = (await request.json().catch(() => null)) as Record<string, unknown> | null
+		if (!body) return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
+		return NextResponse.json(await getUseCases().proxyPools.importJobs.start(body), {
+			status: 202,
+		})
+	} catch (error) {
+		return failed(error, "Could not start the import", "Error starting proxy import")
 	}
 }
 
-// GET /api/proxy-pools/import-jobs - list recent jobs to reattach to, or one
-// job when ?id= is given.
-export async function GET(request) {
-	const { searchParams } = new URL(request.url)
-	const id = searchParams.get("id")
-	if (id) {
-		const job = getProxyImportJob(id)
-		if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 })
-		return NextResponse.json({ job }, { headers: { "Cache-Control": "no-store" } })
+/** GET /api/proxy-pools/import-jobs — one job by `?id=`, else the recent page. */
+export async function GET(request: Request) {
+	try {
+		const { searchParams } = new URL(request.url)
+		const result = await getUseCases().proxyPools.importJobs.read(searchParams)
+		return NextResponse.json(result, { headers: NO_STORE })
+	} catch (error) {
+		return failed(error, "Could not read import jobs", "Error reading proxy import jobs")
 	}
-
-	return NextResponse.json(
-		{ jobs: listProxyImportJobs().slice(0, 10) },
-		{ headers: { "Cache-Control": "no-store" } },
-	)
 }
 
-// DELETE /api/proxy-pools/import-jobs?id= - ask a running job to stop.
-export async function DELETE(request) {
-	const { searchParams } = new URL(request.url)
-	const id = searchParams.get("id")
-	if (!id) return NextResponse.json({ error: "Missing job id" }, { status: 400 })
-	if (!cancelProxyImportJob(id)) {
-		return NextResponse.json({ error: "Job not found" }, { status: 404 })
+/** DELETE /api/proxy-pools/import-jobs?id= — ask a running job to stop. */
+export async function DELETE(request: Request) {
+	try {
+		const { searchParams } = new URL(request.url)
+		return NextResponse.json(await getUseCases().proxyPools.importJobs.cancel(searchParams))
+	} catch (error) {
+		return failed(error, "Could not cancel the import", "Error cancelling proxy import")
 	}
-	return NextResponse.json({ ok: true })
 }
