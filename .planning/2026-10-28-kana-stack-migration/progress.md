@@ -2048,3 +2048,34 @@ live dev server, `?period=90d` still 400 with the rule's own message, CSV still
 Restored two files that were dirty but not mine: `apps/web/tsconfig.json`
 (reformatted by `next dev`, plus `.next-dev` include entries) and `apps/web/AGENTS.md`
 (written by Next 16 on first boot). Neither belongs in a commit about routes.
+
+## keys: the same defect as usage, but the constant was an identity
+
+`usage` hardcoded a scope; `dashboard-keys` hardcoded the caller as
+`{ role: "admin", permissions: null }`. The role is not a label the rules ignore —
+`mayCreateSubKey` returns `true` for anything that is not `apikey`, and
+`permissionsForSubKey` grants what was asked for on the same condition. So adopting
+the router as written would have let a key session without `manageApiKeys` mint keys
+and one with it grant permissions it may not grant.
+
+Two gaps in the same router, found by comparing it to the route line by line:
+
+1. The caller constant (above).
+2. `list` returned `dashboardKeys.list()` raw, skipping `visibleApiKeys` and the
+   `createdBy` blanking that stop one session reading another key's secret.
+
+Fixed both in `fix(keys)` before touching a route. `callerFromSession` is now the one
+translation; `presentedKeys` filters and labels. Verified at the port: password
+session sees 4 keys, `sk-alpha` sees its own + the child it made, no secrets in the
+payload.
+
+Incidental fix: `create` spread `{...created.key, secret}` and shadowed the view's own
+`key`. The LSP caught it — `key.name` did not compile.
+
+The measurement that made this legible was cheap: call the domain predicates with
+each caller shape and print the verdicts. That table is in the commit body, and it is
+what turned "this looks mechanical" into "this is a privilege escalation".
+
+Gates: typecheck 0, 7722 passed / 0 failed (8 new), and a full CRUD cycle against a
+live dev server — 201, 200, 200, 200, 404 — plus 400/409 refusals carrying their own
+wording. Test keys created during the probe were deleted; the table is back to 5.

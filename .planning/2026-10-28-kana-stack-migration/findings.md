@@ -222,3 +222,64 @@ dashboard *and* for any future HTTP caller.
 Until then the usage routes stay where they are. This is recorded rather than
 worked around: a route that answers with correct scoping is better than a procedure
 that answers faster with someone else's data.
+
+## The dashboard-keys procedures are worse than the usage ones
+
+`usage` had a hardcoded scope that widened a report. `dashboard-keys` has a
+hardcoded *identity* that clears two gates and loses a visibility filter. Same
+shape of mistake, larger blast radius:
+
+```ts
+// apps/api/src/presentation/orpc/routers/dashboard-keys.ts:60
+function passwordSessionCaller(): ApiKeyCaller {
+	return { role: "admin", apiKey: null, keyName: null, keyId: null, scope: {}, permissions: null }
+}
+```
+
+The docstring says why: "This transport authenticates with better-auth, so every
+caller here is a password session... The caps matter on the REST route, where a
+*key* can be the caller". Again true of the transport that existed, and false once
+the dashboard calls this router with an API-key session — which is what the
+transport work does.
+
+Measured, not assumed:
+
+| caller passed | `mayCreateSubKey` | `permissionsForSubKey(… manageApiKeys: true)` |
+| --- | --- | --- |
+| hardcoded `"admin"` | `true` | `{manageApiKeys: true}` — request granted |
+| session `"apikey"`, no `manageApiKeys` | `false` | — |
+| session `"apikey"` with `manageApiKeys` | `true` | `{viewUsage:false, manageApiKeys:false}` — clamped |
+
+So adopting the router as written would let an API-key session that lacks
+`manageApiKeys` mint keys (privilege escalation), and would let one that has it
+grant permissions it is not allowed to grant. Both are exactly what
+`domain/sub-key-scope.ts` exists to prevent.
+
+There is a second, quieter gap: the `list` procedure returns
+`dashboardKeys.list()` raw. The REST route passes it through `visibleApiKeys` and
+rewrites `createdBy` to `""` before replying, because a raw creator key is a
+secret. Adopting `list` as written would hand a creator session other keys'
+secrets — the route's own comment says those "never leave this API".
+
+Conclusion: `keys` is not a candidate for the transport move. Unlike `usage`,
+where moving one constant into the context type was enough, here the fix is to
+carry the whole caller identity (role, apiKey, keyName, keyId, scope,
+permissions) through `RouterContext` and to move `visibleApiKeys`/`creatorNameFor`
+into a shared place. That is a real piece of work with a security surface, not a
+delegation. It should not be bolted onto this batch.
+
+## A note for the next area: check the constant, do not trust the docstring
+
+Two routers in a row carried a hardcoded value with a docstring explaining why it was
+safe: "this transport authenticates with better-auth, so every caller here is a
+password session". Both were safe when written and both became unsafe the moment the
+dashboard became a caller — which is the whole point of the transport work.
+
+The check that finds this in one grep is: does any procedure pass a literal where a
+route passes a session-derived value? `scope = {...} as const` and
+`passwordSessionCaller()` are the same defect in two spellings.
+
+The second-order lesson is that the docstring is evidence about the past, not a
+guarantee about now. Both comments were accurate and both were wrong. When a
+procedure says "the X matters on the REST route", read that as "this procedure does
+not implement X", and then ask what happens when a caller arrives who needs it.
