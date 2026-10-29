@@ -53,6 +53,13 @@ export interface ToolConfigPort {
 	 * a one-field form into a 400 the operator cannot get past.
 	 */
 	readonly required?: readonly (keyof ToolSettingsInput)[]
+	/**
+	 * The config a reset should leave behind, for a tool with no notion of "unconfigured".
+	 *
+	 * Most tools are reset by removing our entry. Some ship a working default that has to be
+	 * restored instead, because an empty file is a tool that does not start.
+	 */
+	readonly resetTo?: () => Record<string, unknown>
 	/** Clears the active-model pointer, leaving the model list intact. */
 	readonly clearActive?: (config: Record<string, unknown>) => Record<string, unknown>
 	/** Removes one model from the list, refusing when it is not there. */
@@ -185,13 +192,23 @@ export async function writeToolSettings(
  */
 export async function resetToolSettings(deps: ToolSettingsDeps): Promise<ToolSettingsAnswer> {
 	try {
-		const config = await deps.config.read()
-		if (!config) {
-			return { ok: true, status: 200, body: { success: true, message: NOTHING_TO_RESET } }
-		}
+		// A tool with a shipped default is reset *to* it even when no file exists yet: writing
+		// nothing would leave a tool that does not start, which is not a reset.
+		if (deps.config.resetTo) {
+			await deps.config.write(
+				settingsFileText(deps.config.resetTo(), deps.config.format ?? "json", deps.config.serialise),
+			)
+		} else {
+			const config = await deps.config.read()
+			if (!config) {
+				return { ok: true, status: 200, body: { success: true, message: NOTHING_TO_RESET } }
+			}
 
-		removeInstallEntry(config, deps.config.installKeys)
-		await deps.config.write(settingsFileText(config))
+			removeInstallEntry(config, deps.config.installKeys)
+			await deps.config.write(
+				settingsFileText(config, deps.config.format ?? "json", deps.config.serialise),
+			)
+		}
 
 		for (const sideRemoval of deps.sideRemovals ?? []) {
 			try {

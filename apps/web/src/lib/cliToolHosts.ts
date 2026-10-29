@@ -1474,3 +1474,108 @@ export async function removeOmpSettings(): Promise<void> {
 	const { removeOmpProvider } = await import("9router-api/domain/omp-models-yml")
 	await fs.writeFile(OMP_YML_PATH(), removeOmpProvider(raw), "utf-8")
 }
+
+/**
+ * DeepSeek TUI's `~/.deepseek/config.toml`, which it owns wholesale.
+ *
+ * Unlike the other tools here, nothing is merged: the file is a complete config, so a save
+ * replaces it and a reset writes the tool's own default (`provider = "deepseek"`) rather than
+ * deleting it — an empty file is a tool that will not start.
+ */
+const DEEPSEEK_DIR = () => path.join(os.homedir(), ".deepseek")
+const DEEPSEEK_CONFIG_PATH = () => path.join(DEEPSEEK_DIR(), "config.toml")
+
+const DEEPSEEK_DEFAULT_TOML = 'provider = "deepseek"\n'
+
+export const isDeepSeekTuiInstalled = async (): Promise<boolean> => {
+	try {
+		const isWindows = os.platform() === "win32"
+		await execAsync(isWindows ? "where deepseek" : "which deepseek", { windowsHide: true })
+		return true
+	} catch {
+		try {
+			await fs.access(DEEPSEEK_CONFIG_PATH())
+			return true
+		} catch {
+			return false
+		}
+	}
+}
+
+/** Renders the TOML DeepSeek TUI reads, in the shape it documents. */
+function deepseekConfigToml(baseUrl: string, apiKey: string, model: string): string {
+	const normalised = baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`
+	return [
+		'provider = "openai"',
+		"",
+		"[providers.openai]",
+		`base_url = "${normalised}"`,
+		`api_key = "${apiKey}"`,
+		`model = "${model}"`,
+		"",
+	].join("\n")
+}
+
+export const deepseekTuiSettingsConfig: ToolConfigPort = {
+	path: DEEPSEEK_CONFIG_PATH(),
+	format: "toml",
+	read: async () => {
+		const raw = await readText(DEEPSEEK_CONFIG_PATH())
+		if (raw === null) return null
+		return parseTomlDocument(raw)
+	},
+	readForWrite: async () => {
+		const raw = await readText(DEEPSEEK_CONFIG_PATH())
+		return raw === null ? {} : { raw }
+	},
+	write: async (text) => {
+		await fs.mkdir(DEEPSEEK_DIR(), { recursive: true })
+		await fs.writeFile(DEEPSEEK_CONFIG_PATH(), text, "utf-8")
+	},
+	baseUrlSuffix: "with-v1",
+	required: ["baseUrl", "model"],
+	resolveApiKey: (requested) => resolveCliApiKey(requested || null),
+	installKeys: ["9router"],
+	storedBaseUrl: () => null,
+	// The reset value goes through the TOML serialiser like any other write, so it is stashed in
+	// the same `toml` key `apply` uses rather than handed over as a plain object.
+	resetTo: () => ({ toml: DEEPSEEK_DEFAULT_TOML }),
+	/**
+	 * The file is replaced, not merged, so `apply` stashes the rendered document and the
+	 * serialiser only has to hand it back. `serialise` sees the config alone, never the form.
+	 */
+	serialise: (config) => String((config as { toml?: string }).toml ?? ""),
+	apply: (_config, input) => ({
+		toml: deepseekConfigToml(input.baseUrl, input.apiKey, input.model ?? ""),
+	}),
+}
+
+/**
+ * Parses the flat TOML DeepSeek TUI writes, keeping section names as dotted keys.
+ *
+ * The screen renders `settings` verbatim, so the shape matters: `providers.openai` is reported as
+ * its own key rather than nested, exactly as the file reads.
+ */
+function parseTomlDocument(toml: string): Record<string, unknown> {
+	const result: Record<string, unknown> = {}
+	let current: Record<string, unknown> = result
+
+	for (const line of toml.split(/\r?\n/)) {
+		const trimmed = line.trim()
+		if (!trimmed || trimmed.startsWith("#")) continue
+
+		const section = trimmed.match(/^\[([^\]]+)\]$/)
+		if (section?.[1]) {
+			const name = section[1]
+			const existing = result[name]
+			current = existing && typeof existing === "object" ? (existing as Record<string, unknown>) : {}
+			result[name] = current
+			continue
+		}
+
+		const pair = trimmed.match(/^(\w+)\s*=\s*"([^"]*)"$/) ?? trimmed.match(/^(\w+)\s*=\s*(.+)$/)
+		if (pair?.[1] && pair[2] !== undefined) current[pair[1]] = pair[2].trim()
+	}
+
+	return result
+}
