@@ -44,6 +44,38 @@ vi.mock("@/lib/network/proxyTest", () => ({
 }))
 
 const originalFetch = global.fetch
+
+/**
+ * The validate route's graph, over the real host functions.
+ *
+ * The route delegates to `validateCredential` now, so building the whole graph
+ * would open a second SQLite handle — which `createDb` refuses under Vitest. Only
+ * the connection store is stubbed; the probe path (which is what these tests
+ * assert) is the real one, so the Nous detour still runs for real.
+ */
+const { makeValidateCredential } = await import(
+	"../../apps/api/src/application/providers/validate-credential.ts"
+)
+const host = await import("@/lib/providerConnectionHost")
+const validateCredential = makeValidateCredential({
+	send: host.sendProbe,
+	findNode: async () => null,
+	defaultModel: host.defaultModelOf,
+	providerConfig: host.providerEntry,
+	aiProvider: host.aiProviderEntry,
+	isOpenAICompatible: () => false,
+	isAnthropicCompatible: () => false,
+	isCustomEmbedding: () => false,
+	probeAws: host.probeAwsCredentials,
+	probeQoder: host.probeQoderCredentials,
+	probeNous: host.probeNousKey,
+	ollamaLocalHost: host.ollamaLocalHost,
+	tokenplanBaseUrl: host.tokenplanBaseUrl,
+	commandCodeBody: host.commandCodeBody,
+	randomId: () => "session-id",
+})
+vi.doMock("@/lib/useCases", () => ({ getUseCases: () => ({ validateCredential }) }))
+
 const { POST: validateProvider } = await import(
 	"../../apps/web/src/app/api/providers/validate/route.js"
 )
