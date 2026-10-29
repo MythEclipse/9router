@@ -1,69 +1,81 @@
-import {
-	cancelDashboardJob,
-	createDashboardJob,
-	DASHBOARD_JOB_POLL_MS,
-	getDashboardJob,
-	listDashboardJobs,
-} from "@9router/db/dashboardJobs"
 import { NextResponse } from "next/server"
-// Importing this module registers the operation handlers.
+// Importing this module registers the operation handlers, before any request can
+// ask about a kind.
 import "@/lib/db/dashboardJobHandlers"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
 // POST /api/dashboard-jobs - start a server-side dashboard operation.
 //
 // The operation runs on the server and survives the browser closing; the
-// dashboard polls for progress and can leave. Same shape as
-// /api/proxy-pools/import-jobs, generalised past the one hardcoded operation.
-export async function POST(request) {
-	let body
+// dashboard polls for progress and can leave.
+export async function POST(request: Request) {
+	let body: unknown
 	try {
 		body = await request.json()
 	} catch {
 		return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
 	}
 
-	const kind = typeof body?.kind === "string" ? body.kind : ""
-	if (!kind) {
-		return NextResponse.json({ error: "kind is required" }, { status: 400 })
-	}
-
 	try {
-		const title = typeof body?.title === "string" ? body.title : ""
-		const { jobId } = createDashboardJob(kind, body?.payload || {}, title)
-		return NextResponse.json({ jobId, pollMs: DASHBOARD_JOB_POLL_MS }, { status: 202 })
+		const { jobId, pollMs } = await getUseCases().dashboardJobs.start(body)
+		return NextResponse.json({ jobId, pollMs }, { status: 202 })
 	} catch (error) {
-		return NextResponse.json(
-			{ error: error?.message || "Could not start the operation" },
-			{ status: 400 },
-		)
+		// An unknown kind or a malformed payload is the caller's fault; anything
+		// else is ours, and reporting it as 400 is what the old catch-all did.
+		if (isAppError(error, "VALIDATION")) {
+			return NextResponse.json({ error: error.message }, { status: 400 })
+		}
+		console.error("[API] Failed to start the operation:", error)
+		return NextResponse.json({ error: "Could not start the operation" }, { status: 500 })
 	}
 }
 
 // GET /api/dashboard-jobs?id=... - one job's progress.
 // GET /api/dashboard-jobs (no id) - every live job, for the notification bell.
-export async function GET(request) {
-	const { searchParams } = new URL(request.url)
-	const id = searchParams.get("id")
+export async function GET(request: Request) {
+	const id = new URL(request.url).searchParams.get("id")
 
-	if (id) {
-		const job = getDashboardJob(id)
-		if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 })
-		return NextResponse.json({ job })
+	try {
+		const jobs = getUseCases().dashboardJobs
+		if (id) {
+			const { job } = await jobs.read(id)
+			return NextResponse.json({ job })
+		}
+		const live = await jobs.live()
+		return NextResponse.json({ jobs: live.jobs, pollMs: live.pollMs })
+	} catch (error) {
+		if (isAppError(error, "NOT_FOUND")) {
+			return NextResponse.json({ error: error.message }, { status: 404 })
+		}
+		console.error("[API] Failed to read the operation:", error)
+		return NextResponse.json({ error: "Could not read the operation" }, { status: 500 })
 	}
-
-	const jobs = listDashboardJobs().filter((j) => j.status === "queued" || j.status === "running")
-	return NextResponse.json({ jobs, pollMs: DASHBOARD_JOB_POLL_MS })
 }
 
 // DELETE /api/dashboard-jobs?id=... - stop a running job.
-export async function DELETE(request) {
-	const { searchParams } = new URL(request.url)
-	const id = searchParams.get("id")
+export async function DELETE(request: Request) {
+	const id = new URL(request.url).searchParams.get("id")
 	if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 })
 
-	const ok = cancelDashboardJob(id)
-	if (!ok) return NextResponse.json({ error: "Job not found" }, { status: 404 })
-	return NextResponse.json({ ok: true })
+	try {
+		await getUseCases().dashboardJobs.cancel(id)
+		return NextResponse.json({ ok: true })
+	} catch (error) {
+		if (isAppError(error, "NOT_FOUND")) {
+			return NextResponse.json({ error: error.message }, { status: 404 })
+		}
+		console.error("[API] Failed to cancel the operation:", error)
+		return NextResponse.json({ error: "Could not cancel the operation" }, { status: 500 })
+	}
+}
+
+function isAppError(error: unknown, code: string): error is { message: string } {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		"code" in error &&
+		(error as { code: unknown }).code === code
+	)
 }

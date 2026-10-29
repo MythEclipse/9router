@@ -25,10 +25,14 @@ import {
 } from "./combos/manage-combos.ts"
 import type { Dependencies } from "./dependencies.ts"
 import { makeClearErrorLogs, makeListErrorLogs } from "./error-logs/read-error-logs.ts"
+import { makeReadPlugins, makeWritePlugins } from "./plugins/manage-plugins.ts"
 import { makeGetPricing, makeResetPricing, makeUpdatePricing } from "./pricing/manage-pricing.ts"
 import { assertSupportedLocale } from "./settings/locale.ts"
 import { readLoginGate } from "./settings/login-gate.ts"
 import { makeGetTheme, makeSetTheme } from "./settings/theme.ts"
+import { makeCacheStats } from "./system/cache-stats.ts"
+import { makeDashboardJobs } from "./system/dashboard-jobs.ts"
+import { makeShutdownFromDashboard, makeShutdownFromHook } from "./system/shutdown.ts"
 import { makeUsageReports } from "./usage/report-usage.ts"
 
 export interface UseCases {
@@ -64,6 +68,16 @@ export interface UseCases {
 	readonly getPricing: ReturnType<typeof makeGetPricing>
 	readonly updatePricing: ReturnType<typeof makeUpdatePricing>
 	readonly resetPricing: ReturnType<typeof makeResetPricing>
+	/** The custom-plugin settings, as one shape for both read and write. */
+	readonly readPlugins: ReturnType<typeof makeReadPlugins>
+	readonly writePlugins: ReturnType<typeof makeWritePlugins>
+	/** Response-cache counters; `reset` answers with the zeroed snapshot. */
+	readonly cacheStats: ReturnType<typeof makeCacheStats>
+	/** Server-side dashboard operations: start, poll, live, cancel. */
+	readonly dashboardJobs: ReturnType<typeof makeDashboardJobs>
+	/** Two identities, one shutdown sequence. */
+	readonly shutdownFromDashboard: ReturnType<typeof makeShutdownFromDashboard>
+	readonly shutdownFromHook: ReturnType<typeof makeShutdownFromHook>
 }
 
 /** The combo use-cases share one dependency slice, so it is built once. */
@@ -120,5 +134,11 @@ export function buildUseCases(deps: Dependencies): UseCases {
 		getPricing: makeGetPricing(deps.pricing),
 		updatePricing: makeUpdatePricing(deps.pricing),
 		resetPricing: makeResetPricing(deps.pricing),
+		readPlugins: makeReadPlugins(deps.plugins, deps.pluginCatalogue),
+		writePlugins: makeWritePlugins(deps.plugins, deps.pluginCatalogue, deps.pluginCache),
+		cacheStats: makeCacheStats(deps.semanticCache),
+		dashboardJobs: makeDashboardJobs(deps.dashboardJobRegistry, deps.dashboardJobEnv),
+		shutdownFromDashboard: makeShutdownFromDashboard(deps.shutdown),
+		shutdownFromHook: makeShutdownFromHook(deps.shutdown, deps.shutdownEnv),
 	}
 }

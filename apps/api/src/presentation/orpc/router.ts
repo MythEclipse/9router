@@ -18,6 +18,7 @@ import { errorLogsRouter } from "./routers/error-logs.ts"
 import { pricingRouter } from "./routers/pricing.ts"
 import { settingsRouter } from "./routers/settings.ts"
 import { systemRouter } from "./routers/system.ts"
+import { cacheStatsRouter, dashboardJobsRouter, pluginsRouter } from "./routers/system-runtime.ts"
 import { themeRouter } from "./routers/theme.ts"
 import { usageRouter } from "./routers/usage.ts"
 
@@ -31,6 +32,9 @@ export const appRouter = base.router({
 	theme: themeRouter,
 	pricing: pricingRouter,
 	usage: usageRouter,
+	plugins: pluginsRouter,
+	cacheStats: cacheStatsRouter,
+	dashboardJobs: dashboardJobsRouter,
 })
 
 export type AppRouter = typeof appRouter

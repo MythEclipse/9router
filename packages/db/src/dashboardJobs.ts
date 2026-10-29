@@ -94,6 +94,17 @@ export function registerDashboardJobHandler(kind: string, handler: DashboardJobH
 }
 
 /**
+ * Whether a kind has a handler.
+ *
+ * Exported so a caller can refuse an unknown kind *before* starting a job and
+ * report it as a bad request, instead of catching the throw from
+ * `createDashboardJob` where a storage failure and a typo look identical.
+ */
+export function hasDashboardJobHandler(kind: string): boolean {
+	return handlers.has(kind)
+}
+
+/**
  * One job of one kind runs at a time. Test all hammers the proxy tester and the
  * relay deploys share the same provider rate limits, so running two of either
  * side by side produced confusing partial results.

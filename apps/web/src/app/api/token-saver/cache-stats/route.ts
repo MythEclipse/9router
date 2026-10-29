@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getSemanticCacheStats, resetSemanticCacheStats } from "open-sse/rtk/semanticCache"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
@@ -8,20 +8,22 @@ export const dynamic = "force-dynamic"
  *
  * The cache toggle is otherwise unfalsifiable from the UI: there is no way to
  * tell a cache that never hits from one that is saving every repeat prompt.
+ * Reading never resets; only POST does.
  */
 export async function GET() {
 	try {
-		return NextResponse.json(getSemanticCacheStats())
+		return NextResponse.json(await getUseCases().cacheStats.read())
 	} catch (error) {
-		return NextResponse.json({ error: error.message }, { status: 500 })
+		console.error("[API] Failed to read cache stats:", error)
+		return NextResponse.json({ error: "Failed to read cache stats" }, { status: 500 })
 	}
 }
 
 export async function POST() {
 	try {
-		resetSemanticCacheStats()
-		return NextResponse.json(getSemanticCacheStats())
+		return NextResponse.json(await getUseCases().cacheStats.reset())
 	} catch (error) {
-		return NextResponse.json({ error: error.message }, { status: 500 })
+		console.error("[API] Failed to reset cache stats:", error)
+		return NextResponse.json({ error: "Failed to reset cache stats" }, { status: 500 })
 	}
 }

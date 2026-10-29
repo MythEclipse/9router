@@ -10,7 +10,9 @@
  */
 
 import { randomUUID } from "node:crypto"
+import { CUSTOM_PLUGIN_KEYS } from "@9router/db/shared/pluginKeys"
 import type { ComboPresetPort } from "../application/dependencies.ts"
+import type { PluginCache } from "../application/plugins/manage-plugins.ts"
 import { buildUseCases, type UseCases } from "../application/use-cases.ts"
 import { createChangelogSourceFromDisk } from "./changelog-source.ts"
 import { createComboRotationPort } from "./combo-rotation-port.ts"
@@ -36,8 +38,18 @@ import { createComboStrategyRepository } from "./db/repositories/combo-strategy-
 import { createErrorLogRepository } from "./db/repositories/error-log-repository.ts"
 import { createPricingRepository } from "./db/repositories/pricing-repository.ts"
 import { createUsageReportPort } from "./db/repositories/usage-report-repository.ts"
+import {
+	createDashboardJobEnvironment,
+	createDashboardJobRegistry,
+	createSemanticCachePort,
+	createShutdownEnvironment,
+	createShutdownPorts,
+	DASHBOARD_JOB_KINDS,
+} from "./runtime-ports.ts"
 import { createSettingsPort } from "./settings-port.ts"
 import { createUnavailablePresetPort } from "./unavailable-preset-port.ts"
+
+export { installSemanticCacheModule } from "./runtime-ports.ts"
 
 export interface UseCaseOptions {
 	/** Overrides `DATA_DIR`; the gateway and the API must agree on this. */
@@ -60,6 +72,21 @@ export interface UseCaseOptions {
 	 * secrets gate, not the dashboard's editor.
 	 */
 	readonly apiKeyStore?: ApiKeyStore
+	/**
+	 * Clears the host's in-memory plugin configuration. Omitted means there is
+	 * no cache in this process, which is true for the API server.
+	 */
+	readonly pluginCache?: PluginCache
+	/**
+	 * Stops the background processes this app manages. Omitted means "this host
+	 * manages none", which is the bare API server.
+	 */
+	readonly stopManagedProcesses?: () => Promise<void>
+	/**
+	 * Overrides how the shutdown closes the database, for a host whose handle is
+	 * not the one this factory opened. Omitted means "close the one I opened".
+	 */
+	readonly closeDatabase?: () => Promise<void>
 }
 
 export interface UseCasesHandle {
@@ -98,11 +125,37 @@ export function createUseCases(
 			gatewayUrl: options.gatewayUrl,
 			onError: options.onRotationError,
 		}),
+		plugins: createSettingsPort(),
+		pluginCatalogue: { keys: CUSTOM_PLUGIN_KEYS },
+		pluginCache: options.pluginCache ?? noPluginCache(),
+		semanticCache: createSemanticCachePort(),
+		dashboardJobRegistry: createDashboardJobRegistry(),
+		dashboardJobEnv: createDashboardJobEnvironment(DASHBOARD_JOB_KINDS),
+		shutdown: createShutdownPorts({
+			/*
+			 * The host's own close wins when it has one: the dashboard holds the
+			 * shared driver (`@9router/db/driver`), whose handle is not the one this
+			 * factory opened, and closing only ours would leave the shared one open.
+			 */
+			closeDatabase: options.closeDatabase ?? (async () => sqlite.close()),
+			stopManagedProcesses: async () => options.stopManagedProcesses?.(),
+		}),
+		shutdownEnv: createShutdownEnvironment(),
 		now: () => new Date(),
 		randomId: () => randomUUID(),
 	})
 
 	return { useCases, close: () => sqlite.close() }
+}
+
+/**
+ * The plugin runtime caches its configuration in-process; a host that owns that
+ * cache passes a clearer. Without one the write still lands, and the next request
+ * that reads the settings row sees it — only a long-lived in-memory copy would
+ * stay stale.
+ */
+function noPluginCache(): PluginCache {
+	return { clear() {} }
 }
 
 /**

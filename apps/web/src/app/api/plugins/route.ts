@@ -1,51 +1,49 @@
-import { CUSTOM_PLUGIN_KEYS } from "@9router/db/shared/pluginKeys"
 import { NextResponse } from "next/server"
-import { getSettings, updateSettings } from "@/lib/localDb"
-import { clearPluginCache } from "@/lib/plugins/customPluginsRuntime"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
+/**
+ * The rules live in `domain/custom-plugins.ts` and the use-case; this file only
+ * translates transport. The shapes are unchanged: `{ customPlugins }` for both
+ * verbs, `Cache-Control: no-store` on the read because the answer is live state.
+ */
 export async function GET() {
 	try {
-		const settings = await getSettings()
-		const stored = settings.customPlugins || {}
-		const customPlugins = {}
-		for (const key of CUSTOM_PLUGIN_KEYS) {
-			const entry = stored[key]
-			customPlugins[key] = {
-				enabled: Boolean(entry?.enabled),
-				models: Array.isArray(entry?.models) ? entry.models.filter(Boolean) : [],
-			}
-		}
+		const { customPlugins } = await getUseCases().readPlugins()
 		return NextResponse.json({ customPlugins }, { headers: { "Cache-Control": "no-store" } })
 	} catch (error) {
-		console.error("Error getting custom plugins:", error)
-		return NextResponse.json({ error: error.message }, { status: 500 })
+		console.error("[API] Failed to read custom plugins:", error)
+		return NextResponse.json({ error: "Failed to read custom plugins" }, { status: 500 })
 	}
 }
 
-export async function PUT(request) {
+export async function PUT(request: Request) {
+	let body: unknown
 	try {
-		const body = await request.json()
-		const { customPlugins } = body
-		if (!customPlugins || typeof customPlugins !== "object") {
-			return NextResponse.json({ error: "Invalid customPlugins payload" }, { status: 400 })
-		}
-
-		const merged = {}
-		for (const key of CUSTOM_PLUGIN_KEYS) {
-			const entry = customPlugins[key]
-			merged[key] = {
-				enabled: Boolean(entry?.enabled),
-				models: Array.isArray(entry?.models) ? entry.models.filter(Boolean) : [],
-			}
-		}
-
-		await updateSettings({ customPlugins: merged })
-		clearPluginCache()
-		return NextResponse.json({ success: true, customPlugins: merged })
-	} catch (error) {
-		console.error("Error updating custom plugins:", error)
-		return NextResponse.json({ error: error.message }, { status: 500 })
+		body = await request.json()
+	} catch {
+		return NextResponse.json({ error: "Invalid customPlugins payload" }, { status: 400 })
 	}
+
+	try {
+		const result = await getUseCases().writePlugins(body)
+		return NextResponse.json({ success: true, customPlugins: result.customPlugins })
+	} catch (error) {
+		// A refused payload is the caller's fault, and the rule already worded why.
+		if (isAppError(error, "VALIDATION")) {
+			return NextResponse.json({ error: error.message }, { status: 400 })
+		}
+		console.error("[API] Failed to update custom plugins:", error)
+		return NextResponse.json({ error: "Failed to update custom plugins" }, { status: 500 })
+	}
+}
+
+function isAppError(error: unknown, code: string): error is { message: string } {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		"code" in error &&
+		(error as { code: unknown }).code === code
+	)
 }

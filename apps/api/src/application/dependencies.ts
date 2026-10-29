@@ -11,7 +11,11 @@ import type { BulkEditPort } from "./api-keys/bulk-edit-api-keys.ts"
 import type { ApiKeyManagementPort } from "./api-keys/manage-api-keys-dashboard.ts"
 import type { SingleKeyAuditPort, SingleKeyPort } from "./api-keys/manage-single-key.ts"
 import type { ChangelogSource } from "./changelog.ts"
+import type { PluginCache, PluginCatalogue, PluginSettingsPort } from "./plugins/manage-plugins.ts"
 import type { SettingsPort } from "./settings/login-gate.ts"
+import type { SemanticCachePort } from "./system/cache-stats.ts"
+import type { DashboardJobEnvironment, DashboardJobRegistry } from "./system/dashboard-jobs.ts"
+import type { ShutdownEnvironment, ShutdownPorts } from "./system/shutdown.ts"
 import type { UsageReportPort } from "./usage/report-usage.ts"
 
 export interface IActivityRepository {
@@ -162,6 +166,14 @@ export interface Dependencies {
 	readonly comboRotation: ComboRotationPort
 	readonly comboPresets: ComboPresetPort
 	readonly comboStrategies: ComboStrategyPort
+	readonly plugins: PluginSettingsPort
+	readonly pluginCatalogue: PluginCatalogue
+	readonly pluginCache: PluginCache
+	readonly semanticCache: SemanticCachePort
+	readonly dashboardJobRegistry: DashboardJobRegistry
+	readonly dashboardJobEnv: DashboardJobEnvironment
+	readonly shutdown: ShutdownPorts
+	readonly shutdownEnv: ShutdownEnvironment
 	readonly now: () => Date
 	/** Injected so tests can pin key material instead of hoping. */
 	readonly randomId: () => string
