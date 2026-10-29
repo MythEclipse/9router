@@ -1,78 +1,59 @@
 import { verifyDashboardAuthToken } from "@9router/auth/dashboardSession"
 import { formatX509Certificate } from "@9router/auth/saml"
+import {
+	isProbeRefusal,
+	probeAccess,
+	samlEndpoints,
+	samlProbeInput,
+} from "9router-api/domain/sso-probe"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 import { getSettings } from "@/lib/localDb"
 
 export const dynamic = "force-dynamic"
 
-async function canAccessTestRoute() {
+/** Open when the dashboard is public by choice; otherwise a session is required. */
+async function canAccessTestRoute(): Promise<{ requireLogin: boolean; hasValidSession: boolean }> {
 	const settings = await getSettings()
-	if (settings.requireLogin === false) return true
-
+	const requireLogin = settings.requireLogin !== false
+	if (!requireLogin) return { requireLogin, hasValidSession: false }
 	const cookieStore = await cookies()
-	const token = cookieStore.get("auth_token")?.value
-	return await verifyDashboardAuthToken(token)
+	return {
+		requireLogin,
+		hasValidSession: await verifyDashboardAuthToken(cookieStore.get("auth_token")?.value),
+	}
 }
 
+/**
+ * POST /api/auth/saml/test - verify a SAML configuration without saving it.
+ *
+ * Reports only; the operator saves separately. Every ordering rule lives in
+ * `domain/sso-probe.ts`: which gate applies, blank-vs-cleared fields, and why the entry point is
+ * checked before the certificate.
+ */
 export async function POST(request) {
 	try {
-		if (!(await canAccessTestRoute())) {
-			return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+		const access = await canAccessTestRoute()
+		const denial = probeAccess(access.requireLogin, access.hasValidSession)
+		if (denial !== null) {
+			return NextResponse.json({ error: denial.message }, { status: denial.status })
 		}
 
 		const body = await request.json().catch(() => ({}))
-		const settings = await getSettings()
-
-		const samlEntryPoint = String(body.samlEntryPoint || settings.samlEntryPoint || "").trim()
-		const samlIssuer = String(body.samlIssuer || settings.samlIssuer || "urn:9router:sp").trim()
-		const samlCert = String(
-			Object.hasOwn(body, "samlCert") ? body.samlCert : settings.samlCert || "",
-		).trim()
-
-		if (!samlEntryPoint) {
-			return NextResponse.json(
-				{ error: "Single Sign-On Service URL (samlEntryPoint) is required" },
-				{ status: 400 },
-			)
+		const input = samlProbeInput(body, await getSettings())
+		if (isProbeRefusal(input)) {
+			return NextResponse.json({ error: input.refusal.message }, { status: input.refusal.status })
 		}
 
-		try {
-			new URL(samlEntryPoint)
-		} catch {
-			return NextResponse.json(
-				{ error: "Single Sign-On Service URL must be a valid URL" },
-				{ status: 400 },
-			)
-		}
-
-		if (!samlIssuer) {
-			return NextResponse.json(
-				{ error: "SP Entity ID / Issuer (samlIssuer) is required" },
-				{ status: 400 },
-			)
-		}
-
-		if (!samlCert) {
-			return NextResponse.json(
-				{ error: "IdP X.509 Certificate (samlCert) is required" },
-				{ status: 400 },
-			)
-		}
-
-		const formattedCert = formatX509Certificate(samlCert)
-		if (!formattedCert) {
+		if (!formatX509Certificate(input.body.certificate)) {
 			return NextResponse.json({ error: "Invalid IdP X.509 Certificate format" }, { status: 400 })
 		}
 
-		const origin = new URL(request.url).origin
-		const acsUrl = `${origin}/api/auth/saml/acs`
-		const metadataUrl = `${origin}/api/auth/saml/metadata`
-
+		const { acsUrl, metadataUrl } = samlEndpoints(new URL(request.url).origin)
 		return NextResponse.json({
 			ok: true,
-			samlEntryPoint,
-			samlIssuer,
+			samlEntryPoint: input.body.entryPoint,
+			samlIssuer: input.body.issuer,
 			certValid: true,
 			acsUrl,
 			metadataUrl,

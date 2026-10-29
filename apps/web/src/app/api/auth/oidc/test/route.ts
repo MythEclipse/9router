@@ -1,76 +1,69 @@
 import { verifyDashboardAuthToken } from "@9router/auth/dashboardSession"
 import { fetchOidcDiscovery, getPublicOrigin, probeOidcClientSecret } from "@9router/auth/oidc"
+import {
+	isProbeRefusal,
+	oidcProbeInput,
+	oidcProbeOutcome,
+	oidcProbeSucceeded,
+	oidcRedirectUri,
+	oidcSecretRejection,
+	probeAccess,
+} from "9router-api/domain/sso-probe"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 import { getSettings } from "@/lib/localDb"
 
 export const dynamic = "force-dynamic"
 
-async function canAccessTestRoute() {
+/** Open when the dashboard is public by choice; otherwise a session is required. */
+async function canAccessTestRoute(): Promise<{ requireLogin: boolean; hasValidSession: boolean }> {
 	const settings = await getSettings()
-	if (settings.requireLogin === false) return true
-
+	const requireLogin = settings.requireLogin !== false
+	if (!requireLogin) return { requireLogin, hasValidSession: false }
 	const cookieStore = await cookies()
-	const token = cookieStore.get("auth_token")?.value
-	return await verifyDashboardAuthToken(token)
+	return {
+		requireLogin,
+		hasValidSession: await verifyDashboardAuthToken(cookieStore.get("auth_token")?.value),
+	}
 }
 
+/**
+ * POST /api/auth/oidc/test - verify an OIDC configuration without saving it.
+ *
+ * A rejected client secret answers 200 with `ok: false`, because the probe worked: it discovered
+ * the provider and learned that the secret is wrong. See `domain/sso-probe.ts`.
+ */
 export async function POST(request) {
 	try {
-		if (!(await canAccessTestRoute())) {
-			return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+		const access = await canAccessTestRoute()
+		const denial = probeAccess(access.requireLogin, access.hasValidSession)
+		if (denial !== null) {
+			return NextResponse.json({ error: denial.message }, { status: denial.status })
 		}
 
 		const body = await request.json().catch(() => ({}))
-		const settings = await getSettings()
-
-		const issuerUrl = String(body.issuerUrl || settings.oidcIssuerUrl || "").trim()
-		const clientId = String(body.clientId || settings.oidcClientId || "").trim()
-		const scopes =
-			String(body.scopes || settings.oidcScopes || "openid profile email").trim() ||
-			"openid profile email"
-		const clientSecret = String(
-			Object.hasOwn(body, "clientSecret") ? body.clientSecret : settings.oidcClientSecret || "",
-		).trim()
-
-		if (!issuerUrl) {
-			return NextResponse.json({ error: "Issuer URL is required" }, { status: 400 })
-		}
-		if (!clientId) {
-			return NextResponse.json({ error: "Client ID is required" }, { status: 400 })
+		const input = oidcProbeInput(body, await getSettings())
+		if (isProbeRefusal(input)) {
+			return NextResponse.json({ error: input.refusal.message }, { status: input.refusal.status })
 		}
 
+		const { issuerUrl, clientId, scopes, clientSecret } = input.body
 		const discovery = await fetchOidcDiscovery(issuerUrl)
-		const redirectUri = `${getPublicOrigin(request)}/api/auth/oidc/callback`
-		const secretProbe = await probeOidcClientSecret({
-			tokenEndpoint: discovery.token_endpoint,
-			clientId,
-			clientSecret,
-			redirectUri,
-		})
-
-		if (secretProbe.tested && secretProbe.valid === false) {
-			return NextResponse.json({
-				ok: false,
-				discoveryOk: true,
-				clientSecretTested: true,
-				clientSecretValid: false,
-				issuerUrl,
+		const redirectUri = oidcRedirectUri(getPublicOrigin(request))
+		const outcome = oidcProbeOutcome(
+			await probeOidcClientSecret({
+				tokenEndpoint: discovery.token_endpoint,
 				clientId,
-				scopes,
+				clientSecret,
 				redirectUri,
-				authorizationEndpoint: discovery.authorization_endpoint || "",
-				tokenEndpoint: discovery.token_endpoint || "",
-				jwksUri: discovery.jwks_uri || "",
-				error: `Discovery loaded, but the client secret is not valid: ${secretProbe.message}`,
-			})
-		}
+			}),
+		)
 
-		return NextResponse.json({
-			ok: true,
+		const report = {
+			ok: oidcProbeSucceeded(outcome),
 			discoveryOk: true,
-			clientSecretTested: secretProbe.tested,
-			clientSecretValid: secretProbe.valid,
+			clientSecretTested: outcome.kind === "ok" ? outcome.tested : true,
+			clientSecretValid: outcome.kind === "ok" ? outcome.valid : false,
 			issuerUrl,
 			clientId,
 			scopes,
@@ -78,8 +71,11 @@ export async function POST(request) {
 			authorizationEndpoint: discovery.authorization_endpoint || "",
 			tokenEndpoint: discovery.token_endpoint || "",
 			jwksUri: discovery.jwks_uri || "",
-			message: secretProbe.message,
-		})
+			...(outcome.kind === "secret-rejected"
+				? { error: oidcSecretRejection(outcome.message) }
+				: { message: outcome.message }),
+		}
+		return NextResponse.json(report)
 	} catch (error) {
 		return NextResponse.json({ error: error.message || "OIDC test failed" }, { status: 500 })
 	}
