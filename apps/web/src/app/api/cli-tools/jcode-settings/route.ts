@@ -1,226 +1,52 @@
-import { exec } from "node:child_process"
-import fs from "node:fs/promises"
-import os from "node:os"
-import path from "node:path"
-import { promisify } from "node:util"
-import { parseTOML, stringifyTOML } from "confbox"
 import { NextResponse } from "next/server"
+import {
+	isJcodeInstalled,
+	jcodeConfigPath,
+	jcodeSettingsConfig,
+	removeJcodeEnv,
+	writeJcodeEnv,
+} from "@/lib/cliToolHosts"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-const execAsync = promisify(exec)
-
-/** One entry of the `providers` table in jcode's config.toml. */
-interface JcodeProvider {
-	type?: string
-	base_url?: string
-	auth?: string
-	api_key_env?: string
-	env_file?: string
-	default_model?: string
-	requires_api_key?: boolean
-	[key: string]: unknown
-}
-
-/** jcode config.toml — this route only owns `providers["9router"]`. */
-interface JcodeConfig {
-	providers?: Record<string, JcodeProvider>
-	[key: string]: unknown
-}
-
-const getJcodeConfigDir = () => path.join(os.homedir(), ".jcode")
-const getConfigPath = () => path.join(getJcodeConfigDir(), "config.toml")
-
-const getProviderEnvPath = () => {
-	const configDir = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config")
-	return path.join(configDir, "jcode", "provider-9router.env")
-}
-
-const checkJcodeInstalled = async () => {
-	try {
-		const isWindows = os.platform() === "win32"
-		const command = isWindows ? "where jcode" : "which jcode"
-		await execAsync(command, { windowsHide: true })
-		return true
-	} catch {
-		try {
-			await fs.access(getJcodeConfigDir())
-			return true
-		} catch {
-			return false
-		}
-	}
-}
-
-const readConfig = async (): Promise<JcodeConfig> => {
-	try {
-		const configPath = getConfigPath()
-		const content = await fs.readFile(configPath, "utf-8")
-		return parseTOML<JcodeConfig>(content) ?? { providers: {} }
-	} catch (_error) {
-		return { providers: {} }
-	}
-}
-
-const has9RouterConfig = (config) => {
-	if (!config || !config.providers) return false
-
-	const providers = config.providers
-
-	if (providers["9router"]) return true
-
-	for (const [, provider] of Object.entries(providers) as [string, JcodeProvider][]) {
-		if (typeof provider?.base_url === "string" && provider.base_url.includes("localhost:20128")) {
-			return true
-		}
-	}
-
-	return false
-}
-
-const writeConfig = async (config) => {
-	const configPath = getConfigPath()
-	const content = stringifyTOML(config)
-	await fs.writeFile(configPath, content, "utf-8")
-}
-
-const readProviderEnv = async () => {
-	try {
-		const envPath = getProviderEnvPath()
-		const content = await fs.readFile(envPath, "utf-8")
-		const env: Record<string, string> = {}
-
-		for (const line of content.split("\n")) {
-			const trimmed = line.trim()
-			if (!trimmed || trimmed.startsWith("#")) continue
-
-			const eqIndex = trimmed.indexOf("=")
-			if (eqIndex > 0) {
-				const key = trimmed.slice(0, eqIndex).trim()
-				let value = trimmed.slice(eqIndex + 1).trim()
-
-				if (
-					(value.startsWith('"') && value.endsWith('"')) ||
-					(value.startsWith("'") && value.endsWith("'"))
-				) {
-					value = value.slice(1, -1)
-				}
-
-				env[key] = value
-			}
-		}
-
-		return env
-	} catch {
-		return {}
-	}
-}
-
-const writeProviderEnv = async (env) => {
-	const envPath = getProviderEnvPath()
-	let content = "# jcode provider environment variables\n"
-
-	for (const [key, value] of Object.entries(env)) {
-		content += `${key}="${value}"\n`
-	}
-
-	await fs.writeFile(envPath, content, "utf-8")
-}
+/**
+ * jcode splits its config in two: the TOML names an env file, and the key lives in that file.
+ * Both writes belong to one save, so the env file is a side write rather than a second route.
+ */
+const deps = () => ({
+	isInstalled: isJcodeInstalled,
+	config: jcodeSettingsConfig,
+	// A side write receives the validated form, not a bare string — it runs after the
+	// key has been resolved, so it writes exactly what the config entry names.
+	sideWrites: [(input) => writeJcodeEnv(input.apiKey)],
+	sideRemovals: [removeJcodeEnv],
+	notInstalledMessage:
+		"jcode not installed. Install via: curl -fsSL https://raw.githubusercontent.com/1jehuang/jcode/master/scripts/install.sh | bash",
+	appliedMessage: "jcode configured successfully. Use: jcode --provider-profile 9router",
+	resetMessage: "9router configuration removed from jcode",
+})
 
 export async function GET() {
-	const isInstalled = await checkJcodeInstalled()
-
-	if (!isInstalled) {
-		return NextResponse.json({
-			installed: false,
-			message:
-				"jcode not installed. Install via: curl -fsSL https://raw.githubusercontent.com/1jehuang/jcode/master/scripts/install.sh | bash",
-		})
-	}
-
-	const config = await readConfig()
-	const has9Router = has9RouterConfig(config)
-
-	return NextResponse.json({
-		installed: true,
-		config,
-		has9Router,
-		configPath: getConfigPath(),
-	})
+	const answer = await getUseCases().cliTools.readToolSettingsStatus(deps())
+	return NextResponse.json(
+		{ ...answer.body, configPath: jcodeConfigPath() },
+		{ status: answer.status },
+	)
 }
 
-export async function POST(request) {
+export async function POST(request: Request) {
+	let body: unknown
 	try {
-		const { baseUrl, apiKey, models } = await request.json()
-
-		if (!baseUrl || !apiKey) {
-			return NextResponse.json({ error: "baseUrl and apiKey are required" }, { status: 400 })
-		}
-
-		const normalizedBaseUrl = baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`
-
-		const config = await readConfig()
-
-		if (!config.providers) {
-			config.providers = {}
-		}
-
-		config.providers["9router"] = {
-			type: "openai-compatible",
-			base_url: normalizedBaseUrl,
-			auth: "bearer",
-			api_key_env: "JCODE_9ROUTER_API_KEY",
-			env_file: "provider-9router.env",
-			default_model: models && models.length > 0 ? models[0] : "cc/claude-opus-4-7",
-			requires_api_key: true,
-		}
-
-		const configDir = getJcodeConfigDir()
-		await fs.mkdir(configDir, { recursive: true })
-
-		await writeConfig(config)
-
-		const xdgConfigDir = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config")
-		const jcodeConfigDir = path.join(xdgConfigDir, "jcode")
-		await fs.mkdir(jcodeConfigDir, { recursive: true })
-
-		const env = await readProviderEnv()
-		env.JCODE_9ROUTER_API_KEY = apiKey
-		await writeProviderEnv(env)
-
-		return NextResponse.json({
-			success: true,
-			message: "jcode configured successfully. Use: jcode --provider-profile 9router",
-			configPath: getConfigPath(),
-		})
-	} catch (error) {
-		console.error("Error configuring jcode:", error)
-		return NextResponse.json({ error: error.message }, { status: 500 })
+		body = await request.json()
+	} catch {
+		return NextResponse.json({ error: { message: "Invalid JSON body" } }, { status: 400 })
 	}
+	const answer = await getUseCases().cliTools.writeToolSettings(body, deps())
+	return NextResponse.json(answer.body, { status: answer.status })
 }
 
 export async function DELETE() {
-	try {
-		const config = await readConfig()
-
-		if (!config.providers) {
-			return NextResponse.json({ success: true, message: "No configuration to remove" })
-		}
-
-		delete config.providers["9router"]
-
-		await writeConfig(config)
-
-		const env = await readProviderEnv()
-		delete env.JCODE_9ROUTER_API_KEY
-		await writeProviderEnv(env)
-
-		return NextResponse.json({
-			success: true,
-			message: "9router configuration removed from jcode",
-		})
-	} catch (error) {
-		console.error("Error removing jcode configuration:", error)
-		return NextResponse.json({ error: error.message }, { status: 500 })
-	}
+	const answer = await getUseCases().cliTools.resetToolSettings(deps())
+	return NextResponse.json(answer.body, { status: answer.status })
 }

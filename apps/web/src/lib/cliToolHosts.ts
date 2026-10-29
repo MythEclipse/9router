@@ -16,6 +16,11 @@ import {
 	resetGrokBuildConfig,
 } from "9router-api/domain/grok-build-config"
 import {
+	JCODE_KEY_ENV,
+	jcodeHasThisInstall,
+	withJcodeProvider,
+} from "9router-api/domain/jcode-config"
+import {
 	OMP_PROVIDER_ID,
 	ompHasThisInstall,
 	withOmpProvider,
@@ -1578,4 +1583,123 @@ function parseTomlDocument(toml: string): Record<string, unknown> {
 	}
 
 	return result
+}
+
+/**
+ * jcode's `~/.jcode/config.toml` plus a provider env file under `XDG_CONFIG_HOME`.
+ *
+ * The key never goes in the TOML: jcode reads it from `provider-9router.env` and the config only
+ * names that file, so the two writes have to agree or jcode looks for a variable nothing sets.
+ */
+const JCODE_CONFIG_DIR = () => path.join(os.homedir(), ".jcode")
+const JCODE_CONFIG_PATH = () => path.join(JCODE_CONFIG_DIR(), "config.toml")
+const JCODE_ENV_PATH = () =>
+	path.join(
+		process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config"),
+		"jcode",
+		"provider-9router.env",
+	)
+/** Where jcode's own config lives, reported by the status screen. */
+export const jcodeConfigPath = JCODE_CONFIG_PATH
+
+export const isJcodeInstalled = async (): Promise<boolean> => {
+	try {
+		const isWindows = os.platform() === "win32"
+		await execAsync(isWindows ? "where jcode" : "which jcode", { windowsHide: true })
+		return true
+	} catch {
+		try {
+			await fs.access(JCODE_CONFIG_DIR())
+			return true
+		} catch {
+			return false
+		}
+	}
+}
+
+/** One `KEY="value"` line per variable, skipping blanks and comments. */
+function parseEnvFile(content: string): Record<string, string> {
+	const env: Record<string, string> = {}
+	for (const line of content.split("\n")) {
+		const trimmed = line.trim()
+		if (!trimmed || trimmed.startsWith("#")) continue
+		const at = trimmed.indexOf("=")
+		if (at <= 0) continue
+		const key = trimmed.slice(0, at).trim()
+		let value = trimmed.slice(at + 1).trim()
+		if (
+			(value.startsWith('"') && value.endsWith('"')) ||
+			(value.startsWith("'") && value.endsWith("'"))
+		) {
+			value = value.slice(1, -1)
+		}
+		env[key] = value
+	}
+	return env
+}
+
+/** Rewrites the provider env file, keeping whatever else it holds. */
+export async function writeJcodeEnv(apiKey: string): Promise<void> {
+	let env: Record<string, string> = {}
+	try {
+		env = parseEnvFile(await fs.readFile(JCODE_ENV_PATH(), "utf-8"))
+	} catch {
+		// first write: start from the header alone
+	}
+	env[JCODE_KEY_ENV] = apiKey
+	await fs.mkdir(path.dirname(JCODE_ENV_PATH()), { recursive: true })
+	const body = Object.entries(env)
+		.map(([key, value]) => `${key}="${value}"`)
+		.join("\n")
+	await fs.writeFile(JCODE_ENV_PATH(), `# jcode provider environment variables\n${body}\n`, "utf-8")
+}
+
+/** Drops only our variable, so a key set for another provider survives a reset. */
+export async function removeJcodeEnv(): Promise<void> {
+	let env: Record<string, string>
+	try {
+		env = parseEnvFile(await fs.readFile(JCODE_ENV_PATH(), "utf-8"))
+	} catch {
+		return
+	}
+	delete env[JCODE_KEY_ENV]
+	const body = Object.entries(env)
+		.map(([key, value]) => `${key}="${value}"`)
+		.join("\n")
+	await fs.writeFile(JCODE_ENV_PATH(), `# jcode provider environment variables\n${body}\n`, "utf-8")
+}
+
+export const jcodeSettingsConfig: ToolConfigPort = {
+	path: JCODE_CONFIG_PATH(),
+	format: "toml",
+	read: async () => {
+		const raw = await readText(JCODE_CONFIG_PATH())
+		if (raw === null) return null
+		return { ...parseTomlDocument(raw), rawToml: raw, has9Router: jcodeHasThisInstall(raw) }
+	},
+	readForWrite: async () => {
+		// The raw document, because the writer splices text instead of re-serialising: a
+		// round-trip would rewrite comments and ordering on every save.
+		const raw = await readText(JCODE_CONFIG_PATH())
+		return { rawToml: raw ?? "" }
+	},
+	write: async (text) => {
+		await fs.mkdir(JCODE_CONFIG_DIR(), { recursive: true })
+		await fs.writeFile(JCODE_CONFIG_PATH(), text, "utf-8")
+	},
+	baseUrlSuffix: "with-v1",
+	// Unlike the other tools, jcode cannot read the key from the TOML: it resolves
+	// `api_key_env` at runtime, so a save without a key writes an entry that cannot authenticate.
+	required: ["baseUrl", "apiKey"],
+	resolveApiKey: async (requested) => requested ?? "",
+	installKeys: ["9router"],
+	storedBaseUrl: () => null,
+	serialise: (config) => String((config as { toml?: string }).toml ?? ""),
+	apply: (config, input) => ({
+		toml: withJcodeProvider(
+			String((config as { rawToml?: string }).rawToml ?? ""),
+			input.baseUrl,
+			input.model ?? "cc/claude-opus-4-7",
+		),
+	}),
 }
