@@ -791,3 +791,37 @@ biome clean, `bun run build` exit 0, gateway baseline unchanged
 (`/login` 200, `/api/health` 200, `/v1/models` 401, `/api/providers` 401).
 
 Remaining: 154 of 168 handlers (10 of 12 in `providers`).
+
+## providers batch, part 2 (overrides, kilo cache, model probing)
+
+Three rules moved out of handlers, each of which was making a decision nobody
+had written down:
+
+- **Header overrides** (`domain/provider-override.ts`). The whitelist was already
+  one function, so this was mostly relocation — but the canonical-id lookup is
+  now the use-case's job, which closes the case where `/gcli/overrides` and
+  `/gemini-cli/overrides` wrote two entries for one provider.
+- **The Kilo free-model cache** (`domain/free-model-cache.ts`). The route kept
+  one module-level entry and served it past its TTL forever when the upstream
+  refused. That is the right instinct — a stale list beats an empty panel — but
+  with no ceiling a process up for a month reports a month-old catalogue as if
+  nothing were wrong. `MAX_STALE_MS` (24h) puts a floor under it.
+- **Model probing** (`domain/model-probe.ts`). Two implicit rules made explicit:
+  the first model is probed alone because the probe triggers a token refresh and
+  a parallel fan-out races that refresh against itself; cookie providers probe
+  serially because their account queue serves one request at a time. Neither was
+  stated anywhere, so a future change to the fan-out would have broken tokens or
+  timeouts with nothing to explain why.
+
+One trap worth recording: `WEB_COOKIE_PROVIDERS` exists **twice** with the same
+name and different types — an object of ids in `shared/constants/providers.ts`,
+and a `Set` in `app/api/models/test/probeBudget.ts` re-exported through `ping.ts`.
+The route used the `Set`; importing the object and calling `.has()` compiled fine
+and failed at runtime. The serial decision belongs to the probe budget's set,
+which is what is imported now, under a distinct local name.
+
+Verification: 579 files / 6267 tests passing, both packages typecheck clean,
+biome clean, `bun run build` exit 0, gateway baseline unchanged
+(`/login` 200, `/api/health` 200, `/v1/models` 401, `/api/providers/*` 401).
+
+Remaining: 151 of 168 handlers (7 of 12 in `providers`).

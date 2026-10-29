@@ -57,7 +57,7 @@ three packages report 0 `tsc` errors and `biome check` is clean.
 | `shutdown`     | 2      | done — one sequence, two gates; 403 vs 401 kept distinct |
 | `pxpipe`       | 8      | done — one list-limit rule; engine codes no longer flattened |
 | `model-registry` | 12 | done — list/alias/availability/custom/studio/nodes/catalogue; transport whitelist now actually applied |
-| `providers`    | 12 | **2 of 12 done** — connection CRUD (list/create/get/update/delete); 10 remaining |
+| `providers`    | 12 | **5 of 12 done** — connection CRUD, `[id]/overrides`, `kilo/free-models`, `[id]/test-models`; 7 remaining |
 | (136 more)     | 136    | pending |
 
 Done: 36 of 168 route handlers. `tags` is deliberately **not** ported: it
@@ -243,7 +243,21 @@ Done: `route.ts` (list, create) and `[id]/route.ts` (get, update, delete), over
 choice, write-only AWS session token) and `domain/api-key-verdict.ts` (the six
 status readings the validate switch needs).
 
-Still to do (10): `validate` (600 LOC switch), `[id]/models` (802 LOC config
-table), `[id]/test`, `[id]/test-models`, `[id]/overrides`, `test-batch`,
-`client` (pagination + sanitising), `suggested-models`, `kilo/free-models`,
-`web-login`.
+Next targets, ordered by what they teach rather than by size:
+
+| Route | LOC | What it decides |
+| ----- | --- | --------------- |
+| ~~`[id]/overrides`~~ | 123 | done — header whitelist in `domain/provider-override.ts` |
+| ~~`kilo/free-models`~~ | 57 | done — `domain/free-model-cache.ts` adds a stale ceiling the route lacked |
+| ~~`[id]/test-models`~~ | 87 | done — warm-up-then-fan-out and the serial case in `domain/model-probe.ts` |
+| `test-batch` | 148 | group selection (oauth/free/apikey/compatible/all) + per-row failure isolation |
+| `client` | 172 | pagination + field whitelist — re-implements the `list-limit` rule |
+| `suggested-models` | 134 | three-level fallback: live → stored → curated |
+| `web-login` | 156 | interactive browser login; mutates a live session object |
+| `[id]/models` | 802 | provider model discovery — a 380-line config table |
+| `validate` | 600 | the 20-arm probe switch; `domain/api-key-verdict.ts` is ready for it |
+
+`[id]/test` is a thin wrapper over `testSingleConnection` (1 412 LOC of probe
+logic). It stays a wrapper: that helper is the router's own health check, not a
+dashboard rule, and moving it would drag the whole executor graph into `apps/api`
+for one delegation.
