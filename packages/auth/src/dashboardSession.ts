@@ -10,6 +10,36 @@ import { jwtVerify, SignJWT } from "jose"
 const DEFAULT_PASSWORD = "123456"
 const SESSION_MAX_AGE_SEC = 24 * 60 * 60
 
+/**
+ * The identity a dashboard session gets when it has no user record behind it.
+ *
+ * This install is single-tenant: one owner, one dashboard password, and OIDC/SAML
+ * standing in for that same owner. The reader side (`sessionFromClaims`,
+ * `sessionClaimsOf`) refuses a token that names nobody — a valid signature proves the
+ * token came from us, not that it belongs to anyone — so an identity has to be issued
+ * with the cookie rather than invented at each reader.
+ */
+const DASHBOARD_USER_ID = "dashboard"
+
+/**
+ * The claims every dashboard session carries, whatever authenticated it.
+ *
+ * Stamping the identity here rather than at each of the four sign-in paths (login,
+ * OIDC, SAML, API key) is what keeps them from drifting: a path that forgets it issues a
+ * cookie every guarded route answers 401 to, and the failure surfaces far from the cause.
+ */
+function sessionClaims(claims) {
+	return { authenticated: true, userId: DASHBOARD_USER_ID, ...claims }
+}
+
+export async function createDashboardAuthToken(claims = {}) {
+	return new SignJWT(sessionClaims(claims))
+		.setProtectedHeader({ alg: "HS256" })
+		.setIssuedAt()
+		.setExpirationTime("24h")
+		.sign(SECRET)
+}
+
 function loadJwtSecret() {
 	if (process.env.JWT_SECRET) return process.env.JWT_SECRET
 	const file = path.join(DATA_DIR, "jwt-secret")
@@ -29,14 +59,6 @@ export function shouldUseSecureCookie(request) {
 	const forwardedProto = request?.headers?.get?.("x-forwarded-proto")
 	const isHttpsRequest = forwardedProto === "https"
 	return forceSecureCookie || isHttpsRequest
-}
-
-export async function createDashboardAuthToken(claims = {}) {
-	return new SignJWT({ authenticated: true, ...claims })
-		.setProtectedHeader({ alg: "HS256" })
-		.setIssuedAt()
-		.setExpirationTime("24h")
-		.sign(SECRET)
 }
 
 export async function verifyDashboardAuthToken(token) {
