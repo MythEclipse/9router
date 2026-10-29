@@ -1,12 +1,29 @@
+/**
+ * Reload the in-process engine module, picking up an upgraded install without a
+ * process restart.
+ *
+ * Delegates: what reloading means, and which failures it can raise, are rules and live
+ * in `9router-api`. The guard denies this path by default, so the session travels with
+ * the call.
+ *
+ * This is `reload`, not `install` or `start` — those stay on their own REST routes
+ * behind the password session, because the oRPC transport is reachable with an API key
+ * and an install triggered by a key can change what runs on the host.
+ */
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { NextResponse } from "next/server"
+import { createApiClient, sessionClaimsOf } from "@/lib/orpcClient"
 import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-// Reload the in-process module (picks up an upgraded install without a restart).
 export async function POST() {
 	try {
-		return NextResponse.json(await getUseCases().pxpipe.reload())
+		const client = createApiClient({
+			session: sessionClaimsOf(await getSessionContext()),
+			useCases: getUseCases(),
+		})
+		return NextResponse.json(await client.pxpipe.reload())
 	} catch (error) {
 		console.error("[API] Failed to reload pxpipe:", error)
 		return NextResponse.json(
