@@ -28,6 +28,7 @@ import type {
 	ProviderNodePort,
 	StudioModelPort,
 } from "./models/ports.ts"
+import type { BulkImportDeps } from "./oauth/import-credentials.ts"
 import type { PluginCache, PluginCatalogue, PluginSettingsPort } from "./plugins/manage-plugins.ts"
 import type {
 	ConnectionNodeStore,
@@ -36,6 +37,14 @@ import type {
 	ProxyPoolStore,
 	StoredConnection,
 } from "./providers/ports.ts"
+import type { DeployDeps } from "./proxy-pools/deploy-relay.ts"
+import type { ImportJobDeps } from "./proxy-pools/import-proxy-pools.ts"
+import type {
+	TailscaleCheckDeps,
+	TailscaleInstallDeps,
+	TunnelProbeDeps,
+	TunnelToggleDeps,
+} from "./tunnel/manage-tunnel.ts"
 
 /** Where the override map lives, and how a URL id becomes a canonical one. */
 export interface OverrideStore {
@@ -268,6 +277,40 @@ export interface Dependencies {
 	readonly connectionNodes: ConnectionNodeStore
 	/** Proxy pools, so a connection cannot name one that does not exist. */
 	readonly proxyPools: ProxyPoolStore
+	/** The four relay providers' HTTP calls; the deploy use-case is shared. */
+	readonly relayDeploy: DeployDeps
+	/** The bulk-import job store; the job runs in the host's process. */
+	readonly proxyImportJobs: ImportJobDeps
+	/** The tunnel routes reach a process or a package manager; only the host can. */
+	/** Importing credentials the operator already holds. */
+	readonly credentialImport: Record<
+		string,
+		{
+			readonly authType: string
+			readonly backfill: BulkImportDeps["backfill"]
+		}
+	>
+	readonly createProviderConnection: BulkImportDeps["create"]
+	/** Where each provider's own tool left its credential; supplied by `apps/web`. */
+	readonly localCredentials: Record<
+		string,
+		import("./oauth/auto-import.ts").LocalCredentialDeps<unknown>
+	>
+	/** Cursor's database needs a three-strategy read, so it has its own port. */
+	readonly cursorImport: import("./oauth/auto-import.ts").CursorImportDeps
+	/** Single-token imports: prove it works, then save it. */
+	readonly tokenVerify: Record<string, import("./oauth/import-token.ts").ImportTokenDeps["verify"]>
+	readonly newSystemId: () => string
+	/** Long-lived keys: checked when possible, stored even when the check could not run. */
+	readonly apiKeyCheck: Record<string, import("./oauth/import-api-key.ts").ApiKeyImportDeps["check"]>
+	readonly findConnection: import("./oauth/import-api-key.ts").MimoImportDeps["findExisting"]
+	readonly updateConnection: import("./oauth/import-api-key.ts").MimoImportDeps["update"]
+	/** The OAuth dispatcher's session actions. */
+	readonly oauthSession: import("./oauth/dispatch-actions.ts").DispatchDeps
+	readonly tunnelProbes: TunnelProbeDeps
+	readonly tunnelToggle: TunnelToggleDeps
+	readonly tailscaleCheck: TailscaleCheckDeps
+	readonly tailscaleInstall: TailscaleInstallDeps
 	/** What kinds of provider exist, and which may be created. */
 	readonly providerCatalogue: ProviderCatalogue
 	/** Normalises the several spellings of a provider id to one. */

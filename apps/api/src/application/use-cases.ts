@@ -6,6 +6,9 @@
  * the same shape from fakes.
  */
 
+import { invalid } from "../domain/errors.ts"
+import type { MimoRegion } from "../domain/mimo-login.ts"
+import { readMimoRegion } from "../domain/mimo-login.ts"
 import { makeBulkEditApiKeys } from "./api-keys/bulk-edit-api-keys.ts"
 import { makeCreateApiKey } from "./api-keys/create-api-key.ts"
 import { makeListApiKeys, makeRevokeApiKey } from "./api-keys/manage-api-keys.ts"
@@ -32,6 +35,24 @@ import { makeCatalogueSync, makeModelProbe } from "./models/manage-catalogue-syn
 import { makeBaseUrlValidation, makeDisabledModels } from "./models/manage-disabled-models.ts"
 import { makeProviderNodes } from "./models/manage-provider-nodes.ts"
 import { makeStudioModels } from "./models/manage-studio-models.ts"
+import { autoImportCursor, autoImportLocalCredential } from "./oauth/auto-import.ts"
+import {
+	type DispatchAnswer,
+	pollSessionStatus,
+	readIdeStatus,
+	stopProviderProxy,
+} from "./oauth/dispatch-actions.ts"
+import type { GitlabPatAnswer, GitlabPatDeps } from "./oauth/gitlab-pat.ts"
+import { importGitlabPat } from "./oauth/gitlab-pat.ts"
+import type { IflowCookieAnswer, IflowCookieDeps } from "./oauth/iflow-cookie.ts"
+import { importIflowCookie } from "./oauth/iflow-cookie.ts"
+import { type ApiKeyAnswer, importKiroApiKey, importMimoApiKey } from "./oauth/import-api-key.ts"
+import { importCredentialBatch } from "./oauth/import-credentials.ts"
+import { importAnswerOf, importToken, needsRemoteVerification } from "./oauth/import-token.ts"
+import type { KiroAuthorizeDeps, KiroExchangeDeps, KiroSocialAnswer } from "./oauth/kiro-social.ts"
+import { authorizeKiroSocial, exchangeKiroSocial } from "./oauth/kiro-social.ts"
+import type { MimoLoginStartDeps, MimoLoginStarted } from "./oauth/mimo-login.ts"
+import { startMimoLogin } from "./oauth/mimo-login.ts"
 import { makeReadPlugins, makeWritePlugins } from "./plugins/manage-plugins.ts"
 import { makeGetPricing, makeResetPricing, makeUpdatePricing } from "./pricing/manage-pricing.ts"
 import { makeCheckConnection } from "./providers/check-connection.ts"
@@ -45,6 +66,12 @@ import { makeSuggestModels } from "./providers/suggest-models.ts"
 import { makeTestConnections } from "./providers/test-connections.ts"
 import { makeValidateCredential } from "./providers/validate-credential.ts"
 import { makeWebLogin } from "./providers/web-login.ts"
+import { deployRelay } from "./proxy-pools/deploy-relay.ts"
+import {
+	cancelProxyImport,
+	readProxyImportJobs,
+	startProxyImport,
+} from "./proxy-pools/import-proxy-pools.ts"
 import {
 	bulkDeleteProxyPools,
 	createProxyPool,
@@ -74,6 +101,14 @@ import { makeGetTheme, makeSetTheme } from "./settings/theme.ts"
 import { makeCacheStats } from "./system/cache-stats.ts"
 import { makeDashboardJobs } from "./system/dashboard-jobs.ts"
 import { makeShutdownFromDashboard, makeShutdownFromHook } from "./system/shutdown.ts"
+import {
+	checkTailscale,
+	prepareTailscaleInstall,
+	readTunnelStatus,
+	runTailscaleInstall,
+	type TunnelStatusCache,
+	toggleTunnel,
+} from "./tunnel/manage-tunnel.ts"
 import { makeUsageReports } from "./usage/report-usage.ts"
 
 export interface UseCases {
@@ -126,6 +161,29 @@ export interface UseCases {
 			missing: string[]
 		}>
 		readonly test: (id: string) => Promise<Record<string, unknown>>
+		/** `POST /api/proxy-pools/<provider>-deploy` — one use-case, four providers. */
+		readonly deploy: (
+			provider: import("../domain/relay-deploy.ts").RelayProvider,
+			body: Record<string, unknown>,
+		) => Promise<{
+			proxyPool: import("./proxy-pools/manage-proxy-pools.ts").StoredPool
+			deployUrl: string
+		}>
+		/** Bulk import: start, poll, cancel. */
+		readonly importJobs: {
+			readonly start: (body: Record<string, unknown>) => {
+				jobId: string
+				status: string
+				total: number
+				pollMs: number
+			}
+			readonly read: (query: URLSearchParams) =>
+				| { job: import("./proxy-pools/import-proxy-pools.ts").ImportJobView }
+				| {
+						jobs: readonly import("./proxy-pools/import-proxy-pools.ts").ImportJobView[]
+				  }
+			readonly cancel: (query: URLSearchParams) => { ok: true }
+		}
 	}
 	/** The scheduled backup, as the settings screen reads and edits it. */
 	readonly autoBackup: {
@@ -199,6 +257,62 @@ export interface UseCases {
 	readonly catalogueSync: ReturnType<typeof makeCatalogueSync>
 	readonly modelProbe: ReturnType<typeof makeModelProbe>
 	readonly baseUrlValidation: ReturnType<typeof makeBaseUrlValidation>
+	/** Importing provider credentials the operator already holds. */
+	readonly credentials: {
+		readonly importBatch: (input: {
+			readonly provider: string
+			readonly body: unknown
+		}) => Promise<import("../domain/oauth-import.ts").BulkImportAnswer>
+		readonly autoImport: (
+			provider: string,
+		) => Promise<import("../domain/oauth-local-credential.ts").CredentialSearch<unknown>>
+		readonly autoImportCursor: () => Promise<import("./oauth/auto-import.ts").CursorImport>
+		readonly importToken: (
+			provider: string,
+			body: unknown,
+		) => Promise<import("./oauth/import-token.ts").ImportAnswer>
+		/** A long-lived key: kiro's bearer key, or MiMo's key-or-session. */
+		readonly importApiKey: (provider: string, body: unknown) => Promise<ApiKeyAnswer>
+	}
+	/**
+	 * The OAuth login dispatcher's session actions.
+	 *
+	 * Separate from `credentials` because these drive a login that is still in flight — a
+	 * session the browser is polling, a proxy to stop — rather than a credential being stored.
+	 */
+	readonly oauth: {
+		readonly importGitlabPat: (body: unknown, host: GitlabPatDeps) => Promise<GitlabPatAnswer>
+		readonly importIflowCookie: (body: unknown, host: IflowCookieDeps) => Promise<IflowCookieAnswer>
+		readonly readMimoRegion: (body: unknown) => MimoRegion
+		readonly startMimoLogin: (body: unknown, host: MimoLoginStartDeps) => Promise<MimoLoginStarted>
+		readonly authorizeKiroSocial: (
+			provider: string | null,
+			host: KiroAuthorizeDeps,
+		) => KiroSocialAnswer
+		readonly exchangeKiroSocial: (body: unknown, host: KiroExchangeDeps) => Promise<KiroSocialAnswer>
+		readonly pollSession: (provider: string, state: string | null) => Promise<DispatchAnswer>
+		readonly stopProxy: (provider: string) => DispatchAnswer
+		readonly ideStatus: (provider: string) => Promise<DispatchAnswer>
+	}
+	/** Cloudflare tunnels and Tailscale funnels, as the network screen drives them. */
+	readonly tunnel: {
+		readonly status: () => Promise<{ tunnel: unknown; tailscale: unknown; download: unknown }>
+		readonly enable: () => Promise<unknown>
+		readonly disable: () => Promise<unknown>
+		readonly tailscaleEnable: () => Promise<unknown>
+		readonly tailscaleDisable: () => Promise<unknown>
+		readonly tailscaleCheck: () => Promise<import("../domain/tunnel.ts").TailscaleCheckAnswer>
+		readonly tailscaleInstall: {
+			readonly prepare: (body: Record<string, unknown>) => Promise<{
+				password: string
+				shortId: string
+			}>
+			readonly run: (
+				prepared: { password: string; shortId: string },
+				reportProgress: (message: string) => void,
+			) => Promise<import("./tunnel/manage-tunnel.ts").InstallEvent>
+		}
+	}
 }
 
 /** The combo use-cases share one dependency slice, so it is built once. */
@@ -210,6 +324,18 @@ function comboDeps(deps: Dependencies) {
 		presets: deps.comboPresets,
 		strategies: deps.comboStrategies,
 	}
+}
+
+/**
+ * The probe cache, hung off `globalThis` so a Next hot reload reuses it.
+ *
+ * A module-level object would be re-created on every reload, so the cache would never hit
+ * during development and every poll would probe the process again.
+ */
+function tunnelStatusCache(): TunnelStatusCache {
+	const scope = globalThis as { __tunnelStatusCache?: TunnelStatusCache }
+	scope.__tunnelStatusCache ??= { value: null, fetchedAt: 0 }
+	return scope.__tunnelStatusCache
 }
 
 export function buildUseCases(deps: Dependencies): UseCases {
@@ -262,6 +388,12 @@ export function buildUseCases(deps: Dependencies): UseCases {
 			remove: (id) => deleteProxyPool(id, deps.proxyPools),
 			bulkRemove: (body) => bulkDeleteProxyPools(body, deps.proxyPools),
 			test: (id) => testProxyPool(id, deps.proxyPools),
+			deploy: (provider, body) => deployRelay({ provider, body }, deps.relayDeploy),
+			importJobs: {
+				start: (body) => startProxyImport(body, deps.proxyImportJobs),
+				read: (query) => readProxyImportJobs(query, deps.proxyImportJobs),
+				cancel: (query) => cancelProxyImport(query, deps.proxyImportJobs),
+			},
 		},
 		autoBackup: {
 			read: () => readAutoBackup(deps.autoBackup),
@@ -423,5 +555,84 @@ export function buildUseCases(deps: Dependencies): UseCases {
 			catalogue: deps.modelCatalogue,
 			probeBaseUrl: (input) => deps.probeBaseUrl(input),
 		}),
+
+		credentials: {
+			importBatch: async ({ provider, body }) => {
+				const settings = deps.credentialImport[provider]
+				if (!settings) throw invalid(`Unknown import provider: ${provider}`)
+				return importCredentialBatch(
+					{ provider, authType: settings.authType, body },
+					{
+						backfill: settings.backfill,
+						create: deps.createProviderConnection,
+						now: () => Date.now(),
+					},
+				)
+			},
+			autoImportCursor: () => autoImportCursor(deps.cursorImport),
+			importToken: async (provider, body) => {
+				// Codex reads its claims from the token itself; every other provider asks.
+				// Codex reads its claims from the token itself; every other provider asks.
+				const verify = needsRemoteVerification(provider)
+					? deps.tokenVerify[provider]
+					: async ({ accessToken }: { accessToken: string }) => ({ accessToken })
+				return importAnswerOf(
+					await importToken(provider, body, {
+						verify,
+						create: deps.createProviderConnection,
+						now: () => deps.now().getTime(),
+						newSystemId: deps.newSystemId,
+					}),
+				)
+			},
+			importApiKey: async (provider, body) => {
+				const check = deps.apiKeyCheck[provider]
+				if (!check) throw invalid(`Unknown api-key provider: ${provider}`)
+				const host = {
+					check,
+					create: deps.createProviderConnection,
+					now: () => deps.now().getTime(),
+				}
+				// MiMo can be re-imported over the row it already made; Kiro never looks.
+				return provider === "xiaomi-mimo"
+					? importMimoApiKey(body, {
+							...host,
+							findExisting: deps.findConnection,
+							update: deps.updateConnection,
+						})
+					: importKiroApiKey(body, host)
+			},
+			autoImport: async (provider) => {
+				const local = deps.localCredentials[provider]
+				if (!local) throw invalid(`Unknown auto-import provider: ${provider}`)
+				return autoImportLocalCredential({ provider }, local)
+			},
+		},
+		oauth: {
+			pollSession: (provider, state) => pollSessionStatus(provider, state, deps.oauthSession),
+			stopProxy: (provider) => stopProviderProxy(provider, deps.oauthSession),
+			ideStatus: (provider) => readIdeStatus(provider, deps.oauthSession),
+			importGitlabPat: (body, host) => importGitlabPat(body, host),
+			importIflowCookie: (body, host) => importIflowCookie(body, host),
+			readMimoRegion: (body) => readMimoRegion(body),
+			startMimoLogin: (body, host) => startMimoLogin(body, host),
+			authorizeKiroSocial: (provider, host) => authorizeKiroSocial(provider, host),
+			exchangeKiroSocial: (body, host) => exchangeKiroSocial(body, host),
+		},
+		// The probe cache is process-wide and survives a hot reload, exactly like the module
+		// scope it replaced: one cache per process, not one per request.
+		tunnel: {
+			status: () => readTunnelStatus(tunnelStatusCache(), deps.tunnelProbes),
+			enable: () => toggleTunnel({ kind: "cloudflare", on: true }, deps.tunnelToggle),
+			disable: () => toggleTunnel({ kind: "cloudflare", on: false }, deps.tunnelToggle),
+			tailscaleEnable: () => toggleTunnel({ kind: "tailscale", on: true }, deps.tunnelToggle),
+			tailscaleDisable: () => toggleTunnel({ kind: "tailscale", on: false }, deps.tunnelToggle),
+			tailscaleCheck: () => checkTailscale(deps.tailscaleCheck),
+			tailscaleInstall: {
+				prepare: (body) => prepareTailscaleInstall(body, deps.tailscaleInstall),
+				run: (prepared, reportProgress) =>
+					runTailscaleInstall(prepared, deps.tailscaleInstall, reportProgress),
+			},
+		},
 	}
 }

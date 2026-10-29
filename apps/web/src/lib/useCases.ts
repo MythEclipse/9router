@@ -1,4 +1,28 @@
 /**
+ * Fill the Codex identity fields a pasted token did not carry.
+ *
+ * An export from another install often has the token and nothing else; the email, account
+ * id and plan are all inside the token's own claims. Reading them here is what makes an
+ * imported connection recognisable in the dashboard instead of a nameless row.
+ */
+function backfillCodex(item: Record<string, unknown>): Record<string, unknown> {
+	const filled = { ...item }
+	const psd = { ...((filled.providerSpecificData as Record<string, unknown> | undefined) ?? {}) }
+	const needsEmail = !filled.email
+	const needsAccountId = !psd.chatgptAccountId
+	const needsPlanType = !psd.chatgptPlanType
+	if (!needsEmail && !needsAccountId && !needsPlanType) return filled
+
+	const raw = filled.idToken ?? filled.accessToken
+	const info = (typeof raw === "string" ? extractCodexAccountInfo(raw) : null) ?? {}
+	if (needsEmail && info.email) filled.email = info.email
+	if (needsAccountId && info.chatgptAccountId) psd.chatgptAccountId = info.chatgptAccountId
+	if (needsPlanType && info.chatgptPlanType) psd.chatgptPlanType = info.chatgptPlanType
+	if (Object.keys(psd).length > 0) filled.providerSpecificData = psd
+	return filled
+}
+
+/**
  * The process-wide use-case graph.
  *
  * Built once, on first use. Constructing it opens the SQLite handle and runs
@@ -17,11 +41,23 @@ import {
 	installSemanticCacheModule,
 } from "9router-api/infrastructure/use-cases-factory"
 import { getSemanticCacheStats, resetSemanticCacheStats } from "open-sse/rtk/semanticCache"
+import { extractCodexAccountInfo } from "@/lib/oauth/providerHelpers"
+import {
+	createProviderConnection,
+	getProviderConnections,
+	updateProviderConnection,
+} from "@/models"
 import { createApiKeyStore } from "./apiKeyStore"
 import { killAppProcesses } from "./appProcessManager"
 import { createAutoBackupDeps } from "./autoBackupHost"
 import { createComboPresetPort } from "./comboPresetPort"
 import { createDatabaseDeps } from "./databaseHost"
+import {
+	cancelProxyImportJob,
+	createProxyImportJob,
+	getProxyImportJob,
+	listProxyImportJobs,
+} from "./db/proxyImportJobs"
 import {
 	catalogueHost,
 	knownSttTransport,
@@ -30,6 +66,14 @@ import {
 	resolveProviderAlias,
 	studioCycleRefusal,
 } from "./modelRegistryHost"
+import {
+	API_KEY_CHECKS,
+	AUTO_IMPORT_HOSTS,
+	type AutoImportProvider,
+	cursorImportDeps,
+	TOKEN_VERIFIERS,
+} from "./oauthImportHost"
+import { oauthSessionDeps } from "./oauthSessionHost"
 import { clearPluginCache } from "./plugins/customPluginsRuntime"
 import {
 	aiProviderEntry,
@@ -72,12 +116,19 @@ import { getPxpipeStats, readPxpipeEvents } from "./pxpipe/events"
 import { getInstallInfo, getInstallLogTail, installPxpipe } from "./pxpipe/install"
 import { loadPxpipe, unloadPxpipe } from "./pxpipe/loader"
 import { getPxpipeStatus, runHealthCheck } from "./pxpipe/service"
+import { createDeployDeps } from "./relayDeployHost"
 import {
 	settingsHistoryHost,
 	settingsPassword,
 	settingsStore,
 	settingsWriteBack,
 } from "./settingsHost"
+import {
+	createTailscaleCheckDeps,
+	createTailscaleInstallDeps,
+	createTunnelProbeDeps,
+	createTunnelToggleDeps,
+} from "./tunnelHost"
 
 // This host is the one that bundles `open-sse` and `lib/pxpipe`, so it is the one
 // that can answer those ports. Without this they would report empty results.
@@ -131,6 +182,54 @@ function cache(): Cache {
 			// The dashboard's database is the shared driver, not the handle the
 			// factory opened, so it is closed through the driver's own entry point.
 			closeDatabase: closeDb,
+			// Deploying a relay calls the provider's own HTTP API; this host has the network.
+			relayDeploy: createDeployDeps(),
+			// Importing a credential writes one row; the batch rules live in the use-case.
+			createProviderConnection: (input) => createProviderConnection(input),
+			credentialImport: {
+				codex: { authType: "oauth", backfill: backfillCodex },
+				"grok-cli": { authType: "oauth", backfill: (item) => item },
+			},
+			localCredentials: Object.fromEntries(
+				(Object.keys(AUTO_IMPORT_HOSTS) as AutoImportProvider[]).map((provider) => [
+					provider,
+					AUTO_IMPORT_HOSTS[provider](),
+				]),
+			),
+			// Cursor's read is a ladder, not one lookup, so it gets its own port.
+			cursorImport: cursorImportDeps(),
+			tokenVerify: TOKEN_VERIFIERS,
+			apiKeyCheck: API_KEY_CHECKS,
+			// MiMo re-imports over the row it already made, so it can see an account twice
+			// without the dashboard offering it twice.
+			findConnection: async ({ key, uid, sessionOnly, mimoUserId, region }) => {
+				const existing = (await getProviderConnections()).find(
+					(c) =>
+						c.provider === "xiaomi-mimo" &&
+						((uid && c.email === `${uid}@xiaomi`) ||
+							(key && c.accessToken === key) ||
+							(sessionOnly &&
+								mimoUserId &&
+								c.providerSpecificData?.mimoUserId === mimoUserId &&
+								(region ? (c.providerSpecificData?.region || "cn") === region : true))),
+				)
+				return existing ? { id: existing.id, provider: existing.provider, email: existing.email } : null
+			},
+			updateConnection: (id, patch) => updateProviderConnection(id, patch),
+			oauthSession: oauthSessionDeps(),
+			newSystemId: () => crypto.randomUUID(),
+			// The tunnel verbs touch a process, a socket and a package manager; only this host can.
+			tunnelProbes: createTunnelProbeDeps(),
+			tunnelToggle: createTunnelToggleDeps(),
+			tailscaleCheck: createTailscaleCheckDeps(),
+			tailscaleInstall: createTailscaleInstallDeps(),
+			// The import jobs run in this process and outlive the browser that started them.
+			proxyImportJobs: {
+				create: (entries) => createProxyImportJob(entries),
+				find: (id) => getProxyImportJob(id) ?? null,
+				list: () => listProxyImportJobs(),
+				cancel: (id) => cancelProxyImportJob(id),
+			},
 			// Turbopack rewrites import.meta.url, so the migrator cannot find the
 			// journal on its own here. copy-standalone-assets.mjs stages it at
 			// <server cwd>/migrations.

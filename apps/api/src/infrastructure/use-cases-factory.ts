@@ -18,6 +18,14 @@ import type { ProviderCatalogue, StoredConnection } from "../application/provide
 import type { SyncedCatalogue } from "../application/providers/suggest-models.ts"
 import type { ValidateCredentialDependencies as ValidateDependencies } from "../application/providers/validate-credential.ts"
 import type { WebLoginDependencies } from "../application/providers/web-login.ts"
+import type { DeployDeps } from "../application/proxy-pools/deploy-relay.ts"
+import type { ImportJobDeps } from "../application/proxy-pools/import-proxy-pools.ts"
+import type {
+	TailscaleCheckDeps,
+	TailscaleInstallDeps,
+	TunnelProbeDeps,
+	TunnelToggleDeps,
+} from "../application/tunnel/manage-tunnel.ts"
 import { buildUseCases, type UseCases } from "../application/use-cases.ts"
 import type { ProviderClassifiers } from "../domain/batch-selection.ts"
 import type { CacheEntry, FreeModel, KiloModel } from "../domain/free-model-cache.ts"
@@ -72,6 +80,7 @@ import {
 	createModelProbePort,
 } from "./model-catalogue-port.ts"
 import { createPxpipePort, createPxpipeSettings } from "./pxpipe-port.ts"
+import { required as takeRequired } from "./requiredPort.ts"
 import {
 	createDashboardJobEnvironment,
 	createDashboardJobRegistry,
@@ -101,6 +110,41 @@ export interface UseCaseOptions {
 	readonly migrationsDir?: string
 	/** Supplied by the host that owns the client catalogs (`apps/web`). */
 	readonly comboPresets: ComboPresetPort
+	/** The four relay providers' HTTP calls, supplied by `apps/web`. */
+	readonly relayDeploy?: DeployDeps
+	/** The bulk-import job store, supplied by `apps/web`. */
+	readonly proxyImportJobs?: ImportJobDeps
+	/** The tunnel routes' machine access, supplied by `apps/web`. */
+	readonly tunnelProbes?: TunnelProbeDeps
+	readonly tunnelToggle?: TunnelToggleDeps
+	readonly tailscaleCheck?: TailscaleCheckDeps
+	readonly tailscaleInstall?: TailscaleInstallDeps
+	/** The credentials a provider's own tool leaves on this machine, supplied by `apps/web`. */
+	readonly credentialImport?: Record<
+		string,
+		{
+			readonly authType: string
+			readonly backfill: (item: Record<string, unknown>) => Record<string, unknown>
+		}
+	>
+	readonly createProviderConnection?: (input: Record<string, unknown>) => Promise<{ id: string }>
+	readonly localCredentials?: Record<
+		string,
+		import("../application/oauth/auto-import.ts").LocalCredentialDeps<unknown>
+	>
+	readonly cursorImport?: import("../application/oauth/auto-import.ts").CursorImportDeps
+	readonly tokenVerify?: Record<
+		string,
+		import("../application/oauth/import-token.ts").ImportTokenDeps["verify"]
+	>
+	readonly newSystemId?: () => string
+	readonly apiKeyCheck?: Record<
+		string,
+		import("../application/oauth/import-api-key.ts").ApiKeyImportDeps["check"]
+	>
+	readonly findConnection?: import("../application/oauth/import-api-key.ts").MimoImportDeps["findExisting"]
+	readonly updateConnection?: import("../application/oauth/import-api-key.ts").MimoImportDeps["update"]
+	readonly oauthSession?: import("../application/oauth/dispatch-actions.ts").DispatchDeps
 	/**
 	 * Supplied by the host that owns `localDb`. Absent means the key-table
 	 * use-cases are unavailable, which is the API-server case: it serves the
@@ -264,6 +308,22 @@ export interface UseCasesHandle {
 	close(): void
 }
 
+/**
+ * Read an option the use-cases cannot run without.
+ *
+ * Named one at a time so the error says which host wiring is missing, rather than a single
+ * "dependencies incomplete" that sends the reader through the whole options type.
+ */
+export function required<K extends keyof UseCaseOptions>(
+	options: UseCaseOptions,
+	key: K,
+): NonNullable<UseCaseOptions[K]> {
+	return takeRequired(
+		options as unknown as Readonly<Record<string, unknown>>,
+		key as string,
+	) as NonNullable<UseCaseOptions[K]>
+}
+
 export function createUseCases(
 	options: UseCaseOptions = { comboPresets: createUnavailablePresetPort() },
 ): UseCasesHandle {
@@ -363,6 +423,36 @@ export function createUseCases(
 		connections: createConnectionStore(connectionHost),
 		connectionNodes: createConnectionNodeStore(connectionHost),
 		proxyPools: createProxyPoolStore(connectionHost),
+		// Deploying a relay calls a provider's HTTP API, which only the host can do; a
+		// factory that invented a no-op would deploy nothing and report success.
+		relayDeploy: (() => {
+			if (!options.relayDeploy) throw new Error("The proxy-pool deploy use-case needs relayDeploy")
+			return options.relayDeploy
+		})(),
+		// The import job runs in the host's process and holds its own rows; a factory that
+		// invented a store would start a job nobody could poll.
+		proxyImportJobs: (() => {
+			if (!options.proxyImportJobs) {
+				throw new Error("The proxy-pool import use-cases need proxyImportJobs")
+			}
+			return options.proxyImportJobs
+		})(),
+		// Every tunnel verb reaches a process, a socket or a package manager, so a factory that
+		// invented one would report a tunnel it never touched.
+		tunnelProbes: required(options, "tunnelProbes"),
+		tunnelToggle: required(options, "tunnelToggle"),
+		tailscaleCheck: required(options, "tailscaleCheck"),
+		tailscaleInstall: required(options, "tailscaleInstall"),
+		credentialImport: options.credentialImport ?? {},
+		createProviderConnection: required(options, "createProviderConnection"),
+		localCredentials: options.localCredentials ?? {},
+		cursorImport: required(options, "cursorImport"),
+		tokenVerify: options.tokenVerify ?? {},
+		newSystemId: options.newSystemId ?? (() => crypto.randomUUID()),
+		apiKeyCheck: options.apiKeyCheck ?? {},
+		findConnection: required(options, "findConnection"),
+		updateConnection: required(options, "updateConnection"),
+		oauthSession: required(options, "oauthSession"),
 		providerCatalogue: options.providerCatalogue ?? unavailableProviderCatalogue(),
 		normalizeProviderId: options.normalizeProviderId ?? identityProviderId,
 		normalizeProviderSpecificData: options.normalizeProviderSpecificData ?? (() => ({})),

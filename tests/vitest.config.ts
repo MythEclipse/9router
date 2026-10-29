@@ -93,6 +93,10 @@ export default defineConfig({
 			// Next route handlers now delegate to `apps/api` use-cases, whose db
 			// client imports `bun:sqlite`. Vite has no such builtin, so any test
 			// touching a delegating route failed at collection. The alias points
+			// `server-only` is a marker package Next resolves at build time and Vite
+			// cannot find. It carries no runtime behaviour, so an empty module keeps
+			// the guard meaningful in the app and harmless here.
+			{ find: "server-only", replacement: resolve(__dirname, "./shims/server-only.ts") },
 		],
 	},
 })

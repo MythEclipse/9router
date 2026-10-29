@@ -81,6 +81,11 @@ async function route() {
 }
 
 describe("suggested-models route durability", () => {
+	// Every case here binds its answer to a stubbed fetch or a stubbed store, so a slow
+	// file can only be the machine's, not the code's. The default 5s sat close enough to
+	// the per-request cost that a loaded suite reported a timeout as a wrong answer.
+	vi.setConfig({ testTimeout: 30_000 })
+
 	beforeEach(() => {
 		syncedGet.mockClear()
 		undiciFetch.mockClear()
