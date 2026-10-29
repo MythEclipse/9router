@@ -1,4 +1,5 @@
 import {
+	type BaseUrlSuffix,
 	NOTHING_TO_RESET,
 	normaliseBaseUrl,
 	pointsAtThisInstall,
@@ -24,6 +25,8 @@ export interface ToolConfigPort {
 	/** The config as read, or null when there is no file yet. */
 	readonly read: () => Promise<Record<string, unknown> | null>
 	readonly write: (text: string) => Promise<void>
+	/** Which spelling of the base URL this tool wants. */
+	readonly baseUrlSuffix: BaseUrlSuffix
 	/** The keys that mean "this install" in this tool's format. */
 	readonly installKeys: readonly string[]
 	/** The base URL already stored, if any — the tool's config nests it differently. */
@@ -100,11 +103,11 @@ export async function writeToolSettings(
 		}
 
 		const existing = (await deps.config.read()) ?? {}
-		await deps.config.write(
-			settingsFileText(
-				deps.config.apply(existing, { ...input, baseUrl: normaliseBaseUrl(input.baseUrl) }),
-			),
-		)
+		const spelled = {
+			...input,
+			baseUrl: normaliseBaseUrl(input.baseUrl, deps.config.baseUrlSuffix),
+		}
+		await deps.config.write(settingsFileText(deps.config.apply(existing, spelled)))
 
 		for (const sideWrite of deps.sideWrites ?? []) {
 			try {

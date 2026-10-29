@@ -7,10 +7,20 @@
  * here. Only those three live in this file; a tool's own file layout stays with that tool.
  */
 
-/** The base URL every OpenAI-compatible tool expects, `/v1` included. */
-export function normaliseBaseUrl(baseUrl: string): string {
-	const trimmed = baseUrl.trim().replace(/\/+$/, "")
-	return trimmed.endsWith("/v1") ? trimmed : `${trimmed}/v1`
+/**
+ * How a tool wants its base URL spelled.
+ *
+ * Almost every OpenAI-compatible tool appends `/v1` to whatever it is given, so it must be
+ * *told* the suffix. Cline is the exception: it appends nothing, so it must be told the URL
+ * without it. Leaving this implicit is how the same screen ends up writing `…/v1/v1` for one
+ * tool and `…/v1/chat/completions` for another.
+ */
+export type BaseUrlSuffix = "with-v1" | "without-v1"
+
+/** The base URL in the spelling a tool expects. */
+export function normaliseBaseUrl(baseUrl: string, suffix: BaseUrlSuffix = "with-v1"): string {
+	const trimmed = baseUrl.trim().replace(/\/+$/, "").replace(/\/v1$/, "")
+	return suffix === "with-v1" ? `${trimmed}/v1` : trimmed
 }
 
 /** The hosts that identify this install. Localhost covers the default single-machine setup. */
@@ -51,6 +61,9 @@ export interface ToolSettingsRead {
  * All three are required because a config missing any of them is one the tool will fail to
  * use — and it fails at request time, inside the tool, where the operator cannot see that the
  * cause was a settings screen that accepted half a form.
+ *
+ * The base URL is left as typed: which suffix it needs is the tool's business, and applying a
+ * default here would silently override the one tool that wants the other spelling.
  */
 export function readToolSettings(body: unknown): ToolSettingsRead {
 	const fields = (body ?? {}) as Record<string, unknown>
@@ -62,7 +75,7 @@ export function readToolSettings(body: unknown): ToolSettingsRead {
 	if (!baseUrl || !apiKey || !model) {
 		return { ok: false, error: "baseUrl, apiKey and model are required" }
 	}
-	return { ok: true, input: { baseUrl: normaliseBaseUrl(baseUrl), apiKey, model } }
+	return { ok: true, input: { baseUrl, apiKey, model } }
 }
 
 /**

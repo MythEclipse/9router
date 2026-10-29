@@ -23,6 +23,16 @@ describe("normaliseBaseUrl", () => {
 		expect(normaliseBaseUrl("http://localhost:20128/v1")).toBe("http://localhost:20128/v1")
 	})
 
+	it("answers the spelling Cline needs, which is the URL without the suffix", () => {
+		// Cline appends the full path itself; giving it /v1 produces /v1/chat/completions.
+		expect(normaliseBaseUrl("http://localhost:20128/v1", "without-v1")).toBe("http://localhost:20128")
+		expect(normaliseBaseUrl("http://localhost:20128", "without-v1")).toBe("http://localhost:20128")
+	})
+
+	it("does not double a suffix the operator already typed", () => {
+		expect(normaliseBaseUrl("http://localhost:20128/v1", "with-v1")).toBe("http://localhost:20128/v1")
+	})
+
 	it("drops trailing slashes rather than producing /v1/", () => {
 		expect(normaliseBaseUrl("http://localhost:20128//")).toBe("http://localhost:20128/v1")
 		expect(normaliseBaseUrl("http://localhost:20128/v1/")).toBe("http://localhost:20128/v1")
@@ -58,14 +68,17 @@ describe("pointsAtThisInstall", () => {
 })
 
 describe("readToolSettings", () => {
-	it("reads and normalises the three required fields", () => {
+	it("reads the three required fields and leaves the URL as typed", () => {
+		// Which spelling of /v1 a tool wants is that tool's business, so the reader must not
+		// pick one: applying a default here would override the single tool that wants the
+		// other spelling.
 		const read = readToolSettings({
 			baseUrl: "http://localhost:20128",
 			apiKey: "sk-1",
 			model: "gpt-4",
 		})
 		expect(read.input).toEqual({
-			baseUrl: "http://localhost:20128/v1",
+			baseUrl: "http://localhost:20128",
 			apiKey: "sk-1",
 			model: "gpt-4",
 		})
@@ -124,6 +137,7 @@ function tool(overrides: Record<string, unknown> = {}) {
 				written.push(text)
 				config = JSON.parse(text)
 			}),
+			baseUrlSuffix: "with-v1" as const,
 			installKeys: ["openai-compatible", "9router"],
 			storedBaseUrl: (c: Record<string, unknown> | null) => {
 				const entry = c?.["openai-compatible"] as Record<string, unknown> | undefined
@@ -145,7 +159,13 @@ function tool(overrides: Record<string, unknown> = {}) {
 		appliedMessage: "applied",
 		resetMessage: "reset",
 	}
-	return Object.assign(deps, overrides)
+	// Overrides may patch the config port itself; fold them into the port so the use-case,
+	// which reads through `deps.config`, sees the patched behaviour.
+	return {
+		...deps,
+		...overrides,
+		config: overrides.config ? { ...deps.config, ...(overrides.config as object) } : deps.config,
+	}
 }
 
 describe("readToolSettingsStatus", () => {
@@ -187,6 +207,19 @@ describe("writeToolSettings", () => {
 				apiKey: "k",
 				model: "m",
 			},
+		})
+	})
+
+	it("writes the spelling the tool declares, not a house default", async () => {
+		// The bug this guards: one normalisation shared by all tools writes /v1/v1 for Cline.
+		const deps = tool({ config: { baseUrlSuffix: "without-v1" } })
+		await writeToolSettings(
+			{ baseUrl: "http://localhost:20128/v1", apiKey: "k", model: "m" },
+			deps as never,
+		)
+
+		expect(deps.getConfig()).toMatchObject({
+			"openai-compatible": { baseUrl: "http://localhost:20128" },
 		})
 	})
 
