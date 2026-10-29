@@ -358,3 +358,73 @@ The rule this adds to the checklist: for each route, ask *two* questions, not on
 Does the handler derive anything from the session (which decides argument equivalence),
 and is the path on `PUBLIC_API_PATHS` (which decides the gate). Reading only the
 handler answers the first and silently guesses at the second.
+
+## Two defects the `models` batch surfaced, one of them mine
+
+**Mine: oRPC's validation refusal was arriving as a 500.** `statusOf()` in
+`apps/web/src/lib/routeErrors.ts` knew `VALIDATION` but not `BAD_REQUEST`, which is the
+code `@orpc/server` throws when a procedure's input schema rejects a call
+(`validateInput` → `new ORPCError("BAD_REQUEST", { message: "Input validation failed" })`).
+So six migrated routes answered 500 — "the server broke" — for a body the caller got
+wrong, where the legacy route answered 400 from the use-case's own `invalid()`. The
+adopt-a-procedure step moves validation *earlier*, so it landed before the use-case
+could produce the code `statusOf` understood. Fixed in the one mapping table, not per
+route: `POST /models/{availability,disabled,custom,test}` and `PUT /models/alias` all
+answer 400 again, with the message intact.
+
+**Not mine: `PATCH /api/pricing` accepts `{provider: {}}` and writes a provider named
+"provider".** Found by sending a deliberately wrong body while checking the status
+codes. `parsePricingUpdate` iterates `Object.entries(body)` and validates the shape of
+each provider's value, never the provider's name, so the key `"provider"` becomes a real
+row. The pre-migration route called the same `updatePricing(body)`, so this predates the
+migration and is not something the move introduced. Recorded rather than fixed, because
+changing what the domain accepts is a behaviour change with its own question — should an
+unknown provider be refused, or is the table deliberately open so an operator can price a
+provider the catalogue does not know yet? The probe row it created was deleted.
+
+**One route is deliberately left unmigrated.** `POST /api/models/catalog-sync` calls
+`catalogueSync.runNow()`, and the `models` router has no such procedure — its header says
+starting a sync is absent on purpose, because the oRPC transport is reachable with an API
+key and a sync rewrites the catalogue. Same boundary as pxpipe's `install`/`start`. The
+reason is now a comment in that route file, so the next person to notice the missing
+procedure reads the decision instead of adding it.
+
+## Two bugs the unit tests could not see
+
+The `providers` migration finished green — 7735 passing, `tsc` clean in both apps — and then
+four live probes answered 500. Both causes are seams: every test imported both ends of each
+seam from one module graph, so the disagreement was invisible until a real request crossed it.
+
+**The dashboard issued cookies its own API refused.** `createDashboardAuthToken` signed
+`{ authenticated, role }`; `sessionFromClaims` and `sessionClaimsOf` both require a `userId`,
+on the deliberate rule that "a valid signature proves the token came from us, not that it
+belongs to anyone". Four sign-in paths (password, API key, OIDC, SAML) all passed claims
+without an id, so every guarded route answered 401 to a correctly-logged-in operator. This was
+not a `providers` bug: `/api/pricing`, `/api/models` and `/api/keys` were equally dead, and had
+been since the routes started resolving a session.
+
+The fix belongs in the issuer, not the readers: dropping the `userId` rule would have let a
+token that names nobody through the auth gate, which is the more dangerous of the two
+failures. `sessionClaims` now stamps `userId: "dashboard"` — this install is single-tenant,
+one owner behind one password — and a caller-supplied id still wins, so a real user record is
+never overwritten.
+
+**`instanceof AppError` fails across Next's transpile boundary.** `error-mapping.ts` and
+`domain/errors.ts` end up evaluated once per chunk, and the two `AppError` classes cannot
+recognise each other. Every `notFound`, `invalid` and `conflict` thrown by a use-case became a
+bare 500: `POST /api/providers/nope/test` answered "Internal server error" instead of 404, and
+`test-batch` with an unknown mode lost the message naming the valid modes. `toORPCError` now
+matches on the shape — a `code` this vocabulary defines plus a string `message` — which is
+also what `apps/web`'s routes had already been doing with their local `isAppError(error, code)`
+helpers. The `instanceof` check stays first, so the common path costs nothing extra.
+
+**Both now have a test at the seam, and both tests were verified by reverting the fix.**
+`dashboard-session-seam.test.ts` signs with the issuer and reads with the reader;
+`orpc-error-mapping.test.ts` stands a plain object in for the other chunk's instance. The
+first version of the reachability test passed while the code was wrong — these fail when the
+fix is removed, which is the only evidence that a test about a seam is worth its keep.
+
+**A reminder about `NextResponse.json(promise)`.** `webLogin.available()` and `abandon()` are
+synchronous in the use-case but every client method returns a promise, so a missing `await`
+serialised as `{}`. It type-checks: `NextResponse.json` accepts `any`. Any route that returns
+a client call without `await` is a silent empty body, and nothing catches it but a live probe.

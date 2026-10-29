@@ -2137,3 +2137,297 @@ is public on a guarded path". Same sabotage now fails with
 `expected [ '/api/pricing:get' ] to deeply equal []`.
 
 Gates: typecheck 0, 7735 passed / 0 failed (6 new).
+
+## `models` and `pxpipe` — six routes, one refusal, and a status-code regression
+
+`models` (2 methods), the six `models/*` sub-routes, and the four pxpipe controls all
+delegate to procedures that already existed. The pattern from `pricing` held: no handler
+reads a session, no path is public, so the client carries the session and the procedures
+stay `authed`.
+
+Live at the port, with a password session: catalogue 200, alias/availability/custom/
+disabled/catalog-sync 200, pxpipe status/logs/health 200 on both GET and POST, anonymous
+401 from the guard. `?limit=` still obeys the router's rule — `2` honoured, `abc`→100 with
+`adjusted: true`, `999999`→500 — which is how I know the argument survived the hop, since
+`null` and absent are the same to the old use-case but not to `z.string().optional()`.
+
+**The batch found a status-code regression that only the migration could reveal.** Six
+routes answered 500 for a body the caller got wrong. `statusOf` mapped `VALIDATION` but
+not `BAD_REQUEST`, the code `@orpc/server` throws from `validateInput`. The old shape was
+`route → use-case`, where `invalid()` supplies the code; adopting a procedure moves
+validation one step earlier, into the transport, so it refused before the use-case could
+produce the code the table understood. Fixed in the one mapping table.
+
+**One route stayed unmigrated on purpose.** `POST /api/models/catalog-sync` calls
+`catalogueSync.runNow()`, and the `models` router has no such procedure — deliberately,
+its header says starting a sync is absent because the transport is reachable with an API
+key and a sync rewrites the catalogue. Recording the reason in the route file is the
+point: the next person to notice the gap reads it instead of filling it.
+
+**A pre-existing bug, found and left alone.** `PATCH /api/pricing` accepts
+`{provider: {}}` and writes a provider literally named `"provider"`, because
+`parsePricingUpdate` validates each provider's value but never its name. The
+pre-migration route called the same use-case, so this is not the migration's doing.
+Recorded in findings rather than fixed: whether an unknown provider should be refused is
+a policy question, not a cleanup. The probe row was deleted.
+
+`tests/unit/sidebar-usage-ownedby.test.ts` needed retargeting: it pinned the literal
+`customModels.add(await request.json())` to prove `ownedBy` is not dropped. The assertion
+now pins the same intent against the new call — body reaches `custom.add` whole, route
+never mentions `ownedBy`.
+
+Gates: typecheck 0, 7735 passed / 0 failed.
+
+## `providers` — the first router built from scratch, and the cost of that
+
+`providers` was not in `appRouter` at all. Twelve namespaces existed; this one did not. So
+the work was not adoption but creation: five procedures (list/get/create/update/remove),
+two routes delegating to them, and a new namespace registered in `router.ts`.
+
+**The caller question finally has a real answer, and it is "no".** `connections.list()`
+takes no caller argument and strips secrets in the use-case's own `toResponse`, so there
+is nothing to narrow. That is the opposite of `usage` (`null` filter widening a key's
+report to every key) and `dashboard-keys` (`role: "admin"` clearing a sub-key gate). The
+router comment records the contrast so the next reader does not re-derive it.
+
+**A 409 became a 500, and no type checker could see it.** The store refuses a duplicate
+name by throwing a plain error with `code: "PROVIDER_NAME_CONFLICT"` plus the id and name
+of the row holding it — `existingId` is what lets the dashboard offer "edit the existing
+one instead". `toORPCError` turns any non-`AppError` throw into `INTERNAL` with a generic
+message, so the transport flattened it. Found by creating the same name twice at the port;
+the second answered 500.
+
+Fixed at the layer that already speaks the store's vocabulary: `nameConflictAsDomainError`
+in `manage-connections.ts` converts it to `conflict(...)`, carried on both create and
+update. `AppError` gained an optional `data` field, distinct from `detail` — `detail` is
+for the log, `data` is what a client acts on — and `toORPCError` forwards it. Then
+`isNameConflict` learned to read both shapes, since the raw store error is still what a
+direct in-process caller sees. Verified after: 201, then 409 carrying `existingId` and
+`existingName`, unknown provider still 400, count back to 73.
+
+**Three tests needed the session mocked.** They already fake `next/server` and
+`@/lib/useCases` because building the real graph opens a second SQLite handle; the session
+is now part of that same wiring. Without it `cookies()` throws "outside a request scope"
+and they fail for a reason unrelated to what they assert. I considered making the route
+tolerate a missing scope — and rejected it: a route that silently proceeds without a
+session is exactly the class of bug this migration keeps finding.
+
+**Ten provider routes remain, deliberately.** `models`, `overrides`, `test`, `test-models`,
+`test-batch`, `validate`, `web-login`, `client`, `kilo/free-models`, `suggested-models` —
+a larger surface, several reaching the network. A half-populated namespace would read as
+done, so they are their own step.
+
+Gates: typecheck 0, 7735 passed / 0 failed.
+
+## providers: the remaining ten
+
+All ten routes are on oRPC: `[id]/models`, `[id]/overrides`, `[id]/test`,
+`[id]/test-models`, `client`, `kilo/free-models`, `suggested-models`, `test-batch`,
+`validate`, `web-login`. The namespace now holds eighteen procedures and the route files
+are three-line delegations.
+
+**Two of the ten carry a status the code cannot express.** `list-provider-models.ts`
+raises `ProviderRefusal` with whatever the provider answered, and `check-connection.ts` can
+run past its ceiling. Neither is a `BAD_REQUEST`/`NOT_FOUND` story, so
+`ProviderRefusal` now extends `AppError` and passes its status through; `toORPCError` lets
+a carried status win over `statusFor(code)`, and `statusOf` on the web side does the same
+before falling back to the code table. Without both halves a 429 became a 502 and a 504
+became a 500 — the panel would have told the operator to open a ticket instead of waiting.
+
+**Not every route could become a bare round-trip.** Three still shape their answer:
+`kilo/free-models` switches on `kind` so "fresh", "cached", "stale" and "failed" stay
+distinguishable (and a failure is a 502, not a 500); `suggested-models` decides which of
+`stale`/`error`/`syncedAt` to include; `web-login` POST answers 202 because starting a
+login is not completing one. Those are statements about the HTTP response, so they belong
+in the route — the use-case does not know it is being spoken to over HTTP.
+
+**`testBatch` types `mode` but does not enumerate it.** An enum in the Zod schema would
+answer "invalid input" where `test-connections.ts` answers "use one of these three modes".
+Validation moved into the transport once and cost six routes their 400s; the lesson generalises
+to messages, not just statuses.
+
+**`webLogin` is four procedures behind the same password session.** `begin` opens a headed
+browser on the host, which is exactly the kind of capability that must not be reachable
+with an API key — it stays inside the guarded namespace, and `/api/providers/web-login` is
+not on `PUBLIC_API_PATHS`.
+
+Gates: `tsc` clean in both `apps/web` and `apps/api`.
+
+## `settings` — eleven routes, and the one credential the body must not carry
+
+All eleven settings paths are on oRPC: `read`/`write` (`/api/settings`), `loginGate`
+(`require-login`), `history.list`/`history.read`/`history.revert`
+(`/api/settings/history`, `/rollback`), `autoBackup.{read,write,sendNow}`
+(`/api/settings/auto-backup`), and `database.{read,write,startJob,readJob}`
+(`/api/settings/database`, `.../jobs`, `.../jobs/[jobId]`).
+
+**`context.headers` went from optional to required, and that was the point.** The four
+database procedures read `x-9r-password`, `x-9r-cli-token` and `x-9r-poll-token` off the
+request. If a caller may omit headers, then `database.write` has a code path where a
+restore proceeds with no credential at all — a hole that typechecks. Making the field
+required turned that hypothesis into 35 compile errors across the app, which is the only
+reason every other route now demonstrably forwards `request.headers`.
+
+**The body carries the password, and the header decides.** `POST /api/settings/database`
+posts JSON `{password, database}` because the browser cannot send a form with a dump that
+size; `POST .../jobs` does the same. So the credential exists in two places for one call,
+and it is easy for the procedure to trust the body's copy — which a script can set to
+anything. `credentialsFrom(request.headers)` stays the only source of truth; the body
+password is the *document* being restored, checked and stripped before the write.
+
+**`GET .../database?summary=true` needs no credential, and is still guarded.** The login
+screen reads the summary before anyone signs in, so the use-case must allow it — but
+`/api/settings/database` is not on `PUBLIC_API_PATHS`, so `dashboardGuard` answers 401
+before the handler runs. Both statements are true and only one of them is reachable; the
+use-case branch exists for the internal callers, not the HTTP path. Passing the raw query
+string through rather than parsing `summary` in the route keeps that decision in one place.
+
+**A 202 stays in the route.** `POST .../jobs` answers 202 because *starting* a restore is
+not *completing* one. The use-case returns a job, not a restore, so the status is the
+route's to choose — same rule as `web-login`.
+
+**`sessionRole()` is gone.** It existed to read one field of the session for the routes
+being migrated; once none called it, it was dead code, and dead auth helpers are worse than
+dead utilities because they look like an access-control path. `grep -rn sessionRole
+apps/web/src tests` now finds only two local variables in components.
+
+Gates: `tsc` clean in both `apps/web` and `apps/api`; `apps/web/src/lib/sessionRole.ts`
+deleted.
+
+## `oauth` — sixteen of twenty, and the two that must not be procedures
+
+Sixteen routes now go through `oauth.*`: the twelve `credentials.*` importers
+(`codex/import-token`, `cursor/import`, `kiro/import`, `zed/import`, `{kiro,xiaomi-mimo}/api-key`,
+`{codex,grok-cli}/bulk-import`, `{kiro,xiaomi-mimo,zed,cursor}/auto-import`) plus
+`gitlabPat`, `iflowCookie` and `kiroSocial.{authorize,exchange}`.
+
+**The refusals needed a third mapping path.** `importToken`, `importApiKey`, `importBatch`,
+`gitlabPat`, `iflowCookie`, `kiroSocial.*` and `startMimoLogin` all answer
+`{ ok, status, error }` instead of throwing, and the status is the provider's — 401 for a
+refused token, 409 for a key Kiro already holds, 502 for an unreachable upstream. That is
+the `ProviderRefusal` problem again in a second family, so `orRefuse` in
+`presentation/orpc/refusal.ts` throws an `AppError` carrying `status`. Without it every one
+of these would have become a bare 200-with-error-body, which is worse than a 500: the panel
+would show a green toast.
+
+**`bulkImport` and `autoImport` are not refusals, and `orRefuse` would have been wrong.**
+`BulkImportAnswer` answers counts — "three of five imported" is a 200, and an error status
+would hide the three. `CredentialSearch` answers `{ found: false }` — nobody has logged into
+Kiro yet is the expected state on a fresh install, not a failure. The type checker caught
+both when `orRefuse` demanded `ok`; the lesson is that "returns a status" and "is a refusal"
+are different questions.
+
+**`iflow/cookie` was calling bare `fetch`.** It passed `fetchImpl: fetch`, so the SSRF guard
+never ran on a path whose upstream host comes from the request. Routing it through the same
+`fetchForCaller` as the GitLab PAT closed a real hole rather than merely tidying.
+
+**`fetchForCaller` is `required`, not defaulted.** The obvious fallback (`() => fetch`)
+silently skips the guard. A host with no opinion now has to write `() => fetch` where
+someone will see it.
+
+**Four routes stay where they are, by decision.** `[provider]/[action]` (`authorize`,
+`start-proxy`, `device-code`, `register-session`, `exchange`, `poll`, `manual-code`),
+`kiro/import-cli-proxy`, `xiaomi-mimo/login/start` and `login/status`: they mint in-memory
+OAuth sessions and set an httpOnly cookie the browser must receive. A cookie is not a value
+a procedure may return, and turning `beginSession` into procedure input would put a
+credential on the caller's side of the boundary — the same mistake the database routes
+avoid with headers. They keep calling the provider layer directly until there is a port
+that returns the cookie as transport state.
+
+Gates: `tsc` clean in both `apps/web` and `apps/api`.
+
+## tunnel, headroom and media-providers: what a status means
+
+Three areas, seventeen routes, and the same lesson finally written down in the code rather
+than in this file: **oRPC carries data, so a status only exists once a route puts it there.**
+
+**`headroom.stop` answers 409, and that is not a trend.** Stopping a proxy that was never
+running is a state change that did not happen; a 200 would leave the dashboard showing
+"stopped" for a proxy it never had. So `stop` returns `{status, ...body}` and the route
+lifts that field into the HTTP status. Nothing else in these seventeen does this — every
+other refusal is a thrown `AppError` with a `status`. The rule is "a body carries a status
+only when the use-case's answer *is* a status", not "bodies may carry statuses".
+
+**`tunnel.tailscaleInstall` splits the decision from the stream.** Installing Tailscale
+streams its progress, and a stream is transport. Only the *decision* moved: `prepareInstall`
+refuses a request with no password, so the form gets a 400 it can render instead of an event
+nobody styled. The SSE stays in the route. This is the same boundary the four `oauth` routes
+sit on from the other side.
+
+**Media providers had five copies of one sequence.** `Read the connection → call the
+provider → group by language` was identical and drifting across `tts/voices`, `deepgram`,
+`elevenlabs`, `inworld` and `minimax`. The *shapes* genuinely differ — each provider names
+its id, its languages and its failures differently — so each keeps its own shape function in
+`application/tts/tts-voices.ts`; only the sequence was shared.
+
+Three boundary rules in there are silent if broken, so
+`tests/unit/tts-voices-boundaries.test.ts` pins them:
+
+- **A missing connection is 400, not 502.** Nothing upstream failed; the caller has not
+  connected the provider yet, and the dashboard renders that as an instruction.
+- **MiniMax reports failure inside a 200 body.** `base_resp.status_code` is the real verdict;
+  checking `res.ok` alone hands the picker an empty list and no reason why.
+- **An unknown `?provider=` is 400 with the name in it.** 502 would blame the network for the
+  caller's typo.
+
+`?lang=` is applied **before** grouping, deliberately: filtering afterwards advertises
+languages whose list is now empty.
+
+Gates this round: `tsc` 0 errors; 10 new tests pass; the failing-test set is identical before
+and after the change (447 names, `comm -13` empty) — the suite still carries pre-existing
+`vi.*`-under-`bun test` failures, and comparing the *set* is the only honest way to read a
+nonzero exit there. Live: all 17 routes answer 401/403 anonymously, none 500.
+
+## usage: three silent rules and one loud one
+
+`usage` is the biggest area left and the one with the most decisions hiding in route bodies.
+Twenty-two routes; the twelve panels left were plumbing. Three use-cases carry the rest.
+
+**Quota used is the larger of two numbers.** `usedTokens` on the key row is a committed
+counter; the sum over the usage log is what has actually happened. Either can be ahead — the
+column lags a write in flight, the log lags a reset. Reading only the column made a spent key
+look fresh; reading only the log ignored a reset the column had already applied. The report
+takes `max` and the test names both directions, because getting this backwards is invisible:
+the page shows a plausible percentage either way.
+
+**The "Deleted keys" row belongs to callers who see every key.** An API-key session is
+narrowed to its own key by `visibleKeys`; folding "aggregates with no matching key" into an
+orphan row would show that caller another branch's traffic under the label "deleted". The
+orphan row is built only when the caller's visible set is the full set.
+
+**A missing query port is a fault, not an empty page.** `usagePanels.errorRows` and
+`keyUsage.aggregatesOf` are supplied by the infrastructure factory, so they are optional on the
+host contract — and an optional port that silently answers `[]` renders as "no API keys yet"
+on an install with plenty. Both use-cases therefore refuse at construction. This is the
+`required()` lesson from last round applied where the host, not the factory, is the caller.
+
+**The connection read is the loud one.** Five steps used to be inline: read by id, gate
+eligibility, refresh only when OAuth, retry only when a refresh token exists, read an
+"expired" answer that arrived as a 200. Reordering is not a cosmetic defect — OpenAI rotates
+the refresh token on every refresh, so refreshing from a stale snapshot revokes the session and
+signs the operator out. `readConnectionUsage` states the order once and the test asserts the
+*sequence* (`["refresh", "usage"]`), not just the end state.
+
+Two statuses are deliberately odd and pinned: "usage not available for this provider" is a
+**200 with a message** (the panel renders an explanation, not an error), and a failed refresh
+is a **401, not a 500** (the credentials are wrong; the server is fine). The
+`refreshAndUpdateCredentials` helper moved out of `[connectionId]/route.ts` into
+`lib/usage/connectionRefresh.ts` — `codex-reset-credits` and `claude-reset` both drove that
+path, and two copies would drift on the one field that matters.
+
+Gates: `tsc` 0 errors; 11 new tests pass; all 22 routes answer 401/403 anonymously, none 500.
+
+**The leak that looked like a regression.** The before/after failing *sets* differed by 25
+names, all in `capabilities-opus-context.test.ts`, resolving 1M Opus models to `222222` — a
+number that appears nowhere in that test. It passed alone, in every pair I tried, and in a
+clean worktree carrying the same diff. The cause was
+`capabilities-memo.test.ts` leaving its fake catalog reader in
+`globalThis.__9rCatalogSource`: the last case never reset it, and `refine()` reads that slot.
+Its own `beforeEach` protected the next test *in the same file* and nothing else.
+
+Two habits worth keeping from it. A `globalThis` slot outlives the file, so the reset belongs
+in `afterEach` as well as `beforeEach`. And when a worktree carrying the identical diff does
+*not* reproduce a failure, the difference is state, not code — the bisect should start at what
+the suite leaves behind, not at the diff.
+
+Fixing it resolved 240 pre-existing failures: every file that had been inheriting `222222`.
