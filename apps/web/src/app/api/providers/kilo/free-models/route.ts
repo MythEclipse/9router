@@ -1,57 +1,24 @@
 import { NextResponse } from "next/server"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-const KILO_MODELS_URL = "https://api.kilo.ai/api/gateway/models"
-
-// In-memory cache with TTL
-let cachedModels = null
-let cacheTimestamp = 0
-const CACHE_TTL_MS = 60 * 60 * 1000 // 1 hour
-
+// GET /api/providers/kilo/free-models - Kilo's free tier, cached for an hour and
+// served stale rather than empty when the upstream refuses.
 export async function GET() {
-	const now = Date.now()
+	const result = await getUseCases().freeModels.list()
 
-	// Return cached result if still valid
-	if (cachedModels && now - cacheTimestamp < CACHE_TTL_MS) {
-		return NextResponse.json({ models: cachedModels, cached: true })
-	}
-
-	try {
-		const res = await fetch(KILO_MODELS_URL, {
-			headers: { Accept: "application/json" },
-			signal: AbortSignal.timeout(10000),
-		})
-
-		if (!res.ok) {
-			throw new Error(`Kilo API returned ${res.status}`)
-		}
-
-		const json = await res.json()
-		const allModels = json.data || []
-
-		const freeModels = allModels
-			.filter((m) => m.isFree === true)
-			.map((m) => ({
-				id: m.id,
-				name: m.name,
-				isFree: true,
-				context_length: m.context_length || 0,
-			}))
-
-		cachedModels = freeModels
-		cacheTimestamp = now
-
-		return NextResponse.json({ models: freeModels, cached: false })
-	} catch (error) {
-		// Return cached data if available, even if expired
-		if (cachedModels) {
-			return NextResponse.json({ models: cachedModels, cached: true, warning: error.message })
-		}
-
-		return NextResponse.json(
-			{ models: [], error: `Failed to fetch Kilo models: ${error.message}` },
-			{ status: 502 },
-		)
+	switch (result.kind) {
+		case "fresh":
+			return NextResponse.json({ models: result.models, cached: false })
+		case "cached":
+			return NextResponse.json({ models: result.models, cached: true })
+		case "stale":
+			return NextResponse.json({ models: result.models, cached: true, warning: result.warning })
+		default:
+			return NextResponse.json(
+				{ models: [], error: `Failed to fetch Kilo models: ${result.message}` },
+				{ status: 502 },
+			)
 	}
 }

@@ -72,6 +72,42 @@ describe("provider test-models route kind routing", () => {
 	})
 
 	it("routes huggingface image models to /api/v1/images/generations", async () => {
+		// The route delegates to the probe use-case now. Building the whole graph
+		// would open a second SQLite handle, which `createDb` refuses under Vitest,
+		// so the use-case is assembled over the mocked connection store and the real
+		// host functions — the routing under test is `pingModelByKind`'s, unchanged.
+		const { makeProbeModels } = await import(
+			"../../apps/api/src/application/providers/probe-models.ts"
+		)
+		const host = await import("@/lib/providerConnectionHost")
+		const probeModels = makeProbeModels({
+			connections: {
+				find: (id) => mocks.getProviderConnectionById(id),
+				list: async () => [],
+				create: async () => {
+					throw new Error("unused")
+				},
+				update: async () => null,
+				remove: async () => false,
+			},
+			catalogue: {
+				label: (p) => p,
+				isOpenAICompatible: () => false,
+				isAnthropicCompatible: () => false,
+				isCustomEmbedding: () => false,
+				isWebCookie: () => false,
+				apiKeySubstituteField: () => null,
+				isCreatable: () => true,
+				usesAwsCredentialForm: () => false,
+			},
+			knownModels: host.probeTargetsFor,
+			aliasOf: host.providerAliasOf,
+			liveModels: async () => null,
+			probe: host.probeModel,
+			isSerialProbe: host.isSerialProbe,
+		})
+		vi.doMock("@/lib/useCases", () => ({ getUseCases: () => ({ probeModels }) }))
+
 		const { POST } = await import("../../apps/web/src/app/api/providers/[id]/test-models/route.js")
 
 		const req = new Request("http://localhost/api/providers/conn-hf/test-models", {
