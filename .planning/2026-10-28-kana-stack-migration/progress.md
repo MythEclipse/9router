@@ -1161,3 +1161,60 @@ clean, biome clean, `bun run build` exit 0, gateway baseline unchanged (`/login`
 401 for GET, PATCH and POST).
 
 **`settings` is done — 9 of 9.** Remaining overall: 128 of 174.
+
+## proxy-pools, part 1 — CRUD and the egress test
+
+Four handlers (`route`, `[id]`, `bulk`, `[id]/test`). Two rules had three copies each:
+what a proxy URL must look like, and whether a pool may be deleted. Both are now in
+`domain/proxy-pool.ts`.
+
+The rule worth naming is the deletion one. A connection stores its `proxyPoolId` inside
+an opaque JSON column, so deleting a bound pool leaves the connection pointing at
+nothing and the failure surfaces later as a dial error with no trail back to the
+deletion. The single delete refused it; the bulk delete refused it too, but each had its
+own copy of the count and its own wording. There is now one `boundConnectionCount` and
+two refusals that differ only in message — "currently in use" versus "some pools are
+currently in use" — because the screen needs to name what is in the way.
+
+Three defects the extraction fixed:
+
+- **The bulk delete could partially delete.** If one selected pool was bound, it answered
+  409 — correct — but a *second* request with the bound pool removed deleted the rest one
+  at a time. Nothing here changed that, but `deletionOutcome` now reports the ids the
+  store did not remove, so a partial delete can no longer be reported as complete.
+- **A socks URL was accepted at save time.** The runtime cannot dial it, the no-leak
+  policy then blocks the direct fallback, and the dashboard shows a healthy pool that
+  answers every request with `UnsupportedProxyProtocol`. Refused at save now, where the
+  operator can still fix it.
+- **A test moved `isActive` and said so nowhere.** A failing test now deactivates the
+  pool so the router stops retrying a known-broken path, and a passing test re-activates
+  one that was switched off. Both directions are stated in the domain, because the next
+  reader will otherwise "fix" it as a bug.
+
+**Two structural corrections along the way.**
+
+`ProxyPoolStore` already existed — a one-method port (`exists`) that the provider
+create-path uses. I first added a second port with the same name in the same
+dependencies interface. The compiler refused, and rightly: the row type is shared by two
+readers, so the port was extended rather than duplicated.
+
+Then a `git checkout --` of the factory, meant to undo a bad regex, reverted 240 lines
+instead of 16 — the regex had eaten from my `proxyPools` block to the end of the object.
+Nothing was lost (the work was committed), but the lesson is worth recording: a regex
+that matches "a block" in a 636-line file is not a safe edit, and `patch` with a unique
+anchor is. One knock-on broke: `dashboardJobHandlers.ts` called the `[id]/test` handler
+in-process with `params: { id }`, and the delegation now takes `params: Promise<{id}>`.
+
+Also worth noting: `proxyPoolHost.ts` initially imported `server-only`, which broke four
+test files that import `providerConnectionHost` (now re-exporting the pool host). The
+neighbouring hosts do not carry that import, and the fix was to match them rather than
+to teach the test runner about a Next-specific package.
+
+Verification: 602 files / 6799 tests passing (74 skipped), both packages typecheck clean,
+biome clean, `bun run build` exit 0, gateway baseline unchanged (`/login` 200,
+`/api/health` 200, `/v1/models` 401, `/api/proxy-pools` 401 with and without
+`includeUsage`, `/api/proxy-pools/xyz` 401, `POST /api/proxy-pools` 401,
+`DELETE /api/proxy-pools/bulk` 401).
+
+Remaining in `proxy-pools`: 5 of 9 (four deploy routes, `import-jobs`).
+Remaining overall: 124 of 174.

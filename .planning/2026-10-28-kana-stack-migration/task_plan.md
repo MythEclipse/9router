@@ -57,6 +57,7 @@ three packages report 0 `tsc` errors and `biome check` is clean.
 | `shutdown`     | 2      | done — one sequence, two gates; 403 vs 401 kept distinct |
 | `pxpipe`       | 8      | done — one list-limit rule; engine codes no longer flattened |
 | `model-registry` | 12 | done — list/alias/availability/custom/studio/nodes/catalogue; transport whitelist now actually applied |
+| `proxy-pools`  | 9      | **4 of 9 done** — `route`, `[id]`, `bulk`, `[id]/test`; 5 remaining (deploy ×4, import-jobs) |
 | `providers`    | 12 | **done** — connection CRUD, overrides, kilo/free-models, test-models, test-batch, client, `[id]/test`, suggested-models, `validate`, `web-login`, `[id]/models` |
 | (136 more)     | 136    | pending |
 
