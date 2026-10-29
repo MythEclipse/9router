@@ -74,7 +74,29 @@ const validateCredential = makeValidateCredential({
 	commandCodeBody: host.commandCodeBody,
 	randomId: () => "session-id",
 })
-vi.doMock("@/lib/useCases", () => ({ getUseCases: () => ({ validateCredential }) }))
+/**
+ * The models route is a delegation now, so it needs the graph. Assembling it over
+ * the real host functions with only the connection store stubbed keeps the Nous
+ * filtering — the thing this test exists to protect — running for real.
+ */
+const { makeListProviderModels } = await import(
+	"../../apps/api/src/application/providers/list-provider-models.ts"
+)
+const modelsHost = await import("@/lib/providerModelsHost")
+const listProviderModelsUseCase = makeListProviderModels({
+	connections: {
+		find: async (id) => mocks.getProviderConnectionById(id),
+	},
+	catalogue: {
+		...host.providerCatalogue,
+		modelListAdapter: modelsHost.modelListAdapter,
+	},
+	fetchModels: modelsHost.fetchModels,
+	resolveCustom: modelsHost.resolveCustomModels,
+})
+vi.doMock("@/lib/useCases", () => ({
+	getUseCases: () => ({ validateCredential, listProviderModels: listProviderModelsUseCase }),
+}))
 
 const { POST: validateProvider } = await import(
 	"../../apps/web/src/app/api/providers/validate/route.js"

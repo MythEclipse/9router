@@ -109,24 +109,29 @@ describe("authenticated model discovery", () => {
 		"models",
 		"route.ts",
 	)
-	const source = readFileSync(ROUTE, "utf8")
+	// The table moved with the logic: the route is a delegation, and the host that
+	// builds the request is what must know every batch provider's endpoint.
+	const HOST = join(dirname(ROUTE), "..", "..", "..", "..", "..", "lib", "providerModelsHost.ts")
+	const source = readFileSync(HOST, "utf8")
 
 	it("registers every batch provider in the /models resolver", () => {
 		// Without an entry here the route answers
 		// 400 "Provider X does not support models listing" and live discovery
 		// silently fails once a key is saved.
 		for (const p of BATCH.map((x) => x.id)) {
-			expect(source).toContain(`${p}: createOpenAIModelsConfig(`)
+			expect(source, `no models adapter for ${p}`).toMatch(
+				new RegExp(`\\b${p.replace(/[-.]/g, "\\$&")}:\\s*(openAIModels|bearerModels)\\(`),
+			)
 		}
 	})
 
 	it("points each entry at that provider's own /models URL", () => {
 		for (const p of BATCH) {
-			const line = source
-				.split("\n")
-				.find((l) => l.trim().startsWith(`${p.id}: createOpenAIModelsConfig(`))
-			expect(line, `no models entry for ${p.id}`).toBeTruthy()
-			expect(line).toContain(p.modelsUrl)
+			// The entry may be written inline or through the shape helper, so the
+			// invariant is the pair: this provider, and this URL beneath it.
+			const block = source.slice(source.indexOf(`\t${p.id}:`))
+			expect(block, `no models entry for ${p.id}`).not.toBe("")
+			expect(block.slice(0, 300), `wrong URL for ${p.id}`).toContain(p.modelsUrl)
 		}
 	})
 })

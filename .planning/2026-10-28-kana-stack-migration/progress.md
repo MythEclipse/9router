@@ -930,3 +930,56 @@ clean, `bun run build` exit 0, gateway baseline unchanged (`/login` 200,
 `/api/providers/web-login` 401).
 
 Remaining: 146 of 168 handlers (1 of 12 in `providers`).
+
+## providers batch, part 5 — the last handler (`[id]/models`)
+
+802 lines, and the reason it was last: it is not one handler. It is 15 provider
+adapters behind one URL, and three of the things it does are production bugs
+waiting for a refactor that reads carelessly.
+
+**What moved where.** `domain/model-list.ts` holds only what is genuinely shared:
+the two URL shapes (`modelsEndpoint`, and `anthropicModelsBaseUrl` which strips a
+pasted `/v1/messages` back to the version root) and the two-answer-shapes reader.
+The per-provider mess — 34 fixed endpoints, 15 resolvers, GitHub filtering to
+`capabilities.type === "chat"` with a non-disabled policy, Codex appending
+`-review` variants, Nous prefixing `nous/` so Basic Chat does not read the vendor
+namespace as a provider, Gemini CLI's `{ models: { id: entry } }` second shape —
+stays in `apps/web/src/lib/providerModelsHost.ts` where the provider modules live.
+`application/providers/list-provider-models.ts` holds only the order of the
+checks. The route is 49 lines.
+
+**The three bugs that were about to be lost.** All three were in the old code and
+all three are easy to "clean up" into a regression:
+
+1. The Anthropic-compatible branch stripped exactly 9 characters (`slice(0, -9)`).
+   That happens to equal `"/messages".length`, so it worked and nothing said why.
+   It also only stripped once: `/v1/messages/` left a trailing slash and produced
+   `/v1//models`.
+2. `ollama-local` *and* `ollama` both exist. `ollama` is a fixed endpoint at
+   `https://ollama.com/api/tags` (note: `/api/tags`, not `/models`); `ollama-local`
+   is a resolver that reads the operator's own host. Collapsing them would send
+   every local request to the cloud.
+3. The old custom-resolver path raced a 20-second timer against the resolver and
+   on timeout answered 504 — but the raced promise kept running and kept its
+   socket. Every abandoned request left one open. `AbortSignal.timeout` closes it.
+
+**Status honesty.** The old route answered a provider's 429 as the provider's 429
+already; that is preserved and now stated as a rule (`ProviderRefusal` carries the
+status, `invalid()` is only for our own 400s). A provider with no list answers 400
+*naming it*, not a generic failure.
+
+**Nine existing tests broke, and their fixes taught something.** All nine read the
+old route — either as text (`aggregator-providers-batch` asserted the literal
+string `dahl: createOpenAIModelsConfig(`) or as a live handler that opened its own
+DB (`zed-live-models`, `nous-provider-routes`). The text assertion is now a
+behavioural one: find the provider's entry, and assert the URL beneath it. The
+handler tests now assemble the use-case over the *real* host functions with only
+the store stubbed, which is what keeps the Zed resolver and the Nous filtering
+running for real rather than mocked into a tautology.
+
+Verification: 593 files / 6544 tests passing (74 skipped), both packages typecheck
+clean, biome clean on every changed file, `bun run build` exit 0, gateway baseline
+unchanged (`/login` 200, `/api/health` 200, `/v1/models` 401,
+`/api/providers/xyz/models` 401).
+
+**`providers` is complete: 12 of 12.** Remaining: 145 of 168 handlers.

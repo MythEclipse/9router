@@ -81,8 +81,28 @@ let createProviderConnection
 beforeAll(async () => {
 	process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "9router-zed-live-"))
 	vi.resetModules()
-	;({ GET } = await import("@/app/api/providers/[id]/models/route.js"))
 	;({ createProviderConnection } = await import("@/models/index.js"))
+
+	// The route is a delegation now. Assembling the graph over the real host
+	// functions with only the connection store stubbed keeps the Zed resolver —
+	// what this file is about — running for real, while avoiding a second SQLite
+	// handle that `createDb` refuses inside Vitest.
+	const { makeListProviderModels } = await import(
+		"../../apps/api/src/application/providers/list-provider-models.ts"
+	)
+	const host = await import("@/lib/providerConnectionHost")
+	const modelsHost = await import("@/lib/providerModelsHost")
+	const { getProviderConnectionById } = await import("@/models/index.js")
+	const useCase = makeListProviderModels({
+		connections: { find: getProviderConnectionById },
+		catalogue: { ...host.providerCatalogue, modelListAdapter: modelsHost.modelListAdapter },
+		fetchModels: modelsHost.fetchModels,
+		resolveCustom: modelsHost.resolveCustomModels,
+	})
+	vi.doMock("@/lib/useCases", () => ({
+		getUseCases: () => ({ listProviderModels: useCase }),
+	}))
+	;({ GET } = await import("@/app/api/providers/[id]/models/route.js"))
 })
 
 afterAll(() => {
