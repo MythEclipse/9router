@@ -1,4 +1,5 @@
 import { getSessionContext } from "@9router/auth/dashboardPermissions"
+import { tierProbeFailure } from "9router-api/domain/antigravity-tier"
 import { NextResponse } from "next/server"
 import { getAntigravityTier } from "@/lib/usage/antigravityTier"
 
@@ -28,16 +29,12 @@ export async function GET() {
 			headers: { "Cache-Control": "no-store" },
 		})
 	} catch (error) {
-		// A tier probe failure must never break the page; fall back to "unknown"
-		// and let the UI keep its neutral styling.
-		return NextResponse.json(
-			{
-				tierId: null,
-				tierName: null,
-				canUseClaude55: false,
-				error: error?.message || "tier probe failed",
-			},
-			{ status: 200, headers: { "Cache-Control": "no-store" } },
-		)
+		// A tier probe failure must never break the page, so this answers 200 with the models
+		// still marked; `tierProbeFailure` owns that shape so the fallback cannot drift into
+		// claiming 5.5 is available.
+		return NextResponse.json(tierProbeFailure(error), {
+			status: 200,
+			headers: { "Cache-Control": "no-store" },
+		})
 	}
 }

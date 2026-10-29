@@ -1,30 +1,24 @@
 /**
- * antigravityTier.js - can this Antigravity account reach Claude 5.5?
+ * The Antigravity tier probe.
  *
- * Claude Opus/Sonnet 5.5 live behind Antigravity's `standard-tier`, which is a
- * subscription of its own - separate from Google One AI Pro. An account on a
- * Google One trial keeps `currentTier.id = "free-tier"` even though
- * `paidTier.id = "g1-pro-tier"`, and upstream then answers those model ids with
- * 404. So eligibility must be read from the live tier, never assumed.
+ * This module owns the *transport*: read the stored OAuth token, call
+ * `loadCodeAssist` and `fetchAvailableModels`, cache the answer for five minutes.
+ * What the answers *mean* — which tier ids unlock Claude 5.5, whether the catalogue
+ * or the tier id decides, how the operator is told why — is
+ * `apps/api/src/domain/antigravity-tier.ts`, which is where those rules are tested.
  *
- * The probe hits the same endpoints the quota service already uses
- * (loadCodeAssist for the tier, fetchAvailableModels for the catalog), reusing
- * the stored OAuth token from the active Antigravity connection.
+ * Historically this file held both, and the eligibility regex drifted narrower than
+ * the model ids upstream actually publishes; extracting it made that visible.
  */
 
 const DB_PATH = process.env.DATABASE_PATH || "/root/.9router/db/data.sqlite"
 const AG_BASE = "https://daily-cloudcode-pa.googleapis.com/v1internal"
 const UA = "Antigravity/2.11.0 darwin/24.0.0"
 
-// Google One trial / promo accounts report paidTier g1-pro-tier while staying on
-// Antigravity's free-tier. Only a real Antigravity standard-tier unlocks 5.5.
-const PAID_TIER_IDS = new Set(["standard-tier", "g1-pro-tier-standard", "ultra-tier"])
-const CLAUDE55_HINTS = [
-	/opus[-_.]?5[-_.]?5/i,
-	/sonnet[-_.]?5[-_.]?5/i,
-	/opus.?5\.5/i,
-	/sonnet.?5\.5/i,
-]
+import {
+	noAntigravityConnection,
+	presentAntigravityTier,
+} from "9router-api/domain/antigravity-tier"
 
 const CACHE_TTL_MS = 5 * 60 * 1000
 let cache = { at: 0, value: null }
@@ -78,14 +72,7 @@ export async function getAntigravityTier() {
 
 	const token = await readToken()
 	if (!token) {
-		const out = {
-			tierId: null,
-			tierName: null,
-			canUseClaude55: false,
-			catalogHasClaude55: false,
-			modelIds: [],
-			reason: "no-antigravity-connection",
-		}
+		const out = noAntigravityConnection()
 		cache = { at: Date.now(), value: out }
 		return out
 	}
@@ -107,27 +94,15 @@ export async function getAntigravityTier() {
 	// The catalog is the decisive signal: a model listed there is one upstream will
 	// accept. Tier ids are undocumented and have changed before.
 	let modelIds = []
-	let catalogHasClaude55 = false
 	try {
 		const cat = await post("fetchAvailableModels", token)
-		if (cat?.models) {
-			modelIds = Object.keys(cat.models)
-			catalogHasClaude55 = modelIds.some((id) => CLAUDE55_HINTS.some((re) => re.test(id)))
-		}
+		if (cat?.models) modelIds = Object.keys(cat.models)
 	} catch {
-		/* keep defaults */
+		/* keep the default: an empty catalogue is "no answer", which the domain reads
+		   as a failed probe rather than as "nothing available". */
 	}
 
-	const canUseClaude55 = catalogHasClaude55 || (tierId ? PAID_TIER_IDS.has(tierId) : false)
-
-	let reason = "ok"
-	if (!tierId && !modelIds.length) reason = "probe-failed"
-	else if (canUseClaude55) reason = catalogHasClaude55 ? "in-catalog" : "paid-tier"
-	else if (paidTierId && paidTierId !== "free-tier")
-		reason = "google-one-trial-only" // One is paid, Antigravity tier is not
-	else reason = "free-tier"
-
-	const out = { tierId, tierName, canUseClaude55, catalogHasClaude55, modelIds, reason }
+	const out = presentAntigravityTier({ tierId, tierName, paidTierId, modelIds })
 	cache = { at: Date.now(), value: out }
 	return out
 }
