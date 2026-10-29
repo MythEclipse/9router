@@ -1,6 +1,13 @@
 import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { parseAllowedModels } from "@9router/db/repos/allowedModels"
 import { getSettings } from "@9router/db/repos/settingsRepo"
+import {
+	isPageFailure,
+	readRequestDetailsPage,
+	redactionSettingsFrom,
+	redactRequestDetail,
+	shouldIncludePayloads,
+} from "9router-api/domain/observability"
 import { NextResponse } from "next/server"
 import { isAuthenticated } from "@/dashboardGuard"
 import { getRequestDetails } from "@/lib/usageDb"
@@ -11,30 +18,10 @@ export const dynamic = "force-dynamic"
  * GET /api/usage/request-details
  * Query parameters: page, pageSize (1-100), provider, model, connectionId, status, startDate, endDate
  *
- * Payload redaction
- * -----------------
- * The stored details contain full request bodies (user prompts, tool calls) and
- * provider responses. Returning them to every dashboard-authenticated user — or,
- * with requireLogin disabled, to anyone who can reach the port — turns the
- * observability tab into a conversation-history reader for all traffic through
- * the gateway. So `request` / `providerRequest` / `providerResponse` / `response`
- * are withheld by default and only returned when the operator turns on
- * `observabilityIncludePayloads`.
- *
- * The redaction is explicit rather than silent: each withheld field carries a
- * marker saying it was withheld and how to see it, because a bare
- * `{redacted:true}` reads as "this request had no payload" and sends people
- * hunting for a storage bug that isn't there.
+ * Paging and payload redaction are rules, not plumbing: they live in
+ * `domain/observability.ts` (they are tested there), and this handler only reads the
+ * settings those rules need and shapes the reply.
  */
-function withheldMarker(field: string, revealed: unknown) {
-	return {
-		withheld: true,
-		field,
-		bytes: revealed == null ? 0 : JSON.stringify(revealed).length,
-		hint:
-			"Payload hidden. Enable Settings → Observability → include payloads to view request/response bodies.",
-	}
-}
 
 export async function GET(request: Request) {
 	try {
@@ -44,24 +31,20 @@ export async function GET(request: Request) {
 		const allowedModelPatterns = parseAllowedModels(ctx.allowedModels || "*")
 		const { searchParams } = new URL(request.url)
 
-		const pageRaw = parseInt(searchParams.get("page"), 10)
-		const page = Number.isNaN(pageRaw) ? 1 : pageRaw
-		const pageSizeRaw = parseInt(searchParams.get("pageSize"), 10)
-		const pageSize = Number.isNaN(pageSizeRaw) ? 20 : pageSizeRaw
+		const paging = readRequestDetailsPage({
+			page: searchParams.get("page"),
+			pageSize: searchParams.get("pageSize"),
+		})
+		if (isPageFailure(paging)) {
+			return NextResponse.json({ error: paging.error }, { status: paging.status })
+		}
+		const { page, pageSize } = paging.page
 		const provider = searchParams.get("provider")
 		const model = searchParams.get("model")
 		const connectionId = searchParams.get("connectionId")
 		const status = searchParams.get("status")
 		const startDate = searchParams.get("startDate")
 		const endDate = searchParams.get("endDate")
-
-		if (page < 1) {
-			return NextResponse.json({ error: "Page must be >= 1" }, { status: 400 })
-		}
-
-		if (pageSize < 1 || pageSize > 100) {
-			return NextResponse.json({ error: "PageSize must be between 1 and 100" }, { status: 400 })
-		}
 
 		const filter: {
 			page: number
@@ -90,28 +73,24 @@ export async function GET(request: Request) {
 
 		let includePayloads = false
 		try {
-			const settings = await getSettings()
-			includePayloads = settings?.observabilityIncludePayloads === true
-			// A gateway with login disabled serves /api/usage/* to anyone who can reach
-			// the port, so payloads there would be world-readable conversation history.
-			// Withhold unless the request is authenticated even though login is off.
-			if (includePayloads && settings?.requireLogin === false) {
-				includePayloads = await isAuthenticated(request)
-			}
+			const read = redactionSettingsFrom(await getSettings())
+			includePayloads = shouldIncludePayloads({
+				settings: read.settings,
+				requireLoginDisabled: read.requireLoginDisabled,
+				// Only consulted when the gateway runs with login off; a throw here is
+				// treated as "not authenticated", which is the safe side of the gate.
+				requestAuthenticated: read.requireLoginDisabled
+					? await isAuthenticated(request).catch(() => false)
+					: false,
+			}).include
 		} catch {
 			// Fail closed: an unreadable settings row must not reveal payloads.
 			includePayloads = false
 		}
 
-		const PAYLOAD_FIELDS = ["request", "providerRequest", "providerResponse", "response"]
-		const details = (result.details || []).map((d: Record<string, unknown>) => {
-			if (includePayloads) return d
-			const out: Record<string, unknown> = { ...d }
-			for (const key of PAYLOAD_FIELDS) {
-				if (out[key] !== undefined) out[key] = withheldMarker(key, out[key])
-			}
-			return out
-		})
+		const details = (result.details || []).map((d: Record<string, unknown>) =>
+			redactRequestDetail(d, includePayloads),
+		)
 
 		return NextResponse.json({
 			...result,

@@ -1,14 +1,23 @@
 import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { creatorNameFor, visibleApiKeys } from "@9router/auth/keyCreator"
 import { getAdapter } from "@9router/db/driver"
+import {
+	compareKeyReportRows,
+	errorRateOf,
+	KEY_REPORT_MODEL_LIMIT,
+	type MergedModelRow,
+	mergeOrphanUsage,
+	nextResetAt,
+	percentOfCap,
+	quotaWindowStart,
+	resolvedUsedTokens,
+	shouldReportOrphanUsage,
+} from "9router-api/domain/key-usage-report"
 import { NextResponse } from "next/server"
 import { getApiKeys } from "@/lib/localDb"
 import { budgetOf, limitKindOf, spentTodayOf, todayKey } from "@/lib/usage/keyBudget"
 
 export const dynamic = "force-dynamic"
-
-const HOUR_MS = 3600000
-const DAY_MS = 24 * HOUR_MS
 
 /** Aggregate row the GROUP BY queries below return, keyed by apiKey. */
 interface KeyTotalRow {
@@ -66,40 +75,9 @@ interface KeyUsageRow {
 	okRequests: number
 	errorRequests: number
 	errorRate: number
-	models: ModelTotalRow[]
-}
-
-// How far each reset interval reaches, in ms. "never" stays open-ended.
-function intervalMs(resetInterval) {
-	switch (resetInterval) {
-		case "5h":
-			return 5 * HOUR_MS
-		case "10h":
-			return 10 * HOUR_MS
-		case "24h":
-		case "1d":
-			return DAY_MS
-		case "7d":
-			return 7 * DAY_MS
-		case "14d":
-			return 14 * DAY_MS
-		case "30d":
-			return 30 * DAY_MS
-		default:
-			return 0
-	}
-}
-
-// When the running quota window rolls over, based on the anchor lastResetAt.
-function nextResetAt(resetInterval, lastResetAt) {
-	const span = intervalMs(resetInterval)
-	if (!span) return null
-	const anchor = lastResetAt ? new Date(lastResetAt).getTime() : 0
-	if (!anchor) return null
-	const now = Date.now()
-	let due = anchor + span
-	while (due <= now) due += span
-	return new Date(due).toISOString()
+	// A live key's rows arrive straight from SQL; the merged "Deleted keys" row is
+	// summed in the domain and is fully typed. Both render in the same panel.
+	models: (ModelTotalRow | MergedModelRow)[]
 }
 
 function maskKey(key) {
@@ -160,8 +138,7 @@ export async function GET() {
 
 		const tokensInWindowMap: Record<string, number> = {}
 		for (const k of keys) {
-			const resetMs = intervalMs(k.resetInterval)
-			const sinceTs = resetMs ? new Date(now - resetMs).toISOString() : "0000-01-01T00:00:00.000Z"
+			const sinceTs = quotaWindowStart(k.resetInterval, now)
 			const row = db.get<{ usedTokensInWindow: number }>(
 				`SELECT COALESCE(SUM(promptTokens + completionTokens), 0) AS usedTokensInWindow
            FROM usageHistory
@@ -199,16 +176,12 @@ export async function GET() {
 			const completionTokens = t.completionTokens || 0
 			const st = errorsByKey[k.key] || { ok: 0, errors: 0 }
 			const limit = k.tokenLimit || 0
-			// The apiKeys.usedTokens column is the quota authority: it is what
-			// validateApiKey enforces against, and usageHistory is a pruned log, so
-			// after cleanup the window sum reads lower than what was actually spent.
-			// The log sum only wins when the column is behind it (log rows raced in
-			// before the quota update), or when the window already rolled over and
-			// the repo zeroed the column for a fresh interval.
-			const column = Number(k.usedTokens) || 0
-			const windowSum = tokensInWindowMap[k.key] || 0
-			const used = Math.max(column, windowSum)
-			const _resetSpan = intervalMs(k.resetInterval)
+			// The column is the quota authority but the log can be ahead of it; see
+			// `resolvedUsedTokens` for why the larger of the two is the honest number.
+			const { used } = resolvedUsedTokens({
+				columnValue: k.usedTokens,
+				windowSum: tokensInWindowMap[k.key] || 0,
+			})
 			// One unified budget per key: the page shows the kind the owner selected rather
 			// than three numbers, and the percentage is measured against that same cap.
 			const kind = limitKindOf(k)
@@ -229,9 +202,9 @@ export async function GET() {
 				expired: Boolean(k.expiresAt && new Date(k.expiresAt).getTime() < now),
 				tokenLimit: limit,
 				usedTokens: used,
-				usagePercent: limit > 0 ? Math.min(100, (used / limit) * 100) : null,
+				usagePercent: percentOfCap(used, limit),
 				resetInterval: k.resetInterval || "never",
-				nextResetAt: nextResetAt(k.resetInterval, k.lastResetAt),
+				nextResetAt: nextResetAt(k.resetInterval, k.lastResetAt, now),
 				rpmLimit: k.rpmLimit || 0,
 				tpmLimit: k.tpmLimit || 0,
 				requests: t.requests || 0,
@@ -243,63 +216,29 @@ export async function GET() {
 				// the pruned usage log, so the page and the 429 can never disagree.
 				dailyCostLimit: Number(k.dailyCostLimit) || 0,
 				costSpentToday: spentToday,
-				costPercent:
-					Number(k.dailyCostLimit) > 0
-						? Math.min(100, (spentToday / Number(k.dailyCostLimit)) * 100)
-						: null,
+				costPercent: percentOfCap(spentToday, Number(k.dailyCostLimit) || 0),
 				limitKind: kind,
 				requestLimit: Number(k.requestLimit) || 0,
 				usedRequests: Number(k.usedRequests) || 0,
 				limitCap: cap,
 				limitUsed: usedForCap,
-				limitPercent: cap > 0 ? Math.min(100, (usedForCap / cap) * 100) : null,
+				limitPercent: percentOfCap(usedForCap, cap),
 				lastUsed: t.lastUsed || null,
 				okRequests: st.ok,
 				errorRequests: st.errors,
-				errorRate: st.ok + st.errors > 0 ? st.errors / (st.ok + st.errors) : 0,
-				models: (modelsByKey[k.key] || []).slice(0, 8),
+				errorRate: errorRateOf(st.ok, st.errors),
+				models: (modelsByKey[k.key] || []).slice(0, KEY_REPORT_MODEL_LIMIT),
 			}
 		})
 
-		// Orphan usage (history for keys no longer registered) is only
-		// meaningful when listing every key. An API key session sees one row.
-		if (!ownKey) {
+		// Orphan usage (history for keys no longer registered) is only meaningful when
+		// listing every key; an API-key session sees one row, and its unseen keys are
+		// not "deleted". `shouldReportOrphanUsage` states that.
+		if (shouldReportOrphanUsage(ownKey)) {
 			const known = new Set(keys.map((k) => k.key))
 			const orphan = Object.keys(totals).filter((raw) => raw && !known.has(raw))
 			if (orphan.length > 0) {
-				let requests = 0,
-					promptTokens = 0,
-					completionTokens = 0,
-					cost = 0,
-					lastUsed = null
-				let ok = 0,
-					errors = 0
-				const modelsMap = new Map()
-				for (const raw of orphan) {
-					const t = totals[raw]
-					requests += t.requests || 0
-					promptTokens += t.promptTokens || 0
-					completionTokens += t.completionTokens || 0
-					cost += t.cost || 0
-					if (t.lastUsed && (!lastUsed || t.lastUsed > lastUsed)) lastUsed = t.lastUsed
-					const st = errorsByKey[raw] || { ok: 0, errors: 0 }
-					ok += st.ok
-					errors += st.errors
-					for (const m of modelsByKey[raw] || []) {
-						const prev = modelsMap.get(m.model) || {
-							model: m.model,
-							requests: 0,
-							tokens: 0,
-							cost: 0,
-							lastUsed: null,
-						}
-						prev.requests += m.requests
-						prev.tokens += m.tokens
-						prev.cost += m.cost
-						if (!prev.lastUsed || m.lastUsed > prev.lastUsed) prev.lastUsed = m.lastUsed
-						modelsMap.set(m.model, prev)
-					}
-				}
+				const merged = mergeOrphanUsage(orphan, totals, errorsByKey, modelsByKey)
 				result.push({
 					id: "deleted",
 					name: "Deleted keys",
@@ -309,29 +248,27 @@ export async function GET() {
 					expiresAt: null,
 					expired: false,
 					tokenLimit: 0,
-					usedTokens: promptTokens + completionTokens,
+					usedTokens: merged.promptTokens + merged.completionTokens,
 					usagePercent: null,
 					resetInterval: "never",
 					nextResetAt: null,
 					rpmLimit: 0,
 					tpmLimit: 0,
-					requests,
-					promptTokens,
-					completionTokens,
-					totalTokens: promptTokens + completionTokens,
-					cost,
-					lastUsed,
-					okRequests: ok,
-					errorRequests: errors,
-					errorRate: ok + errors > 0 ? errors / (ok + errors) : 0,
-					models: [...modelsMap.values()].sort((a, b) => b.requests - a.requests).slice(0, 8),
+					requests: merged.requests,
+					promptTokens: merged.promptTokens,
+					completionTokens: merged.completionTokens,
+					totalTokens: merged.promptTokens + merged.completionTokens,
+					cost: merged.cost,
+					lastUsed: merged.lastUsed,
+					okRequests: merged.ok,
+					errorRequests: merged.errors,
+					errorRate: errorRateOf(merged.ok, merged.errors),
+					models: [...merged.models],
 				})
 			}
 		}
 
-		result.sort(
-			(a, b) => (b.lastUsed || "").localeCompare(a.lastUsed || "") || a.name.localeCompare(b.name),
-		)
+		result.sort(compareKeyReportRows)
 
 		return NextResponse.json(
 			{
