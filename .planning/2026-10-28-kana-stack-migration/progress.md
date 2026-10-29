@@ -2104,3 +2104,36 @@ all fail that test, in different ways. Read what the procedure feeds the rule an
 is allowed through the door — not just what the rule says.
 
 Gates: typecheck 0, 7729 passed / 0 failed (7 new).
+
+## `pricing` — and the correction that came with it
+
+The migration itself was the smallest so far: three procedures, one route, no handler
+reads the session. `GET` returns catalog+overrides, `PATCH` writes `{provider: {model:
+{input, output, ...}}}`, `DELETE` reads `?provider=`/`?model=`. Live: 200 with a session,
+401 anonymous, and `DELETE ?model=` without a provider still refuses with its own
+wording ("A model reset also needs the provider").
+
+The work that mattered was undoing my own change from earlier in this session.
+`pricing.get` had been switched from `authed` to `base`, on the strength of its
+docstring saying "public at the REST layer" and its handler not calling
+`getSessionContext()`. Both observations are true and the conclusion was still wrong.
+
+`dashboardGuard.ts` denies every `/api/*` path by default; reachability comes from
+`PUBLIC_API_PATHS`, which holds ten entries and `/api/pricing` is not one of them. So a
+`base` procedure would have been callable anonymously through oRPC while the REST route
+stayed 401 — the procedure weaker than the route it mirrors. Reverted.
+
+Re-checked all twelve migrated areas against the allow-list afterwards: exactly one is
+public (`/api/theme`), and it is the one the guard's own comment explains — "one
+non-sensitive value that every visitor needs before sign-in; writing it is checked
+inside the route". `theme.get` = `base`, `theme.set` = `authed` is right by that
+reading, not by the docstring.
+
+Then the test. The first version read only the guard and asserted things about the
+allow-list; I sabotaged `pricing.get` back to `base` and it passed 5/5. A test that
+cannot fail on the mistake it was written for is not a test. Rewrote it to read the
+routers and collect every `base.handler` declaration, so the assertion is "no procedure
+is public on a guarded path". Same sabotage now fails with
+`expected [ '/api/pricing:get' ] to deeply equal []`.
+
+Gates: typecheck 0, 7735 passed / 0 failed (6 new).

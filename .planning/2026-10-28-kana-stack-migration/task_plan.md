@@ -22,10 +22,30 @@ gateway serving traffic at every phase boundary.
 
 ## Next Step
 
-**The oRPC server is real and reachable.** `main.ts` resolves the session from the
-`auth_token` JWT, reads the signing key through `getDataDir()`, and stages
-migrations — verified by request (401 without a cookie, 200 with rows). Three
-silent defects stood in the way; see findings.
+**Twelve areas are on oRPC and verified at the port**: `combos` (2 routes), `usage` (5),
+`keys` (3), `theme` (2), `error-logs` (2), `pricing` (1). `apps/web/src/lib/orpcClient.ts`
+builds an in-process client, so a route reaches the same procedure the HTTP server
+exposes without a second hop or a second session lookup.
+
+**The checklist for the next area has two questions per route, not one.**
+
+  1. Does the handler derive anything from the session? This decides argument
+     equivalence. `usage` and `dashboard-keys` both failed it — a `null` filter that
+     widened a key's report to every key, and `role: "admin"` that cleared a gate.
+  2. Is the path on `PUBLIC_API_PATHS`? This decides the auth gate, and **the handler
+     cannot answer it**: `dashboardGuard` denies every `/api/*` path by default and runs
+     before any handler. `pricing.get` was briefly made `base` because its GET never
+     reads a session — true, and irrelevant, since `/api/pricing` is not on the list.
+
+  Of the twelve, exactly one area is public: `/api/theme`, which the guard's comment
+  explains ("one non-sensitive value that every visitor needs before sign-in; writing
+  it is checked inside the route"). `tests/unit/route-reachability-guard.test.ts` now
+  reads the routers and fails if a `base` procedure appears on a guarded path — the
+  first version of that test passed while the code was wrong.
+
+**`models` and `pxpipe` are not the easy wins they look like.** Neither handler reads a
+session, and neither path is public. They belong to the same case as `pricing`: build
+the client with the session, keep the procedures `authed`.
 
 **Converting the 163 remaining handlers to oRPC is no longer the plan.** Measured:
 50 procedures exist, 12 cover a REST route, and the procedure layer is a *superset*

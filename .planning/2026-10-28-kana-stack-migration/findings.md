@@ -322,3 +322,39 @@ The lesson generalises past literals: **a procedure is only equivalent to its ro
 when it derives the same value from the same source.** A literal, an input field and a
 constant all fail that test, and they fail in different ways. Read what the procedure
 feeds the rule, not just what the rule says.
+
+## Correction: "does not read a session" is not "does not require one"
+
+I nearly shipped a loosening. Reading `pricing.ts`, the docstring said "`get` is public
+at the REST layer", and the route's GET handler never calls `getSessionContext()` — so
+I concluded the procedure should be `base` instead of `authed`, matching `theme.get`.
+
+That reasoning was wrong, and the check it skipped is the important one.
+`apps/web/src/dashboardGuard.ts` is a **deny-by-default** gate over `/api/*`:
+
+```js
+if (pathname.startsWith("/api/")) {
+    if (isPublicApi(pathname)) return NextResponse.next()
+    if ((await hasValidCliToken(request)) || (await isAuthenticated(request))) { ... }
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+}
+```
+
+Reachability is decided by `PUBLIC_API_PATHS`, which is short: `/api/health`,
+`/api/init`, `/api/locale`, `/api/auth/{login,logout,status,oidc,saml`, `/api/theme`,
+`/api/settings/require-login`. `/api/pricing` is **not** on it. A handler that never
+reads a session is still unreachable without one, because the guard runs before it.
+
+Had that change shipped, `pricing.get` would have been callable anonymously through the
+oRPC channel while the REST route was not — the procedure would have been *weaker* than
+the route it was supposed to equal. Reverted; `pricing.get` is `authed`.
+
+`theme` is the case that genuinely is public, and the guard's own comment says why:
+"One non-sensitive value that every visitor needs before sign-in; writing it is checked
+inside the route (password session only)." So `theme.get` = `base` and `theme.set` =
+`authed` is correct — verified live: GET 200 with no cookie, anonymous POST 401.
+
+The rule this adds to the checklist: for each route, ask *two* questions, not one.
+Does the handler derive anything from the session (which decides argument equivalence),
+and is the path on `PUBLIC_API_PATHS` (which decides the gate). Reading only the
+handler answers the first and silently guesses at the second.
