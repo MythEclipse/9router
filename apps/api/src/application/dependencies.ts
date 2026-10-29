@@ -193,6 +193,18 @@ export interface Dependencies {
 	readonly activity: IActivityRepository
 	readonly changelog: ChangelogSource
 	readonly settings: SettingsPort
+	/** The settings row as a whole, for the general settings use-case. */
+	readonly settingsStore: import("./settings/manage-settings.ts").SettingsDependencies["store"]
+	/** Hashing and comparison for the settings row's password. */
+	readonly settingsPassword: Pick<
+		import("./settings/manage-settings.ts").SettingsDependencies,
+		"comparePassword" | "hashPassword"
+	>
+	/** The before-image store and the effects a settings write owes the process. */
+	readonly settingsWriteBack: Pick<
+		import("./settings/manage-settings.ts").SettingsDependencies,
+		"snapshot" | "effects" | "environmentFlags" | "logWarning"
+	>
 	readonly combos: ComboPort
 	readonly errorLogs: ErrorLogPort
 	readonly pricing: PricingPort

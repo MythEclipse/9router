@@ -48,6 +48,7 @@ import { makeWebLogin } from "./providers/web-login.ts"
 import { makePxpipe } from "./pxpipe/manage-pxpipe.ts"
 import { assertSupportedLocale } from "./settings/locale.ts"
 import { readLoginGate } from "./settings/login-gate.ts"
+import { makeManageSettings } from "./settings/manage-settings.ts"
 import { makeGetTheme, makeSetTheme } from "./settings/theme.ts"
 import { makeCacheStats } from "./system/cache-stats.ts"
 import { makeDashboardJobs } from "./system/dashboard-jobs.ts"
@@ -77,6 +78,7 @@ export interface UseCases {
 	readonly createComboPresets: ReturnType<typeof makeCreateComboPresets>
 	readonly listErrorLogs: ReturnType<typeof makeListErrorLogs>
 	readonly clearErrorLogs: ReturnType<typeof makeClearErrorLogs>
+	readonly settings: ReturnType<typeof makeManageSettings>
 	readonly getTheme: ReturnType<typeof makeGetTheme>
 	readonly setTheme: ReturnType<typeof makeSetTheme>
 	/**
@@ -171,6 +173,11 @@ export function buildUseCases(deps: Dependencies): UseCases {
 		createComboPresets: makeCreateComboPresets(combos),
 		listErrorLogs: makeListErrorLogs(deps.errorLogs),
 		clearErrorLogs: makeClearErrorLogs(deps.errorLogs),
+		settings: makeManageSettings({
+			store: deps.settingsStore,
+			...deps.settingsPassword,
+			...deps.settingsWriteBack,
+		}),
 		getTheme: makeGetTheme(deps.settings),
 		setTheme: makeSetTheme(deps.settings),
 		assertLocale: assertSupportedLocale,

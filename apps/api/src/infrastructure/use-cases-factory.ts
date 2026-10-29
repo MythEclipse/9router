@@ -80,7 +80,7 @@ import {
 	createShutdownPorts,
 	DASHBOARD_JOB_KINDS,
 } from "./runtime-ports.ts"
-import { createSettingsPort } from "./settings-port.ts"
+import { createSettingsPort, createSettingsRowPort } from "./settings-port.ts"
 import { createUnavailablePresetPort } from "./unavailable-preset-port.ts"
 
 export { installPxpipeEngine } from "./pxpipe-port.ts"
@@ -189,6 +189,18 @@ export interface UseCaseOptions {
 	) => Promise<import("../domain/batch-result.ts").ProbeOutcome>
 	/** Repairs OAuth connection emails before the client listing reads them. */
 	readonly backfillConnectionEmails?: () => Promise<void>
+	/** The settings row as a whole, for the general settings use-case. */
+	readonly settingsStore?: import("../application/settings/manage-settings.ts").SettingsDependencies["store"]
+	/** Hashing and comparison for the settings row's password. */
+	readonly settingsPassword?: Pick<
+		import("../application/settings/manage-settings.ts").SettingsDependencies,
+		"comparePassword" | "hashPassword"
+	>
+	/** The before-image store and the effects a settings write owes the process. */
+	readonly settingsWriteBack?: Pick<
+		import("../application/settings/manage-settings.ts").SettingsDependencies,
+		"snapshot" | "effects" | "environmentFlags" | "logWarning"
+	>
 	/** Fetch a provider's model list over HTTP. */
 	readonly fetchModels?: import("../application/providers/list-provider-models.ts").ModelListDependencies["fetchModels"]
 	/** Resolve a provider whose model list does not come from a fixed endpoint. */
@@ -245,6 +257,9 @@ export function createUseCases(
 	// One port over the settings row, shared by the login gate, the plugin panel
 	// and pxpipe: the same row read three ways would be three chances to disagree.
 	const settingsPort = createSettingsPort()
+	// The general settings use-case needs the whole row, not the projection the
+	// theme/login-gate/plugin use-cases read.
+	const settingsRow = options.settingsStore ?? createSettingsRowPort()
 	if (!options.registryHost || !options.catalogueHost) {
 		throw new Error(
 			"The model-registry use-cases need registryHost and catalogueHost; this host did not supply them",
@@ -363,6 +378,22 @@ export function createUseCases(
 				error: "not available",
 			})),
 		backfillConnectionEmails: options.backfillConnectionEmails ?? (async () => {}),
+		settingsStore: settingsRow,
+		settingsPassword: options.settingsPassword ?? {
+			comparePassword: async () => false,
+			hashPassword: async (plain) => plain,
+		},
+		settingsWriteBack: options.settingsWriteBack ?? {
+			snapshot: async () => {},
+			effects: {
+				applyOutboundProxy: () => {},
+				resetComboRotation: () => {},
+				resetProxyHealth: () => {},
+				reconfigureAutoPing: () => {},
+			},
+			environmentFlags: () => ({ requestLogs: false, translator: false }),
+			logWarning: () => {},
+		},
 		fetchModels: options.fetchModels ?? (async () => ({ ok: false, status: 501, payload: null })),
 		resolveCustomModels: options.resolveCustomModels ?? (async () => null),
 		suggestedCatalogue: options.suggestedCatalogue ?? { filters: {}, fallbacks: {} },

@@ -70,6 +70,7 @@ import { getPxpipeStats, readPxpipeEvents } from "./pxpipe/events"
 import { getInstallInfo, getInstallLogTail, installPxpipe } from "./pxpipe/install"
 import { loadPxpipe, unloadPxpipe } from "./pxpipe/loader"
 import { getPxpipeStatus, runHealthCheck } from "./pxpipe/service"
+import { settingsPassword, settingsStore, settingsWriteBack } from "./settingsHost"
 
 // This host is the one that bundles `open-sse` and `lib/pxpipe`, so it is the one
 // that can answer those ports. Without this they would report empty results.
@@ -106,6 +107,11 @@ function cache(): Cache {
 			onRotationError: (error) => console.warn("combo rotation reset failed:", error),
 			comboPresets: createComboPresetPort(),
 			apiKeyStore: createApiKeyStore(),
+			// The settings row is one table: its password hashing, its history and the
+			// process state a write owes all live in this process.
+			settingsPassword,
+			settingsWriteBack,
+			settingsStore,
 			// The dashboard is the process that holds the plugin runtime, so it is
 			// the one that can invalidate the cached configuration.
 			pluginCache: { clear: clearPluginCache },

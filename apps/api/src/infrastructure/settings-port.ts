@@ -48,3 +48,23 @@ export function createSettingsPort(): SettingsRowPort {
 		},
 	}
 }
+
+/**
+ * The whole settings row, for the general settings use-case.
+ *
+ * Separate from `createSettingsPort` because that one projects a handful of named
+ * fields — enough for the theme, the login gate and the plugin cache, and useless
+ * to a handler that must show every setting and merge an arbitrary patch. Both
+ * read and write the one row, so neither can discard the other's field.
+ */
+export function createSettingsRowPort(): {
+	read(): Promise<Record<string, unknown>>
+	update(changes: Record<string, unknown>): Promise<void>
+} {
+	return {
+		read: async () => (await getSettings()) as Record<string, unknown>,
+		update: async (changes) => {
+			await updateSettings(changes)
+		},
+	}
+}
