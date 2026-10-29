@@ -48,6 +48,8 @@ export interface ToolSettingsInput {
 	readonly model: string
 	/** Passed through untouched: which tool keeps a list, and in which shape, is its own business. */
 	readonly models?: unknown
+	/** Per-agent model overrides; only a tool with agents reads this. */
+	readonly agentModels?: Record<string, string>
 }
 
 /** The result of reading a write, flat for the same reason the OAuth answers are. */
