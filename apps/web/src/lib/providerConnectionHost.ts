@@ -80,6 +80,7 @@ import {
 	syncOneFreeCatalog,
 } from "@/shared/services/freeCatalogSync"
 import { toProviderConnectionResponse, usesAwsCredentialForm } from "./providerConnectionResponse"
+import { modelListAdapter } from "./providerModelsHost"
 import { normalizeProviderId, normalizeProviderSpecificData } from "./providerNormalization"
 
 /** The three tables the connection use-case reads, as the stores expose them. */
@@ -118,6 +119,7 @@ export const providerCatalogue = createProviderCatalogue({
 	isFreeTier: (provider) => !!FREE_TIER_PROVIDERS[provider],
 	apiKeySubstituteField: (provider) => AI_PROVIDERS[provider]?.apiKeyOptionalWith ?? null,
 	usesAwsCredentialForm,
+	modelListAdapter,
 })
 
 /** What the connection use-case needs beyond the tables. */

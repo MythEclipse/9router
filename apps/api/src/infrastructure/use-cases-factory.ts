@@ -189,6 +189,10 @@ export interface UseCaseOptions {
 	) => Promise<import("../domain/batch-result.ts").ProbeOutcome>
 	/** Repairs OAuth connection emails before the client listing reads them. */
 	readonly backfillConnectionEmails?: () => Promise<void>
+	/** Fetch a provider's model list over HTTP. */
+	readonly fetchModels?: import("../application/providers/list-provider-models.ts").ModelListDependencies["fetchModels"]
+	/** Resolve a provider whose model list does not come from a fixed endpoint. */
+	readonly resolveCustomModels?: import("../application/providers/list-provider-models.ts").ModelListDependencies["resolveCustom"]
 	/** The suggested-models filter table and its built-in fallbacks. */
 	readonly suggestedCatalogue?: CatalogueFilters
 	/** The registry entry whose fetcher matches this url and type. */
@@ -359,6 +363,8 @@ export function createUseCases(
 				error: "not available",
 			})),
 		backfillConnectionEmails: options.backfillConnectionEmails ?? (async () => {}),
+		fetchModels: options.fetchModels ?? (async () => ({ ok: false, status: 501, payload: null })),
+		resolveCustomModels: options.resolveCustomModels ?? (async () => null),
 		suggestedCatalogue: options.suggestedCatalogue ?? { filters: {}, fallbacks: {} },
 		findSyncableCatalogue: options.findSyncableCatalogue ?? (() => null),
 		readSyncedCatalogue: options.readSyncedCatalogue ?? (async () => null),
@@ -448,6 +454,7 @@ function unavailableProviderCatalogue(): ProviderCatalogue {
 		apiKeySubstituteField: () => null,
 		isCreatable: () => false,
 		usesAwsCredentialForm: () => false,
+		modelListAdapter: () => ({ kind: "unsupported" }),
 	}
 }
 

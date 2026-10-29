@@ -65,6 +65,7 @@ import {
 	tokenplanBaseUrl,
 	webLogin,
 } from "./providerConnectionHost"
+import { fetchModels, resolveCustomModels } from "./providerModelsHost"
 import { getPxpipeStats, readPxpipeEvents } from "./pxpipe/events"
 import { getInstallInfo, getInstallLogTail, installPxpipe } from "./pxpipe/install"
 import { loadPxpipe, unloadPxpipe } from "./pxpipe/loader"
@@ -140,6 +141,8 @@ function cache(): Cache {
 			clientListingRegistry,
 			probeConnection,
 			backfillConnectionEmails,
+			fetchModels,
+			resolveCustomModels,
 			suggestedCatalogue,
 			findSyncableCatalogue,
 			readSyncedCatalogue,

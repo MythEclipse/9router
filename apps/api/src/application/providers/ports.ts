@@ -113,4 +113,33 @@ export interface ProviderCatalogue {
 	 * ambiguity on an edit: the form cannot read the stored token back.
 	 */
 	usesAwsCredentialForm(provider: string): boolean
+	/**
+	 * How this provider answers "which models do you have".
+	 *
+	 * Three shapes, and the shape decides who builds the request: a compatible
+	 * node states its own base URL, a fixed endpoint is a constant in the
+	 * catalogue, and everything else belongs to a resolver of its own.
+	 */
+	modelListAdapter(provider: string): ModelListAdapter
 }
+
+export type ModelListAdapter =
+	| { readonly kind: "openai-compatible" }
+	| { readonly kind: "anthropic-compatible" }
+	| {
+			readonly kind: "fixed-endpoint"
+			readonly url: string
+			readonly method: "GET" | "POST"
+			readonly headers: Record<string, string>
+			/** Send the token as this query parameter instead of a header. */
+			readonly authQuery?: string
+			readonly authHeader?: string
+			readonly authPrefix?: string
+			readonly body?: unknown
+			/** Read the list out of this provider's own answer shape. */
+			readonly parse: (payload: unknown) => unknown[]
+	  }
+	/** The provider has its own resolver. */
+	| { readonly kind: "custom" }
+	/** The provider has no model list to give. */
+	| { readonly kind: "unsupported" }

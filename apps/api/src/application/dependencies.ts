@@ -324,6 +324,10 @@ export interface Dependencies {
 	) => Promise<import("../domain/batch-result.ts").ProbeOutcome>
 	/** Repairs OAuth connection emails before the client listing reads them. */
 	readonly backfillConnectionEmails: () => Promise<void>
+	/** Fetch a provider's model list over HTTP, bounded by the request's timeout. */
+	readonly fetchModels: import("./providers/list-provider-models.ts").ModelListDependencies["fetchModels"]
+	/** Resolve a provider whose model list does not come from a fixed endpoint. */
+	readonly resolveCustomModels: import("./providers/list-provider-models.ts").ModelListDependencies["resolveCustom"]
 	/**
 	 * The catalogue filters the suggested-models picker applies, keyed by fetcher
 	 * type, with the built-in fallback entries for each.

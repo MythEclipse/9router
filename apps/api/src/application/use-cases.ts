@@ -37,6 +37,7 @@ import { makeGetPricing, makeResetPricing, makeUpdatePricing } from "./pricing/m
 import { makeCheckConnection } from "./providers/check-connection.ts"
 import { makeListClientConnections } from "./providers/list-client-connections.ts"
 import { makeFreeModels } from "./providers/list-free-models.ts"
+import { makeListProviderModels } from "./providers/list-provider-models.ts"
 import { makeConnections } from "./providers/manage-connections.ts"
 import { makeOverrides } from "./providers/manage-overrides.ts"
 import { makeProbeModels } from "./providers/probe-models.ts"
@@ -106,6 +107,7 @@ export interface UseCases {
 	readonly probeModels: ReturnType<typeof makeProbeModels>
 	readonly testConnections: ReturnType<typeof makeTestConnections>
 	readonly checkConnection: ReturnType<typeof makeCheckConnection>
+	readonly listProviderModels: ReturnType<typeof makeListProviderModels>
 	readonly listClientConnections: ReturnType<typeof makeListClientConnections>
 	readonly suggestModels: ReturnType<typeof makeSuggestModels>
 	readonly validateCredential: ReturnType<typeof makeValidateCredential>
@@ -208,6 +210,12 @@ export function buildUseCases(deps: Dependencies): UseCases {
 			now: () => new Date().toISOString(),
 		}),
 		checkConnection: makeCheckConnection({ probe: deps.probeConnection }),
+		listProviderModels: makeListProviderModels({
+			connections: deps.connections,
+			catalogue: deps.providerCatalogue,
+			fetchModels: deps.fetchModels,
+			resolveCustom: deps.resolveCustomModels,
+		}),
 		listClientConnections: makeListClientConnections({
 			connections: deps.connections,
 			nodes: deps.connectionNodes,

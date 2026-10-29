@@ -13,6 +13,7 @@ import type {
 	ConnectionNode,
 	ConnectionNodeStore,
 	ConnectionStore,
+	ModelListAdapter,
 	ProviderCatalogue,
 	ProxyPoolStore,
 	StoredConnection,
@@ -76,6 +77,7 @@ export function createProviderCatalogue(input: {
 	readonly isFreeTier: (provider: string) => boolean
 	readonly apiKeySubstituteField: (provider: string) => string | null
 	readonly usesAwsCredentialForm: (provider: string) => boolean
+	readonly modelListAdapter: (provider: string) => ModelListAdapter
 }): ProviderCatalogue {
 	return {
 		label: (provider) => input.label(provider) ?? provider,
@@ -85,6 +87,7 @@ export function createProviderCatalogue(input: {
 		isWebCookie: input.isWebCookie,
 		apiKeySubstituteField: input.apiKeySubstituteField,
 		usesAwsCredentialForm: input.usesAwsCredentialForm,
+		modelListAdapter: input.modelListAdapter,
 		isCreatable: (provider) =>
 			!!provider &&
 			(input.acceptsApiKey(provider) ||
