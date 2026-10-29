@@ -15,7 +15,7 @@ import {
 	parseAuxRoles,
 	parseDelegationBlock,
 	parseModelBlock,
-} from "./hermesYaml.ts"
+} from "9router-api/domain/hermes-yaml"
 
 // Profile names become directory names and command aliases — keep them inert.
 export const PROFILE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/

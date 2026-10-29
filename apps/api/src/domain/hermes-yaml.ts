@@ -9,6 +9,15 @@
 //   delegation: { ... }         # top-level, subagent model
 //   auxiliary: { <task>: { provider, model, base_url, api_key } }
 
+/** The `stt` block, flattened to the fields this screen reads and writes. */
+export interface HermesSttBlock {
+	enabled: string | null
+	provider: string | null
+	model: string | null
+	base_url: string | null
+	api_key: string | null
+}
+
 // Top-level "model:" mapping block — key on its own line, indented children.
 // NOTE: does NOT match the scalar sentinel `model: ""` (no newline right after `model:`).
 export const MODEL_BLOCK_RE = /^model:[ \t]*\r?\n((?:[ \t]+.*\r?\n?|[ \t]*\r?\n)*)/m
@@ -19,22 +28,22 @@ export const MODEL_SCALAR_RE = /^model:[ \t]*[^\r\n]*\r?\n?/m
 export const DELEGATION_BLOCK_RE = /^delegation:[ \t]*\r?\n((?:[ \t]+.*\r?\n?|[ \t]*\r?\n)*)/m
 // "auxiliary:" block; children are 2-space-indented role keys with 4+-space fields
 export const AUX_BLOCK_RE = /^auxiliary:[ \t]*\r?\n((?:(?:[ \t]+.*\r?\n?)|(?:[ \t]*\r?\n))*)/m
-export const auxRoleRe = (role) =>
+export const auxRoleRe = (role: string): RegExp =>
 	new RegExp(`^  ${role}:[ \\t]*\\r?\\n(?:(?:[ \\t]{4,}.*\\r?\\n?)|(?:[ \\t]*\\r?\\n))*`, "m")
 
-export const buildModelBlock = (model, baseUrl) =>
+export const buildModelBlock = (model: string, baseUrl: string): string =>
 	`model:\n  default: "${model}"\n  provider: "custom"\n  base_url: "${baseUrl}"\n  api_key: \${OPENAI_API_KEY}\n`
 
-export const buildDelegationBlock = (model, baseUrl) =>
+export const buildDelegationBlock = (model: string, baseUrl: string): string =>
 	`delegation:\n  model: "${model}"\n  provider: "custom"\n  base_url: "${baseUrl}"\n  api_key: \${OPENAI_API_KEY}\n`
 
-export const buildAuxRoleBlock = (role, model, baseUrl) =>
+export const buildAuxRoleBlock = (role: string, model: string, baseUrl: string): string =>
 	`  ${role}:\n    provider: "custom"\n    model: "${model}"\n    base_url: "${baseUrl}"\n    api_key: \${OPENAI_API_KEY}\n`
 
-const parseKeyValues = (body) => {
-	const get = (key) => {
-		const m = body.match(new RegExp(`^[ \\t]+${key}:[ \\t]*["']?([^"'\\r\\n]+)["']?`, "m"))
-		return m ? m[1].trim() : null
+const parseKeyValues = (body: string): ((key: string) => string | null) => {
+	const get = (key: string): string | null => {
+		const m = body.match(new RegExp(`^[ 	]+${key}:[ 	]*["']?([^"'\\r\\n]+)["']?`, "m"))
+		return m?.[1]?.trim() ?? null
 	}
 	return get
 }
@@ -53,7 +62,7 @@ export const parseModelBlock = (yaml: string): HermesModelBlock | null => {
 	}
 }
 
-export const upsertModelBlock = (yaml, newBlock) => {
+export const upsertModelBlock = (yaml: string, newBlock: string): string => {
 	if (MODEL_BLOCK_RE.test(yaml)) return yaml.replace(MODEL_BLOCK_RE, newBlock)
 	// Scalar sentinel would otherwise survive the upsert and produce a duplicate `model:` key
 	// (last-wins in most YAML loaders → the 9router block is silently ignored).
@@ -61,14 +70,14 @@ export const upsertModelBlock = (yaml, newBlock) => {
 	return yaml.length > 0 ? `${newBlock}\n${yaml}` : newBlock
 }
 
-export const upsertDelegationBlock = (yaml, newBlock) => {
+export const upsertDelegationBlock = (yaml: string, newBlock: string): string => {
 	if (DELEGATION_BLOCK_RE.test(yaml)) return yaml.replace(DELEGATION_BLOCK_RE, newBlock)
 	return yaml.endsWith("\n") || yaml.length === 0 ? `${yaml}${newBlock}` : `${yaml}\n${newBlock}`
 }
 
-export const removeDelegationBlock = (yaml) => yaml.replace(DELEGATION_BLOCK_RE, "")
+export const removeDelegationBlock = (yaml: string): string => yaml.replace(DELEGATION_BLOCK_RE, "")
 
-export const upsertAuxRole = (yaml, role, roleBlock) => {
+export const upsertAuxRole = (yaml: string, role: string, roleBlock: string): string => {
 	const re = auxRoleRe(role)
 	const m = yaml.match(AUX_BLOCK_RE)
 	if (!m) {
@@ -79,7 +88,7 @@ export const upsertAuxRole = (yaml, role, roleBlock) => {
 	return yaml.replace(AUX_BLOCK_RE, `auxiliary:\n${body}`)
 }
 
-export const removeAuxRole = (yaml, role) => {
+export const removeAuxRole = (yaml: string, role: string): string => {
 	const m = yaml.match(AUX_BLOCK_RE)
 	if (!m) return yaml
 	const body = m[1].replace(auxRoleRe(role), "")
@@ -114,14 +123,14 @@ export const parseDelegationBlock = (yaml: string): HermesModelBlock | null => {
 	return { model: get("model"), provider: get("provider"), base_url: get("base_url") }
 }
 
-export const removeModelBlock = (yaml) => {
+export const removeModelBlock = (yaml: string): string => {
 	if (MODEL_BLOCK_RE.test(yaml)) return yaml.replace(MODEL_BLOCK_RE, "").replace(/^\n+/, "")
 	if (MODEL_SCALAR_RE.test(yaml)) return yaml.replace(MODEL_SCALAR_RE, "").replace(/^\n+/, "")
 	return yaml
 }
 
 // .env helpers — upsert/remove single KEY=VALUE line
-export const upsertEnvVar = (envText, key, value) => {
+export const upsertEnvVar = (envText: string, key: string, value: string): string => {
 	const re = new RegExp(`^${key}=.*$`, "m")
 	const line = `${key}=${value}`
 	if (re.test(envText)) return envText.replace(re, line)
@@ -130,13 +139,15 @@ export const upsertEnvVar = (envText, key, value) => {
 		: `${envText}${line}\n`
 }
 
-export const removeEnvVar = (envText, key) => {
+export const removeEnvVar = (envText: string, key: string): string => {
 	const re = new RegExp(`^${key}=.*\\r?\\n?`, "m")
 	return envText.replace(re, "")
 }
 
 // Detect 9router by base_url containing localhost/127.0.0.1 or matching tunnel URL
-export const has9RouterConfig = (modelCfg) => {
+export const has9RouterConfig = (
+	modelCfg: HermesModelBlock | null | undefined | HermesAuxRole,
+): boolean => {
 	if (!modelCfg?.base_url) return false
 	return (
 		modelCfg.provider === "custom" && /localhost|127\.0\.0\.1|0\.0\.0\.0/.test(modelCfg.base_url)
@@ -174,15 +185,16 @@ export const isCustomBlock = (cfg: HermesModelBlock | null | undefined) =>
 // Top-level "stt:" block — same capture shape as delegation. Children are 2-space
 // indented; the "openai" sub-block carries 4-space fields.
 export const STT_BLOCK_RE = /^stt:[ \t]*\r?\n((?:[ \t]+.*\r?\n?|[ \t]*\r?\n)*)/m
-const sttSubRe = (name) =>
+const sttSubRe = (name: string): RegExp =>
 	new RegExp(`^  ${name}:[ \\t]*\\r?\\n((?:(?:[ \\t]{4,}.*\\r?\\n?)|(?:[ \\t]*\\r?\\n))*)`, "m")
 const STT_API_KEY_REF = "${OPENAI_API_KEY}"
-const stripYamlQuotes = (value) => value.replace(/^[ \t]*["']|["'][ \t]*$/g, "").trim()
+const stripYamlQuotes = (value: string): string =>
+	value.replace(/^[ \t]*["']|["'][ \t]*$/g, "").trim()
 
 // Current stt wiring back to fields (best-effort, simple key:value). Returns null when
 // there is no top-level stt block. `model`/`base_url`/`api_key` read the "openai" sub-block
 // — the backend our override targets; sibling settings (language, local, ...) are ignored.
-export const parseSttBlock = (yaml) => {
+export const parseSttBlock = (yaml: string): HermesSttBlock | null => {
 	const match = yaml.match(STT_BLOCK_RE)
 	if (!match) return null
 	const lines = (match[1] || "").split(/\r?\n/)
@@ -213,14 +225,14 @@ export const parseSttBlock = (yaml) => {
 // reference is the fingerprint — a user's own OpenAI audio setup keeps their own key (or
 // none), while ours always points at the OPENAI_API_KEY line we upsert in .env. base_url
 // may be a tunnel URL, so no localhost test here (same reasoning as isCustomBlock).
-export const is9RouterStt = (cfg) =>
+export const is9RouterStt = (cfg: HermesSttBlock | null | undefined): boolean =>
 	cfg?.provider === "openai" && !!cfg?.base_url && cfg?.api_key === STT_API_KEY_REF
 
-export const buildSttBlock = (model, baseUrl) =>
+export const buildSttBlock = (model: string, baseUrl: string): string =>
 	`stt:\n  enabled: true\n  provider: "openai"\n  openai:\n    model: "${model}"\n    base_url: "${baseUrl}"\n    api_key: ${STT_API_KEY_REF}\n`
 
 // Replace-or-append one `  key: value` direct child of the stt block body.
-const upsertSttDirect = (body, key, value) => {
+const upsertSttDirect = (body: string, key: string, value: string): string => {
 	const re = new RegExp(`^  ${key}:[^\\r\\n]*`, "m")
 	if (re.test(body)) return body.replace(re, `  ${key}: ${value}`)
 	const head = `  ${key}: ${value}\n`
@@ -230,7 +242,7 @@ const upsertSttDirect = (body, key, value) => {
 // Replace-or-append `    key: value` inside the stt "openai" sub-block; creates the
 // sub-block when absent. Scoped to the sub-block so sibling sections (stt.local.model)
 // can never be touched by the replace.
-const upsertSttOpenai = (body, key, value) => {
+const upsertSttOpenai = (body: string, key: string, value: string): string => {
 	const sub = body.match(sttSubRe("openai"))
 	if (!sub) {
 		const block = `  openai:\n    ${key}: ${value}\n`
@@ -247,7 +259,7 @@ const upsertSttOpenai = (body, key, value) => {
 
 // Write the 9router STT wiring, preserving every sibling setting the user already has
 // (language, local model, echo_transcripts, ...). Upserts the openai backend keys only.
-export const upsertStt9Router = (yaml, model, baseUrl) => {
+export const upsertStt9Router = (yaml: string, model: string, baseUrl: string): string => {
 	let body = yaml.match(STT_BLOCK_RE)?.[1] ?? null
 	if (body === null) {
 		const prefix = yaml.length === 0 ? "" : yaml.endsWith("\n") ? yaml : `${yaml}\n`
@@ -266,7 +278,7 @@ export const upsertStt9Router = (yaml, model, baseUrl) => {
 // user owns (language, local, an explicit provider choice) survives. Returns to Hermes'
 // STT autodetect ladder rather than remembering a pre-existing provider: the original
 // api_key line was already replaced by the upsert, so there is nothing to restore.
-export const removeStt9Router = (yaml) => {
+export const removeStt9Router = (yaml: string): string => {
 	const match = yaml.match(STT_BLOCK_RE)
 	if (!match) return yaml
 	let body = match[1] || ""

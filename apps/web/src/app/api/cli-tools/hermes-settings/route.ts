@@ -2,8 +2,6 @@ import { exec } from "node:child_process"
 import fs from "node:fs/promises"
 import os from "node:os"
 import { promisify } from "node:util"
-import { NextResponse } from "next/server"
-import { dirExists, listProfiles, resolveHermesHome } from "./hermesProfiles.ts"
 import {
 	buildAuxRoleBlock,
 	buildDelegationBlock,
@@ -24,7 +22,9 @@ import {
 	upsertEnvVar,
 	upsertModelBlock,
 	upsertStt9Router,
-} from "./hermesYaml.ts"
+} from "9router-api/domain/hermes-yaml"
+import { NextResponse } from "next/server"
+import { dirExists, listProfiles, resolveHermesHome } from "./hermesProfiles.ts"
 
 export const dynamic = "force-dynamic"
 
