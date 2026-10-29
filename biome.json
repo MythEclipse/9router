@@ -113,6 +113,11 @@
           }
         }
       }
+    },
+    {
+      "includes": ["apps/web/open-sse/rtk/antislopPrompt.ts"],
+      "formatter": { "enabled": false },
+      "assist": { "enabled": false }
     }
   ]
 }
