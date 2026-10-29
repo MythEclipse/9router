@@ -1,38 +1,13 @@
 import { exec } from "node:child_process"
 import fs from "node:fs/promises"
 import os from "node:os"
-import path from "node:path"
 import { promisify } from "node:util"
+import { devinBinCandidates } from "9router-api/domain/devin-binary"
 import { NextResponse } from "next/server"
 
 export const dynamic = "force-dynamic"
 
 const execAsync = promisify(exec)
-
-// Mirror the executor's resolveDevinBin discovery so the dashboard's status
-// matches what the runtime actually spawns.
-const candidateDevinPaths = () => {
-	const home = os.homedir()
-	const isWin = os.platform() === "win32"
-	const localAppData = process.env.LOCALAPPDATA || path.join(home, "AppData", "Local")
-	// Mirror resolveDevinBin in the executor - cover installer + common
-	// package-manager locations so detection matches runtime resolution.
-	return isWin
-		? [
-				path.join(localAppData, "devin", "cli", "bin", "devin.exe"),
-				path.join(home, ".local", "bin", "devin.exe"),
-				path.join(home, "scoop", "shims", "devin.exe"),
-				path.join(localAppData, "Programs", "devin", "devin.exe"),
-			]
-		: [
-				path.join(home, ".local", "share", "devin", "bin", "devin"),
-				path.join(home, ".devin", "bin", "devin"),
-				path.join(home, ".local", "bin", "devin"),
-				"/opt/homebrew/bin/devin",
-				"/usr/local/bin/devin",
-				"/usr/bin/devin",
-			]
-}
 
 const checkDevinInstalled = async () => {
 	// 1. PATH lookup
@@ -44,8 +19,12 @@ const checkDevinInstalled = async () => {
 	} catch {
 		// fall through to filesystem probes
 	}
-	// 2. Known installer paths
-	for (const candidate of candidateDevinPaths()) {
+	// 2. Known installer paths — the same list the executor resolves against.
+	for (const candidate of devinBinCandidates({
+		platform: os.platform(),
+		home: os.homedir(),
+		localAppData: process.env.LOCALAPPDATA,
+	})) {
 		try {
 			await fs.access(candidate)
 			return { installed: true, source: candidate }

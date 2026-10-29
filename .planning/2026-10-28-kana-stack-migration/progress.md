@@ -1489,3 +1489,36 @@ Verification: 624 files / 7164 tests passing (13 files / 74 tests skipped), `tsc
 `tsc -p apps/web` both 0 errors, `bun run build` exit 0, and the standalone build answers — health
 200, and omp/jcode/deepseek-tui/hermes all 401 behind auth (the gate runs before the handler, so
 401 rather than a 400 tells us routing and the guard are wired, not that the port is unreachable).
+
+## cli-tools non-settings routes
+
+The remaining `api/cli-tools/` handlers were not settings screens; three of them still had
+untested decision logic, and two are pure plumbing that should stay where they are.
+
+| Route | Outcome |
+| ----- | ------- |
+| `codex-profiles` | `domain/codex-profiles.ts` — name/model validation, filename derivation |
+| `cowork-mcp-registry` | `domain/cowork-mcp-registry.ts` — which registry entries 3p Cowork can reach |
+| `cowork-mcp-tools` | `domain/cowork-mcp-probe.ts` — reading a `tools/list` reply |
+| `all-statuses` | left — a fan-out over 19 `GET` exports, no rules of its own |
+| `hermes-profiles` | left — one call into the existing profile host |
+| `antigravity-mitm` | not ported yet — process manager, needs its own reading |
+
+What the three extractions pinned, all of it previously inline and unstated:
+
+- A codex profile *name* is a path guard, not tidying: `../x` never matched `[a-zA-Z0-9_-]`, but
+  nothing recorded why it must not. A model is a TOML-escape guard for the same reason — a `"` or
+  newline would end the string.
+- Cowork's registry filter is a feature, not a nicety: an entry brokered through claude.ai cannot
+  be reached from 3p at all, so offering one yields a plugin that fails on first use and reads to
+  the operator as "9Router is broken".
+- A 401 from an MCP probe means "wants OAuth", not "broken", and an SSE reply must be matched by
+  JSON-RPC id — the first `data:` line carrying a `result` is often a notification.
+
+Naming collision worth remembering: `tests/unit/codex-profiles.test.ts` already existed for the
+dashboard's `deriveProfileNameFromModel` helper. Rather than overwrite it, the new file is
+`codex-profile-files.test.ts`. Check for an existing test file before naming a new one after the
+route it covers.
+
+Verification: 628 files / 7214 tests passing (13 files / 74 skipped), both packages `tsc` clean,
+`biome check` clean on all nine touched files, `bun run build` exit 0.

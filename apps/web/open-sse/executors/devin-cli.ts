@@ -34,29 +34,25 @@ function resolveDevinBin() {
 
 	const isWin = process.platform === "win32"
 	const home = os.homedir()
+	const localAppData = process.env.LOCALAPPDATA || path.join(home, "AppData", "Local")
 
 	// 2. Known installer / package-manager locations. spawn uses shell:false on
 	//    macOS/Linux, so process.env.PATH alone may miss ~/.local/bin, Homebrew,
 	//    Scoop, etc. when the server runs detached (tray/daemon/launchd) without
 	//    a login shell - probe these explicitly before falling back to PATH.
+	//
+	//    KEEP IN STEP with devinBinCandidates() in apps/api/src/domain/devin-binary.ts,
+	//    which the settings screen uses to report "installed". open-sse is a standalone
+	//    engine and cannot import from apps/api, so the list is duplicated by necessity;
+	//    when they drift, the dashboard claims Devin is missing while the gateway spawns
+	//    it fine. A test asserts the two lists match.
 	const candidates = isWin
 		? [
 				// Official installer: %LOCALAPPDATA%\devin\cli\bin\devin.exe
-				path.join(
-					process.env.LOCALAPPDATA || path.join(home, "AppData", "Local"),
-					"devin",
-					"cli",
-					"bin",
-					"devin.exe",
-				),
+				path.join(localAppData, "devin", "cli", "bin", "devin.exe"),
 				path.join(home, ".local", "bin", "devin.exe"),
 				path.join(home, "scoop", "shims", "devin.exe"),
-				path.join(
-					process.env.LOCALAPPDATA || path.join(home, "AppData", "Local"),
-					"Programs",
-					"devin",
-					"devin.exe",
-				),
+				path.join(localAppData, "Programs", "devin", "devin.exe"),
 			]
 		: [
 				path.join(home, ".local", "share", "devin", "bin", "devin"),
