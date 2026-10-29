@@ -15,6 +15,8 @@ import { apiKeysRouter } from "./routers/api-keys.ts"
 import { combosRouter } from "./routers/combos.ts"
 import { dashboardKeysRouter } from "./routers/dashboard-keys.ts"
 import { errorLogsRouter } from "./routers/error-logs.ts"
+import { headroomRouter } from "./routers/headroom.ts"
+import { mediaProvidersRouter } from "./routers/media-providers.ts"
 import { modelsRouter } from "./routers/models.ts"
 import { oauthRouter } from "./routers/oauth.ts"
 import { pricingRouter } from "./routers/pricing.ts"
@@ -24,6 +26,7 @@ import { settingsRouter } from "./routers/settings.ts"
 import { systemRouter } from "./routers/system.ts"
 import { cacheStatsRouter, dashboardJobsRouter, pluginsRouter } from "./routers/system-runtime.ts"
 import { themeRouter } from "./routers/theme.ts"
+import { tunnelRouter } from "./routers/tunnel.ts"
 import { usageRouter } from "./routers/usage.ts"
 
 export const appRouter = base.router({
@@ -43,6 +46,9 @@ export const appRouter = base.router({
 	models: modelsRouter,
 	providers: providersRouter,
 	oauth: oauthRouter,
+	tunnel: tunnelRouter,
+	headroom: headroomRouter,
+	mediaProviders: mediaProvidersRouter,
 })
 
 export type AppRouter = typeof appRouter

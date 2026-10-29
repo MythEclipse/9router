@@ -119,6 +119,8 @@ export interface UseCaseOptions {
 	readonly tunnelToggle?: TunnelToggleDeps
 	readonly tailscaleCheck?: TailscaleCheckDeps
 	readonly tailscaleInstall?: TailscaleInstallDeps
+	readonly headroom?: import("../application/headroom/manage-headroom.ts").HeadroomDeps
+	readonly ttsVoices?: import("../application/tts/tts-voices.ts").TtsVoiceDeps
 	/** The credentials a provider's own tool leaves on this machine, supplied by `apps/web`. */
 	readonly credentialImport?: Record<
 		string,
@@ -457,6 +459,8 @@ export function createUseCases(
 		tunnelToggle: required(options, "tunnelToggle"),
 		tailscaleCheck: required(options, "tailscaleCheck"),
 		tailscaleInstall: required(options, "tailscaleInstall"),
+		headroom: required(options, "headroom"),
+		ttsVoices: required(options, "ttsVoices"),
 		credentialImport: options.credentialImport ?? {},
 		createProviderConnection: required(options, "createProviderConnection"),
 		localCredentials: options.localCredentials ?? {},

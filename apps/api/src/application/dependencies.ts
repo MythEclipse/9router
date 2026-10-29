@@ -326,6 +326,10 @@ export interface Dependencies {
 	readonly tunnelToggle: TunnelToggleDeps
 	readonly tailscaleCheck: TailscaleCheckDeps
 	readonly tailscaleInstall: TailscaleInstallDeps
+	/** Headroom's process manager and python probe; only a host with a machine can supply them. */
+	readonly headroom: import("./headroom/manage-headroom.ts").HeadroomDeps
+	/** The TTS voice pickers' connections, fetchers and the four payload shapes they answer. */
+	readonly ttsVoices: import("./tts/tts-voices.ts").TtsVoiceDeps
 	/** What kinds of provider exist, and which may be created. */
 	readonly providerCatalogue: ProviderCatalogue
 	/** Normalises the several spellings of a provider id to one. */

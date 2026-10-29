@@ -45,6 +45,7 @@ import {
 } from "./combos/manage-combos.ts"
 import type { Dependencies } from "./dependencies.ts"
 import { makeClearErrorLogs, makeListErrorLogs } from "./error-logs/read-error-logs.ts"
+import { makeHeadroom } from "./headroom/manage-headroom.ts"
 import { makeModelCatalogue } from "./models/list-models.ts"
 import { makeCustomModels, makeModelAliases } from "./models/manage-aliases.ts"
 import { makeModelAvailability } from "./models/manage-availability.ts"
@@ -118,6 +119,7 @@ import { makeGetTheme, makeSetTheme } from "./settings/theme.ts"
 import { makeCacheStats } from "./system/cache-stats.ts"
 import { makeDashboardJobs } from "./system/dashboard-jobs.ts"
 import { makeShutdownFromDashboard, makeShutdownFromHook } from "./system/shutdown.ts"
+import { makeTtsVoices, type TtsVoices } from "./tts/tts-voices.ts"
 import {
 	checkTailscale,
 	prepareTailscaleInstall,
@@ -368,6 +370,10 @@ export interface UseCases {
 			) => Promise<import("./tunnel/manage-tunnel.ts").InstallEvent>
 		}
 	}
+	/** The Headroom proxy this install may run: lifecycle, status, and its extras. */
+	readonly headroom: import("./headroom/manage-headroom.ts").HeadroomLifecycle
+	/** The five TTS voice catalogues the pickers read. */
+	readonly ttsVoices: TtsVoices
 }
 
 /** The combo use-cases share one dependency slice, so it is built once. */
@@ -713,5 +719,7 @@ export function buildUseCases(deps: Dependencies): UseCases {
 					runTailscaleInstall(prepared, deps.tailscaleInstall, reportProgress),
 			},
 		},
+		headroom: makeHeadroom(deps.headroom),
+		ttsVoices: makeTtsVoices(deps.ttsVoices),
 	}
 }
