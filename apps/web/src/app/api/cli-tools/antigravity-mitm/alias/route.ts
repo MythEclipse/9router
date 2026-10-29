@@ -1,3 +1,4 @@
+import { aliasWriteRefusal, sanitizeAliasMappings } from "9router-api/domain/mitm-alias"
 import { NextResponse } from "next/server"
 import { writeAliasForTool } from "@/lib/mitmAliasCache"
 import { getMitmStatus } from "@/mitm/manager"
@@ -23,25 +24,13 @@ export async function PUT(request) {
 	try {
 		const { tool, mappings } = await request.json()
 
-		if (!tool || !mappings || typeof mappings !== "object") {
-			return NextResponse.json({ error: "tool and mappings required" }, { status: 400 })
-		}
-
-		// Check if DNS is enabled for this tool
 		const status = await getMitmStatus()
-		if (!status.dnsStatus || !status.dnsStatus[tool]) {
-			return NextResponse.json(
-				{ error: `DNS must be enabled for ${tool} before editing model mappings` },
-				{ status: 403 },
-			)
+		const refusal = aliasWriteRefusal(tool, mappings, status.dnsStatus)
+		if (refusal) {
+			return NextResponse.json({ error: refusal.error }, { status: refusal.status })
 		}
 
-		const filtered: Record<string, string> = {}
-		for (const [alias, model] of Object.entries(mappings)) {
-			if (typeof model === "string" && model.trim()) {
-				filtered[alias] = model.trim()
-			}
-		}
+		const filtered = sanitizeAliasMappings(mappings)
 
 		await setMitmAliasAll(tool, filtered)
 		writeAliasForTool(tool, filtered)
