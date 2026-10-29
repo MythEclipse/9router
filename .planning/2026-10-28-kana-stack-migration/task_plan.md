@@ -60,17 +60,21 @@ three packages report 0 `tsc` errors and `biome check` is clean.
 | `proxy-pools`  | 9      | **done** — `route`, `[id]`, `bulk`, `[id]/test`, four `*-deploy`, `import-jobs` |
 | `providers`    | 12 | **done** — connection CRUD, overrides, kilo/free-models, test-models, test-batch, client, `[id]/test`, suggested-models, `validate`, `web-login`, `[id]/models` |
 | `tunnel`       | 7      | **done** — `status`, `enable`/`disable`, `tailscale-{check,enable,disable,install}` |
-| (129 more)     | 129    | pending |
+| `cli-tools`    | 15     | **done** — every `*-settings` route on `getUseCases().cliTools`; four own domain modules (`omp` YAML, `jcode` TOML, `hermes` YAML, `grok-build` TOML) |
+| (107 more)     | 107    | pending |
 
-Done: 36 of 168 route handlers. `tags` is deliberately **not** ported: it
+Done: 51 of 168 route handlers. `tags` is deliberately **not** ported: it
 returns one hardcoded catalogue with no rules, so moving it would add layers
 that extract nothing (see findings.md).
 
-Next: finish `oauth` (8 routes left). The two families still open are the
-generic `[provider]/[action]` proxy — which is a dispatcher, not a handler, and
-needs the action table read before anything is moved — and the OAuth *login*
-flows (`kiro/social-*`, `xiaomi-mimo/login/*`), which hand a browser a redirect
-and therefore cannot become a JSON use-case without splitting the redirect out.
+`cli-tools` closed with all 15 per-tool settings routes. Eight routes under
+`api/cli-tools/` are deliberately still Next-side: `all-statuses` is an aggregate
+fan-out, `antigravity-mitm`, `codex-profiles`, `hermes-profiles` and the three
+`cowork-*` handlers are profile/process management rather than config editing, so
+each needs its own port read before moving. `cowork-settings` is the next settings
+route and the last one of that family.
+
+Next: `cowork-settings`, then the remaining `cowork-*` siblings.
 
 Still parked inside `usage/`: `available-models` (360 LOC) and `api-keys`
 (351 LOC). They were split off on purpose — they need the engine behind ports,
@@ -272,3 +276,27 @@ for one delegation.
 | Resource | Routes | Status |
 | -------- | ------ | ------ |
 | `oauth`  | 20 | done — dispatch actions, credential import, gitlab pat, iflow cookie, mimo login, kiro social |
+| `cli-tools` | 15 | done — see the batch section below |
+
+## Batch: `cli-tools` (15 `*-settings` routes)
+
+All fifteen now delegate to `getUseCases().cliTools` over `domain/cli-tool-settings.ts`, or to a
+domain module of their own when the file format is not a plain JSON map:
+
+| Tool | Config file | What was extracted |
+| ---- | ----------- | ------------------ |
+| Cline, Crush, Pi, CodeWhale, OpenCode, Claude, Codex, ForgeCode, Kilo, Grok-build, OpenClaw | JSON / TOML | shared port; per-tool `required`, `installKeys`, `storedBaseUrl` |
+| `omp` | `~/.omp/agent/models.yml` | `domain/omp-models-yml.ts` — line-wise block removal |
+| `jcode` | `~/.jcode/config.toml` + env file | `domain/jcode-config.ts` — textual splice of one table |
+| `deepseek-tui` | `~/.deepseek/config.toml` | owns the file: replace on save, `resetTo` on reset |
+| `hermes` | `~/.hermes/profiles/*/config.yaml` | `domain/hermes-yaml.ts`, moved whole (27 tests) |
+
+The lesson worth keeping: **the idempotence test is what found the YAML bug, and no reading of the
+regex did.** Two rewrites of the `omp` pattern each passed a visual review and each failed the
+second-save case in a different direction. Write the "save twice" assertion before touching a
+config writer, not after.
+
+Domains that would have needed a fourth port concept were left with their own handler logic:
+`hermes` keeps `profiles`/`selections`/`audio`/`applyToAll` because those are request
+orchestration; pushing them into the shared port would make nine other tools' ports carry four
+concepts they never use.

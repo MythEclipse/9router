@@ -2,14 +2,26 @@ import crypto from "node:crypto"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import {
+	bareToolNames,
+	COWORK_PROVIDER,
+	COWORK_SECURITY_RELAX,
+	type CoworkConfig,
+	type CoworkCustomPlugin,
+	type CoworkManagedServer,
+	coworkHasThisInstall,
+	normaliseCoworkModels,
+	normaliseCustomPlugins,
+	readCoworkModels,
+	skipApprovalsFor,
+	withInjectedAuth,
+} from "9router-api/domain/cowork-settings"
 import { NextResponse } from "next/server"
 import { SERVER_CONFIG } from "@/shared/constants/config"
 import {
 	buildManagedMcpServers,
-	type CoworkPlugin,
 	DEFAULT_PLUGINS,
 	LOCAL_STDIO_PLUGINS,
-	type ManagedMcpServer,
 } from "@/shared/constants/coworkPlugins"
 import { getConsistentMachineId } from "@/shared/utils/machineId"
 
@@ -28,25 +40,6 @@ interface CoworkMeta {
 	entries: Array<{ id: string; name: string }>
 }
 
-/** JSON settings stored by Cowork's 3p config library. */
-interface CoworkConfig {
-	appliedId?: string
-	entries?: Array<{ id: string; name: string }>
-	inferenceProvider?: string
-	inferenceGatewayBaseUrl?: string
-	inferenceGatewayApiKey?: string
-	inferenceModels?: Array<string | { name?: string }>
-	managedMcpServers?: CoworkManagedServer[]
-	operonSkipMcpApprovals?: Record<string, boolean>
-	[key: string]: unknown
-}
-
-/** Managed MCP entries include URL-backed preset, local bridge and custom plugins. */
-interface CoworkManagedServer extends ManagedMcpServer {
-	custom?: boolean
-	headers?: Record<string, string>
-}
-
 const APP_PORT = SERVER_CONFIG.port
 const CLI_TOKEN_HEADER = "x-9r-cli-token"
 const CLI_TOKEN_SALT = "9r-cli-auth"
@@ -59,31 +52,12 @@ const getCliToken = async () => {
 }
 
 // Inject CLI token header into entries pointing at our local /api/mcp/ bridge.
-const injectAuthHeaders = async (entries: CoworkManagedServer[]) => {
-	const token = await getCliToken()
-	for (const e of entries) {
-		if (typeof e?.url === "string" && e.url.startsWith(LOCAL_MCP_PREFIX)) {
-			e.headers = { ...(e.headers || {}), [CLI_TOKEN_HEADER]: token }
-		}
-	}
-	return entries
-}
-
-const PROVIDER = "gateway"
-
-// Hardcoded relax-security profile applied on every Apply.
-const SECURITY_RELAX = {
-	coworkEgressAllowedHosts: ["*"],
-	disabledBuiltinTools: [],
-	isLocalDevMcpEnabled: true,
-	isDesktopExtensionEnabled: true,
-	isDesktopExtensionDirectoryEnabled: true,
-	isDesktopExtensionSignatureRequired: false,
-	isClaudeCodeForDesktopEnabled: true,
-	disableEssentialTelemetry: true,
-	disableNonessentialTelemetry: true,
-	disableNonessentialServices: true,
-}
+const injectAuthHeaders = async (entries: CoworkManagedServer[]): Promise<CoworkManagedServer[]> =>
+	withInjectedAuth(entries, {
+		localBridgePrefix: LOCAL_MCP_PREFIX,
+		cliTokenHeader: CLI_TOKEN_HEADER,
+		token: await getCliToken(),
+	})
 
 // Tools auto-allow per server via toolPolicy["*"] = "allow" semantics.
 // 3p schema requires explicit tool names; we mark "*" via operonSkipMcpApprovals instead.
@@ -222,11 +196,9 @@ const buildLocalBridgeEntries = (localPluginNames: unknown): CoworkManagedServer
 }
 
 // Build entries for user-defined custom MCP plugins (URL or stdio command).
-const buildCustomEntries = (customPlugins: unknown): CoworkManagedServer[] => {
-	if (!Array.isArray(customPlugins)) return []
+const buildCustomEntries = (customPlugins: CoworkCustomPlugin[]): CoworkManagedServer[] => {
 	const out: CoworkManagedServer[] = []
-	for (const plugin of customPlugins as CoworkPlugin[]) {
-		if (!plugin?.name || !plugin?.url) continue
+	for (const plugin of customPlugins) {
 		out.push({
 			name: plugin.name,
 			url: plugin.url,
@@ -287,10 +259,7 @@ async function writeSkipApprovals(managedServers: CoworkManagedServer[]) {
 	} catch (e) {
 		if (e.code !== "ENOENT") return { error: e.code }
 	}
-	const skip: Record<string, boolean> = {}
-	for (const srv of managedServers) {
-		if (srv?.name) skip[srv.name] = true
-	}
+	const skip = skipApprovalsFor(managedServers)
 	cfg.operonSkipMcpApprovals = skip
 	await fs.mkdir(getWriteRoot(), { recursive: true })
 	await fs.writeFile(cfgPath, JSON.stringify(cfg, null, 2))
@@ -314,11 +283,9 @@ export async function GET() {
 		const config = configPath ? await readJson(configPath) : null
 
 		const baseUrl = config?.inferenceGatewayBaseUrl || null
-		const models = Array.isArray(config?.inferenceModels)
-			? config.inferenceModels.map((m) => (typeof m === "string" ? m : m?.name)).filter(Boolean)
-			: []
+		const models = readCoworkModels(config)
 		const managedMcp = Array.isArray(config?.managedMcpServers) ? config.managedMcpServers : []
-		const has9Router = !!(config?.inferenceProvider === PROVIDER && baseUrl)
+		const has9Router = coworkHasThisInstall(config)
 
 		// Active local plugins = managedMcp entries whose URL points at our inline bridge.
 		const stdioNames = new Set(LOCAL_STDIO_PLUGINS.map((p) => p.name))
@@ -354,18 +321,10 @@ export async function GET() {
 							!(stdioNames.has(m.name) && typeof m.url === "string" && m.url.includes("/api/mcp/")),
 					)
 					.map((m) => {
-						// Strip "{name}-" prefix and dedupe so re-applies don't multiply entries.
-						const keys = m.toolPolicy ? Object.keys(m.toolPolicy) : []
-						const prefix = `${m.name}-`
-						const bare = new Set()
-						for (const k of keys) {
-							let t = k
-							while (t.startsWith(prefix)) t = t.slice(prefix.length)
-							bare.add(t)
-						}
-						// If plugin matches a default, prefer default toolNames (curated/correct).
+						// If a plugin matches a default, prefer its toolNames (curated/correct).
 						const def = DEFAULT_PLUGINS.find((d) => d.name === m.name)
-						const toolNames = def && Array.isArray(def.toolNames) ? def.toolNames : Array.from(bare)
+						const bare = bareToolNames(m.name, m.toolPolicy ? Object.keys(m.toolPolicy) : [])
+						const toolNames = def && Array.isArray(def.toolNames) ? def.toolNames : bare
 						return { name: m.name, url: m.url, transport: m.transport, oauth: !!m.oauth, toolNames }
 					}),
 				localPlugins: activeLocalNames,
@@ -395,9 +354,7 @@ export async function POST(request) {
 		if (!baseUrl || !apiKey) {
 			return NextResponse.json({ error: "baseUrl and apiKey are required" }, { status: 400 })
 		}
-		const modelsArray = Array.isArray(models)
-			? models.filter((m) => typeof m === "string" && m.trim())
-			: []
+		const modelsArray = normaliseCoworkModels(models)
 		if (modelsArray.length === 0) {
 			return NextResponse.json({ error: "At least one model is required" }, { status: 400 })
 		}
@@ -406,9 +363,7 @@ export async function POST(request) {
 		const pluginsArray = Array.isArray(plugins) ? plugins : DEFAULT_PLUGINS
 		const localPluginNames = Array.isArray(localPlugins) ? localPlugins : []
 		// Only URL-based custom plugins allowed (no stdio command spawning).
-		const customPluginsArray = (Array.isArray(customPlugins) ? customPlugins : []).filter(
-			(p) => p?.url,
-		)
+		const customPluginsArray = normaliseCustomPlugins(customPlugins)
 
 		const bridgeEntries = await injectAuthHeaders(buildLocalBridgeEntries(localPluginNames))
 		const customEntries = await injectAuthHeaders(buildCustomEntries(customPluginsArray))
@@ -423,8 +378,8 @@ export async function POST(request) {
 		const configPath = path.join(getWriteConfigDir(), `${meta.appliedId}.json`)
 
 		const newConfig: CoworkConfig = {
-			...SECURITY_RELAX,
-			inferenceProvider: PROVIDER,
+			...COWORK_SECURITY_RELAX,
+			inferenceProvider: COWORK_PROVIDER,
 			inferenceGatewayBaseUrl: baseUrl,
 			inferenceGatewayApiKey: apiKey,
 			inferenceModels: modelsArray.map((name) => ({ name })),

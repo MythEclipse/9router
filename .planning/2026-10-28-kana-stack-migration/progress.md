@@ -1453,3 +1453,39 @@ Verification: 617 files / 7077 tests passing, both packages typecheck clean, `bu
 exit 0, and the standalone build answered — gitlab without token 400, gitlab loopback base
 400 `URL not allowed` (guard refuses before fetching), iflow without cookie 400, kiro
 social-authorize with a bad provider 400 and with `google` a real `kiro://` PKCE URL.
+
+## cli-tools batch complete — all 15 per-tool settings routes
+
+Every `api/cli-tools/*-settings` route now delegates to `getUseCases().cliTools` on top of
+`domain/cli-tool-settings.ts`, or to a domain module of its own when its file format differs:
+`omp-models-yml.ts` (YAML), `jcode-config.ts` (nested TOML table), `hermes-yaml.ts` (YAML with
+profiles), `grok-build-config.ts` (TOML with markers).
+
+The four ports that needed more than the shared `ToolConfigPort` are the interesting ones:
+
+- **`omp`** — the route removed its provider block with `\s*9router:[\s\S]*?(?=\n\s*\w+:|$)`. Two
+  regex rewrites both failed the idempotence test, in opposite directions: the first matched
+  nothing when the block was indented (second save appended a duplicate, file no longer valid
+  YAML), the second swallowed the sibling provider below it. It is now a loop over lines — our
+  block is the `9router:` line plus every following line blank or indented deeper — and that
+  version is what the test was written to force.
+- **`deepseek-tui`** — the only tool that owns its whole file. A save replaces it; a reset writes
+  `provider = "deepseek"` back rather than deleting it, because an empty file is a tool that does
+  not start. Expressed as a new optional `resetTo` port. The first cut dropped the existing
+  "nothing to reset" answer for tools *without* a default and two older tests caught it.
+- **`jcode`** — the entry is spliced as text, not round-tripped through `confbox`: a round-trip
+  rewrites comments and ordering on every save. Safe only because the entry is flat, so the test
+  pins that a neighbouring table survives byte-identical.
+- **`hermes`** — `hermesYaml.ts` was already pure (no imports, 27 tests) and only moved to
+  `domain/`. Its route keeps `profiles`/`selections`/`audio`/`applyToAll` orchestration: pressing
+  those into the shared port would make every other tool's port carry four concepts it ignores.
+
+Two pre-existing strict-mode failures were found because moving a file into `apps/api` makes
+`tsc -p apps/api` look at it: `grok-build-config.ts` had untyped parameters, and `hermes-yaml.ts`
+declared `parseKeyValues` as returning `Record<string, string>` when it returns a getter. Both
+were type-only fixes; the 27 hermes tests were unchanged and still pass.
+
+Verification: 624 files / 7164 tests passing (13 files / 74 tests skipped), `tsc -p apps/api` and
+`tsc -p apps/web` both 0 errors, `bun run build` exit 0, and the standalone build answers — health
+200, and omp/jcode/deepseek-tui/hermes all 401 behind auth (the gate runs before the handler, so
+401 rather than a 400 tells us routing and the guard are wired, not that the port is unreachable).
