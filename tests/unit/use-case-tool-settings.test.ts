@@ -346,3 +346,24 @@ describe("tool model lists", () => {
 		expect(merged[0]?.name).toBe("My Model")
 	})
 })
+
+describe("settings file format", () => {
+	it("writes JSON by default, which is what most tools parse", () => {
+		expect(settingsFileText({ a: 1 })).toBe('{\n  "a": 1\n}\n')
+	})
+
+	it("writes TOML when the tool parses TOML", () => {
+		// The bug this guards: TOML written into a file the tool parses as JSON reads back as
+		// garbage, so one save through this screen breaks a working tool.
+		const text = settingsFileText(
+			{ openai: { model: "m" } },
+			"toml",
+			(config) => `[openai]\nmodel = "${(config.openai as { model: string }).model}"\n`,
+		)
+		expect(text).toBe('[openai]\nmodel = "m"\n')
+	})
+
+	it("refuses to guess a TOML serialiser", () => {
+		expect(() => settingsFileText({ a: 1 }, "toml")).toThrow(/TOML serialiser/)
+	})
+})

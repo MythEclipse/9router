@@ -5,6 +5,7 @@ import path from "node:path"
 import { promisify } from "node:util"
 import type { ToolConfigPort } from "9router-api/application/cli-tools/manage-tool-settings"
 import { type ModelEntry, mergeModelEntries } from "9router-api/domain/cli-tool-settings"
+import { parseTOML, stringifyTOML } from "confbox"
 import { readConfigForWrite } from "./cliTools/configWrite"
 
 const execAsync = promisify(exec)
@@ -34,6 +35,15 @@ async function readJson(filePath: string): Promise<Record<string, unknown> | nul
 	try {
 		const content = await fs.readFile(filePath, "utf-8")
 		return JSON.parse(content.replace(/,(\s*[}\]])/g, "$1"))
+	} catch {
+		return null
+	}
+}
+
+/** The file's text, or null when there is no file — the raw form `readForWrite` needs. */
+async function readText(filePath: string): Promise<string | null> {
+	try {
+		return await fs.readFile(filePath, "utf-8")
 	} catch {
 		return null
 	}
@@ -419,3 +429,92 @@ export async function removePiSettings(): Promise<void> {
 }
 
 export { isPiInstalled, resolvePiModelsJsonPath }
+
+/**
+ * CodeWhale's layout: `[openai]` in a TOML file, with every other table re-written untouched.
+ *
+ * This is the first TOML tool here, so the host supplies both halves of the format — the
+ * parser used by `readForWrite` and the serialiser used on write — because a file written as
+ * TOML but parsed as JSON reads back as garbage the moment the tool next loads it.
+ */
+
+const CODEWHALE_CONFIG_DIR = () => path.join(os.homedir(), ".codewhale")
+const CODEWHALE_CONFIG_PATH = () => path.join(CODEWHALE_CONFIG_DIR(), "config.toml")
+
+type CodewhaleConfig = { openai?: Record<string, unknown>; [key: string]: unknown }
+
+async function isCodewhaleInstalled(): Promise<boolean> {
+	try {
+		const isWindows = os.platform() === "win32"
+		await execAsync(isWindows ? "where codewhale" : "which codewhale", { windowsHide: true })
+		return true
+	} catch {
+		try {
+			await fs.access(CODEWHALE_CONFIG_PATH())
+			return true
+		} catch {
+			return false
+		}
+	}
+}
+
+export const codewhaleSettingsConfig: ToolConfigPort = {
+	path: CODEWHALE_CONFIG_PATH(),
+	read: async () => {
+		const raw = await readText(CODEWHALE_CONFIG_PATH())
+		if (raw === null) return null
+		try {
+			return (parseTOML(raw) ?? {}) as Record<string, unknown>
+		} catch {
+			return null
+		}
+	},
+	readForWrite: async () =>
+		readConfigForWrite(
+			fs,
+			CODEWHALE_CONFIG_PATH(),
+			(raw) => (parseTOML(raw) ?? {}) as Record<string, unknown>,
+		),
+	write: async (text) => {
+		await fs.mkdir(CODEWHALE_CONFIG_DIR(), { recursive: true })
+		await fs.writeFile(CODEWHALE_CONFIG_PATH(), text, "utf-8")
+	},
+	format: "toml",
+	// The file is ours from the first write, and the header says so; a tool that loses this
+	// comment still keeps working, so the marker is a courtesy rather than a mechanism.
+	serialise: (config) => `# CodeWhale config - managed by 9Router\n\n${stringifyTOML(config)}`,
+	baseUrlSuffix: "with-v1",
+	installKeys: ["openai"],
+	storedBaseUrl: (config) => {
+		const openai = (config as CodewhaleConfig)?.openai
+		return typeof openai?.base_url === "string" ? openai.base_url : null
+	},
+	apply: (config, input) => ({
+		...(config as CodewhaleConfig),
+		openai: {
+			base_url: input.baseUrl,
+			api_key: input.apiKey,
+			model: input.model || "provider/model-id",
+		},
+	}),
+}
+
+/** CodeWhale's reset drops the table, and the file only when no other table remains. */
+export async function removeCodewhaleSettings(): Promise<void> {
+	const raw = await readText(CODEWHALE_CONFIG_PATH())
+	if (raw === null) return
+	let config: CodewhaleConfig
+	try {
+		config = (parseTOML(raw) ?? {}) as CodewhaleConfig
+	} catch {
+		return
+	}
+	delete config.openai
+	if (Object.keys(config).length === 0) {
+		await fs.rm(CODEWHALE_CONFIG_PATH(), { force: true })
+		return
+	}
+	await fs.writeFile(CODEWHALE_CONFIG_PATH(), stringifyTOML(config), "utf-8")
+}
+
+export { isCodewhaleInstalled }

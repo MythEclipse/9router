@@ -118,9 +118,25 @@ export const NOTHING_TO_RESET = "No settings file to reset"
  * Written with a trailing newline because these files are read by humans as often as by the
  * tool, and a file that ends mid-line shows up as a "\ No newline at end of file" diff.
  */
-export function settingsFileText(config: Record<string, unknown>): string {
+export function settingsFileText(
+	config: Record<string, unknown>,
+	format: SettingsFormat = "json",
+	serialiseToml?: (config: Record<string, unknown>) => string,
+): string {
+	if (format === "toml") {
+		if (!serialiseToml) throw new Error("A TOML config needs a TOML serialiser")
+		return serialiseToml(config)
+	}
 	return `${JSON.stringify(config, null, 2)}\n`
 }
+
+/**
+ * How a tool's config file is written.
+ *
+ * The parse and the write have to agree, or a tool reads a file this screen wrote as garbage:
+ * writing TOML into a file parsed as JSON is how a working tool stops working after one save.
+ */
+export type SettingsFormat = "json" | "toml"
 
 /**
  * A model entry as a tool records it, kept loose because tools add fields we never read.

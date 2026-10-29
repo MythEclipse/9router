@@ -5,6 +5,7 @@ import {
 	pointsAtThisInstall,
 	readToolSettings,
 	removeInstallEntry,
+	type SettingsFormat,
 	settingsFileText,
 	THIS_INSTALL_HOSTS,
 	type ToolSettingsInput,
@@ -34,6 +35,10 @@ export interface ToolConfigPort {
 	 */
 	readonly readForWrite: () => Promise<Record<string, unknown>>
 	readonly write: (text: string) => Promise<void>
+	/** Which format the config file is written in; must match what `readForWrite` parses. */
+	readonly format?: SettingsFormat
+	/** Serialises TOML, supplied by the host because the parser lives there. */
+	readonly serialise?: (config: Record<string, unknown>) => string
 	/** Which spelling of the base URL this tool wants. */
 	readonly baseUrlSuffix: BaseUrlSuffix
 	/** The keys that mean "this install" in this tool's format. */
@@ -116,7 +121,13 @@ export async function writeToolSettings(
 			...input,
 			baseUrl: normaliseBaseUrl(input.baseUrl, deps.config.baseUrlSuffix),
 		}
-		await deps.config.write(settingsFileText(deps.config.apply(existing, spelled)))
+		await deps.config.write(
+			settingsFileText(
+				deps.config.apply(existing, spelled),
+				deps.config.format ?? "json",
+				deps.config.serialise,
+			),
+		)
 
 		for (const sideWrite of deps.sideWrites ?? []) {
 			try {

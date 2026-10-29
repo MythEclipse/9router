@@ -1,159 +1,40 @@
-import { exec } from "node:child_process"
-import fs from "node:fs/promises"
-import os from "node:os"
-import path from "node:path"
-import { promisify } from "node:util"
-import { parseTOML, stringifyTOML } from "confbox"
 import { NextResponse } from "next/server"
-import { readConfigForWrite } from "@/lib/cliTools/configWrite"
-import { resolveCliApiKey } from "../resolveApiKey.ts"
+import {
+	codewhaleSettingsConfig,
+	isCodewhaleInstalled,
+	removeCodewhaleSettings,
+} from "@/lib/cliToolHosts"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-const execAsync = promisify(exec)
-
-/**
- * ~/.codewhale/config.toml — this route only owns the `[openai]` table; every
- * other table is read back and re-serialized untouched.
- */
-interface CodewhaleConfig {
-	openai?: {
-		base_url?: string
-		api_key?: string
-		model?: string
-	}
-	[key: string]: unknown
-}
-
-const getCodewhaleDir = () => path.join(os.homedir(), ".codewhale")
-const getCodewhaleConfigPath = () => path.join(getCodewhaleDir(), "config.toml")
-
-const checkCodewhaleInstalled = async () => {
-	const isWindows = os.platform() === "win32"
-	try {
-		const command = isWindows ? "where codewhale" : "which codewhale"
-		await execAsync(command, { windowsHide: true })
-		return true
-	} catch {
-		try {
-			await fs.access(getCodewhaleConfigPath())
-			return true
-		} catch {
-			return false
-		}
-	}
-}
-
-const has9RouterConfig = (content) => {
-	if (!content) return false
-	return content.includes("managed by 9Router") || content.includes("localhost:20128")
-}
-
-const readConfig = async () => {
-	try {
-		return await fs.readFile(getCodewhaleConfigPath(), "utf-8")
-	} catch {
-		return null
-	}
-}
+/** CodeWhale keeps `[openai]` in a TOML file; see `codewhaleSettingsConfig`. */
+const deps = () => ({
+	isInstalled: isCodewhaleInstalled,
+	config: codewhaleSettingsConfig,
+	sideRemovals: [removeCodewhaleSettings],
+	notInstalledMessage: "CodeWhale CLI is not installed",
+	appliedMessage: "CodeWhale settings applied successfully!",
+	resetMessage: "9Router removed from CodeWhale",
+})
 
 export async function GET() {
-	try {
-		const installed = await checkCodewhaleInstalled()
-		if (!installed) {
-			return NextResponse.json({
-				installed: false,
-				config: null,
-				message: "CodeWhale CLI is not installed",
-			})
-		}
-
-		const content = await readConfig()
-		let config = null
-		try {
-			if (content) config = parseTOML(content)
-		} catch {}
-
-		return NextResponse.json({
-			installed: true,
-			config,
-			has9Router: has9RouterConfig(content),
-			configPath: getCodewhaleConfigPath(),
-		})
-	} catch (err) {
-		return NextResponse.json({ error: { message: err.message } }, { status: 500 })
-	}
+	const answer = await getUseCases().cliTools.readToolSettingsStatus(deps())
+	return NextResponse.json(answer.body, { status: answer.status })
 }
 
-export async function POST(request) {
-	let rawBody
+export async function POST(request: Request) {
+	let body: unknown
 	try {
-		rawBody = await request.json()
+		body = await request.json()
 	} catch {
 		return NextResponse.json({ error: { message: "Invalid JSON body" } }, { status: 400 })
 	}
-
-	try {
-		const { baseUrl, apiKey, model } = rawBody || {}
-		if (!baseUrl) {
-			return NextResponse.json({ error: { message: "baseUrl is required" } }, { status: 400 })
-		}
-
-		const configPath = getCodewhaleConfigPath()
-		await fs.mkdir(getCodewhaleDir(), { recursive: true })
-
-		// An absent file means a fresh config; an unreadable one must abort the write
-		// rather than let the merge below drop every other setting the user had.
-		const existing: CodewhaleConfig = await readConfigForWrite(
-			fs,
-			configPath,
-			(raw) => parseTOML<CodewhaleConfig>(raw) ?? {},
-		)
-
-		const normalizedBaseUrl = baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`
-
-		existing.openai = {
-			base_url: normalizedBaseUrl,
-			api_key: await resolveCliApiKey(apiKey),
-			model: model || "provider/model-id",
-		}
-
-		const header = "# CodeWhale config - managed by 9Router\n\n"
-		const content = header + stringifyTOML(existing)
-
-		await fs.writeFile(configPath, content, "utf-8")
-
-		return NextResponse.json({
-			success: true,
-			message: "CodeWhale settings applied successfully!",
-			configPath,
-		})
-	} catch (err) {
-		return NextResponse.json({ error: { message: err.message } }, { status: 500 })
-	}
+	const answer = await getUseCases().cliTools.writeToolSettings(body, deps())
+	return NextResponse.json(answer.body, { status: answer.status })
 }
 
 export async function DELETE() {
-	try {
-		const configPath = getCodewhaleConfigPath()
-		let existing: CodewhaleConfig = {}
-		try {
-			const raw = await fs.readFile(configPath, "utf-8")
-			existing = parseTOML<CodewhaleConfig>(raw) ?? {}
-		} catch {
-			return NextResponse.json({ success: true, message: "No config file to reset" })
-		}
-
-		delete existing.openai
-
-		if (Object.keys(existing).length === 0) {
-			await fs.rm(configPath, { force: true })
-		} else {
-			await fs.writeFile(configPath, stringifyTOML(existing), "utf-8")
-		}
-
-		return NextResponse.json({ success: true, message: "9Router removed from CodeWhale" })
-	} catch (err) {
-		return NextResponse.json({ error: { message: err.message } }, { status: 500 })
-	}
+	const answer = await getUseCases().cliTools.resetToolSettings(deps())
+	return NextResponse.json(answer.body, { status: answer.status })
 }
