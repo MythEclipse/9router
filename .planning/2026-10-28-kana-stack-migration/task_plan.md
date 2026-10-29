@@ -22,19 +22,28 @@ gateway serving traffic at every phase boundary.
 
 ## Next Step
 
-**Phase 8's route sweep is finished.** 167 of the 174 handlers outside `v1/`/`v1beta/`
-delegate to `apps/api` domain modules or use-cases; the seven that do not are stream
-bodies, two fan-outs, and two liveness endpoints (table below). Nothing is "pending".
+**The oRPC server is real and reachable.** `main.ts` resolves the session from the
+`auth_token` JWT, reads the signing key through `getDataDir()`, and stages
+migrations — verified by request (401 without a cookie, 200 with rows). Three
+silent defects stood in the way; see findings.
 
-What remains is not porting — it is the two things the sweep kept finding:
+**Converting the 163 remaining handlers to oRPC is no longer the plan.** Measured:
+50 procedures exist, 12 cover a REST route, and the procedure layer is a *superset*
+of the routes (`combos` route calls 2 use-cases, its router calls 9). `apps/web` has
+no oRPC client and no reference to port 20127 — the 199 call sites are
+`fetch("/api/...")`. The defect the sweep existed to remove (rules stranded in
+routes) is gone; what is left in each handler is the parse-and-reply shell.
 
-1. **The handlers still return `NextResponse`.** Each one now delegates its *rules*, but
-   the transport is Next's. Converting the delegating handlers to oRPC procedures is the
-   mechanical half of Phase 8 and has not started.
-2. **The trace-blind path audit is closed** (`894eddaef`, `4dece3ecf`). Every runtime-built
-   path was checked against the assembled tree rather than read: `CHANGELOG.md` was missing
-   and `src/mitm/server.js` was missing (only `.ts` shipped, and node cannot run it). Both
-   are now staged and in preflight. Nothing in this class is known-broken.
+**Next action: prove the transport on one area instead of rewriting 163 files.**
+Wire an oRPC client into `apps/web` and move `combos` end-to-end — its procedures
+already exceed its route, so the move adds capability rather than re-plumbing it.
+Gate on the same request-level evidence used for the session: a real call returning
+real rows, not a green build.
+
+Closed earlier: the trace-blind path audit (`894eddaef`, `4dece3ecf`). Every
+runtime-built path was checked against the assembled tree rather than read:
+`CHANGELOG.md` was missing and `src/mitm/server.js` was missing (only `.ts`
+shipped, and node cannot run it). Both are staged and in preflight.
 
 The measurements below are the original scope, kept for reference.
 

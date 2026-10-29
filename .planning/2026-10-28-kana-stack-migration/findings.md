@@ -138,3 +138,46 @@ Two facts make (2) unsafe to grow:
 
 The measurement above is the input to that decision; it is not a recommendation to skip
 the work. Option 1 is the smallest honest cleanup, option 2 is the original goal.
+
+## Measured: the oRPC transport migration is not worth continuing
+
+The plan's remaining item was "convert the delegating handlers to oRPC
+procedures". Measured before writing any of it:
+
+| Fact | Number |
+| ---- | ------ |
+| Route handlers outside `v1/`/`v1beta/` | 163 |
+| oRPC procedures that already exist | 50 (12 routers) |
+| Procedures with a matching REST route | 12 of 50 |
+| Dashboard call sites, by area | providers 70, settings 60, cli-tools 46, models 36, oauth 34, usage 19, combos 18, provider-nodes 17, proxy-pools 16, tunnel 15, keys 12, auth 11 |
+
+Three findings decide it:
+
+1. **The procedures are a superset of the routes, not a duplicate of them.**
+   `combos.ts` (route) calls 2 use-cases; the `combos` oRPC router calls 9. So
+   "convert the route to oRPC" is not a transport swap over identical logic — the
+   procedure layer carries behaviour the route never had. Moving the dashboard onto
+   it adds capability, and the REST routes must keep working for the CLI anyway.
+
+2. **`apps/web` has no oRPC client at all** — no `@orpc/client` dependency, no
+   `RPCLink`, nothing in `src/` that reaches port 20127. The 199 dashboard call
+   sites are `fetch("/api/...")` against Next route handlers. Migrating them means
+   adding a second transport alongside the first, in a tree where both must serve
+   the same dashboard.
+
+3. **The value is already banked.** The reason the sweep existed — rules living in
+   routes where no test could reach them — is gone: every handler delegates to
+   `apps/api` domain modules or use-cases, and those are covered by 7705 tests. The
+   remaining `NextResponse` in each handler is the parse-and-reply shell, which
+   holds no rule.
+
+So the oRPC server is now *real and reachable* (session resolution, shared signing
+key, migrations — all verified by request), while the dashboard keeps using the
+REST surface that both it and the CLI depend on. Converting 163 handlers would add
+a parallel transport, not remove a defect.
+
+**What that leaves worth doing instead** is the gap this measurement exposed:
+`apps/web` cannot call the API server at all. Wiring one client and migrating one
+area end-to-end — `combos`, whose procedures already exceed its route — would prove
+the transport without a 163-file rewrite. Recorded as the next step rather than
+claiming the sweep is incomplete.

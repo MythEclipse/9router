@@ -1969,3 +1969,49 @@ wrapper to `globalThis.fetch` failed. One cast, as Bun's own docs prescribe.
 
 Verification: 653 files / 7698 tests passing (74 skipped), tsc clean on api and web,
 server answers 200 with rows.
+
+## The dashboard could not reach its database in dev (found by wiring oRPC)
+
+Wiring the first oRPC client exposed a defect bigger than the client itself:
+**`bun run dev` could not serve any database-backed route.** Every one answered 500
+on `Migration journal not found at apps/web/migrations`.
+
+`apps/web/src/lib/useCases.ts` passed `process.cwd() + "/migrations"` to the
+migrator unconditionally. That path exists only in a standalone build. The migrator
+treats an explicit path as authoritative and *stops* when it is missing — it never
+falls back to its own upward search — so the whole dev tree was dead.
+
+Why it went unnoticed: `/api/theme` answered 200. It catches its error and replies
+with the default theme, so a broken install reads as a working one — it was returning
+`glass` when the stored value was `dark`. The route was failing the entire time.
+
+The fix has two halves because dev and production fail differently:
+
+| Context | Why the search fails | Fix |
+| ------- | -------------------- | --- |
+| dev (`next dev`) | explicit `apps/web/migrations` does not exist | pass `undefined` unless the path exists, so the ascent runs |
+| standalone | bundler rewrites `import.meta.url`, so ascent starts in `.next/server/chunks/` | `custom-server.ts` sets `MIGRATIONS_DIR` from its own `__dirname` |
+
+Both verified by request: dev `/api/settings` 500 → 200; standalone `/api/settings`,
+`/api/combos`, `/api/theme` all 200. `tests/unit/migrations-journal-lookup.test.ts`
+(4 cases) pins the ascent, including that a `migrations/` directory with no `.sql` in
+it is not a journal.
+
+**Editing `custom-server.js` was wrong**: it is generated from `custom-server.ts` by
+`copy-standalone-assets.mjs`, so the change vanished on the next build (grep for
+`MIGRATIONS_DIR` in the bundle returned 0). The source is the only file to edit.
+
+## oRPC client: proven in-process on combos
+
+`apps/web/src/lib/orpcClient.ts` builds a `createRouterClient(appRouter, { context })`
+bound to one request's session — in-process, so no HTTP hop, no second session
+resolution, and no requirement that the API server be running for the dashboard.
+A fresh client per call, never cached: a cached one would serve the first caller's
+session to everyone after.
+
+`/api/combos` now goes through `combos.list`/`combos.create` instead of calling
+use-cases directly. Verified end-to-end: `POST` 201 with a real id, `GET` returns it,
+`DELETE /api/combos/[id]` 200, row gone.
+
+`9router-api` gained a `./presentation/orpc/router` export; `apps/api` `dev`/`start`
+scripts gained `--conditions=react-server`, without which both crash on `server-only`.
