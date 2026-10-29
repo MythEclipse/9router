@@ -8,6 +8,7 @@
  *   - a failed session is cleaned up by /poll-status itself
  */
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { pollSessionStatus } from "../../apps/api/src/application/oauth/dispatch-actions.ts"
 
 vi.mock("next/server", () => ({
 	NextResponse: {
@@ -31,11 +32,18 @@ vi.mock("@/models", () => ({
 	createProviderConnection: vi.fn(async (d) => ({ id: "conn-1", ...d })),
 }))
 
-vi.mock("open-sse/shared/mimoAccount.js", () => ({
+vi.mock("open-sse/shared/mimoAccount", () => ({
 	readDesktopPassToken: vi.fn(async () => ({ passToken: "pt-abc", userId: "u1", cUserId: "c1" })),
 }))
 
 vi.mock("@/lib/oauth/utils/ideDetect", () => ({ detectIdeInstalled: vi.fn() }))
+
+vi.mock("@/lib/oauth/constants/oauth", () => ({
+	ZED_HOSTED_CONFIG: { defaultNativeAppPort: 58443 },
+}))
+
+// Loaded by the dispatcher at module scope, but not exercised by these tests.
+vi.mock("open-sse/shared/perchCredentials", () => ({ readPerchCliSession: vi.fn(() => null) }))
 
 // Session store backing the mocked OAuth server helpers, so the test can assert
 // on real lifecycle transitions rather than on call counts alone.
@@ -87,6 +95,41 @@ vi.mock("@/lib/oauth/utils/server", () => {
 		},
 	}
 })
+
+// The poll-status branch now delegates to the use-case, which reaches this machine through
+// `oauthSessionDeps`. Both layers read the same in-memory stores, so the lifecycle assertions
+// below still exercise real transitions rather than call counts. Everything lives inside the
+// factory because `vi.mock` is hoisted above the declarations above it.
+vi.mock("@/lib/useCases", () => ({
+	getUseCases: () => ({
+		oauth: {
+			pollSession: async (provider: string, state: string | null) => {
+				return pollSessionStatus(provider, state, {
+					readSession: (p: string, st: string) => {
+						if (p !== "xiaomi-mimo") return null
+						const session = sessions.get(st)
+						return session
+							? {
+									status: session.status,
+									result: session.result || null,
+									error: session.error || null,
+								}
+							: null
+					},
+					clearSession: (p: string, st: string) => {
+						if (p === "xiaomi-mimo") sessions.delete(st)
+					},
+					stopProxy: (p: string) => {
+						if (p === "xiaomi-mimo") stopped.count += 1
+					},
+					detectIde: async () => ({ installed: false }),
+				})
+			},
+			stopProxy: () => ({ ok: true, status: 200, body: { success: true } }),
+			ideStatus: async () => ({ ok: true, status: 200, body: {} }),
+		},
+	}),
+}))
 
 const { GET, POST } = await import("../../apps/web/src/app/api/oauth/[provider]/[action]/route.js")
 

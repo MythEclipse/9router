@@ -1,212 +1,165 @@
-import * as fsPromises from "node:fs/promises"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vitest"
+import { autoImportCursor } from "../../apps/api/src/application/oauth/auto-import.ts"
+import {
+	cursorMissMessage,
+	cursorTokensComplete,
+} from "../../apps/api/src/domain/oauth-local-credential.ts"
 
-// Mock next/server
-vi.mock("next/server", () => ({
-	NextResponse: {
-		json: vi.fn((body, init) => ({
-			status: init?.status || 200,
-			body,
-			json: async () => body,
-		})),
-	},
-}))
-
-// Mock os
-vi.mock("os", () => ({
-	default: { homedir: vi.fn(() => "/mock/home") },
-	homedir: vi.fn(() => "/mock/home"),
-}))
-
-// Mock fs/promises
-vi.mock("fs/promises", () => ({
-	access: vi.fn(),
-	constants: { R_OK: 4 },
-}))
-
-// Shared mock db instance
-const mockDbInstance = {
-	prepare: vi.fn(),
-	close: vi.fn(),
-	__throwOnConstruct: false,
+/** The ladder with every port stubbed; each test overrides only what it is about. */
+function deps(overrides: Partial<Parameters<typeof autoImportCursor>[0]> = {}) {
+	return {
+		candidates: ["/home/u/.config/Cursor/User/globalStorage/state.vscdb"],
+		readable: async () => true,
+		readViaBinding: async () => ({ accessToken: "test-token", machineId: "test-machine-id" }),
+		readViaCli: async () => ({ accessToken: null, machineId: null }),
+		...overrides,
+	}
 }
 
-// Mock better-sqlite3 as a class so `new Database(...)` works
-vi.mock("better-sqlite3", () => ({
-	default: class MockDatabase {
-		constructor() {
-			if (mockDbInstance.__throwOnConstruct) {
-				throw new Error("SQLITE_CANTOPEN")
-			}
-			return mockDbInstance
-		}
-	},
-}))
-
-// We need to dynamically import after mocks are registered
-let GET
-
-/**
- * Row map the mocked better-sqlite3 answers with. The route looks up one key
- * at a time via .get(), so the mock resolves by the bound key rather than
- * returning a fixed list.
- */
-const stubRows = (rows) => {
-	mockDbInstance.prepare.mockImplementation(() => ({
-		get: vi.fn((key) => rows[key] || null),
-	}))
-}
-
-describe("GET /api/oauth/cursor/auto-import", () => {
-	const originalPlatform = process.platform
-
-	beforeEach(async () => {
-		vi.clearAllMocks()
-		mockDbInstance.__throwOnConstruct = false
-		// Force darwin so macOS-specific logic is exercised
-		Object.defineProperty(process, "platform", { value: "darwin", writable: true })
-		// Re-import to pick up fresh mocks each run
-		const mod = await import("../../apps/web/src/app/api/oauth/cursor/auto-import/route.js")
-		GET = mod.GET
-	})
-
-	afterEach(() => {
-		Object.defineProperty(process, "platform", { value: originalPlatform, writable: true })
-	})
-
-	// ── macOS path probing ────────────────────────────────────────────────
-
-	it("returns not-found listing the probed locations when no db is accessible", async () => {
-		vi.mocked(fsPromises.access).mockRejectedValue(new Error("ENOENT"))
-
-		const response = await GET()
-
-		expect(response.body.found).toBe(false)
-		expect(response.body.error).toContain("Cursor database not found")
-		expect(response.body.error).toContain("state.vscdb")
-		expect(response.body.error).toContain("globalStorage")
-	})
-
-	it("falls back to manual mode when the db exists but cannot be opened", async () => {
-		vi.mocked(fsPromises.access).mockResolvedValue()
-		mockDbInstance.__throwOnConstruct = true
-
-		const response = await GET()
-
-		// better-sqlite3 and the sqlite3 CLI both fail, so the route asks the user
-		// to paste credentials instead of reporting a silent success.
-		expect(response.body.found).toBe(false)
-		expect(response.body.windowsManual).toBe(true)
-		expect(response.body.dbPath).toContain("state.vscdb")
-	})
-
-	// ── Token extraction ──────────────────────────────────────────────────
-
-	it("extracts tokens using exact keys", async () => {
-		vi.mocked(fsPromises.access).mockResolvedValue()
-		stubRows({
-			"cursorAuth/accessToken": { value: "test-token" },
-			"storage.serviceMachineId": { value: "test-machine-id" },
+describe("autoImportCursor", () => {
+	it("answers both halves when the binding can read the database", async () => {
+		const result = await autoImportCursor(deps())
+		expect(result).toEqual({
+			found: true,
+			accessToken: "test-token",
+			machineId: "test-machine-id",
 		})
-
-		const response = await GET()
-
-		expect(response.body.found).toBe(true)
-		expect(response.body.accessToken).toBe("test-token")
-		expect(response.body.machineId).toBe("test-machine-id")
-		expect(mockDbInstance.close).toHaveBeenCalled()
 	})
 
-	it("unwraps JSON-encoded string values", async () => {
-		vi.mocked(fsPromises.access).mockResolvedValue()
-		stubRows({
-			"cursorAuth/accessToken": { value: '"json-token"' },
-			"storage.serviceMachineId": { value: '"json-machine-id"' },
+	it("lists every path it tried when no database is readable", async () => {
+		const tried = [
+			"/Users/u/Library/Application Support/Cursor/User/globalStorage/state.vscdb",
+			"/Users/u/Library/Application Support/Cursor - Insiders/User/globalStorage/state.vscdb",
+		]
+		const result = await autoImportCursor(deps({ candidates: tried, readable: async () => false }))
+		expect(result.found).toBe(false)
+		expect(result).toMatchObject({
+			found: false,
+			error: expect.stringContaining("Cursor database not found"),
 		})
-
-		const response = await GET()
-
-		expect(response.body.found).toBe(true)
-		expect(response.body.accessToken).toBe("json-token")
-		expect(response.body.machineId).toBe("json-machine-id")
+		expect((result as { error: string }).error).toContain(
+			"/Users/u/Library/Application Support/Cursor/User/globalStorage/state.vscdb",
+		)
+		expect((result as { error: string }).error).toContain("state.vscdb")
+		expect((result as { error: string }).error).toContain("globalStorage")
 	})
 
-	it("falls back to the alternate key aliases", async () => {
-		vi.mocked(fsPromises.access).mockResolvedValue()
-		stubRows({
-			"cursorAuth/token": { value: "alias-token" },
-			"storage.machineId": { value: "alias-machine" },
+	it("uses the first readable path rather than the first listed one", async () => {
+		const seen: string[] = []
+		await autoImportCursor(
+			deps({
+				candidates: ["/a", "/b"],
+				readable: async (path) => {
+					seen.push(path)
+					return path === "/b"
+				},
+				readViaBinding: async (path) => ({ accessToken: "t", machineId: path }),
+			}),
+		)
+		expect(seen).toEqual(["/a", "/b"])
+	})
+
+	it("falls back to the sqlite3 CLI when the binding cannot load", async () => {
+		const result = await autoImportCursor(
+			deps({
+				readViaBinding: async () => {
+					throw new Error("SQLITE_CANTOPEN")
+				},
+				readViaCli: async () => ({ accessToken: "cli-token", machineId: "cli-machine" }),
+			}),
+		)
+		expect(result).toEqual({ found: true, accessToken: "cli-token", machineId: "cli-machine" })
+	})
+
+	it("offers the paste box when both readers fail, naming the database", async () => {
+		const result = await autoImportCursor(
+			deps({
+				readViaBinding: async () => {
+					throw new Error("no binding")
+				},
+				readViaCli: async () => {
+					throw new Error("no sqlite3")
+				},
+			}),
+		)
+		expect(result).toMatchObject({
+			found: false,
+			windowsManual: true,
+			dbPath: "/home/u/.config/Cursor/User/globalStorage/state.vscdb",
 		})
-
-		const response = await GET()
-
-		expect(response.body.found).toBe(true)
-		expect(response.body.accessToken).toBe("alias-token")
-		expect(response.body.machineId).toBe("alias-machine")
 	})
 
-	it("returns manual-mode fallback when no tokens are found", async () => {
-		vi.mocked(fsPromises.access).mockResolvedValue()
-		stubRows({})
-
-		const response = await GET()
-
-		expect(response.body.found).toBe(false)
-		expect(response.body.windowsManual).toBe(true)
+	it("offers the paste box when the database reads but holds no tokens", async () => {
+		const result = await autoImportCursor(
+			deps({
+				readViaBinding: async () => ({ accessToken: null, machineId: null }),
+				readViaCli: async () => ({ accessToken: null, machineId: null }),
+			}),
+		)
+		expect(result.found).toBe(false)
+		expect(result).toMatchObject({ windowsManual: true })
 	})
 
-	// ── Platform-specific paths ───────────────────────────────────────────
-
-	it("linux probes the .config paths and lists them when absent", async () => {
-		Object.defineProperty(process, "platform", { value: "linux", writable: true })
-		vi.mocked(fsPromises.access).mockRejectedValue(new Error("ENOENT"))
-
-		const response = await GET()
-
-		expect(response.body.found).toBe(false)
-		expect(response.body.error).toContain(".config/Cursor/User/globalStorage/state.vscdb")
+	it("falls through when a reader answers only half a credential", async () => {
+		const result = await autoImportCursor(
+			deps({
+				readViaBinding: async () => ({ accessToken: "half", machineId: null }),
+				readViaCli: async () => ({ accessToken: "full", machineId: "m" }),
+			}),
+		)
+		expect(result).toMatchObject({ found: true, accessToken: "full" })
 	})
 
-	it("linux skips auto-import when config exists but Cursor is not installed", async () => {
-		Object.defineProperty(process, "platform", { value: "linux", writable: true })
-		// db file is readable, but neither `which cursor` nor the .desktop file exists
-		vi.mocked(fsPromises.access).mockImplementation(async (target) => {
-			if (String(target).includes("state.vscdb")) return undefined
-			throw new Error("ENOENT")
-		})
-		stubRows({
-			"cursorAuth/accessToken": { value: "test-token" },
-			"storage.serviceMachineId": { value: "test-machine-id" },
-		})
-
-		const response = await GET()
-
-		expect(response.body.found).toBe(false)
-		expect(response.body.error).toContain("does not appear to be installed")
+	it("refuses a leftover config when the IDE is not installed", async () => {
+		const read = vi.fn(async () => ({ accessToken: "t", machineId: "m" }))
+		const result = await autoImportCursor(
+			deps({ installed: async () => false, readViaBinding: read }),
+		)
+		expect(result.found).toBe(false)
+		expect((result as { error: string }).error).toContain("does not appear to be installed")
+		expect(read).not.toHaveBeenCalled()
 	})
 
-	it("windows probes APPDATA and LOCALAPPDATA locations", async () => {
-		Object.defineProperty(process, "platform", { value: "win32", writable: true })
-		vi.mocked(fsPromises.access).mockRejectedValue(new Error("ENOENT"))
-
-		const response = await GET()
-
-		expect(response.body.found).toBe(false)
-		// Windows candidates live under AppData\Roaming / AppData\Local.
-		expect(response.body.error).toContain("AppData")
-		expect(response.body.error).toContain("globalStorage")
+	it("reads normally when the IDE is installed", async () => {
+		const result = await autoImportCursor(deps({ installed: async () => true }))
+		expect(result.found).toBe(true)
 	})
 
-	it("an unknown platform falls through to the POSIX paths rather than erroring", async () => {
-		Object.defineProperty(process, "platform", { value: "freebsd", writable: true })
-		vi.mocked(fsPromises.access).mockRejectedValue(new Error("ENOENT"))
+	it("does not probe for an installer on platforms that have no such check", async () => {
+		const result = await autoImportCursor(deps({ installed: undefined }))
+		expect(result.found).toBe(true)
+	})
 
-		const response = await GET()
+	it("answers not-found, not a crash, when the readability probe itself throws", async () => {
+		const result = await autoImportCursor(
+			deps({
+				readable: async () => {
+					throw new Error("EPERM")
+				},
+			}),
+		)
+		expect(result.found).toBe(false)
+		expect((result as { error: string }).error).toContain("Cursor database not found")
+	})
+})
 
-		// The route has no unsupported-platform branch: it reports the POSIX paths
-		// it probed instead of a 400.
-		expect(response.status).toBe(200)
-		expect(response.body.found).toBe(false)
-		expect(response.body.error).toContain("state.vscdb")
+describe("cursorTokensComplete", () => {
+	it("needs both halves", () => {
+		expect(cursorTokensComplete({ accessToken: "a", machineId: "m" })).toBe(true)
+		expect(cursorTokensComplete({ accessToken: "a", machineId: null })).toBe(false)
+		expect(cursorTokensComplete({ accessToken: null, machineId: "m" })).toBe(false)
+		expect(cursorTokensComplete({})).toBe(false)
+	})
+})
+
+describe("cursorMissMessage", () => {
+	it("lists the tried paths for a missing database", () => {
+		expect(cursorMissMessage({ reason: "not-found", tried: ["/a", "/b"] })).toBe(
+			"Cursor database not found. Checked locations:\n/a\n/b\n\nMake sure Cursor IDE is installed and opened at least once.",
+		)
+	})
+
+	it("answers nothing for the paste box, which carries its own wording", () => {
+		expect(cursorMissMessage({ reason: "manual", dbPath: "/a" })).toBe("")
 	})
 })
