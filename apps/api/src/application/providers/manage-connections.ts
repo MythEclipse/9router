@@ -217,19 +217,21 @@ export function makeConnections({
 			let merged = applyProxyConfig(providerSpecificData, proxyConfig)
 			merged = applyProxyPoolChoice(merged, proxyPoolChoice)
 
-			const created = await connections.create({
-				provider,
-				authType: isWebCookie ? "cookie" : "apikey",
-				name: connectionName,
-				apiKey: typeof apiKey === "string" ? apiKey : "",
-				priority: typeof priority === "number" ? priority : 1,
-				globalPriority: typeof globalPriority === "number" ? globalPriority : null,
-				defaultModel: typeof defaultModel === "string" ? defaultModel : null,
-				providerSpecificData: merged,
-				isActive: true,
-				testStatus: typeof testStatus === "string" ? testStatus : "unknown",
-				allowOverwrite: body.id ? true : body.allowOverwrite === true || body.overwrite === true,
-			})
+			const created = await nameConflictAsDomainError(() =>
+				connections.create({
+					provider,
+					authType: isWebCookie ? "cookie" : "apikey",
+					name: connectionName,
+					apiKey: typeof apiKey === "string" ? apiKey : "",
+					priority: typeof priority === "number" ? priority : 1,
+					globalPriority: typeof globalPriority === "number" ? globalPriority : null,
+					defaultModel: typeof defaultModel === "string" ? defaultModel : null,
+					providerSpecificData: merged,
+					isActive: true,
+					testStatus: typeof testStatus === "string" ? testStatus : "unknown",
+					allowOverwrite: body.id ? true : body.allowOverwrite === true || body.overwrite === true,
+				}),
+			)
 
 			return toResponse(created)
 		},
@@ -301,7 +303,9 @@ export function makeConnections({
 				fields.providerSpecificData = merged
 			}
 
-			const updated = await connections.update(id, fields as Partial<ConnectionFields>)
+			const updated = await nameConflictAsDomainError(() =>
+				connections.update(id, fields as Partial<ConnectionFields>),
+			)
 			if (!updated) throw notFound("Connection")
 			return toResponse(updated)
 		},
@@ -329,3 +333,37 @@ export function makeConnections({
 }
 
 export type Connections = ReturnType<typeof makeConnections>
+
+/**
+ * Translate the store's name-collision error into a typed application error.
+ *
+ * The store refuses a duplicate name with a plain `Error` carrying
+ * `code: "PROVIDER_NAME_CONFLICT"` and the id/name of the row that holds it. While the
+ * dashboard called this use-case directly, the raw error travelled back to the route and
+ * `isNameConflict` recognised it. Once the call goes through the oRPC transport,
+ * `toORPCError` sees a non-`AppError` throw and reports it as `INTERNAL` with a generic
+ * message — so the dashboard lost both the 409 and the offer to "edit the existing one
+ * instead".
+ *
+ * Doing the translation here keeps the knowledge of the store's error shape in the
+ * application layer, where the store's own vocabulary already lives, and means every
+ * caller (route, transport, tests) sees one consistent error.
+ */
+async function nameConflictAsDomainError<T>(call: () => Promise<T>): Promise<T> {
+	try {
+		return await call()
+	} catch (error) {
+		const details = error as {
+			code?: unknown
+			message?: unknown
+			existingId?: unknown
+			existingName?: unknown
+		}
+		if (details?.code !== "PROVIDER_NAME_CONFLICT") throw error
+		const message =
+			typeof details.message === "string" ? details.message : "Connection name already exists"
+		const existingId = typeof details.existingId === "string" ? details.existingId : undefined
+		const existingName = typeof details.existingName === "string" ? details.existingName : undefined
+		throw conflict(message, { existingId, existingName, cause: error })
+	}
+}

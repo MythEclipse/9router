@@ -37,7 +37,9 @@ export function toORPCError(error: unknown): ORPCError<string, unknown> {
 			status: statusFor(error.code),
 			message: error.message,
 			cause: error,
-			data: error.detail ? { detail: error.detail } : undefined,
+			// `detail` is for the log; `data` is what a client acts on, so the two are
+			// carried separately and a structured conflict reaches the dashboard intact.
+			data: error.data ?? (error.detail ? { detail: error.detail } : undefined),
 		})
 	}
 	return new ORPCError("INTERNAL", {

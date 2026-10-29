@@ -20,17 +20,21 @@ export interface AppErrorOptions {
 	/** Machine-readable detail for logs; never rendered to the end user. */
 	readonly detail?: string
 	readonly cause?: unknown
+	/** Structured facts a client needs to act on — e.g. which row holds a name. */
+	readonly data?: Record<string, unknown>
 }
 
 export class AppError extends Error {
 	readonly code: AppErrorCode
 	readonly detail: string | undefined
+	readonly data: Record<string, unknown> | undefined
 
 	constructor(code: AppErrorCode, message: string, options: AppErrorOptions = {}) {
 		super(message, { cause: options.cause })
 		this.name = "AppError"
 		this.code = code
 		this.detail = options.detail
+		this.data = options.data
 	}
 }
 
@@ -40,7 +44,8 @@ export const forbidden = (message = "Not permitted") => new AppError("FORBIDDEN"
 export const notFound = (what: string) => new AppError("NOT_FOUND", `${what} not found`)
 export const invalid = (message: string, detail?: string) =>
 	new AppError("VALIDATION", message, { detail })
-export const conflict = (message: string) => new AppError("CONFLICT", message)
+export const conflict = (message: string, data?: Record<string, unknown>) =>
+	new AppError("CONFLICT", message, { data })
 export const tooLarge = (message = "Payload too large") =>
 	new AppError("PAYLOAD_TOO_LARGE", message)
 export const upstream = (message: string, cause?: unknown) =>
