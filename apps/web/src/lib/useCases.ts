@@ -232,8 +232,10 @@ function cache(): Cache {
 			},
 			// Turbopack rewrites import.meta.url, so the migrator cannot find the
 			// journal on its own here. copy-standalone-assets.mjs stages it at
-			// <server cwd>/migrations.
-			migrationsDir: join(process.cwd(), "migrations"),
+			// <server cwd>/migrations. A process that runs from a different
+			// directory — the oRPC server, whose cwd is the repo root — passes
+			// MIGRATIONS_DIR instead of being forced to chdir.
+			migrationsDir: process.env.MIGRATIONS_DIR ?? join(process.cwd(), "migrations"),
 			// The model registries and the capability tables live in this
 			// directory, so this process is the one that can answer for them.
 			registryHost,
