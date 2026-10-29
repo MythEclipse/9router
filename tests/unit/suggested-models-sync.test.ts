@@ -36,8 +36,48 @@ const ROUTE_URL =
 	encodeURIComponent("https://opencode.ai/inference/v1/models") +
 	"&type=opencode-free"
 
+/**
+ * The route's dependencies, over the mocks above.
+ *
+ * The route delegates to `suggestModels` now, so building the whole graph would
+ * open a second SQLite handle — which `createDb` refuses under Vitest. The
+ * use-case is assembled here over the real filter table and the injected
+ * synced-copy and fetch stubs, so what is under test (which answer wins when
+ * upstream fails) is still the real code.
+ */
+async function useCases() {
+	const { makeSuggestModels } = await import(
+		"../../apps/api/src/application/providers/suggest-models.ts"
+	)
+	const host = await import("@/lib/providerConnectionHost")
+	const suggestModels = makeSuggestModels({
+		catalogue: host.suggestedCatalogue,
+		findSyncable: host.findSyncableCatalogue,
+		readSynced: async (entryId) => {
+			const synced = await syncedGet(entryId)
+			if (!synced) return null
+			return { data: synced.data, syncedAt: synced.syncedAt }
+		},
+		refreshSynced: () => {},
+		fetchCatalogue: async (url, type) => {
+			const res = await undiciFetch(url, type === "opencode-free" ? {} : {})
+			return res.json()
+		},
+		armSyncer: () => {},
+		timeoutMs: 12_000,
+	})
+	return { suggestModels }
+}
+
 function request() {
 	return new Request("http://localhost" + ROUTE_URL)
+}
+
+/** Point the route at the stubbed graph before importing it. */
+async function route() {
+	const graph = await useCases()
+	vi.doMock("@/lib/useCases", () => ({ getUseCases: () => graph }))
+	return import("../../apps/web/src/app/api/providers/suggested-models/route.js")
 }
 
 describe("suggested-models route durability", () => {
@@ -61,7 +101,7 @@ describe("suggested-models route durability", () => {
 				{ status: 200, headers: { "content-type": "application/json" } },
 			),
 		)
-		const { GET } = await import("../../apps/web/src/app/api/providers/suggested-models/route.js")
+		const { GET } = await route()
 		const res = await GET(request())
 		const body = await res.json()
 		expect(body.stale).toBeFalsy()
@@ -72,7 +112,7 @@ describe("suggested-models route durability", () => {
 	it("serves the synced copy flagged stale when upstream is unreachable", async () => {
 		syncedGet.mockResolvedValue(SYNCED)
 		undiciFetch.mockRejectedValue(new TypeError("fetch failed"))
-		const { GET } = await import("../../apps/web/src/app/api/providers/suggested-models/route.js")
+		const { GET } = await route()
 		const res = await GET(request())
 		const body = await res.json()
 		expect(body.stale).toBe(true)
@@ -84,7 +124,7 @@ describe("suggested-models route durability", () => {
 	it("falls back to built-in models only when nothing was ever synced", async () => {
 		syncedGet.mockResolvedValue(null)
 		undiciFetch.mockRejectedValue(new TypeError("fetch failed"))
-		const { GET } = await import("../../apps/web/src/app/api/providers/suggested-models/route.js")
+		const { GET } = await route()
 		const res = await GET(request())
 		const body = await res.json()
 		expect(body.stale).toBeFalsy()
@@ -100,7 +140,7 @@ describe("suggested-models route durability", () => {
 				headers: { "content-type": "application/json" },
 			}),
 		)
-		const { GET } = await import("../../apps/web/src/app/api/providers/suggested-models/route.js")
+		const { GET } = await route()
 		const res = await GET(request())
 		const body = await res.json()
 		expect(body.stale).toBe(true)
@@ -108,7 +148,7 @@ describe("suggested-models route durability", () => {
 	})
 
 	it("rejects an unknown filter without touching the network", async () => {
-		const { GET } = await import("../../apps/web/src/app/api/providers/suggested-models/route.js")
+		const { GET } = await route()
 		const res = await GET(
 			new Request("http://localhost/api/providers/suggested-models?url=x&type=nope"),
 		)

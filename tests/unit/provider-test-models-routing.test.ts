@@ -38,6 +38,7 @@ describe("provider test-models route kind routing", () => {
 		})
 		mocks.getApiKeys.mockResolvedValue([{ key: "sk-internal", isActive: true }])
 		mocks.getConsistentMachineId.mockResolvedValue("cli-token")
+
 		global.fetch = vi.fn((url) => {
 			if (String(url).includes("/api/v1/images/generations")) {
 				return Promise.resolve(
@@ -110,6 +111,22 @@ describe("provider test-models route kind routing", () => {
 
 		const { POST } = await import("../../apps/web/src/app/api/providers/[id]/test-models/route.js")
 
+		// `open-sse/utils/proxyFetch` replaces `globalThis.fetch` as an import side
+		// effect, so a spy installed earlier is discarded. Installing it here, after
+		// the route and its probe are loaded, is what makes the assertion below
+		// observe the dispatcher's own call.
+		// A minimal image response: the dispatcher reads `data` for image kinds and
+		// reports "no image data" for an empty body, which would fail the row even
+		// though the routing under test is correct.
+		const fetchSpy = vi.fn(
+			async () =>
+				new Response(JSON.stringify({ data: [{ url: "https://img.test/x.png" }] }), {
+					status: 200,
+					headers: { "content-type": "application/json" },
+				}),
+		)
+		global.fetch = fetchSpy
+
 		const req = new Request("http://localhost/api/providers/conn-hf/test-models", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
@@ -122,7 +139,7 @@ describe("provider test-models route kind routing", () => {
 		expect(body.results.some((r) => r.modelId === "black-forest-labs/FLUX.1-schnell" && r.ok)).toBe(
 			true,
 		)
-		expect(global.fetch).toHaveBeenCalledWith(
+		expect(fetchSpy).toHaveBeenCalledWith(
 			expect.stringContaining("/api/v1/images/generations"),
 			expect.objectContaining({
 				method: "POST",

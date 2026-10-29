@@ -1,25 +1,16 @@
 import { NextResponse } from "next/server"
-import { testSingleConnection } from "./testUtils.ts"
+import { failed } from "@/lib/routeErrors"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-// POST /api/providers/[id]/test - Test connection
+// POST /api/providers/[id]/test - probe one connection. A missing connection is a
+// 404 rather than a failed probe; `check-connection.ts` draws that line.
 export async function POST(_request, { params }) {
 	try {
 		const { id } = await params
-		const result = await testSingleConnection(id)
-
-		if (result.error === "Connection not found") {
-			return NextResponse.json({ error: "Connection not found" }, { status: 404 })
-		}
-
-		return NextResponse.json({
-			valid: result.valid,
-			error: result.error,
-			refreshed: result.refreshed || false,
-		})
+		return NextResponse.json(await getUseCases().checkConnection.run(id))
 	} catch (error) {
-		console.log("Error testing connection:", error)
-		return NextResponse.json({ error: "Test failed" }, { status: 500 })
+		return failed(error, "Test failed", "Error testing connection")
 	}
 }
