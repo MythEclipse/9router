@@ -1,36 +1,25 @@
-import fs from "node:fs"
 import { NextResponse } from "next/server"
-import { CATALOG_FILE } from "open-sse/providers/catalogOverride"
-import { getSyncState, syncModelCatalog } from "@/lib/modelCatalog/sync"
+import { failed } from "@/lib/routeErrors"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-// GET /api/models/catalog-sync - Sync status and what the catalog currently holds
+// GET /api/models/catalog-sync - sync state and what the catalog currently holds.
 export async function GET() {
-	const state = getSyncState()
-	let catalog = null
 	try {
-		const parsed = JSON.parse(fs.readFileSync(CATALOG_FILE, "utf8"))
-		catalog = {
-			syncedAt: parsed.syncedAt,
-			models: Object.keys(parsed.models || {}).length,
-			providers: Object.keys(parsed.providers || {}).length,
-			bytes: fs.statSync(CATALOG_FILE).size,
-		}
-	} catch {
-		catalog = null
+		return NextResponse.json(await getUseCases().catalogueSync.status())
+	} catch (error) {
+		return failed(error, "Failed to read sync state", "Catalog sync status failed")
 	}
-	return NextResponse.json({ ...state, catalog })
 }
 
-// POST /api/models/catalog-sync - Run a sync now instead of waiting for the timer
+// POST /api/models/catalog-sync - run a sync now instead of waiting for the timer.
+// A sync already in flight answers 503 with its reason, not a silent success.
 export async function POST() {
-	const result = await syncModelCatalog()
-	if (!result) {
-		return NextResponse.json(
-			{ error: getSyncState().lastError || "sync in progress" },
-			{ status: 503 },
-		)
+	try {
+		const result = await getUseCases().catalogueSync.runNow()
+		return NextResponse.json({ success: true, result })
+	} catch (error) {
+		return failed(error, "Sync could not start", "Catalog sync failed")
 	}
-	return NextResponse.json({ success: true, result })
 }

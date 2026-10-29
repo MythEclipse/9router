@@ -51,19 +51,12 @@ describe("model test route kind routing", () => {
 	})
 
 	it("routes image model tests to /api/v1/images/generations", async () => {
-		const { POST } = await import("../../apps/web/src/app/api/models/test/route.js")
-
-		const req = new Request("http://localhost/api/models/test", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({
-				model: "hf/black-forest-labs/FLUX.1-schnell",
-				kind: "image",
-			}),
-		})
-
-		const res = await POST(req)
-		const body = await res.json()
+		const { pingModelByKind } = await import("../../apps/web/src/app/api/models/test/ping.js")
+		const input = {
+			model: "hf/black-forest-labs/FLUX.1-schnell",
+			kind: "image",
+		}
+		const body = await pingModelByKind(input.model, input.kind || "llm")
 
 		expect(body.ok).toBe(true)
 		expect(global.fetch).toHaveBeenCalledWith(
@@ -91,19 +84,12 @@ describe("model test route kind routing", () => {
 			),
 		)
 
-		const { POST } = await import("../../apps/web/src/app/api/models/test/route.js")
-
-		const req = new Request("http://localhost/api/models/test", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({
-				model: "voyage/voyage-3-large",
-				kind: "embedding",
-			}),
-		})
-
-		const res = await POST(req)
-		const body = await res.json()
+		const { pingModelByKind } = await import("../../apps/web/src/app/api/models/test/ping.js")
+		const input = {
+			model: "voyage/voyage-3-large",
+			kind: "embedding",
+		}
+		const body = await pingModelByKind(input.model, input.kind || "llm")
 
 		expect(body.ok).toBe(true)
 		expect(global.fetch).toHaveBeenCalledWith(
@@ -131,19 +117,12 @@ describe("model test route kind routing", () => {
 			),
 		)
 
-		const { POST } = await import("../../apps/web/src/app/api/models/test/route.js")
-
-		const req = new Request("http://localhost/api/models/test", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({
-				model: "voyage/voyage-3-large",
-				kind: "embedding",
-			}),
-		})
-
-		const res = await POST(req)
-		const body = await res.json()
+		const { pingModelByKind } = await import("../../apps/web/src/app/api/models/test/ping.js")
+		const input = {
+			model: "voyage/voyage-3-large",
+			kind: "embedding",
+		}
+		const body = await pingModelByKind(input.model, input.kind || "llm")
 
 		expect(body.ok).toBe(false)
 		expect(body.error).toBe("Provider returned no embedding data")
@@ -162,19 +141,12 @@ describe("model test route kind routing", () => {
 			),
 		)
 
-		const { POST } = await import("../../apps/web/src/app/api/models/test/route.js")
-
-		const req = new Request("http://localhost/api/models/test", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({
-				model: "hf/openai/whisper-small",
-				kind: "stt",
-			}),
-		})
-
-		const res = await POST(req)
-		const body = await res.json()
+		const { pingModelByKind } = await import("../../apps/web/src/app/api/models/test/ping.js")
+		const input = {
+			model: "hf/openai/whisper-small",
+			kind: "stt",
+		}
+		const body = await pingModelByKind(input.model, input.kind || "llm")
 
 		expect(body.ok).toBe(true)
 		expect(global.fetch).toHaveBeenCalledWith(
@@ -199,19 +171,12 @@ describe("model test route kind routing", () => {
 			),
 		)
 
-		const { POST } = await import("../../apps/web/src/app/api/models/test/route.js")
-
-		const req = new Request("http://localhost/api/models/test", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({
-				model: "voyage/voyage-3-large",
-				kind: "embedding",
-			}),
-		})
-
-		const res = await POST(req)
-		const body = await res.json()
+		const { pingModelByKind } = await import("../../apps/web/src/app/api/models/test/ping.js")
+		const input = {
+			model: "voyage/voyage-3-large",
+			kind: "embedding",
+		}
+		const body = await pingModelByKind(input.model, input.kind || "llm")
 
 		expect(body.ok).toBe(false)
 		expect(body.status).toBe(502)

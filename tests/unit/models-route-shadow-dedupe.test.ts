@@ -12,39 +12,89 @@
 // 1. a custom row whose providerAlias/id collides with a listed routedModel is
 //    dropped (read-time filter; the kv row itself is untouched);
 // 2. surviving custom rows resolve caps through the provider id, not the alias.
+// The rules under test now live in `apps/api/src/application/models/list-models.ts`
+// (they were in the route). The harness below wires the real capability tables,
+// the real registry (AI_MODELS) and the real alias map, and fakes only the two
+// stores the test itself changes — so the assertions still exercise a real
+// collision against the real 1M/128k registry entry.
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-vi.mock("@/models", () => ({
-	getModelAliases: vi.fn(async () => ({})),
-	setModelAlias: vi.fn(),
-	getCustomModels: vi.fn(async () => []),
-}))
-vi.mock("@/lib/disabledModelsDb", () => ({
-	getDisabledModels: vi.fn(async () => ({})),
+const stores = vi.hoisted(() => ({
+	custom: [] as Array<Record<string, unknown>>,
+	disabled: {} as Record<string, string[]>,
 }))
 
-import { GET } from "@/app/api/models/route.js"
-import { getCustomModels } from "@/models"
+import { makeModelCatalogue } from "9router-api/application/models/list-models"
+import { catalogueHost, registryHost } from "@/lib/modelRegistryHost"
 
-function _jsonRes(obj) {
-	return { json: async () => obj }
+function catalogue() {
+	return makeModelCatalogue({
+		catalogue: {
+			async curated() {
+				return catalogueHost.curatedModels()
+			},
+			async liveFree() {
+				return []
+			},
+			capabilities: (provider, model) => catalogueHost.capabilities(provider, model),
+			providerIdOf: (alias) => catalogueHost.providerIdOf(alias),
+			aggregateCombo: (members, byName, window) =>
+				catalogueHost.aggregateCombo(members, byName, window),
+			displayName: (model, fallback) => catalogueHost.displayName(model, fallback),
+			generateId: () => catalogueHost.generateId(),
+			normalizeLogo: (value) => catalogueHost.normalizeLogo(value),
+			rejectUrl: (raw, local) => catalogueHost.rejectUrl(raw, local),
+			capabilityKeys: () => catalogueHost.capabilityKeys(),
+			sttTransports: () => catalogueHost.sttTransports(),
+		},
+		aliases: registryHost.aliases,
+		customModels: {
+			async list() {
+				return stores.custom
+			},
+			async add() {
+				return {}
+			},
+			async remove() {},
+		},
+		studios: {
+			async list() {
+				return []
+			},
+			async find() {
+				return null
+			},
+			async save() {
+				return {}
+			},
+			async remove() {},
+		},
+		combos: registryHost.combos,
+		disabledModels: {
+			async list() {
+				return stores.disabled
+			},
+		},
+		plugins: {
+			async read() {
+				return {}
+			},
+		},
+	})
 }
 
-// The registry list comes from AI_MODELS (static import) — real registry, so
-// opencode-go/claude-haiku-5-5 is listed and any ocg/ custom shadow collides.
 async function fetchModels() {
-	const res = await GET()
-	const body = await res.json()
-	return body.models || []
+	return catalogue().list()
 }
 
 beforeEach(() => {
-	vi.mocked(getCustomModels).mockClear()
+	stores.custom = []
+	stores.disabled = {}
 })
 
 describe("/api/models — custom-model shadow dedupe", () => {
 	it("drops the ocg/claude-haiku-5-5 shadow and keeps the 1M registry entry", async () => {
-		vi.mocked(getCustomModels).mockResolvedValueOnce([
+		stores.custom = [
 			{
 				providerAlias: "ocg",
 				id: "claude-haiku-5-5",
@@ -52,7 +102,7 @@ describe("/api/models — custom-model shadow dedupe", () => {
 				name: "claude-haiku-5-5",
 				caps: { vision: true, reasoning: true },
 			},
-		])
+		]
 
 		const models = await fetchModels()
 		const routed = models.filter(
@@ -67,10 +117,10 @@ describe("/api/models — custom-model shadow dedupe", () => {
 	})
 
 	it("keeps non-colliding custom rows and resolves their caps by provider id", async () => {
-		vi.mocked(getCustomModels).mockResolvedValueOnce([
+		stores.custom = [
 			// does not collide: registry has no such id under a routed alias
 			{ providerAlias: "cmc", id: "some-totally-custom-model", type: "llm", name: "x", caps: {} },
-		])
+		]
 
 		const models = await fetchModels()
 		const kept = models.find((m) => m.fullModel === "cmc/some-totally-custom-model")

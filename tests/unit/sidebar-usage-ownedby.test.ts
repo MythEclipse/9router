@@ -44,8 +44,12 @@ describe("custom model owned_by", () => {
 	it("the label travels from the modal to the API", () => {
 		const page = read("apps/web/src/app/(dashboard)/dashboard/providers/[id]/page.tsx")
 		expect(page).toContain("...(ownedBy ? { ownedBy } : {})")
+		// The route used to trim the label inline; the normalisation moved into the
+		// custom-model rule so every caller gets the same treatment.
 		const route = read("apps/web/src/app/api/models/custom/route.ts")
-		expect(route).toContain('ownedBy: typeof ownedBy === "string" ? ownedBy.trim() : ""')
+		expect(route).toContain("customModels.add(await request.json())")
+		const rule = read("apps/api/src/domain/custom-model.ts")
+		expect(rule).toContain("readCustomModel")
 		const repo = read("packages/db/src/repos/aliasRepo.ts")
 		expect(repo).toContain("ownedBy")
 	})

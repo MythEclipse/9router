@@ -1,66 +1,40 @@
-import { reconcileAllowedModels } from "@9router/db/repos/apiKeysRepo"
 import { NextResponse } from "next/server"
-import { deleteModelAlias, getModelAliases, setModelAlias } from "@/models"
+import { failed } from "@/lib/routeErrors"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-// GET /api/models/alias - Get all aliases
+// GET /api/models/alias - every alias and the model it resolves to.
 export async function GET() {
 	try {
-		const aliases = await getModelAliases()
-		return NextResponse.json({ aliases })
+		return NextResponse.json({ aliases: await getUseCases().modelAliases.list() })
 	} catch (error) {
-		console.log("Error fetching aliases:", error)
-		return NextResponse.json({ error: "Failed to fetch aliases" }, { status: 500 })
+		return failed(error, "Failed to fetch aliases", "Error fetching aliases")
 	}
 }
 
-// PUT /api/models/alias - Set model alias
-export async function PUT(request: Request) {
+// PUT /api/models/alias - point an alias at a model. Re-pointing one tells the
+// key reconciler, so a key that pinned the old target follows the alias.
+export async function PUT(request) {
 	try {
 		const body = await request.json()
-		const { model, alias } = body
-
-		if (!model || !alias) {
-			return NextResponse.json({ error: "Model and alias required" }, { status: 400 })
-		}
-
-		const aliases = (await getModelAliases()) as Record<string, string>
-		const previous = aliases?.[alias]
-		await setModelAlias(alias, model)
-		// The alias name is the map key, so it does not move. What does move is the
-		// model it resolved to: a key that pinned the old target now follows the alias
-		// to the new one instead of pointing at whatever now occupies that name.
-		if (previous && previous !== model) {
-			await reconcileAllowedModels({ renamed: { [previous.toLowerCase()]: model } })
-		}
-
-		return NextResponse.json({ success: true, model, alias })
+		const result = await getUseCases().modelAliases.set({ model: body?.model, alias: body?.alias })
+		return NextResponse.json({ success: true, ...result })
 	} catch (error) {
-		console.log("Error updating alias:", error)
-		return NextResponse.json({ error: "Failed to update alias" }, { status: 500 })
+		return failed(error, "Failed to update alias", "Error updating alias")
 	}
 }
 
-// DELETE /api/models/alias?alias=xxx - Delete alias
+// DELETE /api/models/alias?alias=xxx - keys that named it are reported back.
 export async function DELETE(request) {
 	try {
 		const { searchParams } = new URL(request.url)
-		const alias = searchParams.get("alias")
-
-		if (!alias) {
-			return NextResponse.json({ error: "Alias required" }, { status: 400 })
-		}
-
-		await deleteModelAlias(alias)
-		const { emptied } = await reconcileAllowedModels({ removed: [alias] })
-
+		const result = await getUseCases().modelAliases.remove(searchParams.get("alias") ?? "")
 		return NextResponse.json({
 			success: true,
-			...(emptied.length ? { keysLeftForReview: emptied } : {}),
+			...(result.keysLeftForReview.length ? { keysLeftForReview: result.keysLeftForReview } : {}),
 		})
 	} catch (error) {
-		console.log("Error deleting alias:", error)
-		return NextResponse.json({ error: "Failed to delete alias" }, { status: 500 })
+		return failed(error, "Failed to delete alias", "Error deleting alias")
 	}
 }

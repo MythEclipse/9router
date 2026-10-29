@@ -1,202 +1,31 @@
 import { NextResponse } from "next/server"
-import {
-	deleteCustomModel,
-	deleteModelAlias,
-	deleteProviderConnectionsByProvider,
-	deleteProviderNode,
-	getCustomModels,
-	getModelAliases,
-	getProviderConnections,
-	getProviderNodeById,
-	updateProviderConnection,
-	updateProviderNode,
-} from "@/models"
-import type { ProviderNode } from "@/shared/types/domain"
-import { normalizeLogo } from "@/shared/utils/providerLogo"
+import { failed } from "@/lib/routeErrors"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-/** A stored custom-model record (`customModels` KV value). */
-interface CustomModelRecord {
-	providerAlias: string
-	id: string
-	type?: string
-}
-
-/** The node fields a PUT may write; only `logo`/`apiType`/quota are optional. */
-interface ProviderNodeUpdates {
-	name: string
-	prefix: string
-	baseUrl: string
-	logo?: string
-	apiType?: string
-	quotaEnabled?: boolean
-	quotaPath?: string
-	[key: string]: unknown
-}
-
-// PUT /api/provider-nodes/[id] - Update provider node
+// PUT /api/provider-nodes/[id] - update. The node's connections carry a copy of
+// its prefix and base URL, so the use-case patches both; updating the node alone
+// leaves every connection routing to the old prefix.
 export async function PUT(request, { params }) {
 	try {
 		const { id } = await params
-		const body: Record<string, unknown> = await request.json()
-		const name = typeof body.name === "string" ? body.name : ""
-		const prefix = typeof body.prefix === "string" ? body.prefix : ""
-		const baseUrl = typeof body.baseUrl === "string" ? body.baseUrl : ""
-		const { apiType, logo, quotaEnabled, quotaPath } = body
-
-		const node = (await getProviderNodeById(id)) as ProviderNode | null
-
-		if (!node) {
-			return NextResponse.json({ error: "Provider node not found" }, { status: 404 })
-		}
-
-		if (!name?.trim()) {
-			return NextResponse.json({ error: "Name is required" }, { status: 400 })
-		}
-
-		if (!prefix?.trim()) {
-			return NextResponse.json({ error: "Prefix is required" }, { status: 400 })
-		}
-
-		// Only validate apiType for OpenAI Compatible nodes
-		const requestedApiType = typeof apiType === "string" ? apiType : ""
-		if (node.type === "openai-compatible" && !["chat", "responses"].includes(requestedApiType)) {
-			return NextResponse.json({ error: "Invalid OpenAI compatible API type" }, { status: 400 })
-		}
-
-		if (!baseUrl?.trim()) {
-			return NextResponse.json({ error: "Base URL is required" }, { status: 400 })
-		}
-
-		// An omitted logo leaves the stored one alone, "" clears it
-		const normalizedLogo = logo === undefined ? null : normalizeLogo(logo)
-		if (normalizedLogo === undefined) {
-			return NextResponse.json(
-				{ error: "Logo must be a small PNG, JPEG, WebP or GIF data URL" },
-				{ status: 400 },
-			)
-		}
-
-		let sanitizedBaseUrl = baseUrl.trim()
-
-		// Sanitize Base URL for Anthropic Compatible
-		if (node.type === "anthropic-compatible") {
-			sanitizedBaseUrl = sanitizedBaseUrl.replace(/\/$/, "")
-			if (sanitizedBaseUrl.endsWith("/messages")) {
-				sanitizedBaseUrl = sanitizedBaseUrl.slice(0, -9) // remove /messages
-			}
-		}
-
-		// Sanitize Base URL for Custom Embedding (strip trailing slash and /embeddings)
-		if (node.type === "custom-embedding") {
-			sanitizedBaseUrl = sanitizedBaseUrl.replace(/\/$/, "")
-			if (sanitizedBaseUrl.endsWith("/embeddings")) {
-				sanitizedBaseUrl = sanitizedBaseUrl.slice(0, -"/embeddings".length)
-			}
-		}
-
-		const updates: ProviderNodeUpdates = {
-			name: name.trim(),
-			prefix: prefix.trim(),
-			baseUrl: sanitizedBaseUrl,
-		}
-		if (normalizedLogo !== null) updates.logo = normalizedLogo
-
-		if (node.type === "openai-compatible") {
-			updates.apiType = requestedApiType
-		}
-
-		if (node.type === "openai-compatible" || node.type === "anthropic-compatible") {
-			// Preserve the existing value when an older client does not send the fields.
-			const nextQuotaEnabled =
-				typeof quotaEnabled === "boolean" ? quotaEnabled : node.quotaEnabled === true
-			updates.quotaEnabled = nextQuotaEnabled
-			const nextQuotaPath =
-				typeof quotaPath === "string" && quotaPath.trim()
-					? quotaPath.trim()
-					: typeof node.quotaPath === "string"
-						? node.quotaPath
-						: "/credits"
-			updates.quotaPath =
-				/^https?:\/\//i.test(nextQuotaPath) || nextQuotaPath.startsWith("/")
-					? nextQuotaPath
-					: `/${nextQuotaPath}`
-		}
-
-		const updated = await updateProviderNode(id, updates)
-
-		const connections = await getProviderConnections({ provider: id })
-		await Promise.all(
-			connections.map((connection) =>
-				updateProviderConnection(connection.id, {
-					providerSpecificData: {
-						...(connection.providerSpecificData || {}),
-						prefix: prefix.trim(),
-						apiType: node.type === "openai-compatible" ? requestedApiType : undefined,
-						baseUrl: sanitizedBaseUrl,
-						nodeName: updated.name,
-						quotaEnabled: updates.quotaEnabled,
-						quotaPath: updates.quotaPath,
-					},
-				}),
-			),
-		)
-
-		return NextResponse.json({ node: updated })
+		const body = await request.json()
+		const node = await getUseCases().providerNodes.update(String(id), body ?? {})
+		return NextResponse.json({ node })
 	} catch (error) {
-		console.log("Error updating provider node:", error)
-		return NextResponse.json({ error: "Failed to update provider node" }, { status: 500 })
+		return failed(error, "Failed to update provider node", "Error updating provider node")
 	}
 }
 
-// DELETE /api/provider-nodes/[id] - Delete provider node and its connections
+// DELETE /api/provider-nodes/[id] - a node's connections are its children, so
+// deleting it takes them with it.
 export async function DELETE(_request, { params }) {
 	try {
 		const { id } = await params
-		const node = await getProviderNodeById(id)
-
-		if (!node) {
-			return NextResponse.json({ error: "Provider node not found" }, { status: 404 })
-		}
-
-		await deleteProviderConnectionsByProvider(id)
-		await deleteProviderNode(id)
-
-		// Custom models and aliases still pointing at the deleted node id would
-		// surface as a ghost compat group in the picker, so remove them as well.
-		// TODO: combos and studio targets referencing this node id are left alone
-		// because combo members are free-form values and studio targets may point
-		// at combos, so pruning them here risks deleting unrelated records.
-		try {
-			const customModels = (await getCustomModels()) as CustomModelRecord[]
-			await Promise.all(
-				(customModels || [])
-					.filter((m) => m?.providerAlias === id)
-					.map((m) =>
-						deleteCustomModel({
-							providerAlias: m.providerAlias,
-							id: m.id,
-							type: typeof m.type === "string" ? m.type : "llm",
-						}),
-					),
-			)
-			const aliases = await getModelAliases()
-			await Promise.all(
-				Object.entries(aliases || {})
-					.filter(
-						([, fullModel]) =>
-							typeof fullModel === "string" && (fullModel === id || fullModel.startsWith(`${id}/`)),
-					)
-					.map(([aliasName]) => deleteModelAlias(aliasName)),
-			)
-		} catch (cleanupError) {
-			console.log("Error cleaning up models for deleted provider node:", cleanupError)
-		}
-
+		await getUseCases().providerNodes.remove(String(id))
 		return NextResponse.json({ success: true })
 	} catch (error) {
-		console.log("Error deleting provider node:", error)
-		return NextResponse.json({ error: "Failed to delete provider node" }, { status: 500 })
+		return failed(error, "Failed to delete provider node", "Error deleting provider node")
 	}
 }

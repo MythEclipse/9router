@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
-import { disableModels, enableModels, getDisabledModels } from "@/lib/disabledModelsDb"
+import { failed } from "@/lib/routeErrors"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
@@ -7,44 +8,39 @@ export const dynamic = "force-dynamic"
 export async function GET(request) {
 	try {
 		const { searchParams } = new URL(request.url)
-		const providerAlias = searchParams.get("providerAlias")
-		const all = await getDisabledModels()
-		if (providerAlias) return NextResponse.json({ ids: all[providerAlias] || [] })
-		return NextResponse.json({ disabled: all })
+		const result = await getUseCases().disabledModels.list(searchParams.get("providerAlias"))
+		return NextResponse.json(result)
 	} catch (error) {
-		console.log("Error fetching disabled models:", error)
-		return NextResponse.json({ error: "Failed to fetch disabled models" }, { status: 500 })
+		return failed(error, "Failed to fetch disabled models", "Error fetching disabled models")
 	}
 }
 
 // POST /api/models/disabled  body: { providerAlias, ids: [...] }
 export async function POST(request) {
 	try {
-		const { providerAlias, ids } = await request.json()
-		if (!providerAlias || !Array.isArray(ids)) {
+		const result = await getUseCases().disabledModels.disable(await request.json())
+		return NextResponse.json(result)
+	} catch (error) {
+		// A body that is not JSON used to be a 500 here; it is the caller's error.
+		if (error instanceof SyntaxError) {
 			return NextResponse.json({ error: "providerAlias and ids[] required" }, { status: 400 })
 		}
-		await disableModels(providerAlias, ids)
-		return NextResponse.json({ success: true })
-	} catch (error) {
-		console.log("Error disabling models:", error)
-		return NextResponse.json({ error: "Failed to disable models" }, { status: 500 })
+		return failed(error, "Failed to disable models", "Error disabling models")
 	}
 }
 
 // DELETE /api/models/disabled?providerAlias=xxx[&id=yyy]
+// Without `id` this re-enables every model for the provider, which is the
+// documented meaning of an empty list rather than a no-op.
 export async function DELETE(request) {
 	try {
 		const { searchParams } = new URL(request.url)
-		const providerAlias = searchParams.get("providerAlias")
-		const id = searchParams.get("id")
-		if (!providerAlias) {
-			return NextResponse.json({ error: "providerAlias required" }, { status: 400 })
-		}
-		await enableModels(providerAlias, id ? [id] : [])
-		return NextResponse.json({ success: true })
+		const result = await getUseCases().disabledModels.enable({
+			providerAlias: searchParams.get("providerAlias"),
+			id: searchParams.get("id"),
+		})
+		return NextResponse.json(result)
 	} catch (error) {
-		console.log("Error enabling models:", error)
-		return NextResponse.json({ error: "Failed to enable models" }, { status: 500 })
+		return failed(error, "Failed to enable models", "Error enabling models")
 	}
 }

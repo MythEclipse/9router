@@ -186,8 +186,12 @@ describe("aggregateComboCapabilities - the resolver slot cannot break the list",
 })
 
 describe("the routes that publish combos pass the arguments in the right slots", () => {
+	// The dashboard's call used to sit in the route; it moved into the catalogue
+	// adapter when the model list became a use-case. The invariant is unchanged —
+	// one aggregator, with the resolver null and the window last — so the check
+	// follows the call rather than pinning it to a file name.
 	for (const file of [
-		"apps/web/src/app/api/models/route.ts",
+		"apps/web/src/lib/modelRegistryHost.ts",
 		"apps/web/src/app/api/v1/models/route.ts",
 	]) {
 		it(`${file} sends null for the resolver and the combo window last`, () => {
@@ -195,9 +199,17 @@ describe("the routes that publish combos pass the arguments in the right slots",
 			// The call is spread over several lines, so the pattern tolerates
 			// whitespace between arguments instead of demanding a single line.
 			expect(src).toMatch(
-				/aggregateComboCapabilities\(\s*[\w.]+,\s*comboByName,\s*null,\s*0,\s*Number\(combo\.contextWindow\)\s*\|\|\s*0,?\s*\)/,
+				/aggregateComboCapabilities\(\s*[\w.]+,\s*(?:comboByName|byName),\s*null,\s*0,\s*(?:Number\(combo\.contextWindow\)\s*\|\|\s*0|contextWindow),?\s*\)/,
 			)
-			expect(src).not.toMatch(/aggregateComboCapabilities\([^)]*comboByName, 0,/)
+			expect(src).not.toMatch(/aggregateComboCapabilities\([^)]*(?:comboByName|byName), 0,/)
 		})
 	}
+
+	it("the use-case asks the port instead of re-implementing the aggregation", () => {
+		const src = readFileSync(
+			resolve(__dirname, "../..", "apps/api/src/application/models/list-models.ts"),
+			"utf8",
+		)
+		expect(src).toMatch(/deps\.catalogue\.aggregateCombo\(/)
+	})
 })

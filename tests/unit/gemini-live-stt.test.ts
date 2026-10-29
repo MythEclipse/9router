@@ -399,10 +399,31 @@ describe("Custom-model transport persistence via POST /api/models/custom", () =>
 		else process.env.DATA_DIR = originalDataDir
 	})
 
+	/**
+	 * The route now delegates to the custom-model use-case, and building the whole
+	 * use-case graph would open a second SQLite handle (`createDb` refuses inside
+	 * Vitest by design). So this drives the same use-case over the same real
+	 * `aliasRepo`, which is what the route does once its graph exists.
+	 */
 	async function postCustom(payload) {
-		const { POST } = await import("@/app/api/models/custom/route.js")
-		const res = await POST({ json: async () => payload })
-		return res.json()
+		const { makeCustomModels } = await import("9router-api/application/models/manage-aliases")
+		const repo = await import("@9router/db/repos/aliasRepo")
+		const useCase = makeCustomModels({
+			models: {
+				list: () => repo.getCustomModels(),
+				add: (fields) => repo.addCustomModel(fields),
+				remove: (fields) => repo.deleteCustomModel(fields),
+			},
+			reconciler: {
+				async reconcile() {
+					return { emptied: [] }
+				},
+			},
+			capabilityKeys: ["vision", "reasoning", "audio", "video"],
+			knownTransport: (value) => value === "gemini-live",
+		})
+		const added = await useCase.add(payload)
+		return { success: true, added }
 	}
 
 	async function customRows() {
