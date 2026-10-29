@@ -1,3 +1,11 @@
+import {
+	externalProxyRefusal,
+	headroomFailureStatus,
+	headroomStartOptions,
+	headroomStartPort,
+	headroomUrl,
+	START_CLIENT_ERROR_CODES,
+} from "9router-api/domain/headroom-lifecycle"
 import { NextResponse } from "next/server"
 import { DEFAULT_HEADROOM_URL, isLoopbackHeadroomUrl } from "@/lib/headroom/detect"
 import { restartHeadroomProxy } from "@/lib/headroom/process"
@@ -5,36 +13,30 @@ import { getSettings } from "@/lib/localDb"
 
 export const dynamic = "force-dynamic"
 
-function parsePortFromUrl(url) {
-	try {
-		const u = new URL(url)
-		const p = parseInt(u.port, 10)
-		if (p > 0 && p < 65536) return p
-	} catch {
-		/* ignore, fall through to default */
-	}
-	return null
-}
-
+/**
+ * POST /api/headroom/restart - restart the local Headroom proxy.
+ *
+ * Same gate and same port rule as `start`: a remote URL is refused here too, because a "restart"
+ * of a proxy this install never started is not a restart. The rules live in
+ * `domain/headroom-lifecycle.ts`.
+ */
 export async function POST() {
 	try {
 		const settings = await getSettings()
-		const url = settings.headroomUrl || DEFAULT_HEADROOM_URL
-		if (!isLoopbackHeadroomUrl(url)) {
-			return NextResponse.json(
-				{ error: "External Headroom proxies must be started outside 9Router", code: "EXTERNAL_PROXY" },
-				{ status: 400 },
-			)
+		const url = headroomUrl(settings, DEFAULT_HEADROOM_URL)
+		const refusal = externalProxyRefusal(url, isLoopbackHeadroomUrl)
+		if (refusal) {
+			return NextResponse.json({ error: refusal.message, code: refusal.code }, { status: 400 })
 		}
-		const port = parsePortFromUrl(url) || 8787
 		const result = await restartHeadroomProxy({
-			port,
-			codeAware: settings.headroomCodeAware === true,
-			kompress: settings.headroomKompress !== false,
+			port: headroomStartPort(url),
+			...headroomStartOptions(settings),
 		})
 		return NextResponse.json({ success: true, ...result })
 	} catch (error) {
-		const status = error.code === "NOT_INSTALLED" ? 400 : 500
-		return NextResponse.json({ error: error.message, code: error.code || null }, { status })
+		return NextResponse.json(
+			{ error: error.message, code: error.code || null },
+			{ status: headroomFailureStatus(error, START_CLIENT_ERROR_CODES) },
+		)
 	}
 }
