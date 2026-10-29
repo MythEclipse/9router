@@ -1,20 +1,15 @@
 import { NextResponse } from "next/server"
-import { disableTunnel } from "@/lib/tunnel"
+import { failed } from "@/lib/routeErrors"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-import { getSettings } from "@/lib/localDb"
-import { configureTunnelMonitoring } from "@/shared/services/initializeApp"
-
+/** POST /api/tunnel/Cloudflare tunnel disable — turn it on, then re-arm monitoring. */
 export async function POST() {
 	try {
-		const result = await disableTunnel()
-		getSettings()
-			.then(configureTunnelMonitoring)
-			.catch((error) => console.warn("Tunnel monitor update failed:", error.message))
-		return NextResponse.json(result)
+		return NextResponse.json(await getUseCases().tunnel.disable())
 	} catch (error) {
-		console.error("Tunnel disable error:", error)
-		return NextResponse.json({ error: error.message }, { status: 500 })
+		console.error("Tunnel Cloudflare tunnel disable error:", error)
+		return failed(error, "Cloudflare tunnel disable failed", "Error changing tunnel state")
 	}
 }

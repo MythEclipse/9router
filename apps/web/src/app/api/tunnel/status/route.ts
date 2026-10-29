@@ -1,27 +1,15 @@
 import { NextResponse } from "next/server"
-import { getDownloadStatus, getTailscaleStatus, getTunnelStatus } from "@/lib/tunnel"
+import { failed } from "@/lib/routeErrors"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-const STATUS_CACHE_TTL_MS = 3000 // coalesce rapid polls; underlying probes already cache 10s
-
-// Survive hot reload; one cache per process. Only tunnel/tailscale probes are cached -
-// download progress stays live so the enable/download UI updates smoothly.
-const statusCache = (global.__tunnelStatusCache ??= { value: null, fetchedAt: 0 })
-
+/** GET /api/tunnel/status — both probes (cached for a few seconds), plus live download. */
 export async function GET() {
 	try {
-		let probes = statusCache.value
-		if (!probes || Date.now() - statusCache.fetchedAt >= STATUS_CACHE_TTL_MS) {
-			const [tunnel, tailscale] = await Promise.all([getTunnelStatus(), getTailscaleStatus()])
-			probes = { tunnel, tailscale }
-			statusCache.value = probes
-			statusCache.fetchedAt = Date.now()
-		}
-		const download = getDownloadStatus()
-		return NextResponse.json({ ...probes, download })
+		return NextResponse.json(await getUseCases().tunnel.status())
 	} catch (error) {
 		console.error("Tunnel status error:", error)
-		return NextResponse.json({ error: error.message }, { status: 500 })
+		return failed(error, "Tunnel status failed", "Error reading tunnel status")
 	}
 }

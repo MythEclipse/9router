@@ -1,20 +1,15 @@
 import { NextResponse } from "next/server"
-import { enableTailscale } from "@/lib/tunnel"
+import { failed } from "@/lib/routeErrors"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-import { getSettings } from "@/lib/localDb"
-import { configureTunnelMonitoring } from "@/shared/services/initializeApp"
-
+/** POST /api/tunnel/Tailscale enable — turn it on, then re-arm monitoring. */
 export async function POST() {
 	try {
-		const result = await enableTailscale()
-		getSettings()
-			.then(configureTunnelMonitoring)
-			.catch((error) => console.warn("Tailscale monitor start failed:", error.message))
-		return NextResponse.json(result)
+		return NextResponse.json(await getUseCases().tunnel.tailscaleEnable())
 	} catch (error) {
-		console.error("Tailscale enable error:", error.message)
-		return NextResponse.json({ error: error.message }, { status: 500 })
+		console.error("Tunnel Tailscale enable error:", error)
+		return failed(error, "Tailscale enable failed", "Error changing tunnel state")
 	}
 }

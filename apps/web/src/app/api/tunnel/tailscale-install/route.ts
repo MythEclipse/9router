@@ -1,80 +1,51 @@
-import { execSync } from "node:child_process"
-import os from "node:os"
-import { getSettings, updateSettings } from "@/lib/localDb"
-import { generateShortId, installTailscale, loadState } from "@/lib/tunnel"
-import { getCachedPassword, initDbHooks, loadEncryptedPassword } from "@/mitm/manager"
+import { failed } from "@/lib/routeErrors"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-initDbHooks(getSettings, updateSettings)
+export const runtime = "nodejs"
 
-const EXTENDED_PATH = `/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:${process.env.PATH || ""}`
+/**
+ * POST /api/tunnel/tailscale-install — install Tailscale, streaming progress.
+ *
+ * The stream is the transport, so it stays here: a use-case cannot own a `ReadableStream`
+ * without owning a framework. What the use-case decides is upstream of the stream —
+ * whether the request has a password to install with — so a refusal is a 400 the form can
+ * show, not an event nobody styled.
+ */
+export async function POST(request: Request) {
+	const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
 
-function hasBrew() {
+	const tunnel = getUseCases().tunnel.tailscaleInstall
+	let prepared: { password: string; shortId: string }
 	try {
-		execSync("which brew", {
-			stdio: "ignore",
-			windowsHide: true,
-			env: { ...process.env, PATH: EXTENDED_PATH },
-		})
-		return true
-	} catch {
-		return false
+		prepared = await tunnel.prepare(body)
+	} catch (error) {
+		return failed(error, "Sudo password is required", "Tailscale install refused")
 	}
-}
-
-export async function POST(request) {
-	const body = await request.json().catch(() => ({}))
-	const platform = os.platform()
-	const isWindows = platform === "win32"
-	const isBrew = platform === "darwin" && hasBrew()
-	const needsPassword = !isWindows && !isBrew
-
-	const sudoPassword =
-		body.sudoPassword || getCachedPassword() || (await loadEncryptedPassword()) || ""
-
-	if (needsPassword && !sudoPassword.trim()) {
-		return new Response(JSON.stringify({ error: "Sudo password is required" }), {
-			status: 400,
-			headers: { "Content-Type": "application/json" },
-		})
-	}
-
-	const shortId = loadState()?.shortId || generateShortId()
 
 	const encoder = new TextEncoder()
 	const stream = new ReadableStream({
 		async start(controller) {
 			let closed = false
-			const send = (event, data) => {
+			const send = (event: string, data: unknown) => {
 				if (closed) return
 				try {
 					controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`))
 				} catch {
+					// The client closed the tab; there is nobody left to report to.
 					closed = true
 				}
 			}
 
-			try {
-				const result = await installTailscale(sudoPassword, shortId, (msg) => {
-					send("progress", { message: msg })
-				})
-				send("done", {
-					success: true,
-					authUrl: "authUrl" in result ? result.authUrl || null : null,
-				})
-			} catch (error) {
-				console.error("Tailscale install error:", error)
-				const msg =
-					error.message?.includes("incorrect password") || error.message?.includes("Sorry")
-						? "Wrong sudo password"
-						: error.message
-				send("error", { error: msg })
-			} finally {
-				if (!closed) {
-					try {
-						controller.close()
-					} catch {}
+			const terminal = await tunnel.run(prepared, (message) => send("progress", { message }))
+			send(terminal.event, terminal.data)
+
+			if (!closed) {
+				try {
+					controller.close()
+				} catch {
+					/* already closed by the client */
 				}
 			}
 		},
