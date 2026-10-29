@@ -40,6 +40,19 @@ export type PeriodResult =
 	| { readonly ok: false; readonly message: string }
 
 /**
+ * Narrows a period answer to its refusal branch.
+ *
+ * A predicate rather than `if (!result.ok)` because `apps/web` compiles with
+ * `strict: false`, where a discriminated union does not narrow through a boolean
+ * discriminant. Same reason `isMitmFailure` and `isPageFailure` exist.
+ */
+export function isPeriodRefused(
+	result: PeriodResult,
+): result is { readonly ok: false; readonly message: string } {
+	return !result.ok
+}
+
+/**
  * Resolve a requested period, or refuse it.
  *
  * `undefined` and `null` mean "the caller named none" and take the default; an

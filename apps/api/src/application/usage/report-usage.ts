@@ -22,6 +22,7 @@ import { invalid } from "../../domain/errors.ts"
 import {
 	DEFAULT_PERIOD,
 	DEFAULT_SPARKS_PERIOD,
+	isPeriodRefused,
 	keyFilterOf,
 	modelScopeOf,
 	type ReportingPeriod,
@@ -124,7 +125,7 @@ function requirePeriod(
 	fallback: ReportingPeriod = DEFAULT_PERIOD,
 ): ReportingPeriod {
 	const resolved = resolvePeriod(requested, fallback)
-	if (resolved.ok === false) throw invalid(resolved.message)
+	if (isPeriodRefused(resolved)) throw invalid(resolved.message)
 	return resolved.period
 }
 

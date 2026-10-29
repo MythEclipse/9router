@@ -1,59 +1,54 @@
 import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { getAdapter } from "@9router/db/driver"
 import { matchesAllowedModels, parseAllowedModels } from "@9router/db/repos/allowedModels"
+import { isPeriodRefused, periodCutoff, resolvePeriod } from "9router-api/domain/reporting-period"
+import {
+	buildLeaderboard,
+	type LeaderboardAggregateRow,
+} from "9router-api/domain/usage-derivations"
 import { NextResponse } from "next/server"
 
 export const dynamic = "force-dynamic"
 
+/**
+ * GET /api/usage/leaderboard?period=7d
+ *
+ * Previously this handler did not validate the period at all — `?period=garbage` fell through
+ * every branch to a 7-day cutoff and came back labelled `garbage`.
+ *
+ * The success count is now matching the error panel's rule (`LOWER(status)`), because the two
+ * endpoints disagreed about a status stored as `"OK"`: a success here, an error there.
+ */
 export async function GET(request: Request) {
 	try {
 		const { searchParams } = new URL(request.url)
-		const period = searchParams.get("period") || "7d"
-
-		const now = new Date()
-		let cutoff = null
-		if (period === "today") {
-			const startOfDay = new Date()
-			startOfDay.setHours(0, 0, 0, 0)
-			cutoff = startOfDay.toISOString()
-		} else if (period !== "all") {
-			let cutoffDays = 7
-			if (period === "24h") cutoffDays = 1
-			else if (period === "30d") cutoffDays = 30
-			else if (period === "60d") cutoffDays = 60
-			cutoff = new Date(now.getTime() - cutoffDays * 86400000).toISOString()
+		const resolved = resolvePeriod(searchParams.get("period"))
+		if (isPeriodRefused(resolved)) {
+			return NextResponse.json({ error: resolved.message }, { status: 400 })
 		}
+		const period = resolved.period
+		const cutoff = periodCutoff(period, new Date())
 
 		const ctx = await getSessionContext()
-		const keyFilter = ctx.apiKeyFilter
 		const patterns = parseAllowedModels(ctx.allowedModels || "*")
 
-		const conds = []
-		const params = []
+		const conds: string[] = []
+		const params: unknown[] = []
 		if (cutoff) {
 			conds.push("timestamp >= ?")
 			params.push(cutoff)
 		}
-		if (keyFilter) {
+		if (ctx.apiKeyFilter) {
 			conds.push("apiKey = ?")
-			params.push(keyFilter)
+			params.push(ctx.apiKeyFilter)
 		}
 		const where = conds.length ? `WHERE ${conds.join(" AND ")}` : ""
 
 		const db = await getAdapter()
-		const rows = db.all<{
-			model: string
-			provider: string
-			requests: number
-			successes: number
-			promptTokens: number
-			completionTokens: number
-			totalTokens: number
-			totalCost: number
-		}>(
+		const rows = db.all<LeaderboardAggregateRow>(
 			`SELECT model, provider,
               COUNT(*) as requests,
-              SUM(CASE WHEN status IN ('ok','200','success') THEN 1 ELSE 0 END) as successes,
+              SUM(CASE WHEN LOWER(status) IN ('ok','200','success') THEN 1 ELSE 0 END) as successes,
               SUM(promptTokens) as promptTokens,
               SUM(completionTokens) as completionTokens,
               SUM(promptTokens + completionTokens) as totalTokens,
@@ -63,22 +58,7 @@ export async function GET(request: Request) {
 			params,
 		)
 
-		const leaderboard = rows
-			.filter((r) => r.model && matchesAllowedModels(patterns, r.model))
-			.map((r) => ({
-				model: r.model,
-				provider: r.provider || "",
-				requests: r.requests || 0,
-				successes: r.successes || 0,
-				successRate: r.requests > 0 ? ((r.successes / r.requests) * 100).toFixed(1) : "0.0",
-				promptTokens: r.promptTokens || 0,
-				completionTokens: r.completionTokens || 0,
-				totalTokens: r.totalTokens || 0,
-				avgTokensPerRequest: r.requests > 0 ? Math.round(r.totalTokens / r.requests) : 0,
-				totalCost: r.totalCost || 0,
-			}))
-			.slice(0, 50)
-
+		const leaderboard = buildLeaderboard(rows, (model) => matchesAllowedModels(patterns, model))
 		return NextResponse.json({ period, leaderboard })
 	} catch (error) {
 		console.error("Model leaderboard failed:", error)
