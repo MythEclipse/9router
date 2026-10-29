@@ -298,15 +298,24 @@ export interface UseCases {
 	 * session the browser is polling, a proxy to stop — rather than a credential being stored.
 	 */
 	readonly oauth: {
-		readonly importGitlabPat: (body: unknown, host: GitlabPatDeps) => Promise<GitlabPatAnswer>
-		readonly importIflowCookie: (body: unknown, host: IflowCookieDeps) => Promise<IflowCookieAnswer>
+		/**
+		 * The caller's headers decide which fetch verifies the PAT: remote goes through the
+		 * SSRF guard, local may reach a self-hosted instance. Passing the headers rather
+		 * than a fetch keeps that rule in this layer, where it cannot be skipped by a new
+		 * caller.
+		 */
+		readonly importGitlabPat: (body: unknown, headers: Headers) => Promise<GitlabPatAnswer>
+		readonly importIflowCookie: (body: unknown, headers: Headers) => Promise<IflowCookieAnswer>
 		readonly readMimoRegion: (body: unknown) => MimoRegion
+		/**
+		 * MiMo's login start stays a host concern: it walks two redirect hops while carrying
+		 * a session cookie the host mints, and the answer sets that cookie. The cookie is a
+		 * credential the browser must receive, not a value a procedure may return, so this
+		 * one is not a procedure — see the note in `routers/oauth.ts`.
+		 */
 		readonly startMimoLogin: (body: unknown, host: MimoLoginStartDeps) => Promise<MimoLoginStarted>
-		readonly authorizeKiroSocial: (
-			provider: string | null,
-			host: KiroAuthorizeDeps,
-		) => KiroSocialAnswer
-		readonly exchangeKiroSocial: (body: unknown, host: KiroExchangeDeps) => Promise<KiroSocialAnswer>
+		readonly authorizeKiroSocial: (provider: string | null) => KiroSocialAnswer
+		readonly exchangeKiroSocial: (body: unknown) => Promise<KiroSocialAnswer>
 		readonly pollSession: (provider: string, state: string | null) => Promise<DispatchAnswer>
 		readonly stopProxy: (provider: string) => DispatchAnswer
 		readonly ideStatus: (provider: string) => Promise<DispatchAnswer>
@@ -658,12 +667,24 @@ export function buildUseCases(deps: Dependencies): UseCases {
 			pollSession: (provider, state) => pollSessionStatus(provider, state, deps.oauthSession),
 			stopProxy: (provider) => stopProviderProxy(provider, deps.oauthSession),
 			ideStatus: (provider) => readIdeStatus(provider, deps.oauthSession),
-			importGitlabPat: (body, host) => importGitlabPat(body, host),
-			importIflowCookie: (body, host) => importIflowCookie(body, host),
+			importGitlabPat: (body, headers) =>
+				importGitlabPat(body, {
+					fetchImpl: deps.fetchForCaller(headers),
+					createConnection: deps.createProviderConnection,
+				}),
+			importIflowCookie: (body, headers) =>
+				importIflowCookie(body, {
+					fetchImpl: deps.fetchForCaller(headers),
+					createConnection: deps.createProviderConnection,
+				}),
 			readMimoRegion: (body) => readMimoRegion(body),
 			startMimoLogin: (body, host) => startMimoLogin(body, host),
-			authorizeKiroSocial: (provider, host) => authorizeKiroSocial(provider, host),
-			exchangeKiroSocial: (body, host) => exchangeKiroSocial(body, host),
+			authorizeKiroSocial: (provider) => authorizeKiroSocial(provider, deps.kiroSocial.authorize),
+			exchangeKiroSocial: (body) =>
+				exchangeKiroSocial(body, {
+					...deps.kiroSocial.exchange,
+					createConnection: deps.createProviderConnection,
+				}),
 		},
 		cliTools: {
 			readToolSettingsStatus: (host) => readToolSettingsStatus(host),

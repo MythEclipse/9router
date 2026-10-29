@@ -146,6 +146,20 @@ export interface UseCaseOptions {
 	readonly updateConnection?: import("../application/oauth/import-api-key.ts").MimoImportDeps["update"]
 	readonly oauthSession?: import("../application/oauth/dispatch-actions.ts").DispatchDeps
 	/**
+	 * The fetch a credential check may use, chosen from the caller's headers: a remote
+	 * caller must go through the SSRF guard, a local one may reach a self-hosted GitLab.
+	 * Omitted means every caller is treated as remote.
+	 */
+	readonly fetchForCaller?: (headers: Headers) => typeof globalThis.fetch
+	/** Kiro's social sign-in: PKCE, the login URL, and the code exchange. */
+	readonly kiroSocial?: {
+		readonly authorize: import("../application/oauth/kiro-social.ts").KiroAuthorizeDeps
+		readonly exchange: Omit<
+			import("../application/oauth/kiro-social.ts").KiroExchangeDeps,
+			"createConnection"
+		>
+	}
+	/**
 	 * Supplied by the host that owns `localDb`. Absent means the key-table
 	 * use-cases are unavailable, which is the API-server case: it serves the
 	 * secrets gate, not the dashboard's editor.
@@ -453,6 +467,16 @@ export function createUseCases(
 		findConnection: required(options, "findConnection"),
 		updateConnection: required(options, "updateConnection"),
 		oauthSession: required(options, "oauthSession"),
+		/**
+		 * Absent is a hard error, not a lenient default.
+		 *
+		 * A fallback of `globalThis.fetch` would silently skip the SSRF guard on the one
+		 * path where a client-supplied base URL reaches it — the failure would look like a
+		 * working import. A host that has no opinion must say `() => fetch`, and then the
+		 * omission is in the code rather than in a default nobody reads.
+		 */
+		fetchForCaller: required(options, "fetchForCaller"),
+		kiroSocial: required(options, "kiroSocial"),
 		providerCatalogue: options.providerCatalogue ?? unavailableProviderCatalogue(),
 		normalizeProviderId: options.normalizeProviderId ?? identityProviderId,
 		normalizeProviderSpecificData: options.normalizeProviderSpecificData ?? (() => ({})),

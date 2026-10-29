@@ -41,12 +41,16 @@ import {
 	installSemanticCacheModule,
 } from "9router-api/infrastructure/use-cases-factory"
 import { getSemanticCacheStats, resetSemanticCacheStats } from "open-sse/rtk/semanticCache"
+import { isLocalHeaders } from "@/dashboardGuard"
 import { extractCodexAccountInfo } from "@/lib/oauth/providerHelpers"
+import { KiroService } from "@/lib/oauth/services/kiro"
+import { generatePKCE } from "@/lib/oauth/utils/pkce"
 import {
 	createProviderConnection,
 	getProviderConnections,
 	updateProviderConnection,
 } from "@/models"
+import { fetchPublic } from "@/shared/utils/ssrfGuard"
 import { createApiKeyStore } from "./apiKeyStore"
 import { killAppProcesses } from "./appProcessManager"
 import { createAutoBackupDeps } from "./autoBackupHost"
@@ -203,6 +207,22 @@ function cache(): Cache {
 			relayDeploy: createDeployDeps(),
 			// Importing a credential writes one row; the batch rules live in the use-case.
 			createProviderConnection: (input) => createProviderConnection(input),
+			// A client-supplied base URL (GitLab PAT, iflow) must pass the SSRF guard for a
+			// remote caller, while a local one keeps a self-hosted instance reachable.
+			fetchForCaller: (headers) => (isLocalHeaders(headers) ? globalThis.fetch : fetchPublic),
+			kiroSocial: {
+				authorize: {
+					generatePkce: generatePKCE,
+					buildLoginUrl: (provider, codeChallenge, state) =>
+						new KiroService().buildSocialLoginUrl(provider, codeChallenge, state),
+				},
+				exchange: {
+					// The redirect URI is Kiro's own callback; the service already knows it.
+					exchangeCode: (code, codeVerifier) => new KiroService().exchangeSocialCode(code, codeVerifier),
+					emailFromToken: (accessToken) => new KiroService().extractEmailFromJWT(accessToken),
+					now: () => Date.now(),
+				},
+			},
 			credentialImport: {
 				codex: { authType: "oauth", backfill: backfillCodex },
 				"grok-cli": { authType: "oauth", backfill: (item) => item },

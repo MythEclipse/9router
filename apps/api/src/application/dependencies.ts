@@ -307,6 +307,21 @@ export interface Dependencies {
 	readonly updateConnection: import("./oauth/import-api-key.ts").MimoImportDeps["update"]
 	/** The OAuth dispatcher's session actions. */
 	readonly oauthSession: import("./oauth/dispatch-actions.ts").DispatchDeps
+	/**
+	 * The fetch a credential check may use, chosen by who is asking.
+	 *
+	 * A remote caller must go through the SSRF guard — the base URL in a GitLab PAT import
+	 * is client-supplied, and without the guard it can point the server at a loopback or
+	 * metadata host. A local caller keeps self-hosted GitLab on a private network
+	 * reachable, which is the whole point of the feature. That decision needs the request
+	 * headers, so the host supplies the rule rather than the chosen fetch.
+	 */
+	readonly fetchForCaller: (headers: Headers) => typeof globalThis.fetch
+	/** Kiro's social sign-in: PKCE, the login URL, and the code exchange. */
+	readonly kiroSocial: {
+		readonly authorize: import("./oauth/kiro-social.ts").KiroAuthorizeDeps
+		readonly exchange: Omit<import("./oauth/kiro-social.ts").KiroExchangeDeps, "createConnection">
+	}
 	readonly tunnelProbes: TunnelProbeDeps
 	readonly tunnelToggle: TunnelToggleDeps
 	readonly tailscaleCheck: TailscaleCheckDeps

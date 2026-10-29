@@ -142,23 +142,39 @@ function isLoopbackHostname(h) {
 }
 
 function isLoopbackPeer(request) {
-	if (hasTrustedPeerHeaders(request)) {
-		return isLoopbackHostname(request.headers.get("x-9r-real-ip"))
+	return isLoopbackPeerHeaders(request.headers)
+}
+
+/** The headers-only half of `isLoopbackPeer`, for callers that never hold the request. */
+function isLoopbackPeerHeaders(headers) {
+	if (hasTrustedPeerHeaders({ headers })) {
+		return isLoopbackHostname(headers.get("x-9r-real-ip"))
 	}
 	// Bare `next dev` forks its server, so the wrapper never loads and no peer address
 	// reaches us. Host is spoofable, so this stays confined to development.
 	if (process.env.NODE_ENV === "development") {
-		return isLoopbackHostname(request.headers.get("host"))
+		return isLoopbackHostname(headers.get("host"))
 	}
 	return false
 }
 
 export function isLocalRequest(request) {
+	return isLocalHeaders(request.headers)
+}
+
+/**
+ * The same rule, decided from headers alone.
+ *
+ * `isLocalRequest` needs a request; the SSRF choice for a credential check needs only the
+ * headers, which is what crosses the boundary into `apps/api`. Keeping one implementation
+ * means a caller cannot be "local" for the guard and "remote" for the fetch that follows.
+ */
+export function isLocalHeaders(headers) {
 	// Stamped by custom-server.js when forwarding headers exist: request came through
 	// a reverse proxy, so the loopback socket is the proxy hop, not the end-user.
-	if (request.headers.get("x-9r-via-proxy")) return false
-	if (!isLoopbackPeer(request)) return false
-	const origin = request.headers.get("origin")
+	if (headers.get("x-9r-via-proxy")) return false
+	if (!isLoopbackPeerHeaders(headers)) return false
+	const origin = headers.get("origin")
 	if (origin) {
 		try {
 			if (!isLoopbackHostname(new URL(origin).hostname)) return false

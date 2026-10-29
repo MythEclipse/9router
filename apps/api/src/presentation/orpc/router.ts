@@ -16,6 +16,7 @@ import { combosRouter } from "./routers/combos.ts"
 import { dashboardKeysRouter } from "./routers/dashboard-keys.ts"
 import { errorLogsRouter } from "./routers/error-logs.ts"
 import { modelsRouter } from "./routers/models.ts"
+import { oauthRouter } from "./routers/oauth.ts"
 import { pricingRouter } from "./routers/pricing.ts"
 import { providersRouter } from "./routers/providers.ts"
 import { pxpipeRouter } from "./routers/pxpipe.ts"
@@ -41,6 +42,7 @@ export const appRouter = base.router({
 	pxpipe: pxpipeRouter,
 	models: modelsRouter,
 	providers: providersRouter,
+	oauth: oauthRouter,
 })
 
 export type AppRouter = typeof appRouter
