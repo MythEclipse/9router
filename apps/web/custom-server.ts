@@ -11,6 +11,17 @@ const __dirname = path.dirname(__filename)
 
 const origCreate = http.createServer.bind(http)
 
+// The migration journal, for anything downstream that asks. A standalone build
+// stages `migrations/` beside this file, but the bundler rewrites `import.meta.url`
+// inside the server chunks — so the migrator's own upward search starts from
+// `.next/server/chunks/` and finds nothing. Every database-backed route then answers
+// 500 on "Migration journal not found". This wrapper is the one place that knows its
+// real directory, so it says where the journal is; an operator-set value wins.
+if (!process.env.MIGRATIONS_DIR) {
+	const staged = path.join(__dirname, "migrations")
+	if (fs.existsSync(staged)) process.env.MIGRATIONS_DIR = staged
+}
+
 /**
  * The directory the server-side source tree lives in. Normally this is simply
  * the wrapper's own directory (repo checkout, and the standalone tree where

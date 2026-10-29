@@ -32,7 +32,7 @@ function backfillCodex(item: Record<string, unknown>): Record<string, unknown> {
  * handle on every hot reload until the process ran out of file descriptors.
  */
 
-import { join } from "node:path"
+import { existsSync } from "node:fs"
 import { closeDb } from "@9router/db/driver"
 import type { UseCases } from "9router-api/application/use-cases"
 import {
@@ -151,6 +151,23 @@ installPxpipeEngine({
 
 const CACHE_KEY = Symbol.for("9router.useCases")
 
+/**
+ * Where the migration journal is, or `undefined` to let the migrator search.
+ *
+ * `undefined` is the honest answer when nothing staged a journal: the migrator
+ * then ascends from its own location and finds `apps/api/migrations` in a dev
+ * tree. Handing it a path that does not exist makes it stop and refuse, which is
+ * how every database-backed route came to answer 500 under `bun run dev`.
+ *
+ * A standalone build stages `migrations/` beside the server and sets nothing, so
+ * the same ascent finds that copy too.
+ */
+function resolveMigrationsDir(): string | undefined {
+	const configured = process.env.MIGRATIONS_DIR
+	if (!configured) return undefined
+	return existsSync(configured) ? configured : undefined
+}
+
 interface Cache {
 	readonly useCases: UseCases
 }
@@ -230,12 +247,17 @@ function cache(): Cache {
 				list: () => listProxyImportJobs(),
 				cancel: (id) => cancelProxyImportJob(id),
 			},
-			// Turbopack rewrites import.meta.url, so the migrator cannot find the
-			// journal on its own here. copy-standalone-assets.mjs stages it at
-			// <server cwd>/migrations. A process that runs from a different
-			// directory — the oRPC server, whose cwd is the repo root — passes
-			// MIGRATIONS_DIR instead of being forced to chdir.
-			migrationsDir: process.env.MIGRATIONS_DIR ?? join(process.cwd(), "migrations"),
+			// Turbopack rewrites import.meta.url in a build, so the migrator cannot
+			// always find the journal on its own; copy-standalone-assets.mjs stages it
+			// at <server cwd>/migrations, and a process started from another directory
+			// (the oRPC server) passes MIGRATIONS_DIR.
+			//
+			// Passing a path that does not exist is worse than passing none: the
+			// migrator checks an explicit path and stops, never trying its own ascent.
+			// That made `bun run dev` fail every database-backed route with "Migration
+			// journal not found at apps/web/migrations" — a directory that only exists
+			// in a standalone build. An absent path now falls through to the search.
+			migrationsDir: resolveMigrationsDir(),
 			// The model registries and the capability tables live in this
 			// directory, so this process is the one that can answer for them.
 			registryHost,
