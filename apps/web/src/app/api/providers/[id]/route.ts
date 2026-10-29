@@ -1,26 +1,47 @@
+/**
+ * One connection: read, update, delete.
+ *
+ * Delegates: what a connection may hold, and what a name collision means, are rules and
+ * live in `9router-api`. The guard denies this path by default, so the session travels
+ * with the call.
+ */
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { NextResponse } from "next/server"
+import { createApiClient, sessionClaimsOf } from "@/lib/orpcClient"
 import { isNameConflict, nameConflictBody } from "@/lib/providerConflicts"
 import { failed } from "@/lib/routeErrors"
 import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-// GET /api/providers/[id] - one connection, secret stripped.
-export async function GET(_request, { params }) {
+async function client() {
+	return createApiClient({
+		session: sessionClaimsOf(await getSessionContext()),
+		useCases: getUseCases(),
+	})
+}
+
+type IdParams = { params: Promise<{ id: string }> }
+
+/** One connection, secret stripped. */
+export async function GET(_request: Request, { params }: IdParams) {
 	try {
 		const { id } = await params
-		return NextResponse.json({ connection: await getUseCases().connections.get(id) })
+		return NextResponse.json({ connection: await (await client()).providers.get({ id }) })
 	} catch (error) {
 		return failed(error, "Failed to fetch connection", "Error fetching connection")
 	}
 }
 
-// PUT /api/providers/[id] - update. Every field is optional; absent means "leave
-// it alone", including the proxy and pool fields.
-export async function PUT(request, { params }) {
+/**
+ * Update. Every field is optional; absent means "leave it alone", including the proxy
+ * and pool fields.
+ */
+export async function PUT(request: Request, { params }: IdParams) {
 	try {
 		const { id } = await params
-		const connection = await getUseCases().connections.update(id, await request.json())
+		const changes = await request.json().catch(() => ({}))
+		const connection = await (await client()).providers.update({ id, changes })
 		return NextResponse.json({ connection })
 	} catch (error) {
 		if (isNameConflict(error)) {
@@ -30,11 +51,10 @@ export async function PUT(request, { params }) {
 	}
 }
 
-// DELETE /api/providers/[id]
-export async function DELETE(_request, { params }) {
+export async function DELETE(_request: Request, { params }: IdParams) {
 	try {
 		const { id } = await params
-		await getUseCases().connections.remove(id)
+		await (await client()).providers.remove({ id })
 		return NextResponse.json({ message: "Connection deleted successfully" })
 	} catch (error) {
 		return failed(error, "Failed to delete connection", "Error deleting connection")

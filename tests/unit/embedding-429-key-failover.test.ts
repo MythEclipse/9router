@@ -62,6 +62,16 @@ beforeAll(async () => {
 		getProxyPoolById: models.getProxyPoolById,
 	})
 	vi.doMock("@/lib/useCases", () => ({ getUseCases: () => ({ connections }) }))
+	// The route reaches the procedure through the in-process client, which carries the
+	// dashboard session. No Next request scope exists here, so the session is part of the
+	// wiring this test fakes.
+	vi.doMock("@9router/auth/dashboardPermissions", () => ({
+		getSessionContext: async () => ({
+			session: { userId: "owner-1", email: "owner@local", role: "admin" },
+			permissions: [],
+			apiKeyFilter: null,
+		}),
+	}))
 	;({ POST } = await import("@/app/api/providers/route.js"))
 	await updateSettings({ requireApiKey: false })
 })

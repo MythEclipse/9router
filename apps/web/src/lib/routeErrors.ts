@@ -24,6 +24,13 @@ const STATUS_BY_CODE: Record<string, number> = {
 	FORBIDDEN: 403,
 	NOT_FOUND: 404,
 	CONFLICT: 409,
+	/**
+	 * A duplicate connection name. The store raises it with the id and name of the row
+	 * that holds the name, so the dashboard can offer "edit the existing one instead" —
+	 * which needs both. Without this entry the 409 body would arrive as a 500 and the
+	 * dashboard would lose the offer.
+	 */
+	PROVIDER_NAME_CONFLICT: 409,
 	/** An upstream dependency refused, which is not this server's fault. */
 	UPSTREAM: 503,
 }

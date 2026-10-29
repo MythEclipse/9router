@@ -17,6 +17,7 @@ import { dashboardKeysRouter } from "./routers/dashboard-keys.ts"
 import { errorLogsRouter } from "./routers/error-logs.ts"
 import { modelsRouter } from "./routers/models.ts"
 import { pricingRouter } from "./routers/pricing.ts"
+import { providersRouter } from "./routers/providers.ts"
 import { pxpipeRouter } from "./routers/pxpipe.ts"
 import { settingsRouter } from "./routers/settings.ts"
 import { systemRouter } from "./routers/system.ts"
@@ -39,6 +40,7 @@ export const appRouter = base.router({
 	dashboardJobs: dashboardJobsRouter,
 	pxpipe: pxpipeRouter,
 	models: modelsRouter,
+	providers: providersRouter,
 })
 
 export type AppRouter = typeof appRouter

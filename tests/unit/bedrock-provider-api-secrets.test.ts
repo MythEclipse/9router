@@ -123,6 +123,17 @@ describe("Bedrock connection API secrets", () => {
 		const models = await import("@/models/index.js")
 		const connections = await connectionsOver(models)
 		vi.doMock("@/lib/useCases", () => ({ getUseCases: () => ({ connections }) }))
+		// The route now reaches the procedure through the in-process client, which
+		// carries the dashboard session. There is no Next request scope here, so the
+		// session is part of the wiring this test fakes — a password session, which is
+		// what a dashboard caller has.
+		vi.doMock("@9router/auth/dashboardPermissions", () => ({
+			getSessionContext: async () => ({
+				session: { userId: "owner-1", email: "owner@local", role: "admin" },
+				permissions: [],
+				apiKeyFilter: null,
+			}),
+		}))
 
 		;({ GET: listConnections, POST: createConnection } = await import("@/app/api/providers/route.js"))
 		;({ GET: getConnection, PUT: updateConnection } = await import(
