@@ -1096,3 +1096,131 @@ export async function removeCodexSettings(): Promise<void> {
 }
 
 export { isCodexInstalled }
+
+/**
+ * GitHub Copilot's layout: VS Code's `chatLanguageModels.json`, an array of vendor entries.
+ *
+ * Two details are Copilot's, not this screen's:
+ *
+ * - the entry must be marked `vendor: "azure"`, because VS Code routes by vendor and an
+ *   OpenAI-compatible endpoint without that marker is offered as nothing;
+ * - the model URL carries a `#models.ai.azure.com` fragment, which is how VS Code decides to
+ *   send an `api-key` header instead of a bearer token. Dropping it authenticates wrongly.
+ *
+ * The array is shared with entries the operator added in VS Code, so a save replaces ours and
+ * appends when there is none — it never rebuilds the array.
+ */
+
+const COPILOT_CONFIG_PATH = () => {
+	const home = os.homedir()
+	if (os.platform() === "win32") {
+		return path.join(process.env.APPDATA || home, "Code", "User", "chatLanguageModels.json")
+	}
+	if (os.platform() === "darwin") {
+		return path.join(
+			home,
+			"Library",
+			"Application Support",
+			"Code",
+			"User",
+			"chatLanguageModels.json",
+		)
+	}
+	return path.join(home, ".config", "Code", "User", "chatLanguageModels.json")
+}
+
+const COPILOT_ENTRY_NAME = "9Router"
+const AZURE_ROUTE_FRAGMENT = "#models.ai.azure.com"
+
+type CopilotModel = {
+	id: string
+	name: string
+	url: string
+	toolCalling: boolean
+	vision: boolean
+	maxInputTokens: number
+	maxOutputTokens: number
+}
+type CopilotEntry = {
+	name: string
+	vendor: string
+	apiKey: string
+	models: CopilotModel[]
+}
+
+async function isCopilotInstalled(): Promise<boolean> {
+	try {
+		const isWindows = os.platform() === "win32"
+		await execAsync(isWindows ? "where code" : "which code", { windowsHide: true })
+		return true
+	} catch {
+		try {
+			await fs.access(COPILOT_CONFIG_PATH())
+			return true
+		} catch {
+			return false
+		}
+	}
+}
+
+export const copilotSettingsConfig: ToolConfigPort = {
+	path: COPILOT_CONFIG_PATH(),
+	read: () => readJson(COPILOT_CONFIG_PATH()),
+	readForWrite: async () =>
+		readConfigForWrite(fs, COPILOT_CONFIG_PATH(), (raw) => {
+			const parsed = JSON.parse(raw) as unknown
+			// The file is an array; anything else is not a config this screen understands.
+			return Array.isArray(parsed) ? { entries: parsed } : { entries: [] }
+		}),
+	write: async (text) => {
+		const parsed = JSON.parse(text) as { entries?: unknown }
+		await fs.mkdir(path.dirname(COPILOT_CONFIG_PATH()), { recursive: true })
+		await fs.writeFile(COPILOT_CONFIG_PATH(), JSON.stringify(parsed.entries ?? [], null, 2))
+	},
+	baseUrlSuffix: "with-v1",
+	required: ["baseUrl"],
+	resolveApiKey: (requested) => resolveCliApiKey(requested || null),
+	installKeys: [COPILOT_ENTRY_NAME],
+	storedBaseUrl: (config) => {
+		const entries = (config as { entries?: CopilotEntry[] }).entries ?? []
+		const ours = entries.find((entry) => entry.name === COPILOT_ENTRY_NAME)
+		const url = ours?.models?.[0]?.url
+		if (!url) return null
+		return url.split(AZURE_ROUTE_FRAGMENT)[0]?.replace(/\/chat\/completions$/, "") ?? null
+	},
+	apply: (config, input) => {
+		const entries = ((config as { entries?: CopilotEntry[] }).entries ?? []).slice()
+		const endpoint = `${input.baseUrl}/chat/completions${AZURE_ROUTE_FRAGMENT}`
+		const models = requestedModelsOf(input)
+		const entry: CopilotEntry = {
+			name: COPILOT_ENTRY_NAME,
+			vendor: "azure",
+			apiKey: input.apiKey,
+			models: models.map((id) => ({
+				id,
+				name: resolveModelDisplayName(id, undefined),
+				url: endpoint,
+				toolCalling: true,
+				vision: false,
+				maxInputTokens: 128000,
+				maxOutputTokens: 16000,
+			})),
+		}
+		const index = entries.findIndex((existing) => existing.name === COPILOT_ENTRY_NAME)
+		if (index >= 0) entries[index] = entry
+		else entries.push(entry)
+		return { ...(config as Record<string, unknown>), entries }
+	},
+}
+
+/** Copilot's reset removes only its own entry from the shared array. */
+export async function removeCopilotSettings(): Promise<void> {
+	const entries = ((await readJson(COPILOT_CONFIG_PATH())) as { entries?: CopilotEntry[] } | null)
+		?.entries
+	if (!entries) return
+	const kept = entries.filter((entry) => entry.name !== COPILOT_ENTRY_NAME)
+	if (kept.length === entries.length) return
+	await fs.writeFile(COPILOT_CONFIG_PATH(), JSON.stringify(kept, null, 2))
+}
+
+export { isCopilotInstalled }
