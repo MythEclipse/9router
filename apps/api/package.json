@@ -18,12 +18,13 @@
     "./application/tunnel/*": "./src/application/tunnel/*.ts",
     "./application/oauth/*": "./src/application/oauth/*.ts",
     "./application/cli-tools/*": "./src/application/cli-tools/*.ts",
-    "./application/claude-tools/*": "./src/application/claude-tools/*.ts"
+    "./application/claude-tools/*": "./src/application/claude-tools/*.ts",
+    "./presentation/orpc/router": "./src/presentation/orpc/router.ts"
   },
   "scripts": {
-    "dev": "bun --watch src/main.ts",
+    "dev": "bun --conditions=react-server --watch src/main.ts",
     "build": "bun run scripts/build.ts",
-    "start": "bun dist/main.js",
+    "start": "bun --conditions=react-server dist/main.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "bun test tests/",
     "db:generate": "drizzle-kit generate"
