@@ -1,28 +1,24 @@
 import { getSessionContext } from "@9router/auth/dashboardPermissions"
+import { usageScopeOf } from "9router-api/application/usage/report-usage"
 import { NextResponse } from "next/server"
-import { getUsageStats } from "@/lib/usageDb"
-
-const VALID_PERIODS = new Set(["today", "24h", "7d", "30d", "60d", "all"])
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
 export async function GET(request) {
 	try {
 		const { searchParams } = new URL(request.url)
-		const period = searchParams.get("period") || "7d"
-
-		if (!VALID_PERIODS.has(period)) {
-			return NextResponse.json({ error: "Invalid period" }, { status: 400 })
-		}
-
 		const ctx = await getSessionContext()
-		// Narrowed locally: the session payload fields are typed `unknown`, but the
-		// filter is a key string or null and the model scope is always a string.
-		const apiKeyFilter = typeof ctx.apiKeyFilter === "string" ? ctx.apiKeyFilter : null
-		const allowedModels = typeof ctx.allowedModels === "string" ? ctx.allowedModels : "*"
-		const stats = await getUsageStats(period, apiKeyFilter, allowedModels)
+		const stats = await getUseCases().usageReports.stats(
+			searchParams.get("period"),
+			usageScopeOf(ctx),
+		)
 		return NextResponse.json(stats)
 	} catch (error) {
+		// A refused period is the caller's fault; the rule already worded the message.
+		if (error?.code === "VALIDATION") {
+			return NextResponse.json({ error: error.message }, { status: 400 })
+		}
 		console.error("[API] Failed to get usage stats:", error)
 		return NextResponse.json({ error: "Failed to fetch usage stats" }, { status: 500 })
 	}

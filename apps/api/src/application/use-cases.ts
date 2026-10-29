@@ -29,6 +29,7 @@ import { makeGetPricing, makeResetPricing, makeUpdatePricing } from "./pricing/m
 import { assertSupportedLocale } from "./settings/locale.ts"
 import { readLoginGate } from "./settings/login-gate.ts"
 import { makeGetTheme, makeSetTheme } from "./settings/theme.ts"
+import { makeUsageReports } from "./usage/report-usage.ts"
 
 export interface UseCases {
 	readonly createApiKey: ReturnType<typeof makeCreateApiKey>
@@ -38,6 +39,8 @@ export interface UseCases {
 	readonly dashboardKeys: ReturnType<typeof makeManageApiKeys>
 	readonly bulkEditKeys: ReturnType<typeof makeBulkEditApiKeys>
 	readonly singleKey: ReturnType<typeof makeManageSingleKey>
+	/** The read-only usage endpoints: stats, chart, sparks, logs, history. */
+	readonly usageReports: ReturnType<typeof makeUsageReports>
 	readonly getChangelog: () => ReturnType<typeof loadChangelog>
 	readonly getLoginGate: () => ReturnType<typeof readLoginGate>
 	readonly listCombos: ReturnType<typeof makeListCombos>
@@ -90,6 +93,7 @@ export function buildUseCases(deps: Dependencies): UseCases {
 			keys: deps.bulkApiKeys,
 			audit: deps.apiKeyAudit,
 		}),
+		usageReports: makeUsageReports({ usage: deps.usageReports }),
 		singleKey: makeManageSingleKey({
 			keys: deps.singleApiKeys,
 			audit: deps.singleKeyAudit,

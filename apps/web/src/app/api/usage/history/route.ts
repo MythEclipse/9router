@@ -1,65 +1,35 @@
 import { getSessionContext } from "@9router/auth/dashboardPermissions"
+import { usageScopeOf } from "9router-api/application/usage/report-usage"
 import { NextResponse } from "next/server"
-import { getUsageHistory } from "@/lib/usageDb"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
+/**
+ * GET /api/usage/history?format=csv
+ *
+ * The CSV shaping, including quoting and formula defusing, is in
+ * `domain/csv-export.ts`; this handler chooses the reply.
+ */
 export async function GET(request) {
 	try {
 		const { searchParams } = new URL(request.url)
-		const format = searchParams.get("format") || "json"
-
 		const ctx = await getSessionContext()
-		// Narrowed locally: getSessionContext returns `unknown` for the key filter
-		// (the session payload is a decoded JWT claim), and this filter is only ever
-		// a key string or null at runtime.
-		const filter: { apiKey?: string } = {}
-		if (typeof ctx.apiKeyFilter === "string") filter.apiKey = ctx.apiKeyFilter
+		const result = await getUseCases().usageReports.history(
+			searchParams.get("format"),
+			usageScopeOf(ctx),
+		)
 
-		const history = await getUsageHistory(filter)
-
-		if (format === "csv") {
-			const headers = [
-				"timestamp",
-				"provider",
-				"model",
-				"connectionId",
-				"apiKeyMasked",
-				"endpoint",
-				"status",
-				"cost",
-				"promptTokens",
-				"completionTokens",
-			]
-			const rows = history.map((r) => {
-				const promptTokens = r.tokens?.prompt_tokens || r.tokens?.input_tokens || 0
-				const completionTokens = r.tokens?.completion_tokens || r.tokens?.output_tokens || 0
-				return [
-					r.timestamp,
-					r.provider || "",
-					r.model || "",
-					r.connectionId || "",
-					r.apiKeyMasked || "",
-					r.endpoint || "",
-					r.status || "ok",
-					r.cost || 0,
-					promptTokens,
-					completionTokens,
-				]
-					.map((val) => `"${String(val).replace(/"/g, '""')}"`)
-					.join(",")
-			})
-
-			const csvContent = [headers.join(","), ...rows].join("\n")
-			return new NextResponse(csvContent, {
+		if (result.kind === "csv") {
+			return new NextResponse(result.body, {
 				headers: {
 					"Content-Type": "text/csv",
-					"Content-Disposition": `attachment; filename="usage-report-${new Date().toISOString().slice(0, 10)}.csv"`,
+					"Content-Disposition": `attachment; filename="${result.filename}"`,
 				},
 			})
 		}
 
-		return NextResponse.json({ history })
+		return NextResponse.json({ history: result.body })
 	} catch (error) {
 		console.error("Error fetching usage history:", error)
 		return NextResponse.json({ error: "Failed to fetch usage history" }, { status: 500 })

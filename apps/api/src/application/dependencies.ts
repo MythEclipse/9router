@@ -12,6 +12,7 @@ import type { ApiKeyManagementPort } from "./api-keys/manage-api-keys-dashboard.
 import type { SingleKeyAuditPort, SingleKeyPort } from "./api-keys/manage-single-key.ts"
 import type { ChangelogSource } from "./changelog.ts"
 import type { SettingsPort } from "./settings/login-gate.ts"
+import type { UsageReportPort } from "./usage/report-usage.ts"
 
 export interface IActivityRepository {
 	record(entry: {
@@ -133,6 +134,7 @@ export interface Dependencies {
 	readonly apiKeys: IApiKeyRepository
 	readonly dashboardApiKeys: ApiKeyManagementPort
 	readonly bulkApiKeys: BulkEditPort
+	readonly usageReports: UsageReportPort
 	readonly singleApiKeys: SingleKeyPort
 	readonly singleKeyAudit: SingleKeyAuditPort
 	readonly apiKeyAudit: {

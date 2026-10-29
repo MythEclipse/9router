@@ -1,8 +1,7 @@
 import { getSessionContext } from "@9router/auth/dashboardPermissions"
-import { getSparks } from "@9router/db/repos/usageRepo"
+import { usageScopeOf } from "9router-api/application/usage/report-usage"
 import { NextResponse } from "next/server"
-
-const VALID_PERIODS = new Set(["today", "24h", "7d", "30d", "60d", "all"])
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
@@ -14,18 +13,16 @@ export const dynamic = "force-dynamic"
 export async function GET(request) {
 	try {
 		const { searchParams } = new URL(request.url)
-		const period = searchParams.get("period") || "30d"
-		if (!VALID_PERIODS.has(period)) {
-			return NextResponse.json({ error: "Invalid period" }, { status: 400 })
-		}
 		const ctx = await getSessionContext()
-		// Narrowed locally: the session payload fields are typed `unknown`, but the
-		// filter is a key string or null and the model scope is always a string.
-		const apiKeyFilter = typeof ctx.apiKeyFilter === "string" ? ctx.apiKeyFilter : null
-		const allowedModels = typeof ctx.allowedModels === "string" ? ctx.allowedModels : "*"
-		const sparks = await getSparks(period, apiKeyFilter, allowedModels)
+		const sparks = await getUseCases().usageReports.sparks(
+			searchParams.get("period"),
+			usageScopeOf(ctx),
+		)
 		return NextResponse.json(sparks)
 	} catch (error) {
+		if (error?.code === "VALIDATION") {
+			return NextResponse.json({ error: error.message }, { status: 400 })
+		}
 		console.error("[API] Failed to get usage sparks:", error)
 		return NextResponse.json({ error: "Failed to fetch usage sparks" }, { status: 500 })
 	}

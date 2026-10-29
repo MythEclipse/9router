@@ -35,6 +35,7 @@ import {
 import { createComboStrategyRepository } from "./db/repositories/combo-strategy-repository.ts"
 import { createErrorLogRepository } from "./db/repositories/error-log-repository.ts"
 import { createPricingRepository } from "./db/repositories/pricing-repository.ts"
+import { createUsageReportPort } from "./db/repositories/usage-report-repository.ts"
 import { createSettingsPort } from "./settings-port.ts"
 import { createUnavailablePresetPort } from "./unavailable-preset-port.ts"
 
@@ -77,6 +78,7 @@ export function createUseCases(
 	const useCases = buildUseCases({
 		apiKeys: createApiKeyRepository(db),
 		dashboardApiKeys: makeApiKeyManagementPort(options.apiKeyStore ?? unavailableApiKeyStore()),
+		usageReports: createUsageReportPort(),
 		bulkApiKeys: makeBulkEditPort(options.apiKeyStore ?? unavailableApiKeyStore()),
 		singleApiKeys: makeSingleKeyPort(options.apiKeyStore ?? unavailableApiKeyStore()),
 		singleKeyAudit: makeSingleKeyAuditPort(),
