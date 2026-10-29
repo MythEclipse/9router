@@ -744,3 +744,50 @@ biome clean, `bun run build` exit 0, gateway baseline unchanged
 (`/login` 200, `/api/health` 200, `/v1/models` 401, `/api/models/custom` 401).
 
 Remaining: 156 of 168.
+
+## providers batch, part 1 (connection CRUD)
+
+Extracted the two rules the old routes duplicated:
+
+- `normalizeProxyConfig` existed twice with different behaviour. The create copy
+  could not distinguish "no proxy fields sent" from "proxy fields sent empty", so
+  every create wrote `connectionProxyEnabled: false` over whatever was stored,
+  while an update with no proxy fields left it alone. `domain/provider-connection.ts`
+  now models three states (absent / set / invalid) and both paths share it.
+- `normalizeProxyPoolId` existed twice, differing only on the absent case. Same
+  treatment: `absent` / `cleared` / `set`, where cleared removes the key rather
+  than storing `null`.
+
+Three branches that copied a node's fields into a connection became one
+`nodeFields(node, {includeQuota, includeApiType})`.
+
+Defects this batch caught, all found by existing tests rather than by me:
+
+1. My first `nodeFields` signature took a bare boolean and silently dropped
+   `apiType` for OpenAI-compatible nodes — `compatible-provider-connections`
+   failed on the missing field. `apiType` is only meaningful for that kind, so it
+   is now an explicit option rather than something derived.
+2. I then over-corrected and asserted that a custom embedding connection *should*
+   carry `quotaEnabled`/`quotaPath`, calling the old behaviour a bug. It is not:
+   quota lives on the node and an embedding node has none. The test now pins the
+   omission so a future refactor cannot start copying it.
+3. The AWS session token rule was dropped entirely. `bedrock-provider-api-secrets`
+   caught it. The form cannot read the token back, so every edit sends it blank;
+   `""` must mean *keep*, `null` must mean *clear*, absent must mean *leave*. The
+   first attempt applied the rule after merging `incoming`, which had already
+   overwritten the stored value with the blank — the rule has to read the incoming
+   field and decide against the *stored* map.
+
+Nine integration tests failed because the routes now call `getUseCases()`, which
+opens the database, and `createDb` refuses under Vitest by design. Each was rewired
+to hand the route a real connection use-case over the very stores the test seeds
+(`compatible-provider-connections`, `bedrock-provider-api-secrets`,
+`embedding-429-key-failover`). One of those mocks had to move ahead of the route
+import — a `vi.doMock` after the import leaves the route holding the unmocked
+binding.
+
+Verification: 574 files / 6181 tests passing, both packages typecheck clean,
+biome clean, `bun run build` exit 0, gateway baseline unchanged
+(`/login` 200, `/api/health` 200, `/v1/models` 401, `/api/providers` 401).
+
+Remaining: 154 of 168 handlers (10 of 12 in `providers`).

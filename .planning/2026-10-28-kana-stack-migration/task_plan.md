@@ -57,6 +57,7 @@ three packages report 0 `tsc` errors and `biome check` is clean.
 | `shutdown`     | 2      | done — one sequence, two gates; 403 vs 401 kept distinct |
 | `pxpipe`       | 8      | done — one list-limit rule; engine codes no longer flattened |
 | `model-registry` | 12 | done — list/alias/availability/custom/studio/nodes/catalogue; transport whitelist now actually applied |
+| `providers`    | 12 | **2 of 12 done** — connection CRUD (list/create/get/update/delete); 10 remaining |
 | (136 more)     | 136    | pending |
 
 Done: 36 of 168 route handlers. `tags` is deliberately **not** ported: it
@@ -192,3 +193,57 @@ Phase 8 — porting route handlers to oRPC (in progress)
 | cli payload answered 503 to every route                                                       | 3       | (a) `appDir` was the repo root; (b) `custom-server` joined without `.js`; (c) guard loader used `jsx: ReactJSX` on plain `.ts`, so `<T>` parsed as JSX. All three fixed; `Preserve`, not `None` (rejected with a fileName) |
 | a fix to the guard loader never reached the payload                                           | 1       | `cli:build` listed only `cli/` inputs, so moon served a cache hit. Added the `apps/web` inputs it consumes and `deps: web:build`             |
 | `web:typecheck` failed on `.next-cli-build/types`                                             | 1       | tsconfig excluded `.next` but not the CLI build dir, while still *including* its types. Removed both                                                |
+
+## Batch: `providers` (12 routes, 3 071 LOC)
+
+Measured before writing code:
+
+| Route | LOC | What it decides |
+| ----- | --- | --------------- |
+| `route.ts` | 258 | list + create connection |
+| `[id]/route.ts` | 218 | read/update/delete one connection |
+| `validate/route.ts` | 600 | is this key accepted? — a 20-arm switch |
+| `[id]/models/route.ts` | 802 | provider model discovery — a 380-line config table |
+| `[id]/test/route.ts` | 25 | delegate to `testUtils` |
+| `[id]/test-models/route.ts` | 87 | per-model probe |
+| `[id]/overrides/route.ts` | 123 | per-model overrides |
+| `test-batch/route.ts` | 148 | test many by group |
+| `client/route.ts` | 172 | paginated, sanitised listing |
+| `suggested-models/route.ts` | 134 | suggested catalogue |
+| `kilo/free-models/route.ts` | 57 | kilo free tier |
+| `web-login/route.ts` | 156 | interactive browser login |
+
+Duplication found on first read:
+
+1. **`normalizeProxyConfig` exists twice with different behaviour.** The create
+   copy returns `{error}` or the fields; the update copy also reports
+   `hasAnyProxyField`, and only that one can distinguish "no proxy fields sent"
+   from "proxy fields sent as empty". Two copies of one rule that disagree.
+2. **`normalizeProxyPoolId` exists twice**, differing only on the absent case.
+3. **"Which status codes mean the key is valid" is inlined 20 times** in
+   `validate/route.ts` and disagrees per arm: most treat 401/403 as invalid, but
+   `xai` requires exactly 200 or 403, `xiaomi-tokenplan` accepts anything but 401,
+   `blackbox` accepts 200 or 400, `cloudflare-ai` also rejects 404, `anthropic`
+   rejects only 401. That is a domain decision written as scattered literals.
+4. **Node lookup + providerSpecificData copy-pasted three times** in the create
+   route (openai-compatible / anthropic-compatible / custom-embedding), differing
+   only in which fields are copied.
+5. **Pagination clamping** in `client/route.ts` re-implements the `list-limit`
+   rule already extracted for pxpipe, with a different ceiling (500 vs 100).
+
+Domain rules to extract: `provider-connection.ts` (proxy config normalisation,
+proxy pool resolution, connection name ordinal), `api-key-verdict.ts` (status →
+verdict per provider), `provider-node-fields.ts` (the three node→psd copy arms).
+
+### `providers` progress
+
+Done: `route.ts` (list, create) and `[id]/route.ts` (get, update, delete), over
+`application/providers/manage-connections.ts`. Domain rules extracted:
+`domain/provider-connection.ts` (proxy config, pool choice, key ordinal, name
+choice, write-only AWS session token) and `domain/api-key-verdict.ts` (the six
+status readings the validate switch needs).
+
+Still to do (10): `validate` (600 LOC switch), `[id]/models` (802 LOC config
+table), `[id]/test`, `[id]/test-models`, `[id]/overrides`, `test-batch`,
+`client` (pagination + sanitising), `suggested-models`, `kilo/free-models`,
+`web-login`.
