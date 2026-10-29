@@ -1073,3 +1073,48 @@ unchanged (`/login` 200, `/api/health` 200, `/api/settings` 401,
 
 Remaining in `settings`: 4 of 9 (`auto-backup`, `database` ×3, `proxy-test`).
 Remaining overall: 133 of 174.
+
+## settings, part 3 — the install's own storage
+
+Four handlers (`database`, `database/jobs`, `database/jobs/[jobId]`, `proxy-test`).
+The interesting part is not the export: it is that the same four-way credential
+check was written out three times, and each copy explained a different one of the
+four reasons.
+
+The rule is now `domain/database-access.ts`, and the reasons are written down where
+the rule is: a CLI token (the operator already has the database), a password (the
+dashboard's way in), a poll token, and the summary exemption. The poll token is the
+one that earns its own paragraph — the import replaces the settings row holding the
+password hash, so a client polling with its password is compared against the row it
+just overwrote. The old code answered "Invalid password" over a restore that had
+committed. `verifyPollToken` is checked first for exactly that reason.
+
+Three defects the extraction fixed:
+
+- The synchronous import took its password **in the body**, and the body *is* the
+  database. `{ password, ...payload }` was correct, but one refactor away from
+  writing a `password` row into every import. `bodySplit` is now the only place the
+  two are separated.
+- An oversized import was answered `413` by a route that had not yet decided the
+  caller was allowed to import at all. The size check now runs first and answers
+  `PAYLOAD_TOO_LARGE` (a new `AppError` code, mapped to 413 in both boundaries),
+  which keeps "too big" and "not allowed" from being the same answer.
+- `exportSectionsOf(",,,")` used to export *everything* while looking like it had
+  asked for nothing. It still exports everything, and says so: a list of blank
+  sections means no filter, because an empty filter would export an empty backup
+  and report success.
+
+**A verification note.** My first smoke test asserted `?summary=true` answers 200
+without a credential, and it answered 401. That was not a regression: `dashboardGuard`
+lists `/api/settings/database` in `ALWAYS_PROTECTED`, so the guard refuses before any
+handler runs — the summary exemption only reaches a caller that already passed the
+guard, i.e. a CLI token. The guard is untouched (`git diff` empty), so the behaviour
+is the pre-migration behaviour. Worth recording because the assumption was mine, not
+the code's.
+
+Verification: 598 files / 6685 tests passing (74 skipped), both packages typecheck
+clean, biome clean, `bun run build` exit 0, gateway baseline unchanged (`/login` 200,
+`/api/health` 200, `/v1/models` 401, `/api/settings/database` 401,
+`/api/settings/database/jobs/x` 401, `/api/settings/proxy-test` 401).
+
+Remaining in `settings`: 1 of 9 (`auto-backup`). Remaining overall: 129 of 174.
