@@ -5,28 +5,29 @@ import {
 	clearNotificationsByKind,
 	notify,
 } from "@9router/db/repos/notificationsRepo"
+import {
+	planQuotaNotices,
+	QUOTA_NOTICE_KIND,
+	QUOTA_NOTICE_LINK,
+	staleQuotaKeys,
+} from "9router-api/domain/notification-scan"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 import { quotaBody, quotaPressure, quotaTitle } from "@/lib/notifications/quotaPressure"
 
 export const dynamic = "force-dynamic"
 
-// GET /api/notifications/scan - derive conditions into notifications.
-//
-// A notification is written once per condition (dedupeKey), so this can run on
-// every dashboard load without flooding the feed. Each condition also clears
-// itself when it stops being true, so a resolved problem stops nagging and a
-// relapse is announced again.
-
-// Every kind a key can enforce, so a notice written under one kind is cleared when the
-// key is switched to another (or its budget is raised) instead of lingering as advice
-// about a budget that no longer exists.
-const QUOTA_KINDS = ["tokens", "cost", "requests"]
-const QUOTA_LEVELS = ["warning", "critical"]
-
+/**
+ * GET /api/notifications/scan - derive conditions into notifications.
+ *
+ * A notification is written once per condition (dedupeKey), so this can run on every dashboard
+ * load without flooding the feed. Each condition also clears itself when it stops being true, so
+ * a resolved problem stops nagging and a relapse is announced again. The dedupe and sweep rules
+ * live in `domain/notification-scan.ts`; this does the reads and writes around them.
+ */
 export async function GET() {
-	// Bell button and the header call this. A key session gets nothing to derive
-	// from: key names and quota pressure are admin-only facts.
+	// The bell button and the header call this. A key session gets nothing to derive from: key
+	// names and quota pressure are admin-only facts.
 	const cookieStore = await cookies()
 	const session = await getDashboardAuthSession(cookieStore.get("auth_token")?.value)
 	if (!session || session.role === "apikey") {
@@ -37,35 +38,34 @@ export async function GET() {
 	try {
 		await clearNotificationsByKind("update")
 
-		// --- key quota pressure ---
-		// Reads the budget the key actually enforces (`limitKind`), not just the token cap:
-		// a key switched to a USD or request budget used to spend itself in silence.
-		const keys = await getApiKeys()
-		const live = new Set()
-		for (const key of keys || []) {
-			const state = quotaPressure(key)
-			if (!state) continue
-			const dedupeKey = `quota:${key.id}:${state.kind}:${state.level}`
-			live.add(dedupeKey)
+		const keys = (await getApiKeys()) || []
+		// The pressure is kept per key so the wording can be built without deriving it a second
+		// time — across a midnight rollover the second read can disagree with the first.
+		const pressureById = new Map()
+		const { notices, live } = planQuotaNotices(keys, (key) => {
+			const pressure = quotaPressure(key)
+			if (pressure) pressureById.set(String(key?.id ?? ""), pressure)
+			return pressure
+		})
+
+		for (const notice of notices) {
+			const key = keys.find((k) => String(k?.id) === notice.keyId)
+			const pressure = pressureById.get(notice.keyId)
 			await notify({
-				kind: "quota",
-				severity: state.level === "critical" ? "error" : "warning",
-				title: quotaTitle(key, state),
-				body: quotaBody(state),
-				link: "/dashboard/endpoint",
-				dedupeKey,
+				kind: QUOTA_NOTICE_KIND,
+				severity: notice.severity,
+				title: quotaTitle(key, pressure),
+				body: quotaBody(pressure),
+				link: QUOTA_NOTICE_LINK,
+				dedupeKey: notice.dedupeKey,
 			})
-			created.push(`quota:${key.id}`)
+			created.push(`quota:${notice.keyId}`)
 		}
+
 		// Clear every notice this pass did not recreate: recovered, raised, deactivated, or
-		// switched to a different kind.
-		for (const key of keys || []) {
-			for (const kind of QUOTA_KINDS) {
-				for (const level of QUOTA_LEVELS) {
-					const dedupeKey = `quota:${key.id}:${kind}:${level}`
-					if (!live.has(dedupeKey)) await clearNotificationByKind("quota", dedupeKey)
-				}
-			}
+		// switched to a different budget kind.
+		for (const dedupeKey of staleQuotaKeys(keys, live)) {
+			await clearNotificationByKind(QUOTA_NOTICE_KIND, dedupeKey)
 		}
 	} catch (error) {
 		// Deriving conditions must never break the dashboard.
