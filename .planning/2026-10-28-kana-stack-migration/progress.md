@@ -1030,3 +1030,46 @@ clean, biome clean, `bun run build` exit 0, gateway baseline unchanged (`/login`
 `/v1/models` 401).
 
 Remaining in `settings`: 8 of 9. Remaining overall: 137 of 174.
+
+## settings, part 2 — the audit trail
+
+Three handlers (`history`, `rollback`, `require-login`) plus the shared session
+lookup, and the same defect pattern as the row itself: an authorisation check
+written three times, once per handler, in three slightly different shapes.
+
+`requireAdmin` in `history` answered `false` for both "no session" and "API key",
+then answered 401 for both. `rollback` checked the same thing inline and answered
+**403** — for a caller it had already decided was unauthenticated. That is the
+distinction the theme route and the settings row both keep correct, lost here.
+The rule is now one function, `mayRevertSettings`, with the difference stated:
+history is readable by any signed-in session (it holds no secret), reverting is
+password-sign-in only.
+
+Two smaller things the extraction made explicit:
+
+- A revert that restores nothing is now refused. It happened when every key in a
+  snapshot was a secret, or when the caller asked only for keys the snapshot does
+  not carry — and the old code would have written an empty patch and answered 200.
+- `revertPatchOf` will not invent a key the snapshot lacks. Writing `undefined`
+  would have *deleted* the setting instead of leaving it alone.
+
+**A boundary lesson.** `getSettingsSnapshot` returns `unknown` per column — it
+reads a `SELECT` with no schema — and `listSettingsHistory` returns `keys[]` while
+`getSettingsSnapshot` returns `snapshot`. My first port forced one shape onto both
+and the compiler refused. The right answer was not to bend the use-case: the two
+queries genuinely answer different things (a list view must not ship every
+before-image), and the loose `unknown` columns are normalised in the host adapter,
+where the untyped SQL row stops.
+
+`require-login` keeps answering 200 with `requireLogin: true` when the row cannot
+be read, and the domain rule states why: this is what the login screen asks for,
+and a 500 there locks the operator out of the screen they would fix it on.
+
+Verification: 596 files / 6633 tests passing (74 skipped), both packages typecheck
+clean, biome clean on every changed file, `bun run build` exit 0, gateway baseline
+unchanged (`/login` 200, `/api/health` 200, `/api/settings` 401,
+`/api/settings/require-login` 200, `/api/settings/history` 401,
+`POST /api/settings/rollback` 401, `/v1/models` 401).
+
+Remaining in `settings`: 4 of 9 (`auto-backup`, `database` ×3, `proxy-test`).
+Remaining overall: 133 of 174.
