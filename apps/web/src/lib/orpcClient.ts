@@ -10,16 +10,18 @@
  */
 import { createRouterClient } from "@orpc/server"
 import type { UseCases } from "9router-api/application/use-cases"
+import type { SessionClaims } from "9router-api/presentation/orpc/base"
 import { appRouter } from "9router-api/presentation/orpc/router"
 
-/** What a procedure sees as `context.session`; `null` means not logged in. */
-export interface DashboardSession {
-	readonly userId: string
-	readonly email: string
-	readonly role?: string | null
-	readonly permissions?: Record<string, boolean> | null
-	readonly [claim: string]: unknown
-}
+/**
+ * What a procedure sees as `context.session`; `null` means not logged in.
+ *
+ * The full claim set, not just `userId`/`email`: a procedure that reports usage
+ * narrows it with `usageScopeOf(session)`, which reads `apiKeyFilter` and
+ * `allowedModels`. Passing only an identity would leave those undefined and hand an
+ * API-key session every key's usage.
+ */
+export type DashboardSession = SessionClaims
 
 export interface RouterContext {
 	readonly session: DashboardSession | null
@@ -38,3 +40,26 @@ export function createApiClient(context: RouterContext) {
 }
 
 export type ApiClient = ReturnType<typeof createApiClient>
+
+/**
+ * Turn the dashboard's session context into router claims.
+ *
+ * One function rather than a mapping in each route: the first version of the combos
+ * route picked `userId`, `email` and `role` by hand, which dropped `apiKeyFilter`
+ * and `allowedModels`. Those are exactly the claims that narrow usage to the caller,
+ * so a hand-written mapping is how a scoped route silently becomes an unscoped one.
+ *
+ * Returns `null` when there is no `userId`: a session that names nobody is not a
+ * session, and passing an object with a blank id would pass the auth gate.
+ */
+export function sessionClaimsOf(ctx: unknown): DashboardSession | null {
+	const session = (ctx as { session?: Record<string, unknown> | null } | null)?.session
+	if (!session) return null
+	const userId = typeof session.userId === "string" ? session.userId.trim() : ""
+	if (!userId) return null
+	return {
+		...session,
+		userId,
+		email: typeof session.email === "string" ? session.email : userId,
+	} as DashboardSession
+}
