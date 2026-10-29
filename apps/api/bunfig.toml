@@ -1,0 +1,9 @@
+# `server-only` is a marker Next supplies during its own build; nothing on disk
+# provides it, so a Bun process importing an `apps/web` server module dies with
+# `Cannot find package 'server-only'` — an error about resolution, not about the
+# actual problem. `@9router/db/serverOnly` is that marker's empty server branch.
+#
+# This mapping is why `apps/api` can build its use-cases from the same wiring the
+# dashboard uses instead of keeping a second, stubbed copy of every port.
+[alias]
+"server-only" = "@9router/db/serverOnly"

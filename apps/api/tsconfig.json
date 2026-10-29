@@ -1,17 +1,30 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022"],
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
-    "types": ["bun"]
+    "allowJs": false,
+    "checkJs": false,
+    "types": ["node", "bun"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["../web/src/*"],
+      "open-sse": ["../web/open-sse"],
+      "open-sse/*": ["../web/open-sse/*"],
+      "@9router/db": ["../../packages/db/src/index.ts"],
+      "@9router/db/*": ["../../packages/db/src/*"],
+      "@9router/pricing": ["../../packages/pricing/src/index.ts"]
+    },
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "strict": false
   },
-  "include": ["src/**/*", "../../packages/db/src/**/*.d.ts"],
+  "include": ["src/**/*"],
   "exclude": ["node_modules"]
 }

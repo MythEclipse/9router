@@ -576,9 +576,12 @@ async function patchedFetch(url, options = {}) {
 	return proxyAwareFetch(url, options, null)
 }
 
-// Idempotency guard - only patch once to avoid wrapping multiple times
+// Idempotency guard - only patch once to avoid wrapping multiple times.
+// The cast is required off Next: `bun-types` types `globalThis.fetch` as
+// `typeof fetch` plus a `preconnect` member, which this wrapper does not carry.
+// Bun's own docs prescribe exactly this cast for the same reason.
 if (globalThis.fetch !== patchedFetch) {
-	globalThis.fetch = patchedFetch
+	globalThis.fetch = patchedFetch as typeof fetch
 }
 
 export default patchedFetch
