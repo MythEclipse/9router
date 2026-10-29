@@ -1,26 +1,37 @@
+import {
+	MCP_PROBE_TIMEOUT_MS,
+	type McpProbeResult,
+	parseSseReply,
+	probeErrorText,
+	readToolList,
+	requiresAuthStatus,
+} from "9router-api/domain/cowork-mcp-probe"
 import { NextResponse } from "next/server"
 import { isLocalRequest } from "@/dashboardGuard"
 import { assertPublicUrl } from "@/shared/utils/ssrfGuard"
 
 export const dynamic = "force-dynamic"
 
-const TIMEOUT_MS = 8000
+const PROBE_HEADERS = {
+	"Content-Type": "application/json",
+	Accept: "application/json, text/event-stream",
+	"MCP-Protocol-Version": "2025-06-18",
+}
 
-// Probe MCP server: initialize + tools/list. No auth header - works for authless servers.
-// OAuth servers return 401, signal client to skip tool listing.
-async function probeMcp(url) {
-	const headers = {
-		"Content-Type": "application/json",
-		Accept: "application/json, text/event-stream",
-		"MCP-Protocol-Version": "2025-06-18",
-	}
-	const ac = new AbortController()
-	const timer = setTimeout(() => ac.abort(), TIMEOUT_MS)
+/**
+ * Probes an MCP server: `initialize`, then `notifications/initialized`, then `tools/list`.
+ *
+ * No auth header is sent — this works for authless servers, and an OAuth server answers 401,
+ * which is reported as "requires auth" so the screen stops asking rather than showing a failure.
+ */
+async function probeMcp(url: string): Promise<McpProbeResult> {
+	const abort = new AbortController()
+	const timer = setTimeout(() => abort.abort(), MCP_PROBE_TIMEOUT_MS)
+
 	try {
-		// Step 1: initialize
 		const initRes = await fetch(url, {
 			method: "POST",
-			headers,
+			headers: PROBE_HEADERS,
 			body: JSON.stringify({
 				jsonrpc: "2.0",
 				id: 1,
@@ -31,76 +42,60 @@ async function probeMcp(url) {
 					clientInfo: { name: "9router", version: "1" },
 				},
 			}),
-			signal: ac.signal,
+			signal: abort.signal,
 		})
-		if (initRes.status === 401 || initRes.status === 403) {
-			return { requiresAuth: true, tools: [] }
-		}
-		if (!initRes.ok) {
-			return { error: `init ${initRes.status}`, tools: [] }
-		}
+
+		if (requiresAuthStatus(initRes.status)) return { requiresAuth: true, tools: [] }
+		if (!initRes.ok) return { error: `init ${initRes.status}`, tools: [] }
+
 		const sessionId = initRes.headers.get("mcp-session-id") || ""
 		await initRes.text().catch(() => {})
 
-		const listHeaders = { ...headers }
+		const listHeaders: Record<string, string> = { ...PROBE_HEADERS }
+		// A server that issued a session expects it back; one that did not must not receive the
+		// header with an empty value.
 		if (sessionId) listHeaders["mcp-session-id"] = sessionId
 
-		// Step 2: notifications/initialized (required by spec before tools/list)
+		// Required by the spec before `tools/list`; a server refusing it is not fatal here.
 		await fetch(url, {
 			method: "POST",
 			headers: listHeaders,
 			body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized", params: {} }),
-			signal: ac.signal,
+			signal: abort.signal,
 		}).catch(() => {})
 
-		// Step 3: tools/list
 		const listRes = await fetch(url, {
 			method: "POST",
 			headers: listHeaders,
 			body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list" }),
-			signal: ac.signal,
+			signal: abort.signal,
 		})
-		if (listRes.status === 401 || listRes.status === 403) {
-			return { requiresAuth: true, tools: [] }
-		}
-		const ct = listRes.headers.get("content-type") || ""
-		let parsed
-		if (ct.includes("text/event-stream")) {
-			// Parse SSE: each "data: {...}" line is a JSON-RPC message
-			const text = await listRes.text()
-			const dataLines = text.split("\n").filter((l) => l.startsWith("data:"))
-			for (const line of dataLines) {
-				try {
-					const obj = JSON.parse(line.replace(/^data:\s*/, ""))
-					if (obj?.id === 2 && obj.result) {
-						parsed = obj
-						break
-					}
-				} catch {
-					/* skip */
-				}
-			}
-		} else {
-			parsed = await listRes.json().catch(() => null)
-		}
-		const tools = parsed?.result?.tools || []
-		return {
-			tools: tools.map((t) => ({ name: t.name, description: t.description || "" })),
-		}
-	} catch (e) {
-		return { error: e.name === "AbortError" ? "timeout" : e.message, tools: [] }
+
+		if (requiresAuthStatus(listRes.status)) return { requiresAuth: true, tools: [] }
+
+		const contentType = listRes.headers.get("content-type") || ""
+		const reply = contentType.includes("text/event-stream")
+			? parseSseReply(await listRes.text(), 2)
+			: await listRes.json().catch(() => null)
+
+		return { tools: readToolList(reply) }
+	} catch (error) {
+		return { error: probeErrorText(error), tools: [] }
 	} finally {
 		clearTimeout(timer)
 	}
 }
 
-export async function POST(request) {
+export async function POST(request: Request) {
 	try {
-		const { url } = await request.json()
+		const body = (await request.json()) as { url?: unknown }
+		const url = body.url
 		if (!url || typeof url !== "string") {
 			return NextResponse.json({ error: "url required" }, { status: 400 })
 		}
-		// SSRF guard for remote callers; local host keeps self-hosted MCP servers.
+
+		// SSRF guard for remote callers; a local caller keeps its self-hosted MCP servers, which
+		// legitimately live on loopback.
 		if (!isLocalRequest(request)) {
 			try {
 				assertPublicUrl(url)
@@ -108,9 +103,9 @@ export async function POST(request) {
 				return NextResponse.json({ error: "URL not allowed" }, { status: 400 })
 			}
 		}
-		const result = await probeMcp(url)
-		return NextResponse.json(result)
-	} catch (e) {
-		return NextResponse.json({ error: e.message, tools: [] }, { status: 500 })
+
+		return NextResponse.json(await probeMcp(url))
+	} catch (error) {
+		return NextResponse.json({ error: probeErrorText(error), tools: [] }, { status: 500 })
 	}
 }
