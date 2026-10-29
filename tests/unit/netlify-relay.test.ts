@@ -10,7 +10,8 @@ const net = await import("../../apps/web/src/lib/network/netlifyRelay.js")
 const { resolveConnectionProxyConfig } = await import(
 	"../../apps/web/src/lib/network/connectionProxy.js"
 )
-const { POST } = await import("../../apps/web/src/app/api/proxy-pools/netlify-deploy/route.js")
+const { deployRelay } = await import("../../apps/api/src/application/proxy-pools/deploy-relay.ts")
+const { createDeployDeps } = await import("../../apps/web/src/lib/relayDeployHost.js")
 
 const realFetch = globalThis.fetch
 
@@ -166,14 +167,41 @@ describe("netlifyRelay helpers", () => {
 	})
 })
 
-describe("POST /api/proxy-pools/netlify-deploy", () => {
+/**
+ * The Netlify deploy, exercised over the real host calls.
+ *
+ * The route itself now only delegates, so the behaviour worth pinning — the digest flow,
+ * which uploads are skipped, and the status a taken name becomes — is asserted where it
+ * lives: the use-case over `createDeployDeps`.
+ */
+async function deploy(body) {
+	const result = await deployRelay({ provider: "netlify", body }, createDeployDeps())
+	return {
+		status: 201,
+		json: async () => result,
+	}
+}
+
+async function deployFailing(body) {
+	try {
+		await deployRelay({ provider: "netlify", body }, createDeployDeps())
+		return { status: 201, json: async () => ({}) }
+	} catch (error) {
+		return {
+			status: (error.status ?? error.code === "CONFLICT") ? 409 : 500,
+			json: async () => ({ error: error.message }),
+		}
+	}
+}
+
+describe("netlify deploy", () => {
 	it("rejects a missing token with 400 without calling Netlify", async () => {
 		stubFetch(async () => {
 			throw new Error("must not call Netlify")
 		})
-		const res = await POST(postRoute({ projectName: "x" }))
-		expect(res.status).toBe(400)
-		expect((await res.json()).error).toMatch(/token/i)
+		await expect(
+			deployRelay({ provider: "netlify", body: { projectName: "x" } }, createDeployDeps()),
+		).rejects.toThrow(/token/i)
 		expect(createProxyPool).not.toHaveBeenCalled()
 	})
 
@@ -211,7 +239,7 @@ describe("POST /api/proxy-pools/netlify-deploy", () => {
 			throw new Error(`unexpected fetch: ${url}`)
 		})
 
-		const res = await POST(postRoute({ netlifyToken: "nfp_test", projectName: "Netlify-Relay!!" }))
+		const res = await deploy({ netlifyToken: "nfp_test", projectName: "Netlify-Relay!!" })
 		expect(res.status).toBe(201)
 		const data = await res.json()
 		expect(data.deployUrl).toBe("https://relay-x.netlify.app/.netlify/functions/relay")
@@ -252,7 +280,7 @@ describe("POST /api/proxy-pools/netlify-deploy", () => {
 			}
 			throw new Error(`unexpected fetch: ${url}`)
 		})
-		const res = await POST(postRoute({ netlifyToken: "nfp_test" }))
+		const res = await deploy({ netlifyToken: "nfp_test" })
 		expect(res.status).toBe(201)
 
 		stubFetch(async (url) => {
@@ -261,7 +289,7 @@ describe("POST /api/proxy-pools/netlify-deploy", () => {
 			}
 			throw new Error(`unexpected fetch: ${url}`)
 		})
-		const taken = await POST(postRoute({ netlifyToken: "nfp_test", projectName: "taken" }))
+		const taken = await deployFailing({ netlifyToken: "nfp_test", projectName: "taken" })
 		expect(taken.status).toBe(409)
 		expect((await taken.json()).error).toMatch(/different name/i)
 	})
