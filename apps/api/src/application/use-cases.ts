@@ -34,7 +34,10 @@ import { makeProviderNodes } from "./models/manage-provider-nodes.ts"
 import { makeStudioModels } from "./models/manage-studio-models.ts"
 import { makeReadPlugins, makeWritePlugins } from "./plugins/manage-plugins.ts"
 import { makeGetPricing, makeResetPricing, makeUpdatePricing } from "./pricing/manage-pricing.ts"
+import { makeFreeModels } from "./providers/list-free-models.ts"
 import { makeConnections } from "./providers/manage-connections.ts"
+import { makeOverrides } from "./providers/manage-overrides.ts"
+import { makeProbeModels } from "./providers/probe-models.ts"
 import { makePxpipe } from "./pxpipe/manage-pxpipe.ts"
 import { assertSupportedLocale } from "./settings/locale.ts"
 import { readLoginGate } from "./settings/login-gate.ts"
@@ -92,6 +95,9 @@ export interface UseCases {
 	/** Aliases and custom models, which share the key reconcile step. */
 	readonly modelAliases: ReturnType<typeof makeModelAliases>
 	readonly connections: ReturnType<typeof makeConnections>
+	readonly overrides: ReturnType<typeof makeOverrides>
+	readonly freeModels: ReturnType<typeof makeFreeModels>
+	readonly probeModels: ReturnType<typeof makeProbeModels>
 	readonly customModels: ReturnType<typeof makeCustomModels>
 	readonly disabledModels: ReturnType<typeof makeDisabledModels>
 	readonly studioModels: ReturnType<typeof makeStudioModels>
@@ -167,6 +173,26 @@ export function buildUseCases(deps: Dependencies): UseCases {
 		modelAliases: makeModelAliases({
 			aliases: deps.modelAliases,
 			reconciler: deps.allowedModelReconciler,
+		}),
+		overrides: makeOverrides({
+			read: deps.providerOverrides.read,
+			write: deps.providerOverrides.write,
+			resolveAlias: deps.providerOverrides.resolveAlias,
+			builtinHeaders: deps.providerOverrides.builtinHeaders,
+		}),
+		probeModels: makeProbeModels({
+			connections: deps.connections,
+			catalogue: deps.providerCatalogue,
+			knownModels: deps.probeTargetsFor,
+			aliasOf: deps.providerAliasOf,
+			liveModels: deps.fetchConnectionModels,
+			probe: deps.probeModel,
+			isSerialProbe: deps.isSerialProbe,
+		}),
+		freeModels: makeFreeModels({
+			fetchCatalogue: deps.fetchKiloCatalogue,
+			cache: deps.freeModelCache,
+			now: () => Date.now(),
 		}),
 		connections: makeConnections({
 			connections: deps.connections,

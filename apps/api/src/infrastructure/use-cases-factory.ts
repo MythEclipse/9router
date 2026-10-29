@@ -11,10 +11,12 @@
 
 import { randomUUID } from "node:crypto"
 import { CUSTOM_PLUGIN_KEYS } from "@9router/db/shared/pluginKeys"
-import type { ComboPresetPort } from "../application/dependencies.ts"
+import type { ComboPresetPort, OverrideStore } from "../application/dependencies.ts"
 import type { PluginCache } from "../application/plugins/manage-plugins.ts"
 import type { ProviderCatalogue, StoredConnection } from "../application/providers/ports.ts"
 import { buildUseCases, type UseCases } from "../application/use-cases.ts"
+import type { CacheEntry, FreeModel, KiloModel } from "../domain/free-model-cache.ts"
+import type { ProbeTarget } from "../domain/model-probe.ts"
 import { createChangelogSourceFromDisk } from "./changelog-source.ts"
 import { createComboRotationPort } from "./combo-rotation-port.ts"
 import { createDb, resolveDataDir } from "./db/client.ts"
@@ -137,6 +139,27 @@ export interface UseCaseOptions {
 	) => Record<string, unknown>
 	/** Strips secrets before a connection leaves the process. */
 	readonly connectionResponse?: (connection: StoredConnection) => Record<string, unknown>
+	/** The stored provider header overrides. */
+	readonly providerOverrides?: OverrideStore
+	/** The per-process free-model cache. */
+	readonly freeModelCache?: {
+		read(): CacheEntry<FreeModel[]> | null
+		write(entry: CacheEntry<FreeModel[]>): void
+	}
+	/** Fetches Kilo's upstream catalogue. */
+	readonly fetchKiloCatalogue?: () => Promise<readonly KiloModel[]>
+	/** The models the catalogue knows for an alias. */
+	readonly probeTargetsFor?: (alias: string) => readonly ProbeTarget[]
+	/** The alias the router resolves a provider id through. */
+	readonly providerAliasOf?: (provider: string) => string
+	/** Fetches a compatible connection's live model list. */
+	readonly fetchConnectionModels?: (
+		connectionId: string,
+	) => Promise<readonly Record<string, unknown>[] | null>
+	/** Probes one model through the router. */
+	readonly probeModel?: (modelRef: string, kind: string) => Promise<Record<string, unknown>>
+	/** Whether this provider serves one request at a time. */
+	readonly isSerialProbe?: (provider: string) => boolean
 	/**
 	 * The studio cycle guard walks the combo graph, which lives in `apps/web`.
 	 * Absent means no guard, and a cycle would only surface as a request timeout.
@@ -267,6 +290,14 @@ export function createUseCases(
 		normalizeProviderId: options.normalizeProviderId ?? identityProviderId,
 		normalizeProviderSpecificData: options.normalizeProviderSpecificData ?? (() => ({})),
 		connectionResponse: options.connectionResponse ?? ((connection) => ({ ...connection })),
+		providerOverrides: options.providerOverrides ?? unavailableOverrideStore(),
+		freeModelCache: options.freeModelCache ?? { read: () => null, write: () => {} },
+		fetchKiloCatalogue: options.fetchKiloCatalogue ?? failingKiloFetch,
+		probeTargetsFor: options.probeTargetsFor ?? (() => []),
+		providerAliasOf: options.providerAliasOf ?? ((provider) => provider),
+		fetchConnectionModels: options.fetchConnectionModels ?? (async () => null),
+		probeModel: options.probeModel ?? (async () => ({ valid: false, error: "not available" })),
+		isSerialProbe: options.isSerialProbe ?? (() => false),
 		// The cycle guard walks the combo graph and lives beside it in `apps/web`.
 		findStudioCycle: options.findStudioCycle ?? (() => null),
 		resolveProviderAlias: options.resolveProviderAlias ?? ((prefix) => prefix),
@@ -352,4 +383,22 @@ function unavailableProviderCatalogue(): ProviderCatalogue {
 /** The identity normaliser, for a host that sends one spelling of each id. */
 function identityProviderId(provider: unknown): string {
 	return typeof provider === "string" ? provider.trim() : ""
+}
+
+/** Stands in when the host has no settings row for overrides. */
+function unavailableOverrideStore(): OverrideStore {
+	const fail = async (): Promise<never> => {
+		throw new Error("The provider-override store is not available in this process")
+	}
+	return {
+		read: fail,
+		write: fail,
+		resolveAlias: (id) => id,
+		builtinHeaders: () => ({}),
+	}
+}
+
+/** A host that supplies no Kilo fetcher gets an explicit failure, not an empty list. */
+async function failingKiloFetch(): Promise<never> {
+	throw new Error("No Kilo catalogue fetcher was supplied")
 }

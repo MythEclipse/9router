@@ -32,9 +32,17 @@ import { clearPluginCache } from "./plugins/customPluginsRuntime"
 import {
 	connectionHost,
 	connectionResponse,
+	fetchConnectionModels,
+	fetchKiloCatalogue,
+	freeModelCache,
+	isSerialProbe,
 	normalizeProviderId,
 	normalizeProviderSpecificData,
+	probeModel,
+	probeTargetsFor,
+	providerAliasOf,
 	providerCatalogue,
+	providerOverrides,
 } from "./providerConnectionHost"
 import { getPxpipeStats, readPxpipeEvents } from "./pxpipe/events"
 import { getInstallInfo, getInstallLogTail, installPxpipe } from "./pxpipe/install"
@@ -99,6 +107,14 @@ function cache(): Cache {
 			connectionResponse,
 			normalizeProviderId,
 			normalizeProviderSpecificData,
+			providerOverrides,
+			freeModelCache,
+			fetchKiloCatalogue,
+			probeTargetsFor,
+			providerAliasOf,
+			fetchConnectionModels,
+			probeModel,
+			isSerialProbe,
 			findStudioCycle: studioCycleRefusal,
 			resolveProviderAlias,
 			knownSttTransport,

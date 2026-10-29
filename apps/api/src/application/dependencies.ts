@@ -6,7 +6,10 @@
  * plain fakes and keeps the composition root the single wiring point.
  */
 import type { IApiKeyRepository } from "../domain/api-key.ts"
+import type { CacheEntry, FreeModel, KiloModel } from "../domain/free-model-cache.ts"
+import type { ProbeTarget } from "../domain/model-probe.ts"
 import type { PricingResetTarget, PricingUpdate } from "../domain/pricing.ts"
+import type { ProviderOverride } from "../domain/provider-override.ts"
 import type { BulkEditPort } from "./api-keys/bulk-edit-api-keys.ts"
 import type { ApiKeyManagementPort } from "./api-keys/manage-api-keys-dashboard.ts"
 import type { SingleKeyAuditPort, SingleKeyPort } from "./api-keys/manage-single-key.ts"
@@ -33,6 +36,15 @@ import type {
 	ProxyPoolStore,
 	StoredConnection,
 } from "./providers/ports.ts"
+
+/** Where the override map lives, and how a URL id becomes a canonical one. */
+export interface OverrideStore {
+	read(): Promise<Record<string, ProviderOverride>>
+	write(overrides: Record<string, ProviderOverride>): Promise<void>
+	resolveAlias(id: string): string
+	builtinHeaders(canonical: string): Record<string, string>
+}
+
 import type { PxpipePort, PxpipeSettings } from "./pxpipe/manage-pxpipe.ts"
 import type { SettingsPort } from "./settings/login-gate.ts"
 import type { SemanticCachePort } from "./system/cache-stats.ts"
@@ -242,6 +254,27 @@ export interface Dependencies {
 	) => Record<string, unknown>
 	/** Strips secrets before a connection leaves the process. */
 	readonly connectionResponse: (connection: StoredConnection) => Record<string, unknown>
+	/** The provider header overrides stored in the settings row. */
+	readonly providerOverrides: OverrideStore
+	/** The per-process cache the free-model list lives in. */
+	readonly freeModelCache: {
+		read(): CacheEntry<FreeModel[]> | null
+		write(entry: CacheEntry<FreeModel[]>): void
+	}
+	/** Fetches Kilo's upstream catalogue. */
+	readonly fetchKiloCatalogue: () => Promise<readonly KiloModel[]>
+	/** The models the catalogue knows for a provider alias, for probing. */
+	readonly probeTargetsFor: (alias: string) => readonly ProbeTarget[]
+	/** The alias the router resolves a provider id through. */
+	readonly providerAliasOf: (provider: string) => string
+	/** Fetches a compatible connection's live model list. */
+	readonly fetchConnectionModels: (
+		connectionId: string,
+	) => Promise<readonly Record<string, unknown>[] | null>
+	/** Probes one model through the router. */
+	readonly probeModel: (modelRef: string, kind: string) => Promise<Record<string, unknown>>
+	/** Whether this provider serves one request at a time. */
+	readonly isSerialProbe: (provider: string) => boolean
 	/** Maps a provider alias to the provider id the router uses. */
 	readonly resolveProviderAlias: (prefix: string) => string
 	/** Probes a base URL with a key, before a node is saved. */
