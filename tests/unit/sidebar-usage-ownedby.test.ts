@@ -46,8 +46,13 @@ describe("custom model owned_by", () => {
 		expect(page).toContain("...(ownedBy ? { ownedBy } : {})")
 		// The route used to trim the label inline; the normalisation moved into the
 		// custom-model rule so every caller gets the same treatment.
+		//
+		// It now goes through the oRPC client, so the assertion pins the intent rather
+		// than the old call: whatever arrives in the body reaches `custom.add` whole,
+		// with no field picked out and no `ownedBy` dropped on the way.
 		const route = read("apps/web/src/app/api/models/custom/route.ts")
-		expect(route).toContain("customModels.add(await request.json())")
+		expect(route).toContain("models.custom.add(body)")
+		expect(route).not.toContain("ownedBy")
 		const rule = read("apps/api/src/domain/custom-model.ts")
 		expect(rule).toContain("readCustomModel")
 		const repo = read("packages/db/src/repos/aliasRepo.ts")

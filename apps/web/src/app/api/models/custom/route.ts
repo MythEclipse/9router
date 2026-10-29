@@ -1,23 +1,39 @@
+/**
+ * Custom models the operator added.
+ *
+ * Delegates: capability keys and the STT transport are filtered by a domain rule, so a
+ * client cannot store a string where a boolean belongs — that rule lives in
+ * `9router-api`, not here. The guard denies this path by default, so the session
+ * travels with the call.
+ */
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { NextResponse } from "next/server"
+import { createApiClient, sessionClaimsOf } from "@/lib/orpcClient"
 import { failed } from "@/lib/routeErrors"
 import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-// GET /api/models/custom - every custom model the operator added.
+async function client() {
+	return createApiClient({
+		session: sessionClaimsOf(await getSessionContext()),
+		useCases: getUseCases(),
+	})
+}
+
+/** Every custom model the operator added. */
 export async function GET() {
 	try {
-		return NextResponse.json({ models: await getUseCases().customModels.list() })
+		return NextResponse.json(await (await client()).models.custom.list())
 	} catch (error) {
 		return failed(error, "Failed to fetch custom models", "Error fetching custom models")
 	}
 }
 
-// POST /api/models/custom - capability keys and the STT transport are filtered
-// by the domain rule, so a client cannot store a string where a boolean belongs.
-export async function POST(request) {
+export async function POST(request: Request) {
 	try {
-		const added = await getUseCases().customModels.add(await request.json())
+		const body = await request.json().catch(() => undefined)
+		const { added } = await (await client()).models.custom.add(body)
 		return NextResponse.json({ success: true, added })
 	} catch (error) {
 		return failed(error, "Failed to add custom model", "Error adding custom model")
