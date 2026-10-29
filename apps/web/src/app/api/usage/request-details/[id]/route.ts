@@ -1,51 +1,40 @@
-import { getDashboardAuthSession } from "@9router/auth/dashboardSession"
-import { canReadFullRequestPayload } from "9router-api/domain/observability"
-import { cookies } from "next/headers"
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { NextResponse } from "next/server"
-import { getRequestDetailById } from "@/lib/requestDetailsDb"
+import { createApiClient, sessionClaimsOf } from "@/lib/orpcClient"
+import { failed } from "@/lib/routeErrors"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-/**
- * GET /api/usage/request-details/[id]
- *
- * The listing route (/api/usage/request-details) redacts every conversation
- * payload: the stored detail carries the full client request body and the
- * provider response, so handing that to any dashboard-authenticated session
- * would read other users' conversations. That redaction is right for a list.
- *
- * This route serves one record, in full, to a password session only - the
- * administrator asking "what did this request actually send". A key session is
- * refused outright rather than shown a redacted body, because a redacted body
- * would be indistinguishable from an empty one and only invite pointless retries.
- * The role check is `canReadFullRequestPayload` in `domain/observability.ts`, which
- * also owns the listing's redaction, so the two cannot disagree about who may read
- * a conversation.
- */
-export async function GET(_request, context) {
-	try {
-		const id = (await context?.params)?.id
-		if (!id) {
-			return NextResponse.json({ error: "Missing request id" }, { status: 400 })
-		}
+async function client() {
+	return createApiClient({
+		session: sessionClaimsOf(await getSessionContext()),
+		useCases: getUseCases(),
+		headers: new Headers(),
+	})
+}
 
-		const cookieStore = await cookies()
-		const session = await getDashboardAuthSession(cookieStore.get("auth_token")?.value)
-		if (!canReadFullRequestPayload(typeof session?.role === "string" ? session.role : null)) {
+import { canReadFullRequestPayload } from "9router-api/domain/observability"
+
+/**
+ * GET /api/usage/request-details/[id] - one stored request, in full.
+ *
+ * The listing redacts every conversation payload; this exists for the administrator asking
+ * what a request actually sent. `canReadFullRequestPayload` is the same rule the listing's
+ * redaction consults, so the two cannot disagree about who may read a conversation.
+ */
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+	try {
+		const { id } = await params
+		const session = sessionClaimsOf(await getSessionContext())
+		if (!canReadFullRequestPayload(session?.role ?? null)) {
 			return NextResponse.json(
 				{ error: "Only a password sign-in can read a full request payload" },
 				{ status: 403 },
 			)
 		}
-
-		const detail = await getRequestDetailById(id)
-		if (!detail) {
-			return NextResponse.json({ error: "Request not found" }, { status: 404 })
-		}
-
-		return NextResponse.json({ detail })
+		return NextResponse.json(await (await client()).usage.requestDetail({ id }))
 	} catch (error) {
-		console.log("Error reading request detail:", error)
-		return NextResponse.json({ error: "Failed to read request detail" }, { status: 500 })
+		return failed(error, "Failed to fetch request detail", "usage/request-details/id")
 	}
 }

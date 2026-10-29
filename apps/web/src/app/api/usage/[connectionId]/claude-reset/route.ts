@@ -4,7 +4,7 @@ import "open-sse/index"
 import { consumeClaudeResetGrant } from "open-sse/services/usage"
 import { getProviderConnectionById } from "@/lib/localDb"
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy"
-import { refreshAndUpdateCredentials } from "../route.ts"
+import { refreshAndUpdateCredentials } from "@/lib/usage/connectionRefresh"
 
 export const dynamic = "force-dynamic"
 

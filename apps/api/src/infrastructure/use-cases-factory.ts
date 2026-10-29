@@ -53,6 +53,7 @@ import {
 } from "./db/repositories/combo-repository.ts"
 import { createComboStrategyRepository } from "./db/repositories/combo-strategy-repository.ts"
 import { createErrorLogRepository } from "./db/repositories/error-log-repository.ts"
+import { aggregatesOf as keyUsageAggregates } from "./db/repositories/key-usage-repository.ts"
 import {
 	createAllowedModelReconciler,
 	createComboReaderPort,
@@ -72,6 +73,10 @@ import {
 	createConnectionStore,
 	createProxyPoolStore,
 } from "./db/repositories/provider-connection-repository.ts"
+import {
+	errorRows as usageErrorRows,
+	leaderboardRows as usageLeaderboardRows,
+} from "./db/repositories/usage-panel-repository.ts"
 import { createUsageReportPort } from "./db/repositories/usage-report-repository.ts"
 import {
 	type CatalogueHost,
@@ -121,6 +126,9 @@ export interface UseCaseOptions {
 	readonly tailscaleInstall?: TailscaleInstallDeps
 	readonly headroom?: import("../application/headroom/manage-headroom.ts").HeadroomDeps
 	readonly ttsVoices?: import("../application/tts/tts-voices.ts").TtsVoiceDeps
+	readonly keyUsage?: import("../application/usage/key-usage-report.ts").KeyUsageDeps
+	readonly usagePanels?: import("../application/usage/usage-panels.ts").UsagePanelDeps
+	readonly connectionUsage?: import("../application/usage/read-connection-usage.ts").ConnectionUsageDeps
 	/** The credentials a provider's own tool leaves on this machine, supplied by `apps/web`. */
 	readonly credentialImport?: Record<
 		string,
@@ -461,6 +469,16 @@ export function createUseCases(
 		tailscaleInstall: required(options, "tailscaleInstall"),
 		headroom: required(options, "headroom"),
 		ttsVoices: required(options, "ttsVoices"),
+		// Keys and rows are read from the shared database; the visibility, budget and labelling
+		// rules come from the host, because they read the dashboard's auth payload and its
+		// static provider catalogue.
+		keyUsage: { aggregatesOf: keyUsageAggregates, ...required(options, "keyUsage") },
+		usagePanels: {
+			errorRows: usageErrorRows,
+			leaderboardRows: usageLeaderboardRows,
+			...required(options, "usagePanels"),
+		},
+		connectionUsage: required(options, "connectionUsage"),
 		credentialImport: options.credentialImport ?? {},
 		createProviderConnection: required(options, "createProviderConnection"),
 		localCredentials: options.localCredentials ?? {},

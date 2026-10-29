@@ -328,6 +328,12 @@ export interface Dependencies {
 	readonly tailscaleInstall: TailscaleInstallDeps
 	/** Headroom's process manager and python probe; only a host with a machine can supply them. */
 	readonly headroom: import("./headroom/manage-headroom.ts").HeadroomDeps
+	/** Per-key usage: the key list, its aggregate queries, and the budget rules. */
+	readonly keyUsage: import("./usage/key-usage-report.ts").KeyUsageDeps
+	/** The remaining usage panels: errors, leaderboard, providers, token savings, catalogue. */
+	readonly usagePanels: import("./usage/usage-panels.ts").UsagePanelDeps
+	/** Per-connection quota reads, including the refresh order that must not be reordered. */
+	readonly connectionUsage: import("./usage/read-connection-usage.ts").ConnectionUsageDeps
 	/** The TTS voice pickers' connections, fetchers and the four payload shapes they answer. */
 	readonly ttsVoices: import("./tts/tts-voices.ts").TtsVoiceDeps
 	/** What kinds of provider exist, and which may be created. */

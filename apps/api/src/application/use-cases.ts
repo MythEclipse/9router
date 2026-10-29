@@ -128,7 +128,10 @@ import {
 	type TunnelStatusCache,
 	toggleTunnel,
 } from "./tunnel/manage-tunnel.ts"
+import { type KeyUsage, makeKeyUsageReport } from "./usage/key-usage-report.ts"
+import { type ConnectionUsage, makeConnectionUsage } from "./usage/read-connection-usage.ts"
 import { makeUsageReports } from "./usage/report-usage.ts"
+import { makeUsagePanels, type UsagePanels } from "./usage/usage-panels.ts"
 
 export interface UseCases {
 	readonly createApiKey: ReturnType<typeof makeCreateApiKey>
@@ -374,6 +377,12 @@ export interface UseCases {
 	readonly headroom: import("./headroom/manage-headroom.ts").HeadroomLifecycle
 	/** The five TTS voice catalogues the pickers read. */
 	readonly ttsVoices: TtsVoices
+	/** One row per API key: quota state plus aggregates. */
+	readonly keyUsage: KeyUsage
+	/** Error classes, leaderboard, provider filter, token savings, model catalogue, details. */
+	readonly usagePanels: UsagePanels
+	/** One provider connection's own quota answer. */
+	readonly connectionUsage: ConnectionUsage
 }
 
 /** The combo use-cases share one dependency slice, so it is built once. */
@@ -721,5 +730,8 @@ export function buildUseCases(deps: Dependencies): UseCases {
 		},
 		headroom: makeHeadroom(deps.headroom),
 		ttsVoices: makeTtsVoices(deps.ttsVoices),
+		keyUsage: makeKeyUsageReport(deps.keyUsage),
+		usagePanels: makeUsagePanels(deps.usagePanels),
+		connectionUsage: makeConnectionUsage(deps.connectionUsage),
 	}
 }

@@ -33,8 +33,30 @@ function backfillCodex(item: Record<string, unknown>): Record<string, unknown> {
  */
 
 import { existsSync } from "node:fs"
-import { closeDb } from "@9router/db/driver"
+import { creatorNameFor, visibleApiKeys } from "@9router/auth/keyCreator"
+import { closeDb, getAdapter } from "@9router/db/driver"
+import { matchesAllowedModels, parseAllowedModels } from "@9router/db/repos/apiKeysRepo"
+import {
+	getDistinctProviders,
+	getRequestDetailById,
+	getRequestDetails,
+} from "@9router/db/repos/requestDetailsRepo"
 import type { UseCases } from "9router-api/application/use-cases"
+import {
+	authExpiryVerdict,
+	canReadConnectionUsage,
+	customQuotaConnection,
+	quotaProxyOptions,
+	refreshFailureMessage,
+} from "9router-api/domain/connection-usage"
+import { AppError } from "9router-api/domain/errors"
+import {
+	isPageFailure,
+	readRequestDetailsPage,
+	redactionSettingsFrom,
+	redactRequestDetail,
+	shouldIncludePayloads,
+} from "9router-api/domain/observability"
 import {
 	createUseCases,
 	installPxpipeEngine,
@@ -42,6 +64,9 @@ import {
 } from "9router-api/infrastructure/use-cases-factory"
 import { fetchElevenLabsVoices, VOICE_FETCHERS } from "open-sse/handlers/ttsCore"
 import { getSemanticCacheStats, resetSemanticCacheStats } from "open-sse/rtk/semanticCache"
+import { getTokenSavingsReport } from "open-sse/rtk/tokenSaverStats"
+import { getUsageForProvider } from "open-sse/services/usage"
+import { isCustomQuotaProvider } from "open-sse/services/usage/customCredits"
 import { isLocalHeaders } from "@/dashboardGuard"
 import {
 	DEFAULT_HEADROOM_URL,
@@ -68,6 +93,11 @@ import {
 	getProviderConnections,
 	updateProviderConnection,
 } from "@/models"
+import {
+	AI_PROVIDERS,
+	getProviderByAlias,
+	USAGE_APIKEY_PROVIDERS,
+} from "@/shared/constants/providers"
 import { fetchPublic } from "@/shared/utils/ssrfGuard"
 import { createApiKeyStore } from "./apiKeyStore"
 import { killAppProcesses } from "./appProcessManager"
@@ -80,7 +110,13 @@ import {
 	getProxyImportJob,
 	listProxyImportJobs,
 } from "./db/proxyImportJobs"
-import { getSettings } from "./localDb"
+import {
+	getApiKeys,
+	getProviderConnectionById,
+	getProviderNodeById,
+	getProviderNodes,
+	getSettings,
+} from "./localDb"
 import {
 	catalogueHost,
 	knownSttTransport,
@@ -89,6 +125,7 @@ import {
 	resolveProviderAlias,
 	studioCycleRefusal,
 } from "./modelRegistryHost"
+import { resolveConnectionProxyConfig } from "./network/connectionProxy"
 import {
 	API_KEY_CHECKS,
 	AUTO_IMPORT_HOSTS,
@@ -152,6 +189,9 @@ import {
 	createTunnelProbeDeps,
 	createTunnelToggleDeps,
 } from "./tunnelHost"
+import { buildAvailableModels } from "./usage/availableModelsHost"
+import { refreshAndUpdateCredentials } from "./usage/connectionRefresh"
+import { budgetOf, spentTodayOf, todayKey } from "./usage/keyBudget"
 
 // This host is the one that bundles `open-sse` and `lib/pxpipe`, so it is the one
 // that can answer those ports. Without this they would report empty results.
@@ -259,6 +299,107 @@ function cache(): Cache {
 				fetchElevenLabs: (apiKey) => fetchElevenLabsVoices(apiKey),
 				fetchImpl: globalThis.fetch,
 				providers: Object.keys(VOICE_FETCHERS),
+			},
+			// Per-key usage: the key list and the three folding rules are host concerns (the
+			// visibility rule reads the auth payload, the budget rules read the key rows), while
+			// the aggregates come from the shared database in the factory.
+			keyUsage: {
+				listKeys: async () => (await getApiKeys()) as never,
+				visibleKeys: (keys, session) => visibleApiKeys([...keys], session) as never,
+				creatorNameOf: (createdBy, keys) => creatorNameFor({ createdBy, keys: [...keys] }) ?? undefined,
+				budgetOf: (key, context) =>
+					budgetOf(key as never, context as never) as { kind: string; cap: number; used: number },
+				spentTodayOf: (key) => spentTodayOf(key as never),
+				todayKey,
+				// A key is a credential: only a prefix is ever rendered, and never in a log line.
+				maskKey: (key) =>
+					!key || typeof key !== "string"
+						? ""
+						: key.length <= 10
+							? key.slice(0, 4) + "***"
+							: key.slice(0, 10) + "***",
+				now: () => Date.now(),
+			},
+			// The remaining panels: mostly static tables this process owns (the model catalogue,
+			// the provider aliases) plus the open-sse rollup that only it can reach.
+			usagePanels: {
+				admitsModel: (allowedModels, model) =>
+					matchesAllowedModels(parseAllowedModels(allowedModels || "*"), model),
+				distinctProviders: (allowedModels) =>
+					getDistinctProviders(parseAllowedModels(allowedModels || "*")),
+				providerLabels: async () => ({
+					nodes: Object.fromEntries(
+						(await getProviderNodes()).map((node) => [node.id, { name: node.name, logo: node.logo }]),
+					),
+					catalogueOf: (id) => getProviderByAlias(id) || AI_PROVIDERS[id],
+				}),
+				tokenSavings: (period) => getTokenSavingsReport(getAdapter() as never, period),
+				availableModels: (scope) =>
+					buildAvailableModels({
+						allowedModels: scope.allowedModels,
+						isApiKey: scope.isApiKey,
+					}),
+				requestDetails: async ({ query, scope, requestAuthenticated }) => {
+					const paging = readRequestDetailsPage({ page: query.page, pageSize: query.pageSize })
+					if (isPageFailure(paging)) {
+						throw new AppError("VALIDATION", paging.error, { status: paging.status })
+					}
+					const filter: Record<string, unknown> = {
+						page: paging.page.page,
+						pageSize: paging.page.pageSize,
+						allowedModelPatterns: parseAllowedModels(scope.allowedModels || "*"),
+					}
+					for (const field of [
+						"provider",
+						"model",
+						"connectionId",
+						"status",
+						"startDate",
+						"endDate",
+					] as const) {
+						if (query[field]) filter[field] = query[field]
+					}
+
+					const result = await getRequestDetails(filter)
+					let includePayloads = false
+					try {
+						const read = redactionSettingsFrom((await getSettings()) as never)
+						includePayloads = shouldIncludePayloads({
+							settings: read.settings,
+							requireLoginDisabled: read.requireLoginDisabled,
+							requestAuthenticated: read.requireLoginDisabled ? requestAuthenticated : false,
+						}).include
+					} catch {
+						// Fail closed: an unreadable settings row must not reveal payloads.
+						includePayloads = false
+					}
+
+					const details = (result.details || []).map((detail) =>
+						redactRequestDetail(detail as Record<string, unknown>, includePayloads),
+					)
+					return { ...result, details, payloadsIncluded: includePayloads }
+				},
+				requestDetailById: (id) => getRequestDetailById(id),
+			},
+			// One connection's own quota. The refresh path is the one in this file's sibling
+			// module, exported precisely so this and codex-reset-credits cannot drift on it.
+			connectionUsage: {
+				connectionOf: (id) => getProviderConnectionById(id),
+				nodeOf: (provider) => getProviderNodeById(provider),
+				usageApiKeyProviders: USAGE_APIKEY_PROVIDERS,
+				isCustomQuotaProvider,
+				isOAuthConnection: (connection) =>
+					connection.authType === "oauth" || Boolean(connection.refreshToken),
+				canReadConnectionUsage,
+				customQuotaConnection,
+				quotaProxyOptions,
+				proxyConfigOf: (data) => resolveConnectionProxyConfig(data as never),
+				authExpiryVerdict,
+				refreshFailureMessage,
+				refresh: (connection, force, proxyOptions) =>
+					refreshAndUpdateCredentials(connection as never, force, proxyOptions as never),
+				usageOf: (connection, proxyOptions, options) =>
+					getUsageForProvider(connection as never, proxyOptions as never, options as never),
 			},
 			kiroSocial: {
 				authorize: {

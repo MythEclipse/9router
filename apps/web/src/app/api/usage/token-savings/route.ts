@@ -1,21 +1,34 @@
-import { getAdapter } from "@9router/db/driver"
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { NextResponse } from "next/server"
-import { getTokenSavingsReport } from "open-sse/rtk/tokenSaverStats"
+import { createApiClient, sessionClaimsOf } from "@/lib/orpcClient"
+import { failed } from "@/lib/routeErrors"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
+async function client() {
+	return createApiClient({
+		session: sessionClaimsOf(await getSessionContext()),
+		useCases: getUseCases(),
+		headers: new Headers(),
+	})
+}
+
 /**
- * GET /api/usage/token-savings?period=30d
- * Period rollup of what Token Saver avoided: totals, per-model rows, and a
- * daily series for the chart. Cost is a live-rate estimate, flagged as such.
+ * GET /api/usage/token-savings - what Token Saver avoided over the period.
+ *
+ * Unlike the other panels this one does not refuse an unknown period: it reads a rollup table,
+ * so a typo costs a wider window rather than a wrong answer presented as a right one.
  */
-export async function GET(request) {
+export async function GET(request: Request) {
 	try {
 		const { searchParams } = new URL(request.url)
-		const report = await getTokenSavingsReport(getAdapter(), searchParams.get("period") || "30d")
-		return NextResponse.json(report)
+		return NextResponse.json(
+			await (await client()).usage.tokenSavings({
+				period: searchParams.get("period") || undefined,
+			}),
+		)
 	} catch (error) {
-		console.error("Error building token-savings report:", error)
-		return NextResponse.json({ error: "Failed to build token-savings report" }, { status: 500 })
+		return failed(error, "Failed to fetch token savings", "usage/token-savings")
 	}
 }
