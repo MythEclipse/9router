@@ -1,61 +1,49 @@
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import {
+	codexProfile,
+	codexProfileFile,
+	codexProfileToml,
+	isValidCodexModel,
+	isValidProfileName,
+	normaliseProfileName,
+	profileNameFromFile,
+	readProfileModel,
+} from "9router-api/domain/codex-profiles"
 import { NextResponse } from "next/server"
 
 export const dynamic = "force-dynamic"
 
 const getCodexDir = () => path.join(os.homedir(), ".codex")
 
-const isValidProfileName = (name) => {
-	return (
-		typeof name === "string" &&
-		/^[a-zA-Z0-9_-]+$/.test(name) &&
-		name.length <= 64 &&
-		name.toLowerCase() !== "config"
-	)
-}
-
-const isValidModel = (model) => {
-	return (
-		typeof model === "string" &&
-		model.trim().length > 0 &&
-		model.length <= 256 &&
-		!/[\r\n"]/.test(model)
-	)
-}
-
-// GET - List all custom profiles from ~/.codex/*.config.toml
+// GET - List every custom profile under ~/.codex/*.config.toml
 export async function GET() {
 	try {
 		const codexDir = getCodexDir()
-		let files = []
+		let files: string[]
 		try {
 			files = await fs.readdir(codexDir)
-		} catch (err) {
-			if (err.code === "ENOENT") return NextResponse.json({ profiles: [] })
-			throw err
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+				return NextResponse.json({ profiles: [] })
+			}
+			throw error
 		}
 
-		const profileFiles = files.filter(
-			(file) => file.endsWith(".config.toml") && file !== "config.toml",
-		)
-
 		const profiles = await Promise.all(
-			profileFiles.map(async (file) => {
-				const name = file.replace(/\.config\.toml$/, "")
-				try {
-					const content = await fs.readFile(path.join(codexDir, file), "utf-8")
-					const match = content.match(/^\s*model\s*=\s*(["'])([^"\n]+)\1/m)
-					return {
-						name,
-						model: match ? match[2] : "",
-						command: `codex -p ${name}`,
+			files
+				.map((file) => profileNameFromFile(file))
+				.filter((name): name is string => name !== null)
+				.map(async (name) => {
+					try {
+						const content = await fs.readFile(path.join(codexDir, codexProfileFile(name)), "utf-8")
+						return codexProfile(name, readProfileModel(content))
+					} catch {
+						// A profile whose file cannot be read is still a profile the operator made.
+						return codexProfile(name, "")
 					}
-				} catch {
-					return { name, model: "", command: `codex -p ${name}` }
-				}
-			}),
+				}),
 		)
 
 		profiles.sort((a, b) => a.name.localeCompare(b.name))
@@ -67,11 +55,11 @@ export async function GET() {
 }
 
 // POST - Create or update a profile ~/.codex/<name>.config.toml
-export async function POST(request) {
+export async function POST(request: Request) {
 	try {
-		const { name, model } = await request.json()
+		const body = (await request.json()) as { name?: unknown; model?: unknown }
 
-		const cleanName = typeof name === "string" ? name.trim().toLowerCase() : ""
+		const cleanName = normaliseProfileName(body.name)
 		if (!isValidProfileName(cleanName)) {
 			return NextResponse.json(
 				{
@@ -82,26 +70,20 @@ export async function POST(request) {
 			)
 		}
 
-		const cleanModel = typeof model === "string" ? model.trim() : ""
-		if (!isValidModel(cleanModel)) {
+		const cleanModel = typeof body.model === "string" ? body.model.trim() : ""
+		if (!isValidCodexModel(cleanModel)) {
 			return NextResponse.json({ error: "Invalid model name" }, { status: 400 })
 		}
 
 		const codexDir = getCodexDir()
 		await fs.mkdir(codexDir, { recursive: true })
+		await fs.writeFile(
+			path.join(codexDir, codexProfileFile(cleanName)),
+			codexProfileToml(cleanName, cleanModel),
+			"utf-8",
+		)
 
-		const filePath = path.join(codexDir, `${cleanName}.config.toml`)
-		const content = `# codex -p ${cleanName}\nmodel = "${cleanModel}"\nmodel_provider = "9router"\n`
-		await fs.writeFile(filePath, content, "utf-8")
-
-		return NextResponse.json({
-			success: true,
-			profile: {
-				name: cleanName,
-				model: cleanModel,
-				command: `codex -p ${cleanName}`,
-			},
-		})
+		return NextResponse.json({ success: true, profile: codexProfile(cleanName, cleanModel) })
 	} catch (error) {
 		console.error("Error saving codex profile:", error)
 		return NextResponse.json({ error: "Failed to save profile" }, { status: 500 })
@@ -109,23 +91,22 @@ export async function POST(request) {
 }
 
 // DELETE - Remove a profile ~/.codex/<name>.config.toml
-export async function DELETE(request) {
+export async function DELETE(request: Request) {
 	try {
-		const { name } = await request.json()
-		const cleanName = typeof name === "string" ? name.trim().toLowerCase() : ""
+		const body = (await request.json()) as { name?: unknown }
+		const cleanName = normaliseProfileName(body.name)
 
 		if (!isValidProfileName(cleanName)) {
 			return NextResponse.json({ error: "Invalid profile name" }, { status: 400 })
 		}
 
-		const filePath = path.join(getCodexDir(), `${cleanName}.config.toml`)
 		try {
-			await fs.unlink(filePath)
-		} catch (err) {
-			if (err.code === "ENOENT") {
+			await fs.unlink(path.join(getCodexDir(), codexProfileFile(cleanName)))
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code === "ENOENT") {
 				return NextResponse.json({ error: "Profile not found" }, { status: 404 })
 			}
-			throw err
+			throw error
 		}
 
 		return NextResponse.json({ success: true, message: `Profile ${cleanName} deleted` })
