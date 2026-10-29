@@ -1,176 +1,36 @@
-import { exec } from "node:child_process"
-import fs from "node:fs/promises"
-import os from "node:os"
-import path from "node:path"
-import { promisify } from "node:util"
 import { NextResponse } from "next/server"
-import { resolveModelDisplayName } from "@/shared/utils/modelDisplayName"
-import { resolveCliApiKey } from "../resolveApiKey.ts"
+import { crushSettingsConfig, isCrushInstalled, removeCrushSettings } from "@/lib/cliToolHosts"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-/**
- * One entry of the `providers` map in Crush's config.json.
- * Unknown provider-specific extras are preserved, hence the open index.
- */
-interface CrushProvider {
-	type?: string
-	base_url?: string
-	api_key?: string
-	models?: Array<{ id?: string; name?: string; context_window?: number }>
-	[key: string]: unknown
-}
-
-/** Crush config.json — this route only owns `providers["9router"]`. */
-interface CrushSettings {
-	providers?: Record<string, CrushProvider>
-	[key: string]: unknown
-}
-
-const execAsync = promisify(exec)
-
-const getCrushConfigPath = () => {
-	const configDir = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config")
-	return path.join(configDir, "crush", "crush.json")
-}
-
-const getCrushDir = () => path.dirname(getCrushConfigPath())
-
-const checkCrushInstalled = async () => {
-	const isWindows = os.platform() === "win32"
-	try {
-		const command = isWindows ? "where crush" : "which crush"
-		await execAsync(command, { windowsHide: true })
-		return true
-	} catch {
-		try {
-			await fs.access(getCrushConfigPath())
-			return true
-		} catch {
-			return false
-		}
-	}
-}
-
-const has9RouterConfig = (settings): boolean => {
-	if (!settings || !settings.providers) return false
-	const p = settings.providers["9router"]
-	if (p && p.base_url) return true
-	for (const prov of Object.values(settings.providers) as CrushProvider[]) {
-		if (typeof prov?.base_url === "string" && prov.base_url.includes("20128")) {
-			return true
-		}
-	}
-	return false
-}
-
-const readConfig = async () => {
-	try {
-		const content = await fs.readFile(getCrushConfigPath(), "utf-8")
-		return JSON.parse(content)
-	} catch {
-		return null
-	}
-}
+/** Crush keeps `providers["9router"]` in a shared file; see `crushSettingsConfig`. */
+const deps = () => ({
+	isInstalled: isCrushInstalled,
+	config: crushSettingsConfig,
+	sideRemovals: [removeCrushSettings],
+	notInstalledMessage: "Crush CLI is not installed",
+	appliedMessage: "Crush settings applied successfully!",
+	resetMessage: "9Router removed from Crush",
+})
 
 export async function GET() {
-	try {
-		const installed = await checkCrushInstalled()
-		if (!installed) {
-			return NextResponse.json({
-				installed: false,
-				config: null,
-				message: "Crush CLI is not installed",
-			})
-		}
-
-		const config = await readConfig()
-
-		return NextResponse.json({
-			installed: true,
-			config,
-			has9Router: has9RouterConfig(config),
-			configPath: getCrushConfigPath(),
-		})
-	} catch (err) {
-		return NextResponse.json({ error: { message: err.message } }, { status: 500 })
-	}
+	const answer = await getUseCases().cliTools.readToolSettingsStatus(deps())
+	return NextResponse.json(answer.body, { status: answer.status })
 }
 
-export async function POST(request) {
-	let rawBody
+export async function POST(request: Request) {
+	let body: unknown
 	try {
-		rawBody = await request.json()
+		body = await request.json()
 	} catch {
 		return NextResponse.json({ error: { message: "Invalid JSON body" } }, { status: 400 })
 	}
-
-	try {
-		const { baseUrl, apiKey, model } = rawBody || {}
-		if (!baseUrl) {
-			return NextResponse.json({ error: { message: "baseUrl is required" } }, { status: 400 })
-		}
-
-		const configPath = getCrushConfigPath()
-		await fs.mkdir(getCrushDir(), { recursive: true })
-
-		let existing: CrushSettings = {}
-		try {
-			const raw = await fs.readFile(configPath, "utf-8")
-			existing = JSON.parse(raw) as CrushSettings
-		} catch {
-			/* No existing config */
-		}
-
-		if (!existing.providers) existing.providers = {}
-
-		const normalizedBaseUrl = baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`
-		const modelId = model || "provider/model-id"
-
-		existing.providers["9router"] = {
-			type: "openai-compat",
-			base_url: normalizedBaseUrl,
-			api_key: await resolveCliApiKey(apiKey),
-			models: [
-				{
-					id: modelId,
-					name: resolveModelDisplayName(modelId, undefined),
-					context_window: 128000,
-				},
-			],
-		}
-
-		await fs.writeFile(configPath, JSON.stringify(existing, null, 2), "utf-8")
-
-		return NextResponse.json({
-			success: true,
-			message: "Crush settings applied successfully!",
-			configPath,
-		})
-	} catch (err) {
-		return NextResponse.json({ error: { message: err.message } }, { status: 500 })
-	}
+	const answer = await getUseCases().cliTools.writeToolSettings(body, deps())
+	return NextResponse.json(answer.body, { status: answer.status })
 }
 
 export async function DELETE() {
-	try {
-		const configPath = getCrushConfigPath()
-		let existing: CrushSettings = {}
-		try {
-			const raw = await fs.readFile(configPath, "utf-8")
-			existing = JSON.parse(raw) as CrushSettings
-		} catch {
-			return NextResponse.json({ success: true, message: "No config file to reset" })
-		}
-
-		if (existing.providers && existing.providers["9router"]) {
-			delete existing.providers["9router"]
-			if (Object.keys(existing.providers).length === 0) delete existing.providers
-			await fs.writeFile(configPath, JSON.stringify(existing, null, 2), "utf-8")
-		}
-
-		return NextResponse.json({ success: true, message: "9Router removed from Crush" })
-	} catch (err) {
-		return NextResponse.json({ error: { message: err.message } }, { status: 500 })
-	}
+	const answer = await getUseCases().cliTools.resetToolSettings(deps())
+	return NextResponse.json(answer.body, { status: answer.status })
 }

@@ -5,9 +5,11 @@ import {
 	writeToolSettings,
 } from "../../apps/api/src/application/cli-tools/manage-tool-settings.ts"
 import {
+	mergeModelEntries,
 	NOTHING_TO_RESET,
 	normaliseBaseUrl,
 	pointsAtThisInstall,
+	readModelEntries,
 	readToolSettings,
 	removeInstallEntry,
 	settingsFileText,
@@ -313,5 +315,34 @@ describe("resetToolSettings", () => {
 
 		expect(answer).toMatchObject({ ok: false, status: 500 })
 		expect(String(answer.body.error)).toContain("read-only")
+	})
+})
+
+describe("tool model lists", () => {
+	it("reads both shapes tools write, so neither tool's models disappear", () => {
+		expect(readModelEntries(["gpt-4"])).toEqual([{ id: "gpt-4" }])
+		expect(readModelEntries([{ id: "gpt-4", name: "GPT-4" }])).toEqual([
+			{ id: "gpt-4", name: "GPT-4" },
+		])
+		expect(readModelEntries(undefined)).toEqual([])
+	})
+
+	it("keeps a hand-tuned limit when the form only rotates the key", () => {
+		// Rotating a key is not a reason to lose contextWindow an operator set by hand.
+		const merged = mergeModelEntries(
+			[{ id: "gpt-4", contextWindow: 900000, maxTokens: 64000 }],
+			["gpt-4"],
+		)
+		expect(merged).toEqual([{ id: "gpt-4", contextWindow: 900000, maxTokens: 64000, name: "gpt-4" }])
+	})
+
+	it("keeps the models already configured when the form sends no list", () => {
+		const merged = mergeModelEntries([{ id: "a" }, { id: "b" }], undefined)
+		expect(merged.map((m) => m.id)).toEqual(["a", "b"])
+	})
+
+	it("does not invent a name from the id when one is already set", () => {
+		const merged = mergeModelEntries([{ id: "m", name: "My Model" }], [{ id: "m" }])
+		expect(merged[0]?.name).toBe("My Model")
 	})
 })

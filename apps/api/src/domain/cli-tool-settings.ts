@@ -46,6 +46,8 @@ export interface ToolSettingsInput {
 	readonly baseUrl: string
 	readonly apiKey: string
 	readonly model: string
+	/** Passed through untouched: which tool keeps a list, and in which shape, is its own business. */
+	readonly models?: unknown
 }
 
 /** The result of reading a write, flat for the same reason the OAuth answers are. */
@@ -75,7 +77,15 @@ export function readToolSettings(body: unknown): ToolSettingsRead {
 	if (!baseUrl || !apiKey || !model) {
 		return { ok: false, error: "baseUrl, apiKey and model are required" }
 	}
-	return { ok: true, input: { baseUrl, apiKey, model } }
+	return {
+		ok: true,
+		input: {
+			baseUrl,
+			apiKey,
+			model,
+			...(typeof fields.models === "undefined" ? {} : { models: fields.models }),
+		},
+	}
 }
 
 /**
@@ -110,4 +120,50 @@ export const NOTHING_TO_RESET = "No settings file to reset"
  */
 export function settingsFileText(config: Record<string, unknown>): string {
 	return `${JSON.stringify(config, null, 2)}\n`
+}
+
+/**
+ * A model entry as a tool records it, kept loose because tools add fields we never read.
+ */
+export type ModelEntry = Record<string, unknown>
+
+/**
+ * Reads a tool's model list, accepting the two shapes tools actually write.
+ *
+ * Some tools write `["gpt-4"]`, others `[{ id: "gpt-4", name: "GPT-4" }]`. Both mean the same
+ * list, and a writer that only understood one would silently drop the other's models — which
+ * for Pi means the model the operator selected stops existing on the next key change.
+ */
+export function readModelEntries(raw: unknown): ModelEntry[] {
+	if (!Array.isArray(raw)) return []
+	return raw.flatMap((entry) => {
+		if (typeof entry === "string") return [{ id: entry }]
+		if (entry && typeof entry === "object") return [entry as ModelEntry]
+		return []
+	})
+}
+
+/**
+ * Merges the models a form sent over the models a tool already had.
+ *
+ * Identity is the model `id`, and an existing entry wins for every field the form did not
+ * send: `contextWindow`, `maxTokens` and a `name` someone chose by hand cost the operator
+ * effort, and a key rotation is not a reason to lose them.
+ */
+export function mergeModelEntries(existing: unknown, requested: unknown): ModelEntry[] {
+	const previous = new Map<string, ModelEntry>()
+	for (const entry of readModelEntries(existing)) {
+		const id = entry.id
+		if (typeof id === "string") previous.set(id, entry)
+	}
+
+	const incoming = readModelEntries(requested)
+	if (incoming.length === 0) return [...previous.values()]
+
+	return incoming.map((entry) => {
+		const id = typeof entry.id === "string" && entry.id ? entry.id : "provider/model-id"
+		const prior = previous.get(id) ?? {}
+		const requestedName = typeof entry.name === "string" && entry.name !== id ? entry.name : undefined
+		return { ...prior, ...entry, id, name: requestedName ?? prior.name ?? id }
+	})
 }
