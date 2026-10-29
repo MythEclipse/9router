@@ -1,15 +1,28 @@
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { NextResponse } from "next/server"
+import { createApiClient, sessionClaimsOf } from "@/lib/orpcClient"
 import { failed } from "@/lib/routeErrors"
 import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-/** POST /api/tunnel/Cloudflare tunnel disable — turn it on, then re-arm monitoring. */
+async function client() {
+	return createApiClient({
+		session: sessionClaimsOf(await getSessionContext()),
+		useCases: getUseCases(),
+		headers: new Headers(),
+	})
+}
+
+/**
+ * POST /api/tunnel/disable
+ *
+ * Turn it off.
+ */
 export async function POST() {
 	try {
-		return NextResponse.json(await getUseCases().tunnel.disable())
+		return NextResponse.json(await (await client()).tunnel.disable())
 	} catch (error) {
-		console.error("Tunnel Cloudflare tunnel disable error:", error)
-		return failed(error, "Cloudflare tunnel disable failed", "Error changing tunnel state")
+		return failed(error, "Failed to disable the tunnel", "tunnel/disable")
 	}
 }

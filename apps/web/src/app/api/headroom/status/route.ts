@@ -1,18 +1,24 @@
-import { headroomUrl } from "9router-api/domain/headroom-lifecycle"
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { NextResponse } from "next/server"
-import { DEFAULT_HEADROOM_URL, getHeadroomStatus } from "@/lib/headroom/detect"
-import { getManagedPid } from "@/lib/headroom/process"
-import { getSettings } from "@/lib/localDb"
+import { createApiClient, sessionClaimsOf } from "@/lib/orpcClient"
+import { failed } from "@/lib/routeErrors"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
+
+async function client() {
+	return createApiClient({
+		session: sessionClaimsOf(await getSessionContext()),
+		useCases: getUseCases(),
+		headers: new Headers(),
+	})
+}
 
 /** GET /api/headroom/status - installed, running, and the pid this install manages. */
 export async function GET() {
 	try {
-		const url = headroomUrl(await getSettings(), DEFAULT_HEADROOM_URL)
-		const status = await getHeadroomStatus(url)
-		return NextResponse.json({ ...status, url, managedPid: getManagedPid() })
+		return NextResponse.json(await (await client()).headroom.status())
 	} catch (error) {
-		return NextResponse.json({ error: error.message }, { status: 500 })
+		return failed(error, "Failed to read Headroom status", "headroom/status")
 	}
 }

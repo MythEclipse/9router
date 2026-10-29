@@ -1,74 +1,34 @@
-import {
-	groupByListedLanguages,
-	listedLanguages,
-	voiceId,
-	voiceName,
-	voicesForLanguage,
-} from "9router-api/domain/voice-catalogue"
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { NextResponse } from "next/server"
-import { getProviderConnections } from "@/lib/localDb"
+import { createApiClient, sessionClaimsOf } from "@/lib/orpcClient"
+import { failed } from "@/lib/routeErrors"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-const langNames = new Intl.DisplayNames(["en"], { type: "language" })
-
-interface InworldVoice {
-	voiceId: string
-	displayName?: string
-	gender?: string
-	languages?: string[]
-}
-
-interface InworldVoicesResponse {
-	voices?: InworldVoice[]
+async function client() {
+	return createApiClient({
+		session: sessionClaimsOf(await getSessionContext()),
+		useCases: getUseCases(),
+		headers: new Headers(),
+	})
 }
 
 /**
  * GET /api/media-providers/tts/inworld/voices[?lang=en]
- * Returns { languages, byLang } grouped by language code (same shape as the other TTS routes).
+ *
+ * Every Inworld voice carries `languages: [...]`; a voice with none is still usable and is
+ * listed under the custom bucket rather than dropped.
  */
-export async function GET(request) {
+export async function GET(request: Request) {
 	try {
 		const { searchParams } = new URL(request.url)
-		const langFilter = searchParams.get("lang")
-
-		const connections = await getProviderConnections({ provider: "inworld", isActive: true })
-		const apiKey = connections[0]?.apiKey
-		if (!apiKey) return NextResponse.json({ error: "No Inworld connection found" }, { status: 400 })
-
-		const res = await fetch("https://api.inworld.ai/tts/v1/voices", {
-			headers: { Authorization: `Basic ${apiKey}` },
-		})
-		if (!res.ok) {
-			const text = await res.text().catch(() => "")
-			return NextResponse.json(
-				{ error: `Inworld API ${res.status}: ${text || "Failed"}` },
-				{ status: 502 },
-			)
-		}
-		const data = (await res.json()) as InworldVoicesResponse
-
-		const catalogue = groupByListedLanguages(
-			data.voices || [],
-			// Each voice carries `languages: ["en", "es", ...]`; a voice with none is still usable.
-			(voice) => listedLanguages(voice.languages),
-			(voice, code) => {
-				const id = voiceId([voice.voiceId, voice.displayName])
-				return {
-					id,
-					name: voiceName(voice.displayName, id),
-					gender: voice.gender || "",
-					lang: code,
-				}
-			},
-			langNames,
+		return NextResponse.json(
+			await (await client()).mediaProviders.inworldVoices({
+				lang: searchParams.get("lang") || undefined,
+			}),
 		)
-
-		if (langFilter) {
-			return NextResponse.json({ voices: voicesForLanguage(catalogue.byLang, langFilter) })
-		}
-		return NextResponse.json(catalogue)
-	} catch (err) {
-		return NextResponse.json({ error: err.message || "Failed to fetch voices" }, { status: 502 })
+	} catch (error) {
+		return failed(error, "Failed to fetch voices", "media-providers/tts/inworld/voices")
 	}
 }

@@ -1,15 +1,28 @@
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { NextResponse } from "next/server"
+import { createApiClient, sessionClaimsOf } from "@/lib/orpcClient"
 import { failed } from "@/lib/routeErrors"
 import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-/** POST /api/tunnel/Cloudflare tunnel enable — turn it on, then re-arm monitoring. */
+async function client() {
+	return createApiClient({
+		session: sessionClaimsOf(await getSessionContext()),
+		useCases: getUseCases(),
+		headers: new Headers(),
+	})
+}
+
+/**
+ * POST /api/tunnel/enable
+ *
+ * Turn the Cloudflare quick tunnel on.
+ */
 export async function POST() {
 	try {
-		return NextResponse.json(await getUseCases().tunnel.enable())
+		return NextResponse.json(await (await client()).tunnel.enable())
 	} catch (error) {
-		console.error("Tunnel Cloudflare tunnel enable error:", error)
-		return failed(error, "Cloudflare tunnel enable failed", "Error changing tunnel state")
+		return failed(error, "Failed to enable the tunnel", "tunnel/enable")
 	}
 }

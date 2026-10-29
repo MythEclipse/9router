@@ -40,8 +40,26 @@ import {
 	installPxpipeEngine,
 	installSemanticCacheModule,
 } from "9router-api/infrastructure/use-cases-factory"
+import { fetchElevenLabsVoices, VOICE_FETCHERS } from "open-sse/handlers/ttsCore"
 import { getSemanticCacheStats, resetSemanticCacheStats } from "open-sse/rtk/semanticCache"
 import { isLocalHeaders } from "@/dashboardGuard"
+import {
+	DEFAULT_HEADROOM_URL,
+	findPython310,
+	getHeadroomStatus,
+	getInstalledHeadroomExtras,
+	HEADROOM_COMPRESSION_EXTRAS,
+	isLoopbackHeadroomUrl,
+} from "@/lib/headroom/detect"
+import {
+	getInstallLogTail as getHeadroomInstallLogTail,
+	getManagedPid,
+	installHeadroomExtras,
+	restartHeadroomProxy,
+	startHeadroomProxy,
+	stopHeadroomProxy,
+	uninstallHeadroomExtras,
+} from "@/lib/headroom/process"
 import { extractCodexAccountInfo } from "@/lib/oauth/providerHelpers"
 import { KiroService } from "@/lib/oauth/services/kiro"
 import { generatePKCE } from "@/lib/oauth/utils/pkce"
@@ -62,6 +80,7 @@ import {
 	getProxyImportJob,
 	listProxyImportJobs,
 } from "./db/proxyImportJobs"
+import { getSettings } from "./localDb"
 import {
 	catalogueHost,
 	knownSttTransport,
@@ -210,6 +229,37 @@ function cache(): Cache {
 			// A client-supplied base URL (GitLab PAT, iflow) must pass the SSRF guard for a
 			// remote caller, while a local one keeps a self-hosted instance reachable.
 			fetchForCaller: (headers) => (isLocalHeaders(headers) ? globalThis.fetch : fetchPublic),
+			// Headroom runs as a child of this process, so its lifecycle — and the python it
+			// needs — only exists on a host with a machine.
+			headroom: {
+				defaultUrl: DEFAULT_HEADROOM_URL,
+				isLoopback: isLoopbackHeadroomUrl,
+				start: (options) => startHeadroomProxy(options),
+				restart: (options) => restartHeadroomProxy(options),
+				stop: () => stopHeadroomProxy(),
+				detect: (url) => getHeadroomStatus(url),
+				managedPid: () => getManagedPid(),
+				findPython: () => findPython310(),
+				installedExtras: (python) => getInstalledHeadroomExtras(python),
+				availableExtras: HEADROOM_COMPRESSION_EXTRAS,
+				installExtras: (extras) => installHeadroomExtras([...extras]),
+				uninstallExtras: (extras) => uninstallHeadroomExtras([...extras]),
+				installLogTail: (maxLines) => getHeadroomInstallLogTail(maxLines),
+				readSettings: () => getSettings(),
+			},
+			// The voice pickers read one stored connection per provider and reshape whatever
+			// payload the provider answers; both live outside this layer.
+			ttsVoices: {
+				connectionOf: async (provider) => {
+					const connections = await getProviderConnections({ provider, isActive: true })
+					return connections[0] as { apiKey?: string } | undefined
+				},
+				fetchVoices: (provider, apiKey) =>
+					VOICE_FETCHERS[provider as keyof typeof VOICE_FETCHERS](apiKey),
+				fetchElevenLabs: (apiKey) => fetchElevenLabsVoices(apiKey),
+				fetchImpl: globalThis.fetch,
+				providers: Object.keys(VOICE_FETCHERS),
+			},
 			kiroSocial: {
 				authorize: {
 					generatePkce: generatePKCE,

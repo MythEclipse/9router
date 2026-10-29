@@ -1,15 +1,28 @@
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { NextResponse } from "next/server"
+import { createApiClient, sessionClaimsOf } from "@/lib/orpcClient"
 import { failed } from "@/lib/routeErrors"
 import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-/** POST /api/tunnel/Tailscale disable — turn it on, then re-arm monitoring. */
+async function client() {
+	return createApiClient({
+		session: sessionClaimsOf(await getSessionContext()),
+		useCases: getUseCases(),
+		headers: new Headers(),
+	})
+}
+
+/**
+ * POST /api/tunnel/tailscale-disable
+ *
+ * Stop exposing it over Tailscale.
+ */
 export async function POST() {
 	try {
-		return NextResponse.json(await getUseCases().tunnel.tailscaleDisable())
+		return NextResponse.json(await (await client()).tunnel.tailscale.disable())
 	} catch (error) {
-		console.error("Tunnel Tailscale disable error:", error)
-		return failed(error, "Tailscale disable failed", "Error changing tunnel state")
+		return failed(error, "Failed to disable Tailscale", "tunnel/tailscale-disable")
 	}
 }
