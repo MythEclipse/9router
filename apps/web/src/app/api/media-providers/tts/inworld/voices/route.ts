@@ -1,3 +1,10 @@
+import {
+	groupByListedLanguages,
+	listedLanguages,
+	voiceId,
+	voiceName,
+	voicesForLanguage,
+} from "9router-api/domain/voice-catalogue"
 import { NextResponse } from "next/server"
 import { getProviderConnections } from "@/lib/localDb"
 
@@ -5,10 +12,6 @@ export const dynamic = "force-dynamic"
 
 const langNames = new Intl.DisplayNames(["en"], { type: "language" })
 
-/**
- * GET /api/media-providers/tts/inworld/voices[?lang=en]
- * Returns { languages, byLang } grouped by language code (same shape as edge-tts/elevenlabs)
- */
 interface InworldVoice {
 	voiceId: string
 	displayName?: string
@@ -20,12 +23,10 @@ interface InworldVoicesResponse {
 	voices?: InworldVoice[]
 }
 
-interface VoiceLanguage {
-	code: string
-	name: string
-	voices: Array<{ id: string; name: string; gender: string; lang: string }>
-}
-
+/**
+ * GET /api/media-providers/tts/inworld/voices[?lang=en]
+ * Returns { languages, byLang } grouped by language code (same shape as the other TTS routes).
+ */
 export async function GET(request) {
 	try {
 		const { searchParams } = new URL(request.url)
@@ -46,43 +47,27 @@ export async function GET(request) {
 			)
 		}
 		const data = (await res.json()) as InworldVoicesResponse
-		const voices = data.voices || []
 
-		const byLang: Record<string, VoiceLanguage> = {}
-		for (const v of voices) {
-			// Each voice has `languages: ["en", "es", ...]`
-			const langs = Array.isArray(v.languages) && v.languages.length ? v.languages : ["en"]
-			for (const code of langs) {
-				if (!byLang[code]) {
-					byLang[code] = {
-						code,
-						name: (() => {
-							try {
-								return langNames.of(code)
-							} catch {
-								return code
-							}
-						})(),
-						voices: [],
-					}
+		const catalogue = groupByListedLanguages(
+			data.voices || [],
+			// Each voice carries `languages: ["en", "es", ...]`; a voice with none is still usable.
+			(voice) => listedLanguages(voice.languages),
+			(voice, code) => {
+				const id = voiceId([voice.voiceId, voice.displayName])
+				return {
+					id,
+					name: voiceName(voice.displayName, id),
+					gender: voice.gender || "",
+					lang: code,
 				}
-				if (!byLang[code].voices.find((x) => x.id === v.voiceId)) {
-					byLang[code].voices.push({
-						id: v.voiceId,
-						name: v.displayName || v.voiceId,
-						gender: v.gender || "",
-						lang: code,
-					})
-				}
-			}
-		}
-
-		const languages = Object.values(byLang).sort((a, b) => a.name.localeCompare(b.name))
+			},
+			langNames,
+		)
 
 		if (langFilter) {
-			return NextResponse.json({ voices: byLang[langFilter]?.voices || [] })
+			return NextResponse.json({ voices: voicesForLanguage(catalogue.byLang, langFilter) })
 		}
-		return NextResponse.json({ languages, byLang })
+		return NextResponse.json(catalogue)
 	} catch (err) {
 		return NextResponse.json({ error: err.message || "Failed to fetch voices" }, { status: 502 })
 	}

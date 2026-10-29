@@ -1,14 +1,31 @@
+import {
+	groupByListedLanguages,
+	voiceId,
+	voiceName,
+	voicesForLanguage,
+} from "9router-api/domain/voice-catalogue"
 import { NextResponse } from "next/server"
 import { getProviderConnections } from "@/lib/localDb"
 
 export const dynamic = "force-dynamic"
 
+interface DeepgramTtsModel {
+	canonical_name?: string
+	name?: string
+	languages?: string[]
+	metadata?: { tags?: string[] }
+}
+
+interface DeepgramModelsResponse {
+	tts?: DeepgramTtsModel[]
+}
+
 const langNames = new Intl.DisplayNames(["en"], { type: "language" })
 
 /**
  * GET /api/media-providers/tts/deepgram/voices[?lang=en]
- * Returns { languages, byLang } grouped by language code (same shape as edge-tts/elevenlabs/inworld)
- * Each Deepgram voice = one model (canonical_name like "aura-2-thalia-en")
+ * Returns { languages, byLang } grouped by language code (same shape as the other TTS routes).
+ * Each Deepgram TTS voice is one model (canonical_name like "aura-2-thalia-en").
  */
 export async function GET(request) {
 	try {
@@ -17,31 +34,6 @@ export async function GET(request) {
 
 		const connections = await getProviderConnections({ provider: "deepgram", isActive: true })
 		const apiKey = connections[0]?.apiKey
-		interface DeepgramTtsModel {
-			canonical_name?: string
-			name?: string
-			languages?: string[]
-			metadata?: { tags?: string[] }
-		}
-
-		interface DeepgramModelsResponse {
-			tts?: DeepgramTtsModel[]
-		}
-
-		interface VoiceEntry {
-			id: string
-			name: string
-			gender?: string
-			lang: string
-			category?: string
-		}
-
-		interface VoiceLanguage {
-			code: string
-			name: string
-			voices: VoiceEntry[]
-		}
-
 		if (!apiKey) return NextResponse.json({ error: "No Deepgram connection found" }, { status: 400 })
 
 		const res = await fetch("https://api.deepgram.com/v1/models", {
@@ -55,47 +47,30 @@ export async function GET(request) {
 			)
 		}
 		const data = (await res.json()) as DeepgramModelsResponse
-		const ttsModels = data.tts || []
 
-		const byLang: Record<string, VoiceLanguage> = {}
-		for (const m of ttsModels) {
-			// Deepgram returns `languages: ["en"]` or sometimes language inferred from canonical_name suffix
-			const langs =
-				Array.isArray(m.languages) && m.languages.length
-					? m.languages
-					: [m.canonical_name?.split("-").pop() || "en"]
-			for (const code of langs) {
-				if (!byLang[code]) {
-					byLang[code] = {
-						code,
-						name: (() => {
-							try {
-								return langNames.of(code)
-							} catch {
-								return code
-							}
-						})(),
-						voices: [],
-					}
+		const catalogue = groupByListedLanguages(
+			data.tts || [],
+			// Deepgram sends `languages: ["en"]`, or only encodes it in the canonical_name suffix.
+			(model) =>
+				Array.isArray(model.languages) && model.languages.length
+					? model.languages
+					: [model.canonical_name?.split("-").pop() || "en"],
+			(model, code) => {
+				const id = voiceId([model.canonical_name, model.name])
+				return {
+					id,
+					name: voiceName(model.name, id),
+					gender: model.metadata?.tags?.find((tag) => tag === "masculine" || tag === "feminine") || "",
+					lang: code,
 				}
-				const voiceId = m.canonical_name || m.name
-				if (!byLang[code].voices.find((x) => x.id === voiceId)) {
-					byLang[code].voices.push({
-						id: voiceId,
-						name: m.name || voiceId,
-						gender: m.metadata?.tags?.find((t) => t === "masculine" || t === "feminine") || "",
-						lang: code,
-					})
-				}
-			}
-		}
-
-		const languages = Object.values(byLang).sort((a, b) => a.name.localeCompare(b.name))
+			},
+			langNames,
+		)
 
 		if (langFilter) {
-			return NextResponse.json({ voices: byLang[langFilter]?.voices || [] })
+			return NextResponse.json({ voices: voicesForLanguage(catalogue.byLang, langFilter) })
 		}
-		return NextResponse.json({ languages, byLang })
+		return NextResponse.json(catalogue)
 	} catch (err) {
 		return NextResponse.json({ error: err.message || "Failed to fetch voices" }, { status: 502 })
 	}

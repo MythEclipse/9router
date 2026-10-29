@@ -1,3 +1,13 @@
+import {
+	addVoice,
+	CUSTOM_LANGUAGE_CODE,
+	type languageBucket,
+	sortedLanguages,
+	type VoiceCatalogue,
+	voiceId,
+	voiceName,
+	voicesForLanguage,
+} from "9router-api/domain/voice-catalogue"
 import { NextResponse } from "next/server"
 import { getProviderConnections } from "@/lib/localDb"
 
@@ -15,16 +25,15 @@ const VOICE_GROUPS = [
 	{ key: "music_generation", label: "Music" },
 ]
 
-function inferLanguage(voiceId) {
+/**
+ * MiniMax encodes a system voice's language as the prefix of its id (`English_Graceful_Lady`).
+ * Every other group — cloned, generated, music — has no language at all, so those voices go to
+ * the `Custom` bucket rather than being guessed at.
+ */
+function inferLanguage(voiceId: string): string {
 	const value = typeof voiceId === "string" ? voiceId.trim() : ""
-	if (!value.includes("_")) return "Custom"
-	return value.split("_")[0] || "Custom"
-}
-
-function addVoice(byLang, code, voice) {
-	if (!byLang[code]) byLang[code] = { code, name: code, voices: [] }
-	if (byLang[code].voices.some((v) => v.id === voice.id)) return
-	byLang[code].voices.push(voice)
+	if (!value.includes("_")) return CUSTOM_LANGUAGE_CODE
+	return value.split("_")[0] || CUSTOM_LANGUAGE_CODE
 }
 
 /** One MiniMax voice group as returned under a VOICE_GROUPS key. */
@@ -40,41 +49,39 @@ interface MiniMaxVoicesPayload {
 	[groupKey: string]: MiniMaxVoiceItem[] | undefined
 }
 
-/** A language bucket of normalized MiniMax voices. */
-interface MiniMaxVoiceLanguage {
-	code: string
-	name: string
-	voices: Array<{ id: string; name: string; lang: string; category: string }>
-}
-
-function normalizeMiniMaxVoices(data: MiniMaxVoicesPayload) {
-	const byLang: Record<string, MiniMaxVoiceLanguage> = {}
+function normalizeMiniMaxVoices(payload: MiniMaxVoicesPayload): VoiceCatalogue {
+	const byLang: Record<string, ReturnType<typeof languageBucket>> = {}
+	const displayNames = new Intl.DisplayNames(["en"], { type: "language" })
 
 	for (const group of VOICE_GROUPS) {
-		const voices = Array.isArray(data?.[group.key]) ? data[group.key] : []
-		for (const item of voices) {
-			const voiceId = item?.voice_id || item?.voiceId
-			if (!voiceId) continue
+		const voices = Array.isArray(payload?.[group.key]) ? payload[group.key] : []
+		for (const item of voices ?? []) {
+			const id = voiceId([item?.voice_id, item?.voiceId])
+			// A group entry with no id is not a voice; there is nothing to select.
+			if (id === "") continue
 
-			const voiceName = item?.voice_name || item?.voiceName || voiceId
-			const lang = group.key === "system_voice" ? inferLanguage(voiceId) : "Custom"
-			addVoice(byLang, lang, {
-				id: voiceId,
-				name: group.key === "system_voice" ? voiceName : `${voiceName} · ${group.label}`,
+			const name = voiceName(item?.voice_name ?? item?.voiceName, id)
+			const lang = group.key === "system_voice" ? inferLanguage(id) : CUSTOM_LANGUAGE_CODE
+			addVoice(
+				byLang,
 				lang,
-				category: group.key,
-			})
+				{
+					id,
+					// Only system voices carry their own name; the rest need the group, because
+					// cloned and generated voices are often named after the same person.
+					name: group.key === "system_voice" ? name : `${name} · ${group.label}`,
+					lang,
+					gender: "",
+					category: group.key,
+				},
+				displayNames,
+			)
 		}
 	}
 
-	const languages = Object.values(byLang).sort((a, b) => {
-		if (a.code === "Custom") return 1
-		if (b.code === "Custom") return -1
-		return a.name.localeCompare(b.name)
-	})
-
-	for (const lang of languages) {
-		lang.voices.sort((a, b) => a.name.localeCompare(b.name))
+	const languages = sortedLanguages(byLang)
+	for (const language of languages) {
+		language.voices.sort((left, right) => left.name.localeCompare(right.name))
 	}
 
 	return { languages, byLang }
@@ -83,6 +90,9 @@ function normalizeMiniMaxVoices(data: MiniMaxVoicesPayload) {
 /**
  * GET /api/media-providers/tts/minimax/voices[?provider=minimax|minimax-cn&voice_type=all]
  * Returns { languages, byLang } grouped for the shared TTS voice picker.
+ *
+ * MiniMax reports its own failures in the body with HTTP 200, so `base_resp.status_code` is the
+ * real verdict — checking only `res.ok` would hand the picker an empty list and no reason why.
  */
 export async function GET(request) {
 	try {
@@ -130,12 +140,12 @@ export async function GET(request) {
 			return NextResponse.json({ error: statusMessage || "MiniMax voice API error" }, { status: 502 })
 		}
 
-		const normalized = normalizeMiniMaxVoices(data as MiniMaxVoicesPayload)
+		const catalogue = normalizeMiniMaxVoices(data as MiniMaxVoicesPayload)
 		if (langFilter) {
-			return NextResponse.json({ voices: normalized.byLang[langFilter]?.voices || [] })
+			return NextResponse.json({ voices: voicesForLanguage(catalogue.byLang, langFilter) })
 		}
 
-		return NextResponse.json(normalized)
+		return NextResponse.json(catalogue)
 	} catch (err) {
 		return NextResponse.json(
 			{ error: err.message || "Failed to fetch MiniMax voices" },

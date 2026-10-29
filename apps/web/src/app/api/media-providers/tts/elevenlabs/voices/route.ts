@@ -1,30 +1,26 @@
+import {
+	groupByListedLanguages,
+	spokenLanguages,
+	voiceName,
+	voicesForLanguage,
+} from "9router-api/domain/voice-catalogue"
 import { NextResponse } from "next/server"
 import { type ElevenLabsVoice, fetchElevenLabsVoices } from "open-sse/handlers/ttsCore"
 import { getProviderConnections } from "@/lib/localDb"
 
 export const dynamic = "force-dynamic"
 
-/** One language bucket of normalized voices. */
-interface VoiceLanguage {
-	code: string
-	name: string
-	voices: Array<{
-		id: string
-		name: string
-		gender: string
-		lang: string
-		free_users_allowed?: boolean
-	}>
-}
-
 const langNames = new Intl.DisplayNames(["en"], { type: "language" })
 
 /**
  * GET /api/media-providers/tts/elevenlabs/voices[?lang=en]
- * Returns { languages, byLang } grouped by language - same format as edge-tts
- * Uses direct DB read (no mutex) to avoid blocking on concurrent TTS requests
+ * Returns { languages, byLang } grouped by language - same format as the other TTS routes.
+ * Uses direct DB read (no mutex) to avoid blocking on concurrent TTS requests.
+ *
+ * A voice appears under every language ElevenLabs verified it for, not only its primary one:
+ * the picker filters by language, and a voice that speaks both English and Spanish would
+ * otherwise be unreachable from one of the two lists.
  */
-
 export async function GET(request) {
 	try {
 		const { searchParams } = new URL(request.url)
@@ -39,54 +35,28 @@ export async function GET(request) {
 
 		const voices = await fetchElevenLabsVoices(apiKey)
 
-		// Group by all supported languages (verified_languages + labels.language)
-		const byLang: Record<string, VoiceLanguage> = {}
-		const addToLang = (code: string, voice: ElevenLabsVoice) => {
-			if (!byLang[code]) {
-				byLang[code] = {
-					code,
-					name: (() => {
-						try {
-							return langNames.of(code)
-						} catch {
-							return code
-						}
-					})(),
-					voices: [],
-				}
-			}
-			// Avoid duplicate voice in same lang
-			if (!byLang[code].voices.find((v) => v.id === voice.voice_id)) {
-				byLang[code].voices.push({
-					id: voice.voice_id,
-					name: voice.name,
-					gender: voice.labels?.gender || "",
-					lang: code,
-					// premade voices are free; professional library voices added to account may require paid plan
-					free_users_allowed: voice.category === "premade" || voice.is_owner === true,
-				})
-			}
-		}
-		for (const v of voices) {
-			// Add to primary language
-			const primaryLang = v.labels?.language || "en"
-			addToLang(primaryLang, v)
-			// Add to all verified languages
-			for (const vl of v.verified_languages || []) {
-				if (vl.language && vl.language !== primaryLang) {
-					addToLang(vl.language, v)
-				}
-			}
-		}
+		const catalogue = groupByListedLanguages(
+			voices,
+			(voice) =>
+				spokenLanguages(
+					voice.labels?.language,
+					(voice.verified_languages ?? []).map((entry) => entry.language ?? ""),
+				),
+			(voice: ElevenLabsVoice, code) => ({
+				id: voice.voice_id,
+				name: voiceName(voice.name, voice.voice_id),
+				gender: voice.labels?.gender || "",
+				lang: code,
+				// Premade voices are free; professional library voices added to an account may need a paid plan.
+				free_users_allowed: voice.category === "premade" || voice.is_owner === true,
+			}),
+			langNames,
+		)
 
-		const languages = Object.values(byLang).sort((a, b) => a.name.localeCompare(b.name))
-
-		// If lang filter requested, return only that group's voices
 		if (langFilter) {
-			return NextResponse.json({ voices: byLang[langFilter]?.voices || [] })
+			return NextResponse.json({ voices: voicesForLanguage(catalogue.byLang, langFilter) })
 		}
-
-		return NextResponse.json({ languages, byLang })
+		return NextResponse.json(catalogue)
 	} catch (err) {
 		return NextResponse.json(
 			{ error: err instanceof Error ? err.message : "Failed to fetch voices" },

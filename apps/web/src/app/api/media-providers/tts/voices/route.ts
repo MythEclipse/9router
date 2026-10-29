@@ -1,3 +1,8 @@
+import {
+	languageLabel,
+	sortedLanguages,
+	type VoiceLanguage,
+} from "9router-api/domain/voice-catalogue"
 import { NextResponse } from "next/server"
 import { VOICE_FETCHERS } from "open-sse/handlers/ttsCore"
 
@@ -46,27 +51,30 @@ interface NormalizedVoice {
 const LOCALE_NAMES = new Intl.DisplayNames(["en"], { type: "region" })
 const LANG_NAMES = new Intl.DisplayNames(["en"], { type: "language" })
 
-function countryName(code) {
+function regionName(code: string): string {
 	try {
-		return LOCALE_NAMES.of(code)
-	} catch {
-		return code
-	}
-}
-function langName(code) {
-	try {
-		return LANG_NAMES.of(code)
+		return LOCALE_NAMES.of(code) ?? code
 	} catch {
 		return code
 	}
 }
 
+/** `Microsoft X Online (Natural) - ...` → `X (...)`, dropping the vendor prefix and suffix. */
+function edgeTtsName(voice: EdgeTtsVoice): string {
+	return (voice.FriendlyName || voice.ShortName)
+		.replace("Microsoft ", "")
+		.replace(/ Online \(Natural\) - /g, " (")
+}
+
 /**
  * GET /api/media-providers/tts/voices
  * Query:
- *   ?provider=edge-tts | local-device | elevenlabs  (default: edge-tts)
+ *   ?provider=edge-tts | local-device | elevenlabs | gemini  (default: edge-tts)
  *   ?lang=en     (optional filter by lang code)
  *   ?apiKey=xxx  (required for elevenlabs)
+ *
+ * The three payload shapes differ in where the language and the country live, not in what the
+ * picker needs, so each branch reshapes one entry and the grouping stays in the domain.
  */
 export async function GET(request) {
 	try {
@@ -92,42 +100,44 @@ export async function GET(request) {
 		let voices: NormalizedVoice[]
 
 		if (provider === "local-device") {
-			voices = raw.map((v) => ({
+			voices = (raw as LocalDeviceVoice[]).map((v) => ({
 				id: v.id,
 				name: v.name,
 				locale: v.locale.replace("_", "-"),
 				lang: v.lang,
 				country: v.country,
-				countryName: countryName(v.country),
-				langName: langName(v.lang),
+				countryName: regionName(v.country),
+				langName: languageLabel(v.lang, LANG_NAMES),
 				gender: v.gender,
 			}))
 		} else if (useElevenShape) {
-			voices = raw.map((v) => ({
-				id: v.voice_id,
-				name: v.name,
-				locale: v.labels?.language || "en",
-				lang: (v.labels?.language || "en").split("-")[0],
-				country: "",
-				countryName: "",
-				langName: langName((v.labels?.language || "en").split("-")[0]),
-				gender: v.labels?.gender || "",
-				category: v.category,
-			}))
+			voices = (raw as ElevenShapeVoice[]).map((v) => {
+				const locale = v.labels?.language || "en"
+				const lang = locale.split("-")[0]
+				return {
+					id: v.voice_id,
+					name: v.name ?? v.voice_id,
+					locale,
+					lang,
+					country: "",
+					countryName: "",
+					langName: languageLabel(lang, LANG_NAMES),
+					gender: v.labels?.gender || "",
+					category: v.category,
+				}
+			})
 		} else {
 			// edge-tts (default)
-			voices = raw.map((v) => {
+			voices = (raw as EdgeTtsVoice[]).map((v) => {
 				const [lang, country] = v.Locale.split("-")
 				return {
 					id: v.ShortName,
-					name: (v.FriendlyName || v.ShortName)
-						.replace("Microsoft ", "")
-						.replace(/ Online \(Natural\) - /g, " ("),
+					name: edgeTtsName(v),
 					locale: v.Locale,
 					lang,
 					country: country || "",
-					countryName: countryName(country || lang),
-					langName: langName(lang),
+					countryName: regionName(country || lang),
+					langName: languageLabel(lang, LANG_NAMES),
 					gender: v.Gender,
 				}
 			})
@@ -136,18 +146,17 @@ export async function GET(request) {
 		// Apply filter
 		if (langFilter) voices = voices.filter((v) => v.lang === langFilter)
 
-		// Group by language
-		const byLang: Record<string, { code: string; name: string; voices: NormalizedVoice[] }> = {}
-		for (const v of voices) {
-			const key = v.lang
-			if (!byLang[key]) byLang[key] = { code: key, name: v.langName, voices: [] }
-			byLang[key].voices.push(v)
+		const byLang: Record<string, VoiceLanguage> = {}
+		for (const voice of voices) {
+			const bucket = (byLang[voice.lang] ??= {
+				code: voice.lang,
+				name: voice.langName,
+				voices: [],
+			})
+			bucket.voices.push(voice)
 		}
 
-		// Sorted language list
-		const languages = Object.values(byLang).sort((a, b) => a.name.localeCompare(b.name))
-
-		return NextResponse.json({ voices, languages, byLang })
+		return NextResponse.json({ voices, languages: sortedLanguages(byLang), byLang })
 	} catch (err) {
 		return NextResponse.json(
 			{ error: err instanceof Error ? err.message : "Failed to fetch voices" },
