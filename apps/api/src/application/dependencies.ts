@@ -26,6 +26,13 @@ import type {
 	StudioModelPort,
 } from "./models/ports.ts"
 import type { PluginCache, PluginCatalogue, PluginSettingsPort } from "./plugins/manage-plugins.ts"
+import type {
+	ConnectionNodeStore,
+	ConnectionStore,
+	ProviderCatalogue,
+	ProxyPoolStore,
+	StoredConnection,
+} from "./providers/ports.ts"
 import type { PxpipePort, PxpipeSettings } from "./pxpipe/manage-pxpipe.ts"
 import type { SettingsPort } from "./settings/login-gate.ts"
 import type { SemanticCachePort } from "./system/cache-stats.ts"
@@ -217,6 +224,24 @@ export interface Dependencies {
 	}) => string | null
 	/** The STT transports the gateway can dial; anything else is dropped on write. */
 	readonly knownSttTransport: (value: string) => boolean
+	/** Provider connections. */
+	readonly connections: ConnectionStore
+	/** The nodes a compatible connection copies its base URL from. */
+	readonly connectionNodes: ConnectionNodeStore
+	/** Proxy pools, so a connection cannot name one that does not exist. */
+	readonly proxyPools: ProxyPoolStore
+	/** What kinds of provider exist, and which may be created. */
+	readonly providerCatalogue: ProviderCatalogue
+	/** Normalises the several spellings of a provider id to one. */
+	readonly normalizeProviderId: (provider: unknown) => string
+	/** Merges the provider-specific defaults a request body implies. */
+	readonly normalizeProviderSpecificData: (
+		provider: string,
+		body: Record<string, unknown>,
+		providerSpecificData: unknown,
+	) => Record<string, unknown>
+	/** Strips secrets before a connection leaves the process. */
+	readonly connectionResponse: (connection: StoredConnection) => Record<string, unknown>
 	/** Maps a provider alias to the provider id the router uses. */
 	readonly resolveProviderAlias: (prefix: string) => string
 	/** Probes a base URL with a key, before a node is saved. */

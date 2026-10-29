@@ -13,6 +13,7 @@ import { randomUUID } from "node:crypto"
 import { CUSTOM_PLUGIN_KEYS } from "@9router/db/shared/pluginKeys"
 import type { ComboPresetPort } from "../application/dependencies.ts"
 import type { PluginCache } from "../application/plugins/manage-plugins.ts"
+import type { ProviderCatalogue, StoredConnection } from "../application/providers/ports.ts"
 import { buildUseCases, type UseCases } from "../application/use-cases.ts"
 import { createChangelogSourceFromDisk } from "./changelog-source.ts"
 import { createComboRotationPort } from "./combo-rotation-port.ts"
@@ -49,6 +50,12 @@ import {
 	type RegistryHost,
 } from "./db/repositories/model-registry-repository.ts"
 import { createPricingRepository } from "./db/repositories/pricing-repository.ts"
+import {
+	type ConnectionHost,
+	createConnectionNodeStore,
+	createConnectionStore,
+	createProxyPoolStore,
+} from "./db/repositories/provider-connection-repository.ts"
 import { createUsageReportPort } from "./db/repositories/usage-report-repository.ts"
 import {
 	type CatalogueHost,
@@ -116,6 +123,20 @@ export interface UseCaseOptions {
 	readonly registryHost?: RegistryHost
 	/** The capability tables, free-provider registry and probe. See `registryHost`. */
 	readonly catalogueHost?: CatalogueHost
+	/** The connection, node and pool tables the provider-connection use-cases read. */
+	readonly connectionHost?: ConnectionHost
+	/** The provider catalogue, for deciding what may be created and what it is called. */
+	readonly providerCatalogue?: ProviderCatalogue
+	/** Normalises the several spellings of a provider id to one. */
+	readonly normalizeProviderId?: (provider: unknown) => string
+	/** Merges the provider-specific defaults a request body implies. */
+	readonly normalizeProviderSpecificData?: (
+		provider: string,
+		body: Record<string, unknown>,
+		providerSpecificData: unknown,
+	) => Record<string, unknown>
+	/** Strips secrets before a connection leaves the process. */
+	readonly connectionResponse?: (connection: StoredConnection) => Record<string, unknown>
 	/**
 	 * The studio cycle guard walks the combo graph, which lives in `apps/web`.
 	 * Absent means no guard, and a cycle would only surface as a request timeout.
@@ -163,6 +184,7 @@ export function createUseCases(
 	}
 	const registryHost = options.registryHost
 	const catalogueHost = options.catalogueHost
+	const connectionHost = options.connectionHost ?? unavailableConnectionHost()
 	const catalogue = createModelCataloguePort(catalogueHost)
 
 	const useCases = buildUseCases({
@@ -236,6 +258,15 @@ export function createUseCases(
 		modelProbe: createModelProbePort(catalogueHost),
 		comboReader: createComboReaderPort(registryHost),
 		nodePrefixes: createNodePrefixPort(registryHost),
+		// The connection use-cases need their own tables; a host that supplies none
+		// gets stores that refuse loudly rather than an empty dashboard.
+		connections: createConnectionStore(connectionHost),
+		connectionNodes: createConnectionNodeStore(connectionHost),
+		proxyPools: createProxyPoolStore(connectionHost),
+		providerCatalogue: options.providerCatalogue ?? unavailableProviderCatalogue(),
+		normalizeProviderId: options.normalizeProviderId ?? identityProviderId,
+		normalizeProviderSpecificData: options.normalizeProviderSpecificData ?? (() => ({})),
+		connectionResponse: options.connectionResponse ?? ((connection) => ({ ...connection })),
 		// The cycle guard walks the combo graph and lives beside it in `apps/web`.
 		findStudioCycle: options.findStudioCycle ?? (() => null),
 		resolveProviderAlias: options.resolveProviderAlias ?? ((prefix) => prefix),
@@ -284,4 +315,41 @@ function unavailableApiKeyStore(): ApiKeyStore {
 			throw new Error(message)
 		},
 	}
+}
+
+/**
+ * Stands in when the host supplies no connection tables.
+ *
+ * Every call throws. Returning empty lists would make the dashboard render as a
+ * fresh install with no providers — a wrong state that looks like a right one.
+ */
+function unavailableConnectionHost(): ConnectionHost {
+	const message = "The provider-connection store is not available in this process"
+	const fail = async (): Promise<never> => {
+		throw new Error(message)
+	}
+	return {
+		connections: { list: fail, find: fail, create: fail, update: fail, remove: fail },
+		nodes: { find: fail, list: fail },
+		pools: { exists: fail },
+	}
+}
+
+/** Stands in when the host supplies no provider catalogue. */
+function unavailableProviderCatalogue(): ProviderCatalogue {
+	return {
+		label: (provider) => provider,
+		isOpenAICompatible: () => false,
+		isAnthropicCompatible: () => false,
+		isCustomEmbedding: () => false,
+		isWebCookie: () => false,
+		apiKeySubstituteField: () => null,
+		isCreatable: () => false,
+		usesAwsCredentialForm: () => false,
+	}
+}
+
+/** The identity normaliser, for a host that sends one spelling of each id. */
+function identityProviderId(provider: unknown): string {
+	return typeof provider === "string" ? provider.trim() : ""
 }

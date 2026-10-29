@@ -29,6 +29,13 @@ import {
 	studioCycleRefusal,
 } from "./modelRegistryHost"
 import { clearPluginCache } from "./plugins/customPluginsRuntime"
+import {
+	connectionHost,
+	connectionResponse,
+	normalizeProviderId,
+	normalizeProviderSpecificData,
+	providerCatalogue,
+} from "./providerConnectionHost"
 import { getPxpipeStats, readPxpipeEvents } from "./pxpipe/events"
 import { getInstallInfo, getInstallLogTail, installPxpipe } from "./pxpipe/install"
 import { loadPxpipe, unloadPxpipe } from "./pxpipe/loader"
@@ -86,6 +93,12 @@ function cache(): Cache {
 			// directory, so this process is the one that can answer for them.
 			registryHost,
 			catalogueHost,
+			// The connection tables and the provider catalogue live here too.
+			connectionHost,
+			providerCatalogue,
+			connectionResponse,
+			normalizeProviderId,
+			normalizeProviderSpecificData,
 			findStudioCycle: studioCycleRefusal,
 			resolveProviderAlias,
 			knownSttTransport,

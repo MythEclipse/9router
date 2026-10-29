@@ -56,6 +56,7 @@ three packages report 0 `tsc` errors and `biome check` is clean.
 | `dashboard-jobs` | 1    | done — unknown kind refused before a job starts |
 | `shutdown`     | 2      | done — one sequence, two gates; 403 vs 401 kept distinct |
 | `pxpipe`       | 8      | done — one list-limit rule; engine codes no longer flattened |
+| `model-registry` | 12 | done — list/alias/availability/custom/studio/nodes/catalogue; transport whitelist now actually applied |
 | (136 more)     | 136    | pending |
 
 Done: 36 of 168 route handlers. `tags` is deliberately **not** ported: it

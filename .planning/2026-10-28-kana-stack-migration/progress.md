@@ -724,3 +724,23 @@ on every touched file, build green, and a standalone smoke covering status,
 `?limit=-5`, `?limit=abc`, health, stop, reload and the failing install path.
 
 Remaining: 132 of 168.
+
+- The custom-model transport whitelist was written into `domain/custom-model.ts`
+  but never called: `manage-aliases.add()` forwarded the body straight to the
+  store, so an unknown transport landed on the row and then survived every later
+  save. `gemini-live-stt` T14 caught it. `add()` now runs `readCustomModel` and
+  omits the key entirely when nothing usable arrived — the store reads an absent
+  key as "leave the stored value alone", which is what a re-save must do.
+- Four tests asserted against route source that no longer holds the rule
+  (`model-test-routing`, `models-route-shadow-dedupe`, `sidebar-usage-ownedby`,
+  `gemini-live-stt`). Each now exercises the rule where it lives; the shadow
+  dedupe test still runs against the real `AI_MODELS` registry, so the collision
+  it guards is still a real one.
+- `9router-api` package exports gained `./application/models/*` and `./domain/*`
+  so tests can reach a use-case without importing the whole app graph.
+
+Verification: 571 files / 6059 tests passing, both packages typecheck clean,
+biome clean, `bun run build` exit 0, gateway baseline unchanged
+(`/login` 200, `/api/health` 200, `/v1/models` 401, `/api/models/custom` 401).
+
+Remaining: 156 of 168.

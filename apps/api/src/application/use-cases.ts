@@ -34,6 +34,7 @@ import { makeProviderNodes } from "./models/manage-provider-nodes.ts"
 import { makeStudioModels } from "./models/manage-studio-models.ts"
 import { makeReadPlugins, makeWritePlugins } from "./plugins/manage-plugins.ts"
 import { makeGetPricing, makeResetPricing, makeUpdatePricing } from "./pricing/manage-pricing.ts"
+import { makeConnections } from "./providers/manage-connections.ts"
 import { makePxpipe } from "./pxpipe/manage-pxpipe.ts"
 import { assertSupportedLocale } from "./settings/locale.ts"
 import { readLoginGate } from "./settings/login-gate.ts"
@@ -90,6 +91,7 @@ export interface UseCases {
 	readonly pxpipe: ReturnType<typeof makePxpipe>
 	/** Aliases and custom models, which share the key reconcile step. */
 	readonly modelAliases: ReturnType<typeof makeModelAliases>
+	readonly connections: ReturnType<typeof makeConnections>
 	readonly customModels: ReturnType<typeof makeCustomModels>
 	readonly disabledModels: ReturnType<typeof makeDisabledModels>
 	readonly studioModels: ReturnType<typeof makeStudioModels>
@@ -165,6 +167,15 @@ export function buildUseCases(deps: Dependencies): UseCases {
 		modelAliases: makeModelAliases({
 			aliases: deps.modelAliases,
 			reconciler: deps.allowedModelReconciler,
+		}),
+		connections: makeConnections({
+			connections: deps.connections,
+			nodes: deps.connectionNodes,
+			pools: deps.proxyPools,
+			catalogue: deps.providerCatalogue,
+			normalizeProviderId: deps.normalizeProviderId,
+			normalizeProviderSpecificData: deps.normalizeProviderSpecificData,
+			toResponse: deps.connectionResponse,
 		}),
 		customModels: makeCustomModels({
 			models: deps.customModels,
