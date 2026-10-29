@@ -8,15 +8,18 @@ import {
 	pickOidcEmail,
 	verifyOidcIdToken,
 } from "@9router/auth/oidc"
+import {
+	handshakeComplete,
+	handshakeErrorSlug,
+	OIDC_HANDSHAKE_COOKIES,
+} from "9router-api/domain/dashboard-session"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 
 export const dynamic = "force-dynamic"
 
 function clearOidcCookies(cookieStore) {
-	cookieStore.delete("oidc_state")
-	cookieStore.delete("oidc_nonce")
-	cookieStore.delete("oidc_code_verifier")
+	for (const name of OIDC_HANDSHAKE_COOKIES) cookieStore.delete(name)
 }
 
 export async function GET(request) {
@@ -39,7 +42,14 @@ export async function GET(request) {
 	const storedNonce = cookieStore.get("oidc_nonce")?.value
 	const codeVerifier = cookieStore.get("oidc_code_verifier")?.value
 
-	if (!storedState || !storedNonce || !codeVerifier || storedState !== state) {
+	if (
+		!handshakeComplete({
+			storedState,
+			returnedState: state,
+			storedNonce,
+			codeVerifier,
+		})
+	) {
 		clearOidcCookies(cookieStore)
 		return NextResponse.redirect(new URL("/login?error=oidc_invalid_state", getPublicOrigin(request)))
 	}
@@ -90,7 +100,7 @@ export async function GET(request) {
 		clearOidcCookies(cookieStore)
 		return NextResponse.redirect(
 			new URL(
-				`/login?error=${encodeURIComponent(error.message || "oidc_callback_failed")}`,
+				`/login?error=${encodeURIComponent(handshakeErrorSlug(null, "oidc_callback_failed"))}`,
 				getPublicOrigin(request),
 			),
 		)

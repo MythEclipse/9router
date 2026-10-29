@@ -7,6 +7,8 @@ import {
 	pickSamlEmail,
 	validateSamlResponse,
 } from "@9router/auth/saml"
+import { lockoutMessage } from "9router-api/domain/dashboard-login"
+import { handshakeErrorSlug, SAML_HANDSHAKE_COOKIE } from "9router-api/domain/dashboard-session"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 import { getSettings } from "@/lib/localDb"
@@ -21,18 +23,15 @@ export async function POST(request) {
 	const lock = checkLock(ip)
 	if (lock.locked) {
 		return NextResponse.redirect(
-			new URL(
-				`/login?error=${encodeURIComponent(`Too many failed attempts. Try again in ${lock.retryAfter}s.`)}`,
-				origin,
-			),
+			new URL(`/login?error=${encodeURIComponent(lockoutMessage(lock.retryAfter))}`, origin),
 		)
 	}
 
 	const cookieStore = await cookies()
-	const storedRequestId = cookieStore.get("saml_state")?.value || ""
+	const storedRequestId = cookieStore.get(SAML_HANDSHAKE_COOKIE)?.value || ""
 
 	// Always clear saml_state cookie after attempt
-	cookieStore.delete("saml_state")
+	cookieStore.delete(SAML_HANDSHAKE_COOKIE)
 
 	try {
 		const formData = await request.formData()
@@ -65,7 +64,10 @@ export async function POST(request) {
 	} catch (error) {
 		recordFail(ip)
 		return NextResponse.redirect(
-			new URL(`/login?error=${encodeURIComponent(error.message || "saml_acs_failed")}`, origin),
+			new URL(
+				`/login?error=${encodeURIComponent(handshakeErrorSlug(null, "saml_acs_failed"))}`,
+				origin,
+			),
 		)
 	}
 }

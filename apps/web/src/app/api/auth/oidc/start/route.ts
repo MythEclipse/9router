@@ -8,6 +8,11 @@ import {
 	getOidcRuntimeConfig,
 	getPublicOrigin,
 } from "@9router/auth/oidc"
+import {
+	handshakeCookieOptions,
+	handshakeErrorSlug,
+	OIDC_HANDSHAKE_COOKIES,
+} from "9router-api/domain/dashboard-session"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 
@@ -38,22 +43,21 @@ export async function GET(request) {
 		})
 
 		const cookieStore = await cookies()
-		const baseOptions = {
-			httpOnly: true,
-			secure: shouldUseSecureCookie(request),
-			sameSite: "lax" as const,
-			path: "/",
-			maxAge: 10 * 60,
-		}
-		cookieStore.set("oidc_state", state, baseOptions)
-		cookieStore.set("oidc_nonce", nonce, baseOptions)
-		cookieStore.set("oidc_code_verifier", verifier, baseOptions)
+		const options = handshakeCookieOptions(shouldUseSecureCookie(request))
+		const [stateCookie, nonceCookie, verifierCookie] = OIDC_HANDSHAKE_COOKIES
+		cookieStore.set(stateCookie, state, options)
+		cookieStore.set(nonceCookie, nonce, options)
+		cookieStore.set(verifierCookie, verifier, options)
 
 		return NextResponse.redirect(authUrl)
 	} catch (error) {
 		return NextResponse.redirect(
 			new URL(
-				`/login?error=${encodeURIComponent(error.message || "oidc_start_failed")}`,
+				`/login?error=${encodeURIComponent(
+					// Our own failure, so a fixed slug — a raw message can carry a URL or a secret
+					// into the address bar and browser history.
+					handshakeErrorSlug(null, "oidc_start_failed"),
+				)}`,
 				getPublicOrigin(request),
 			),
 		)

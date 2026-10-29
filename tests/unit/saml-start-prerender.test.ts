@@ -17,7 +17,11 @@ describe("SAML start route: never prerendered at build time", () => {
 	})
 
 	it("keeps the cookie-driven redirect behaviour", () => {
-		expect(route).toContain('cookieStore.set("saml_state", requestId')
+		// The cookie name is now `SAML_HANDSHAKE_COOKIE` from the domain module, so this asserts the
+		// behaviour rather than one literal spelling: the state cookie is written, and the redirect
+		// goes to the IdP.
+		expect(route).toContain("SAML_HANDSHAKE_COOKIE")
+		expect(route).toMatch(/cookieStore\.set\(\s*SAML_HANDSHAKE_COOKIE,\s*requestId/)
 		expect(route).toContain("NextResponse.redirect(authorizeUrl)")
 	})
 })

@@ -7,6 +7,7 @@ import {
 	firstAllowedPage,
 	normalizePermissions,
 } from "@9router/db/shared/permissionPaths"
+import { sessionHomePath } from "9router-api/domain/dashboard-login"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 import { getSettings } from "@/lib/localDb"
@@ -59,7 +60,10 @@ export async function GET() {
 					: "Password"
 		// Where this session belongs after signing in. A key without any usable
 		// permission gets null so the login page can stop instead of redirecting in a loop.
-		const homePath = isApiKeyLogin && session ? firstAllowedPage(permissions) : "/dashboard"
+		const homePath = sessionHomePath(
+			role,
+			isApiKeyLogin && session ? firstAllowedPage(permissions) : null,
+		)
 
 		return NextResponse.json({
 			requireLogin,

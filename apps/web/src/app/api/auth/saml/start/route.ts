@@ -1,5 +1,10 @@
 import { shouldUseSecureCookie } from "@9router/auth/dashboardSession"
 import { buildSamlAuthorizeUrl, getSamlBaseUrl, isSamlConfigured } from "@9router/auth/saml"
+import {
+	handshakeCookieOptions,
+	handshakeErrorSlug,
+	SAML_HANDSHAKE_COOKIE,
+} from "9router-api/domain/dashboard-session"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 import { getSettings } from "@/lib/localDb"
@@ -22,18 +27,19 @@ export async function GET(request) {
 		const { authorizeUrl, requestId } = await buildSamlAuthorizeUrl(request, settings)
 
 		const cookieStore = await cookies()
-		cookieStore.set("saml_state", requestId, {
-			httpOnly: true,
-			secure: shouldUseSecureCookie(request),
-			sameSite: "lax",
-			path: "/",
-			maxAge: 10 * 60,
-		})
+		cookieStore.set(
+			SAML_HANDSHAKE_COOKIE,
+			requestId,
+			handshakeCookieOptions(shouldUseSecureCookie(request)),
+		)
 
 		return NextResponse.redirect(authorizeUrl)
 	} catch (error) {
 		return NextResponse.redirect(
-			new URL(`/login?error=${encodeURIComponent(error.message || "saml_start_failed")}`, origin),
+			new URL(
+				`/login?error=${encodeURIComponent(handshakeErrorSlug(null, "saml_start_failed"))}`,
+				origin,
+			),
 		)
 	}
 }
