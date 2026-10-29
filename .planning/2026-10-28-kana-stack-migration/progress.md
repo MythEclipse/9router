@@ -983,3 +983,50 @@ unchanged (`/login` 200, `/api/health` 200, `/v1/models` 401,
 `/api/providers/xyz/models` 401).
 
 **`providers` is complete: 12 of 12.** Remaining: 145 of 168 handlers.
+
+## settings — the row's general read and write
+
+184 lines, and the reason it took a rule file: seven separate decisions were
+interleaved with the read-write, and four of them are security-shaped.
+
+**The one real bug the extraction caught.** The old handler stripped the
+admin-only field from the body for *every* caller:
+
+```
+if (adminOnlyAttempt) {
+  if (session?.role === "apikey") return 403
+  delete body[adminOnlyAttempt]        // ← also ran for administrators
+}
+```
+
+An administrator editing the theme through the settings form had the field
+deleted before the write, so the write reported success and changed nothing. Three
+of my own use-case tests failed on exactly this the first time — which is the
+point of testing the rule apart from the handler.
+
+**What the rules say, now that they say anything at all.**
+
+- `PROTECTED_SETTING_KEYS` is a mass-assignment guard, not a preference: `password`
+  is written only through the `newPassword` flow where the old one is verified and
+  the new one hashed, and `mitmSudoEncrypted` only by the code that encrypts it.
+  The strip happens *first*, so neither can reach the before-image either.
+- `theme` is refused with 403 rather than dropped for an API-key session. Dropping
+  it would let the caller believe the site-wide theme changed.
+- A form field arriving as `undefined` is not an attempt. Every ordinary save sends
+  the whole form.
+- The password rule answers what the change still *needs* (`verify`), not whether
+  it is allowed — hash comparison is async and only the caller has the hash. My
+  first draft had a synchronous cache standing in for that comparison, which would
+  have answered `false` forever; the type system did not catch it, a test did.
+- A blank `oidcClientSecret` means "leave it alone": the form cannot read the
+  secret back, so blank is its normal state.
+- The four side effects (proxy env, combo rotation, proxy health, auto-ping) are
+  named as *owed by certain fields*, so `sideEffectsOf` can be tested without a
+  process. All four exist because leaving one out was a real bug.
+
+Verification: 595 files / 6600 tests passing (74 skipped), both packages typecheck
+clean, biome clean, `bun run build` exit 0, gateway baseline unchanged (`/login`
+200, `/api/health` 200, `/api/settings` 401, `PATCH /api/settings` 401,
+`/v1/models` 401).
+
+Remaining in `settings`: 8 of 9. Remaining overall: 137 of 174.
