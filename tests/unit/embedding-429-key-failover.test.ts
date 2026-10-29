@@ -42,11 +42,27 @@ let updateSettings
 let authService
 
 beforeAll(async () => {
-	;({ POST } = await import("@/app/api/providers/route.js"))
 	;({ handleEmbeddings } = await import("@/sse/handlers/embeddings.js"))
 	;({ getProviderConnections } = await import("@9router/db/repos/connectionsRepo"))
 	;({ updateSettings } = await import("@9router/db/repos/settingsRepo"))
 	authService = await import("@/sse/services/auth.js")
+
+	// The route delegates to the connection use-case now; give it one over these
+	// same stores. Building the full graph would open a second SQLite handle,
+	// which `createDb` refuses under Vitest.
+	const models = await import("@/models/index.js")
+	const connections = await connectionsOver(models, {
+		getProviderConnections,
+		getProviderConnectionById: models.getProviderConnectionById,
+		createProviderConnection: models.createProviderConnection,
+		updateProviderConnection: models.updateProviderConnection,
+		deleteProviderConnection: models.deleteProviderConnection,
+		getProviderNodes: models.getProviderNodes,
+		getProviderNodeById: models.getProviderNodeById,
+		getProxyPoolById: models.getProxyPoolById,
+	})
+	vi.doMock("@/lib/useCases", () => ({ getUseCases: () => ({ connections }) }))
+	;({ POST } = await import("@/app/api/providers/route.js"))
 	await updateSettings({ requireApiKey: false })
 })
 
@@ -66,6 +82,63 @@ const addKey = (apiKey) =>
 			body: JSON.stringify({ provider: "gemini", apiKey }),
 		}),
 	)
+
+/** The real connection use-case over the stores this test already reads back. */
+async function connectionsOver(models, stores) {
+	const { makeConnections } = await import(
+		"../../apps/api/src/application/providers/manage-connections.ts"
+	)
+	const { normalizeProviderId, normalizeProviderSpecificData } = await import(
+		"@/lib/providerNormalization"
+	)
+	const { toProviderConnectionResponse, usesAwsCredentialForm } = await import(
+		"@/lib/providerConnectionResponse"
+	)
+	const {
+		AI_PROVIDERS,
+		APIKEY_PROVIDERS,
+		FREE_TIER_PROVIDERS,
+		WEB_COOKIE_PROVIDERS,
+		isOpenAICompatibleProvider,
+		isAnthropicCompatibleProvider,
+		isCustomEmbeddingProvider,
+	} = await import("@/shared/constants/providers")
+	return makeConnections({
+		connections: {
+			list: (filter) => stores.getProviderConnections(filter),
+			find: (id) => stores.getProviderConnectionById(id),
+			create: (fields) => stores.createProviderConnection(fields),
+			update: (id, fields) => stores.updateProviderConnection(id, fields),
+			remove: (id) => stores.deleteProviderConnection(id),
+		},
+		nodes: {
+			find: (id) => stores.getProviderNodeById(id),
+			list: () => stores.getProviderNodes(),
+		},
+		pools: { exists: async (id) => !!(await stores.getProxyPoolById(id)) },
+		catalogue: {
+			label: (provider) => AI_PROVIDERS[provider]?.name ?? provider,
+			isOpenAICompatible: isOpenAICompatibleProvider,
+			isAnthropicCompatible: isAnthropicCompatibleProvider,
+			isCustomEmbedding: isCustomEmbeddingProvider,
+			isWebCookie: (provider) => !!WEB_COOKIE_PROVIDERS[provider],
+			apiKeySubstituteField: (provider) => AI_PROVIDERS[provider]?.apiKeyOptionalWith ?? null,
+			usesAwsCredentialForm,
+			isCreatable: (provider) =>
+				!!provider &&
+				(!!APIKEY_PROVIDERS[provider] ||
+					!!FREE_TIER_PROVIDERS[provider] ||
+					!!AI_PROVIDERS[provider]?.authModes?.includes("apikey") ||
+					!!WEB_COOKIE_PROVIDERS[provider] ||
+					isOpenAICompatibleProvider(provider) ||
+					isAnthropicCompatibleProvider(provider) ||
+					isCustomEmbeddingProvider(provider)),
+		},
+		normalizeProviderId,
+		normalizeProviderSpecificData,
+		toResponse: toProviderConnectionResponse,
+	})
+}
 
 describe("gemini embedding key pool", () => {
 	beforeEach(() => {

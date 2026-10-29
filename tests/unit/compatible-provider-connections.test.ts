@@ -5,6 +5,68 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const originalDataDir = process.env.DATA_DIR
 
+/**
+ * The real connection use-case over the real `@/models` stores.
+ *
+ * Only the process-level wiring is faked: the rules under test are the ones in
+ * `application/providers/manage-connections.ts`, running against the same tables
+ * the assertions read back.
+ */
+async function connectionsOver(models) {
+	const { makeConnections } = await import(
+		"../../apps/api/src/application/providers/manage-connections.ts"
+	)
+	const { normalizeProviderId, normalizeProviderSpecificData } = await import(
+		"@/lib/providerNormalization"
+	)
+	const { toProviderConnectionResponse } = await import("@/lib/providerConnectionResponse")
+	const {
+		AI_PROVIDERS,
+		APIKEY_PROVIDERS,
+		FREE_TIER_PROVIDERS,
+		WEB_COOKIE_PROVIDERS,
+		isOpenAICompatibleProvider,
+		isAnthropicCompatibleProvider,
+		isCustomEmbeddingProvider,
+	} = await import("@/shared/constants/providers")
+	return makeConnections({
+		connections: {
+			list: (filter) => models.getProviderConnections(filter),
+			find: (id) => models.getProviderConnectionById(id),
+			create: (fields) => models.createProviderConnection(fields),
+			update: (id, fields) => models.updateProviderConnection(id, fields),
+			remove: (id) => models.deleteProviderConnection(id),
+		},
+		nodes: {
+			find: (id) => models.getProviderNodeById(id),
+			list: () => models.getProviderNodes(),
+		},
+		pools: {
+			exists: async (id) => !!(await models.getProxyPoolById(id)),
+		},
+		catalogue: {
+			label: (provider) => AI_PROVIDERS[provider]?.name ?? provider,
+			isOpenAICompatible: isOpenAICompatibleProvider,
+			isAnthropicCompatible: isAnthropicCompatibleProvider,
+			isCustomEmbedding: isCustomEmbeddingProvider,
+			isWebCookie: (provider) => !!WEB_COOKIE_PROVIDERS[provider],
+			apiKeySubstituteField: (provider) => AI_PROVIDERS[provider]?.apiKeyOptionalWith ?? null,
+			isCreatable: (provider) =>
+				!!provider &&
+				(!!APIKEY_PROVIDERS[provider] ||
+					!!FREE_TIER_PROVIDERS[provider] ||
+					!!AI_PROVIDERS[provider]?.authModes?.includes("apikey") ||
+					!!WEB_COOKIE_PROVIDERS[provider] ||
+					isOpenAICompatibleProvider(provider) ||
+					isAnthropicCompatibleProvider(provider) ||
+					isCustomEmbeddingProvider(provider)),
+		},
+		normalizeProviderId,
+		normalizeProviderSpecificData,
+		toResponse: toProviderConnectionResponse,
+	})
+}
+
 async function setupTestContext(nodeData) {
 	const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "9router-compatible-provider-"))
 	process.env.DATA_DIR = tempDir
@@ -20,8 +82,17 @@ async function setupTestContext(nodeData) {
 		},
 	}))
 
+	// The route now delegates to the connection use-case. Building the whole graph
+	// would open a second SQLite handle, which `createDb` refuses under Vitest — so
+	// the route is given a use-case over the very same stores this test seeds.
+	const models = await import("@/models/index.js")
+	const connections = await connectionsOver(models)
+	vi.doMock("@/lib/useCases", () => ({
+		getUseCases: () => ({ connections }),
+	}))
+
 	const { POST } = await import("@/app/api/providers/route.js")
-	const { createProviderNode, getProviderConnections } = await import("@/models/index.js")
+	const { createProviderNode, getProviderConnections } = models
 
 	const node = await createProviderNode(nodeData)
 

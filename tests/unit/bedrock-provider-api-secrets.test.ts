@@ -38,6 +38,68 @@ async function createAwsConnection(provider) {
 	return { response, body: await response.json() }
 }
 
+/**
+ * The real connection use-case over the real `@/models` stores.
+ *
+ * Only the process wiring is faked, so the assertions still exercise the actual
+ * create/update rules against the actual tables.
+ */
+async function connectionsOver(models) {
+	const { makeConnections } = await import(
+		"../../apps/api/src/application/providers/manage-connections.ts"
+	)
+	const { normalizeProviderId, normalizeProviderSpecificData } = await import(
+		"@/lib/providerNormalization"
+	)
+	const { toProviderConnectionResponse, usesAwsCredentialForm } = await import(
+		"@/lib/providerConnectionResponse"
+	)
+	const {
+		AI_PROVIDERS,
+		APIKEY_PROVIDERS,
+		FREE_TIER_PROVIDERS,
+		WEB_COOKIE_PROVIDERS,
+		isOpenAICompatibleProvider,
+		isAnthropicCompatibleProvider,
+		isCustomEmbeddingProvider,
+	} = await import("@/shared/constants/providers")
+	return makeConnections({
+		connections: {
+			list: (filter) => models.getProviderConnections(filter),
+			find: (id) => models.getProviderConnectionById(id),
+			create: (fields) => models.createProviderConnection(fields),
+			update: (id, fields) => models.updateProviderConnection(id, fields),
+			remove: (id) => models.deleteProviderConnection(id),
+		},
+		nodes: {
+			find: (id) => models.getProviderNodeById(id),
+			list: () => models.getProviderNodes(),
+		},
+		pools: { exists: async (id) => !!(await models.getProxyPoolById(id)) },
+		catalogue: {
+			label: (provider) => AI_PROVIDERS[provider]?.name ?? provider,
+			isOpenAICompatible: isOpenAICompatibleProvider,
+			isAnthropicCompatible: isAnthropicCompatibleProvider,
+			isCustomEmbedding: isCustomEmbeddingProvider,
+			isWebCookie: (provider) => !!WEB_COOKIE_PROVIDERS[provider],
+			apiKeySubstituteField: (provider) => AI_PROVIDERS[provider]?.apiKeyOptionalWith ?? null,
+			usesAwsCredentialForm,
+			isCreatable: (provider) =>
+				!!provider &&
+				(!!APIKEY_PROVIDERS[provider] ||
+					!!FREE_TIER_PROVIDERS[provider] ||
+					!!AI_PROVIDERS[provider]?.authModes?.includes("apikey") ||
+					!!WEB_COOKIE_PROVIDERS[provider] ||
+					isOpenAICompatibleProvider(provider) ||
+					isAnthropicCompatibleProvider(provider) ||
+					isCustomEmbeddingProvider(provider)),
+		},
+		normalizeProviderId,
+		normalizeProviderSpecificData,
+		toResponse: toProviderConnectionResponse,
+	})
+}
+
 describe("Bedrock connection API secrets", () => {
 	beforeEach(async () => {
 		tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "9router-bedrock-api-secrets-"))
@@ -54,6 +116,13 @@ describe("Bedrock connection API secrets", () => {
 				},
 			},
 		}))
+
+		// The routes delegate to the connection use-case now. Building the whole
+		// graph would open a second SQLite handle, which `createDb` refuses under
+		// Vitest — so the use-case runs over the same `@/models` stores.
+		const models = await import("@/models/index.js")
+		const connections = await connectionsOver(models)
+		vi.doMock("@/lib/useCases", () => ({ getUseCases: () => ({ connections }) }))
 
 		;({ GET: listConnections, POST: createConnection } = await import("@/app/api/providers/route.js"))
 		;({ GET: getConnection, PUT: updateConnection } = await import(
