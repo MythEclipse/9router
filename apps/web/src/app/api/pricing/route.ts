@@ -1,20 +1,33 @@
 /**
  * Pricing configuration.
  *
- * Delegates: the shape of a valid update, and what a reset target means, are
- * rules and live in `9router-api`. This file keeps the verbs and the query
- * parameters.
+ * Delegates: the shape of a valid update, and what a reset target means, are rules
+ * and live in `9router-api`. This file keeps the verbs and the query parameters.
+ *
+ * No handler reads the session because no rule here needs a caller — but the path is
+ * not public: `dashboardGuard` denies `/api/*` by default and `/api/pricing` is not on
+ * its allow-list. The client is built with the session anyway, because the procedures
+ * are `authed` and the guard is not a substitute for that gate.
  */
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { NextResponse } from "next/server"
+import { createApiClient, sessionClaimsOf } from "@/lib/orpcClient"
 import { getUseCases } from "@/lib/useCases"
 import { toResponse } from "../response"
 
 export const dynamic = "force-dynamic"
 
+async function client() {
+	return createApiClient({
+		session: sessionClaimsOf(await getSessionContext()),
+		useCases: getUseCases(),
+	})
+}
+
 /** The catalog merged with the operator's overrides. */
 export async function GET() {
 	try {
-		return NextResponse.json(await getUseCases().getPricing())
+		return NextResponse.json(await (await client()).pricing.get())
 	} catch (error) {
 		return toResponse(error)
 	}
@@ -24,7 +37,7 @@ export async function GET() {
 export async function PATCH(request: Request) {
 	try {
 		const body = await request.json().catch(() => undefined)
-		return NextResponse.json(await getUseCases().updatePricing(body))
+		return NextResponse.json(await (await client()).pricing.update(body))
 	} catch (error) {
 		return toResponse(error)
 	}
@@ -38,10 +51,10 @@ export async function PATCH(request: Request) {
 export async function DELETE(request: Request) {
 	try {
 		const { searchParams } = new URL(request.url)
-		const pricing = await getUseCases().resetPricing(
-			searchParams.get("provider"),
-			searchParams.get("model"),
-		)
+		const pricing = await (await client()).pricing.reset({
+			provider: searchParams.get("provider"),
+			model: searchParams.get("model"),
+		})
 		return NextResponse.json(pricing)
 	} catch (error) {
 		return toResponse(error)
