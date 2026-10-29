@@ -2,6 +2,7 @@ import { execSync } from "node:child_process"
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
+import { parseProcessRows, selectAppPids } from "./appProcessSelection.ts"
 
 const KILL_TIMEOUT_MS = 5000
 const PROCESS_WAIT_MS = 1500
@@ -101,21 +102,17 @@ function collectAppPids() {
 		}
 	} else {
 		try {
-			const output = execSync("ps aux 2>/dev/null", { encoding: "utf8", timeout: KILL_TIMEOUT_MS })
-			output.split("\n").forEach((line) => {
-				const isAppProcess =
-					line.includes("9router") ||
-					line.includes("next-server") ||
-					line.includes("cloudflared") ||
-					line.includes("/bin/app/") ||
-					line.includes("tray_darwin") ||
-					line.includes("tray_linux")
-				if (isAppProcess) {
-					const parts = line.trim().split(/\s+/)
-					const pid = parts[1]
-					if (pid && !Number.isNaN(Number(pid)) && pid !== process.pid.toString()) pids.push(pid)
-				}
+			/*
+			 * `pid=` and `comm=` only. Scanning the full `ps aux` line for the string
+			 * "9router" matched any process whose *arguments* mentioned the project
+			 * directory — every shell and editor in it — and killed them. `comm` is the
+			 * executable's name, which an argument cannot spoof.
+			 */
+			const output = execSync("ps -eo pid=,comm= 2>/dev/null", {
+				encoding: "utf8",
+				timeout: KILL_TIMEOUT_MS,
 			})
+			pids.push(...selectAppPids(parseProcessRows(output), process.pid))
 		} catch {
 			/* no processes */
 		}
