@@ -1,5 +1,6 @@
 import {
 	type BaseUrlSuffix,
+	isWritableApiKey,
 	NOTHING_TO_RESET,
 	normaliseBaseUrl,
 	pointsAtThisInstall,
@@ -35,6 +36,23 @@ export interface ToolConfigPort {
 	 */
 	readonly readForWrite: () => Promise<Record<string, unknown>>
 	readonly write: (text: string) => Promise<void>
+	/**
+	 * Fills in a key the card did not carry.
+	 *
+	 * The card's key field is optional because the backend already knows the active dashboard
+	 * key; an empty field means "use that", not "write nothing". The placeholder the card puts
+	 * in the field must not be written either, which is why resolution happens here and not in
+	 * the browser.
+	 */
+	readonly resolveApiKey?: (requested: string) => Promise<string>
+	/**
+	 * The fields this tool's screen actually requires.
+	 *
+	 * Most cards demand all three, but a tool whose key the backend can resolve — and whose
+	 * model has a documented default — only needs a base URL. Requiring all three there turns
+	 * a one-field form into a 400 the operator cannot get past.
+	 */
+	readonly required?: readonly (keyof ToolSettingsInput)[]
 	/** Which format the config file is written in; must match what `readForWrite` parses. */
 	readonly format?: SettingsFormat
 	/** Serialises TOML, supplied by the host because the parser lives there. */
@@ -105,22 +123,26 @@ export async function writeToolSettings(
 	body: unknown,
 	deps: ToolSettingsDeps,
 ): Promise<ToolSettingsAnswer> {
-	const parsed = readToolSettings(body)
+	const parsed = readToolSettings(body, deps.config.required)
 	if (!parsed.ok || !parsed.input) {
 		return { ok: false, status: 400, body: { error: parsed.error } }
 	}
 	const input = parsed.input
 
 	try {
-		if (!(await deps.isInstalled())) {
-			return { ok: false, status: 400, body: notInstalled(deps).body }
-		}
-
-		const existing = await deps.config.readForWrite()
+		// No install check here on purpose: a tool that has never run has no config file, and
+		// that is exactly the state this screen exists to fix. Refusing to write because the
+		// binary is not on PATH turns "configure it for me" into an error the operator cannot
+		// get past. The check belongs on GET, where it describes instead of blocks.
 		const spelled = {
 			...input,
 			baseUrl: normaliseBaseUrl(input.baseUrl, deps.config.baseUrlSuffix),
 		}
+		if (deps.config.resolveApiKey) {
+			const resolved = await deps.config.resolveApiKey(spelled.apiKey ?? "")
+			if (resolved && isWritableApiKey(resolved)) spelled.apiKey = resolved
+		}
+		const existing = await deps.config.readForWrite()
 		await deps.config.write(
 			settingsFileText(
 				deps.config.apply(existing, spelled),

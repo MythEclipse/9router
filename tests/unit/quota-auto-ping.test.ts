@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-vi.mock("open-sse/index.js", () => ({}), { virtual: true })
+// The specifier must match the source exactly. The module is imported as "open-sse/index"
+// (no extension), so mocking "open-sse/index.js" left the real engine to load — and it failed
+// with "Cannot find package", which is a resolution error, not the assertion under test.
+vi.mock("open-sse/index", () => ({}), { virtual: true })
 
 vi.mock("@/lib/localDb", async (importOriginal) => ({
 	...(await importOriginal()),

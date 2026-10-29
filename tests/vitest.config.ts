@@ -22,11 +22,19 @@ const __dirname = fileURLToPath(new URL(".", import.meta.url))
 function bunSqliteStub(): Plugin {
 	const stub = resolve(__dirname, "stubs/bun-sqlite.ts")
 	const clientStub = resolve(__dirname, "stubs/api-db-client.ts")
+	const openSseRoot = resolve(__dirname, "../apps/web/open-sse")
 	return {
 		name: "9router:bun-sqlite-stub",
 		enforce: "pre",
 		resolveId(source, importer) {
 			if (source === "bun:sqlite") return stub
+			// `open-sse` is a directory of modules, not a package: it has no `package.json` and
+			// is absent from node_modules, so `resolve.alias` is never consulted for the bare
+			// `open-sse/index` specifier — Vite treats it as a package name and fails with
+			// "Cannot find package". Resolving it here, where the alias pass cannot, keeps the
+			// engine's side-effect imports working. Subpath imports use the alias below.
+			if (source === "open-sse") return resolve(openSseRoot, "index.ts")
+			if (source.startsWith("open-sse/")) return resolve(openSseRoot, `${source.slice(9)}.ts`)
 			// The api's db client imports `bun:sqlite` at module scope and opens a
 			// handle immediately; resolving the whole file for a test that only
 			// reaches a use-case would drag the native binding in. Substitute the
@@ -82,8 +90,11 @@ export default defineConfig({
 			// The engine moved to apps/web/open-sse with the monorepo split; the
 			// root open-sse/ directory is now empty, so aliasing to it resolved
 			// every "open-sse/..." import to a path that does not exist.
-			{ find: /^open-sse\//, replacement: resolve(__dirname, "../apps/web/open-sse") + "/" },
-			{ find: "open-sse", replacement: resolve(__dirname, "../apps/web/open-sse") },
+			//
+			// Extensionless: the source writes `open-sse/executors/index`, but the file is
+			// `index.ts`, and an alias replacement is not extension-resolved the way a normal
+			// import is. The `resolveId` plugin above completes these to a real file.
+			{ find: /^open-sse(\/|$)/, replacement: resolve(__dirname, "../apps/web/open-sse") + "/" },
 			// `@/` is the Next app's own root alias. It pointed at ../src, which
 			// stopped existing when the Next app moved to apps/web; every test
 			// importing "@/..." then failed on module resolution instead of on an

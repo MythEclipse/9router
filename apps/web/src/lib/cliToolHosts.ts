@@ -4,8 +4,14 @@ import os from "node:os"
 import path from "node:path"
 import { promisify } from "node:util"
 import type { ToolConfigPort } from "9router-api/application/cli-tools/manage-tool-settings"
-import { type ModelEntry, mergeModelEntries } from "9router-api/domain/cli-tool-settings"
+import {
+	isWritableApiKey,
+	type ModelEntry,
+	mergeModelEntries,
+} from "9router-api/domain/cli-tool-settings"
 import { parseTOML, stringifyTOML } from "confbox"
+import { resolveCliApiKey } from "@/app/api/cli-tools/resolveApiKey"
+import { resolveModelDisplayName } from "@/shared/utils/modelDisplayName"
 import { readConfigForWrite } from "./cliTools/configWrite"
 
 const execAsync = promisify(exec)
@@ -362,17 +368,22 @@ async function resolvePiModelsJsonPath(): Promise<string> {
 type PiConfig = { providers?: Record<string, Record<string, unknown>> }
 
 async function isPiInstalled(): Promise<boolean> {
+	// Either location counts: Pi reads the agent file when that directory exists and the root
+	// file otherwise, so a config at either path is a Pi that has been run.
+	for (const candidate of [PI_AGENT_PATH(), PI_ROOT_PATH()]) {
+		try {
+			await fs.access(candidate)
+			return true
+		} catch {
+			// try the next location
+		}
+	}
 	try {
 		const isWindows = os.platform() === "win32"
 		await execAsync(isWindows ? "where pi" : "which pi", { windowsHide: true })
 		return true
 	} catch {
-		try {
-			await fs.access(PI_ROOT_PATH())
-			return true
-		} catch {
-			return false
-		}
+		return false
 	}
 }
 
@@ -394,6 +405,8 @@ export const piSettingsConfig: ToolConfigPort = {
 		await fs.writeFile(configPath, text, "utf-8")
 	},
 	baseUrlSuffix: "with-v1",
+	required: ["baseUrl"],
+	resolveApiKey: (requested) => resolveCliApiKey(requested || null),
 	installKeys: ["9router"],
 	storedBaseUrl: (config) => {
 		const provider = (config as PiConfig)?.providers?.["9router"]
@@ -406,11 +419,14 @@ export const piSettingsConfig: ToolConfigPort = {
 		const models: ModelEntry[] = mergeModelEntries(
 			existing.models,
 			Array.isArray(input.models) && input.models.length > 0 ? input.models : [input.model],
+			resolveModelDisplayName,
 		)
 		providers["9router"] = {
 			...existing,
 			baseUrl: input.baseUrl,
-			apiKey: input.apiKey || existing.apiKey,
+			// A placeholder is not a key: keep the stored one rather than write a value that
+			// every request will reject.
+			apiKey: isWritableApiKey(input.apiKey ?? "") ? input.apiKey : existing.apiKey,
 			api: existing.api ?? "openai-completions",
 			models,
 		}

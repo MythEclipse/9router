@@ -61,6 +61,20 @@ describe("Pi CLI-tools settings route", () => {
 		}))
 		vi.doMock("@9router/db", () => ({ getApiKeys: async () => dbKeys }))
 
+		// The route delegates to the shared use-case, so the graph has to be reachable without
+		// opening a database. The use-case itself is the real one — only its wiring is faked,
+		// so these cases still assert on the behaviour the card depends on.
+		vi.doMock("@/lib/useCases", async () => {
+			const { readToolSettingsStatus, writeToolSettings, resetToolSettings } = await import(
+				"../../apps/api/src/application/cli-tools/manage-tool-settings.ts"
+			)
+			return {
+				getUseCases: () => ({
+					cliTools: { readToolSettingsStatus, writeToolSettings, resetToolSettings },
+				}),
+			}
+		})
+
 		;({ POST: postPiSettings } = await import("@/app/api/cli-tools/pi-settings/route.js"))
 	})
 

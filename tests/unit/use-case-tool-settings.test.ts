@@ -86,13 +86,20 @@ describe("readToolSettings", () => {
 		})
 	})
 
-	it("refuses a half-filled form and says so once", () => {
-		// A config missing any field is one the tool cannot use, and it fails inside the
-		// tool, where the operator cannot see that the screen accepted half a form.
+	it("names the fields a half-filled form is missing", () => {
+		// A config missing a field is one the tool cannot use, and it fails inside the tool,
+		// where the operator cannot see that the screen accepted half a form. Naming the field
+		// is what tells them which box to fill.
 		expect(readToolSettings({ baseUrl: "http://x", apiKey: "k" })).toEqual({
 			ok: false,
-			error: "baseUrl, apiKey and model are required",
+			error: "model is required",
 		})
+	})
+
+	it("accepts a form that only carries what the tool requires", () => {
+		// Pi resolves the key from the dashboard and has a documented default model, so its
+		// card is a one-field form. Demanding all three turns that into a 400.
+		expect(readToolSettings({ baseUrl: "http://x" }, ["baseUrl"])).toMatchObject({ ok: true })
 	})
 
 	it("treats a whitespace-only field as missing", () => {
@@ -242,15 +249,17 @@ describe("writeToolSettings", () => {
 		expect(deps.config.write).not.toHaveBeenCalled()
 	})
 
-	it("refuses to configure a tool that is not installed", async () => {
+	it("writes even when the tool looks uninstalled, because that is what it fixes", async () => {
+		// A tool that has never run has no config file, so an install check here refuses
+		// exactly the state this screen exists to correct. GET reports it instead.
 		const deps = tool({ isInstalled: async () => false })
 		const answer = await writeToolSettings(
 			{ baseUrl: "http://x", apiKey: "k", model: "m" },
 			deps as never,
 		)
 
-		expect(answer.status).toBe(400)
-		expect(deps.config.write).not.toHaveBeenCalled()
+		expect(answer.status).toBe(200)
+		expect(deps.config.write).toHaveBeenCalled()
 	})
 
 	it("refuses to overwrite a config it cannot parse, rather than dropping its settings", async () => {

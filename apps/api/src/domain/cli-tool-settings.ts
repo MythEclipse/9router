@@ -67,15 +67,23 @@ export interface ToolSettingsRead {
  * The base URL is left as typed: which suffix it needs is the tool's business, and applying a
  * default here would silently override the one tool that wants the other spelling.
  */
-export function readToolSettings(body: unknown): ToolSettingsRead {
+export function readToolSettings(
+	body: unknown,
+	required: readonly (keyof ToolSettingsInput)[] = ["baseUrl", "apiKey", "model"],
+): ToolSettingsRead {
 	const fields = (body ?? {}) as Record<string, unknown>
 	const text = (value: unknown) => (typeof value === "string" ? value.trim() : "")
 
 	const baseUrl = text(fields.baseUrl)
 	const apiKey = text(fields.apiKey)
 	const model = text(fields.model)
-	if (!baseUrl || !apiKey || !model) {
-		return { ok: false, error: "baseUrl, apiKey and model are required" }
+	const values: Record<string, string> = { baseUrl, apiKey, model }
+	const missing = required.filter((field) => !values[field])
+	if (missing.length > 0) {
+		return {
+			ok: false,
+			error: `${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} required`,
+		}
 	}
 	return {
 		ok: true,
@@ -166,7 +174,11 @@ export function readModelEntries(raw: unknown): ModelEntry[] {
  * send: `contextWindow`, `maxTokens` and a `name` someone chose by hand cost the operator
  * effort, and a key rotation is not a reason to lose them.
  */
-export function mergeModelEntries(existing: unknown, requested: unknown): ModelEntry[] {
+export function mergeModelEntries(
+	existing: unknown,
+	requested: unknown,
+	displayName: (id: string, fallback: string) => string = (id) => id,
+): ModelEntry[] {
 	const previous = new Map<string, ModelEntry>()
 	for (const entry of readModelEntries(existing)) {
 		const id = entry.id
@@ -180,6 +192,47 @@ export function mergeModelEntries(existing: unknown, requested: unknown): ModelE
 		const id = typeof entry.id === "string" && entry.id ? entry.id : "provider/model-id"
 		const prior = previous.get(id) ?? {}
 		const requestedName = typeof entry.name === "string" && entry.name !== id ? entry.name : undefined
-		return { ...prior, ...entry, id, name: requestedName ?? prior.name ?? id }
+		const name = requestedName ?? (prior.name as string) ?? displayName(id, id)
+		return {
+			...prior,
+			...entry,
+			id,
+			name,
+			contextWindow: readLimit(
+				entry.contextWindow ?? prior.contextWindow,
+				DEFAULT_CONTEXT_WINDOW,
+				MAX_CONTEXT_WINDOW,
+			),
+			maxTokens: readLimit(entry.maxTokens ?? prior.maxTokens, DEFAULT_MAX_TOKENS, MAX_MAX_TOKENS),
+		}
 	})
+}
+
+/** The placeholder the cards put in an untouched key field. Writing it configures nothing. */
+export const PLACEHOLDER_API_KEY = "sk_9router"
+
+/** The id a model field falls back to when the operator leaves it blank. */
+export const PLACEHOLDER_MODEL_ID = "provider/model-id"
+
+/** Pi's documented limits, used when the form sends none or sends nonsense. */
+export const DEFAULT_CONTEXT_WINDOW = 128000
+export const DEFAULT_MAX_TOKENS = 16384
+export const MAX_CONTEXT_WINDOW = 2000000
+export const MAX_MAX_TOKENS = 200000
+
+/**
+ * Whether a key is worth writing.
+ *
+ * The card sends its placeholder for an untouched field, and a config holding `sk_9router`
+ * looks configured while every request fails authorisation — the worst of both states.
+ */
+export function isWritableApiKey(apiKey: string): boolean {
+	const trimmed = apiKey.trim()
+	return trimmed !== "" && trimmed !== PLACEHOLDER_API_KEY
+}
+
+/** A numeric limit the form sent, or the default when it is missing or out of range. */
+export function readLimit(value: unknown, fallback: number, maximum: number): number {
+	const parsed = Number(value)
+	return Number.isFinite(parsed) && parsed > 0 && parsed <= maximum ? parsed : fallback
 }
