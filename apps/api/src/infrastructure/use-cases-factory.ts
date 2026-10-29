@@ -16,6 +16,8 @@ import type { PluginCache } from "../application/plugins/manage-plugins.ts"
 import type { ClientListingRegistry } from "../application/providers/list-client-connections.ts"
 import type { ProviderCatalogue, StoredConnection } from "../application/providers/ports.ts"
 import type { SyncedCatalogue } from "../application/providers/suggest-models.ts"
+import type { ValidateCredentialDependencies as ValidateDependencies } from "../application/providers/validate-credential.ts"
+import type { WebLoginDependencies } from "../application/providers/web-login.ts"
 import { buildUseCases, type UseCases } from "../application/use-cases.ts"
 import type { ProviderClassifiers } from "../domain/batch-selection.ts"
 import type { CacheEntry, FreeModel, KiloModel } from "../domain/free-model-cache.ts"
@@ -164,6 +166,19 @@ export interface UseCaseOptions {
 	readonly probeModel?: (modelRef: string, kind: string) => Promise<Record<string, unknown>>
 	/** Whether this provider serves one request at a time. */
 	readonly isSerialProbe?: (provider: string) => boolean
+	/** Sends one validation probe and reports the status and body. */
+	readonly sendProbe?: ValidateDependencies["send"]
+	readonly defaultModelOf?: ValidateDependencies["defaultModel"]
+	readonly providerEntry?: ValidateDependencies["providerConfig"]
+	readonly aiProviderEntry?: ValidateDependencies["aiProvider"]
+	readonly probeAwsCredentials?: ValidateDependencies["probeAws"]
+	readonly probeQoderCredentials?: ValidateDependencies["probeQoder"]
+	readonly probeNousKey?: ValidateDependencies["probeNous"]
+	readonly ollamaLocalHost?: ValidateDependencies["ollamaLocalHost"]
+	readonly tokenplanBaseUrl?: ValidateDependencies["tokenplanBaseUrl"]
+	readonly commandCodeBody?: ValidateDependencies["commandCodeBody"]
+	/** The interactive web-login flow, backed by the browser driver. */
+	readonly webLogin?: Omit<WebLoginDependencies, "connections" | "providerLabel">
 	/** The free/oauth/apikey/compatible questions a batch test groups by. */
 	readonly batchClassifiers?: ProviderClassifiers
 	/** What the client listing asks the catalogue about usage eligibility and order. */
@@ -324,6 +339,17 @@ export function createUseCases(
 		fetchConnectionModels: options.fetchConnectionModels ?? (async () => null),
 		probeModel: options.probeModel ?? (async () => ({ valid: false, error: "not available" })),
 		isSerialProbe: options.isSerialProbe ?? (() => false),
+		sendProbe: options.sendProbe ?? unreachableProbe(),
+		defaultModelOf: options.defaultModelOf ?? (() => ""),
+		providerEntry: options.providerEntry ?? (() => undefined),
+		aiProviderEntry: options.aiProviderEntry ?? (() => undefined),
+		probeAwsCredentials: options.probeAwsCredentials ?? unsupportedProbe,
+		probeQoderCredentials: options.probeQoderCredentials ?? unsupportedProbe,
+		probeNousKey: options.probeNousKey ?? unsupportedProbe,
+		ollamaLocalHost: options.ollamaLocalHost ?? (() => "http://localhost:11434"),
+		tokenplanBaseUrl: options.tokenplanBaseUrl ?? (() => ""),
+		commandCodeBody: options.commandCodeBody ?? (() => ({})),
+		webLogin: options.webLogin ?? unavailableWebLogin(),
 		batchClassifiers: options.batchClassifiers ?? ungroupableProviders(),
 		clientListingRegistry: options.clientListingRegistry ?? unlistableProviders(),
 		probeConnection:
@@ -478,5 +504,43 @@ function unlistableProviders(): ClientListingRegistry {
 		supportsUsage: () => false,
 		supportsApiKeyUsage: () => false,
 		usageOrder: [],
+	}
+}
+
+/**
+ * No transport: a probe that refuses loudly.
+ *
+ * Throwing beats answering `{ valid: false }`: a host with no network access must
+ * not tell the operator their key is bad when it never asked anyone.
+ */
+function unreachableProbe(): ValidateDependencies["send"] {
+	return async () => {
+		throw new Error("validation probes are not configured on this host")
+	}
+}
+
+/** A probe this host cannot run, reported as unsupported rather than invalid. */
+async function unsupportedProbe(): Promise<{ valid: boolean; error: string | null }> {
+	return { valid: false, error: "Provider validation not supported" }
+}
+
+/**
+ * No web-login driver: every session looks absent.
+ *
+ * `statusOf` returning null makes a poll answer 404, which is exactly right — there
+ * is no login in progress because this host cannot start one. The store and the
+ * label are supplied by `buildUseCases`, so they are not part of this slice.
+ */
+function unavailableWebLogin(): Omit<WebLoginDependencies, "connections" | "providerLabel"> {
+	return {
+		listProviders: () => [],
+		listProfiles: () => [],
+		configOf: () => null,
+		statusOf: () => null,
+		start: async () => {
+			throw new Error("web login is not configured on this host")
+		},
+		cancel: () => false,
+		fetchIdentity: async () => ({ status: "invalid", error: "web login is not configured" }),
 	}
 }

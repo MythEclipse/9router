@@ -42,6 +42,8 @@ import { makeOverrides } from "./providers/manage-overrides.ts"
 import { makeProbeModels } from "./providers/probe-models.ts"
 import { makeSuggestModels } from "./providers/suggest-models.ts"
 import { makeTestConnections } from "./providers/test-connections.ts"
+import { makeValidateCredential } from "./providers/validate-credential.ts"
+import { makeWebLogin } from "./providers/web-login.ts"
 import { makePxpipe } from "./pxpipe/manage-pxpipe.ts"
 import { assertSupportedLocale } from "./settings/locale.ts"
 import { readLoginGate } from "./settings/login-gate.ts"
@@ -106,6 +108,8 @@ export interface UseCases {
 	readonly checkConnection: ReturnType<typeof makeCheckConnection>
 	readonly listClientConnections: ReturnType<typeof makeListClientConnections>
 	readonly suggestModels: ReturnType<typeof makeSuggestModels>
+	readonly validateCredential: ReturnType<typeof makeValidateCredential>
+	readonly webLogin: ReturnType<typeof makeWebLogin>
 	readonly customModels: ReturnType<typeof makeCustomModels>
 	readonly disabledModels: ReturnType<typeof makeDisabledModels>
 	readonly studioModels: ReturnType<typeof makeStudioModels>
@@ -218,6 +222,28 @@ export function buildUseCases(deps: Dependencies): UseCases {
 			fetchCatalogue: deps.fetchCatalogueUrl,
 			armSyncer: deps.armCatalogueSyncer,
 			timeoutMs: 12_000,
+		}),
+		validateCredential: makeValidateCredential({
+			send: deps.sendProbe,
+			findNode: async (provider) => deps.connectionNodes.find(provider),
+			defaultModel: deps.defaultModelOf,
+			providerConfig: deps.providerEntry,
+			aiProvider: deps.aiProviderEntry,
+			isOpenAICompatible: (provider) => deps.providerCatalogue.isOpenAICompatible(provider),
+			isAnthropicCompatible: (provider) => deps.providerCatalogue.isAnthropicCompatible(provider),
+			isCustomEmbedding: (provider) => deps.providerCatalogue.isCustomEmbedding(provider),
+			probeAws: deps.probeAwsCredentials,
+			probeQoder: deps.probeQoderCredentials,
+			probeNous: deps.probeNousKey,
+			ollamaLocalHost: deps.ollamaLocalHost,
+			tokenplanBaseUrl: deps.tokenplanBaseUrl,
+			commandCodeBody: deps.commandCodeBody,
+			randomId: () => deps.randomId(),
+		}),
+		webLogin: makeWebLogin({
+			...deps.webLogin,
+			connections: deps.connections,
+			providerLabel: (provider) => deps.providerCatalogue.label(provider),
 		}),
 		freeModels: makeFreeModels({
 			fetchCatalogue: deps.fetchKiloCatalogue,

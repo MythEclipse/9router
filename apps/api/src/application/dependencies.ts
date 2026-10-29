@@ -275,6 +275,45 @@ export interface Dependencies {
 	readonly probeModel: (modelRef: string, kind: string) => Promise<Record<string, unknown>>
 	/** Whether this provider serves one request at a time. */
 	readonly isSerialProbe: (provider: string) => boolean
+	/** Sends one validation probe and reports the status and body. */
+	readonly sendProbe: (
+		request: import("./providers/validate-credential.ts").ProbeRequest,
+	) => Promise<import("./providers/validate-credential.ts").ProbeResponse>
+	/** The provider's default model, for probes that need one. */
+	readonly defaultModelOf: (provider: string) => string
+	/** The provider's registry entry: base URL, format, headers, auth header. */
+	readonly providerEntry: (
+		provider: string,
+	) => import("./providers/validate-credential.ts").RegistryEntry | undefined
+	/** The provider's AI entry: noAuth, service kinds, credential form, probe configs. */
+	readonly aiProviderEntry: (
+		provider: string,
+	) => import("./providers/validate-credential.ts").AiProviderEntry | undefined
+	/** Probes AWS credentials, which have no bearer key. */
+	readonly probeAwsCredentials: (input: {
+		readonly apiKey: string
+		readonly providerSpecificData?: Record<string, unknown>
+	}) => Promise<{ readonly valid: boolean; readonly error: string | null }>
+	/** Probes a Qoder PAT, which needs a token exchange first. */
+	readonly probeQoderCredentials: (input: {
+		readonly provider: string
+		readonly apiKey: string
+		readonly providerSpecificData?: Record<string, unknown>
+	}) => Promise<{ readonly valid: boolean; readonly error: string | null }>
+	/** Probes Nous, whose /models is public and proves nothing. */
+	readonly probeNousKey: (
+		apiKey: string,
+	) => Promise<{ readonly valid: boolean; readonly error: string | null }>
+	/** The two dynamic base URLs computed from the operator's own data. */
+	readonly ollamaLocalHost: (input: { providerSpecificData?: Record<string, unknown> }) => string
+	readonly tokenplanBaseUrl: (input: { providerSpecificData?: Record<string, unknown> }) => string
+	/** Builds a CommandCode request body, which is not OpenAI-shaped. */
+	readonly commandCodeBody: (model: string) => unknown
+	/** The interactive web-login flow, backed by the browser driver. */
+	readonly webLogin: Omit<
+		import("./providers/web-login.ts").WebLoginDependencies,
+		"connections" | "providerLabel"
+	>
 	/** The free/oauth/apikey/compatible questions a batch test groups by. */
 	readonly batchClassifiers: import("../domain/batch-selection.ts").ProviderClassifiers
 	/** What the client listing asks the catalogue about usage eligibility and order. */

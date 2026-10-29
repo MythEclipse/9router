@@ -8,14 +8,40 @@
 
 import type { ClientListingRegistry } from "9router-api/application/providers/list-client-connections"
 import type { SyncedCatalogue } from "9router-api/application/providers/suggest-models"
+import type { ValidateCredentialDependencies } from "9router-api/application/providers/validate-credential"
+import type { WebLoginDependencies } from "9router-api/application/providers/web-login"
 import type { ProviderClassifiers } from "9router-api/domain/batch-selection"
 import type { CatalogueFilters, SuggestedModel } from "9router-api/domain/model-catalogue"
 import type { ConnectionHost } from "9router-api/infrastructure/db/repositories/provider-connection-repository"
 import { createProviderCatalogue } from "9router-api/infrastructure/db/repositories/provider-connection-repository"
-import { getProviderModels, PROVIDER_ID_TO_ALIAS } from "open-sse/config/providerModels"
-import { PROVIDERS } from "open-sse/config/providers"
+import {
+	getDefaultModel,
+	getProviderModels,
+	PROVIDER_ID_TO_ALIAS,
+} from "open-sse/config/providerModels"
+import {
+	PROVIDERS,
+	resolveOllamaLocalHost,
+	resolveXiaomiTokenplanBaseUrl,
+} from "open-sse/config/providers"
+import { probeBedrockCredentials } from "open-sse/executors/bedrock"
 import REGISTRY from "open-sse/providers/registry/index"
 import { resolveProviderAlias } from "open-sse/services/model"
+import {
+	createNousApiKeyProbe,
+	getNousApiKeyValidationError,
+	isNousApiKeyAccepted,
+} from "open-sse/services/nous"
+import { resolveQoderCredentials, resolveQoderModels } from "open-sse/services/qoderModels"
+import { fetchWebIdentity } from "open-sse/services/webIdentity"
+import {
+	cancelWebLogin,
+	getWebLoginStatus,
+	listWebLoginProfiles,
+	startWebLogin,
+} from "open-sse/services/webLogin"
+import { getWebLoginConfig, listWebLoginProviders } from "open-sse/services/webLoginConfig"
+import { openaiToCommandCodeRequest } from "open-sse/translator/request/openai-to-commandcode"
 import { fetch as undiciFetch } from "undici"
 import { pingModelByKind, WEB_COOKIE_PROVIDERS } from "@/app/api/models/test/ping"
 import { testSingleConnection } from "@/app/api/providers/[id]/test/testUtils"
@@ -312,3 +338,84 @@ export function armCatalogueSyncer(): void {
  * failed row, so both stay consistent with one string.
  */
 export const probeConnection = (connectionId: string) => testSingleConnection(connectionId)
+
+// ---------------------------------------------------------------------------
+// Credential validation and the interactive web login
+// ---------------------------------------------------------------------------
+
+/** Send one validation probe. Throws only when the network itself fails. */
+export const sendProbe: ValidateCredentialDependencies["send"] = async (request) => {
+	const res = await fetch(request.url, {
+		method: request.method ?? "GET",
+		...(request.headers ? { headers: request.headers } : {}),
+		...(request.body ? { body: request.body } : {}),
+		signal: AbortSignal.timeout(request.timeoutMs ?? 8_000),
+	})
+	const text = await res.text().catch(() => "")
+	return { status: res.status, ok: res.ok, text }
+}
+
+/** The provider's default model, for probes that need one. */
+export const defaultModelOf = (provider: string) => getDefaultModel(provider) ?? ""
+
+/** The provider's registry entry, as the validator reads it. */
+export const providerEntry = (provider: string) => PROVIDERS[provider] as never
+
+/** The provider's AI entry, as the validator reads it. */
+export const aiProviderEntry = (provider: string) => AI_PROVIDERS[provider] as never
+
+/** AWS credentials have no bearer key, so Bedrock is probed by signing a request. */
+export const probeAwsCredentials: ValidateCredentialDependencies["probeAws"] = (input) =>
+	probeBedrockCredentials(input, fetch as never) as never
+
+/** A Qoder PAT needs a job-token exchange before it can sign anything. */
+export const probeQoderCredentials: ValidateCredentialDependencies["probeQoder"] = async (
+	input,
+) => {
+	try {
+		const resolved = await resolveQoderCredentials(input as never, null, AbortSignal.timeout(8000))
+		const result = await resolveQoderModels(resolved, { forceRefresh: true })
+		return { valid: !!result?.models?.length, error: null }
+	} catch (error) {
+		return { valid: false, error: (error as Error).message }
+	}
+}
+
+/** Nous's /models is public, so it proves nothing; a minimal inference does. */
+export const probeNousKey: ValidateCredentialDependencies["probeNous"] = async (apiKey) => {
+	const probe = createNousApiKeyProbe(apiKey)
+	const res = await fetch(probe.url, { ...probe.options, signal: AbortSignal.timeout(8000) })
+	const valid = isNousApiKeyAccepted(res.status)
+	return { valid, error: valid ? null : getNousApiKeyValidationError(res.status) }
+}
+
+export const ollamaLocalHost = (input: { providerSpecificData?: Record<string, unknown> }) =>
+	resolveOllamaLocalHost(input as never) as string
+
+export const tokenplanBaseUrl = (input: { providerSpecificData?: Record<string, unknown> }) =>
+	resolveXiaomiTokenplanBaseUrl(input as never) as string
+
+/** CommandCode's body is not OpenAI-shaped; its translator builds it. */
+export const commandCodeBody = (model: string) =>
+	openaiToCommandCodeRequest(
+		model,
+		{ messages: [{ role: "user", content: "ping" }], max_tokens: 1, stream: false },
+		false,
+	)
+
+/**
+ * The interactive web-login flow.
+ *
+ * The session objects come from the browser driver and are mutable: the save step
+ * records which connection it wrote on the session it was handed. Passing the
+ * driver's own `getWebLoginStatus` through is what keeps that shared.
+ */
+export const webLogin: Omit<WebLoginDependencies, "connections" | "providerLabel"> = {
+	listProviders: () => listWebLoginProviders(),
+	listProfiles: () => listWebLoginProfiles(),
+	configOf: (provider) => getWebLoginConfig(provider) as never,
+	statusOf: (provider) => getWebLoginStatus(provider) as never,
+	start: (provider, profile) => startWebLogin(provider, profile) as never,
+	cancel: (provider) => cancelWebLogin(provider),
+	fetchIdentity: (provider, credential) => fetchWebIdentity(provider, credential) as never,
+}
