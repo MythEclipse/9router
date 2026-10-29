@@ -9,7 +9,14 @@ import {
 	type ModelEntry,
 	mergeModelEntries,
 } from "9router-api/domain/cli-tool-settings"
+import {
+	applyGrokBuildConfig,
+	GROK_MAIN_MODEL_SLOT,
+	parseGrokBuildConfig,
+	resetGrokBuildConfig,
+} from "9router-api/domain/grok-build-config"
 import { parseTOML, stringifyTOML } from "confbox"
+import { getCapabilitiesForModel } from "open-sse/providers/capabilities"
 import { resolveCliApiKey } from "@/app/api/cli-tools/resolveApiKey"
 import { resolveModelDisplayName } from "@/shared/utils/modelDisplayName"
 import { readConfigForWrite } from "./cliTools/configWrite"
@@ -1270,3 +1277,87 @@ export async function removeForgeSettings(): Promise<void> {
 }
 
 export const isForgeInstalled = () => detectInstall("forge", FORGE_CONFIG_PATH())
+
+/**
+ * Grok Build's layout: `~/.grok/config.toml` where this screen owns `[models]` slots only.
+ *
+ * Unlike the other TOML tools, the editing rules live in `domain/grok-build-config.ts`: the
+ * file is rewritten by matching sections, existing defaults are remembered in `# 9router-prev-*`
+ * comments so a reset can restore them, and only the slots this screen created are touched.
+ * The host supplies the file and the selected model's context window.
+ */
+
+const GROK_DIR = () => path.join(os.homedir(), ".grok")
+const GROK_CONFIG_PATH = () => path.join(GROK_DIR(), "config.toml")
+
+export const isGrokBuildInstalled = async (): Promise<boolean> => {
+	try {
+		const isWindows = os.platform() === "win32"
+		await execAsync(isWindows ? "where grok" : "which grok", { windowsHide: true })
+		return true
+	} catch {
+		try {
+			await fs.access(GROK_CONFIG_PATH())
+			return true
+		} catch {
+			try {
+				await fs.access(path.join(GROK_DIR(), "bin", "grok"))
+				return true
+			} catch {
+				return false
+			}
+		}
+	}
+}
+
+/** The context window Grok Build should record for a model this install serves. */
+function contextWindowFor(model: string): number {
+	const slash = model.indexOf("/")
+	const provider = slash > 0 ? model.slice(0, slash) : null
+	const modelId = slash > 0 ? model.slice(slash + 1) : model
+	return getCapabilitiesForModel(provider, modelId).contextWindow
+}
+
+export const grokBuildSettingsConfig: ToolConfigPort = {
+	path: GROK_CONFIG_PATH(),
+	read: async () => {
+		const raw = await readText(GROK_CONFIG_PATH())
+		return raw === null ? null : { toml: raw }
+	},
+	readForWrite: async () => {
+		const raw = await readText(GROK_CONFIG_PATH())
+		return { toml: raw ?? "" }
+	},
+	write: async (text) => {
+		await fs.mkdir(GROK_DIR(), { recursive: true })
+		// The value stored here is already TOML, produced by the domain rules below.
+		await fs.writeFile(GROK_CONFIG_PATH(), JSON.parse(text).toml ?? "")
+	},
+	baseUrlSuffix: "with-v1",
+	required: ["baseUrl", "model"],
+	installKeys: [GROK_MAIN_MODEL_SLOT],
+	storedBaseUrl: (config) => {
+		const toml = (config as { toml?: string })?.toml
+		if (!toml) return null
+		const main = parseGrokBuildConfig(toml).model
+		return typeof main?.base_url === "string" ? main.base_url : null
+	},
+	apply: (config, input) => {
+		const toml = (config as { toml?: string })?.toml ?? ""
+		return {
+			toml: applyGrokBuildConfig(toml, {
+				baseUrl: input.baseUrl,
+				apiKey: input.apiKey,
+				model: input.model,
+				contextWindow: contextWindowFor(input.model),
+				subagentModels: undefined,
+			}),
+		}
+	},
+}
+
+export const removeGrokBuildSettings = async (): Promise<void> => {
+	const raw = await readText(GROK_CONFIG_PATH())
+	if (raw === null) return
+	await fs.writeFile(GROK_CONFIG_PATH(), resetGrokBuildConfig(raw))
+}
