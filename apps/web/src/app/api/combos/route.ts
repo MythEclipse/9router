@@ -11,25 +11,15 @@
  */
 import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { NextResponse } from "next/server"
-import { createApiClient } from "@/lib/orpcClient"
+import { createApiClient, sessionClaimsOf } from "@/lib/orpcClient"
 import { getUseCases } from "@/lib/useCases"
 import { toResponse } from "../response"
 
 export const dynamic = "force-dynamic"
 
 async function client() {
-	const ctx = await getSessionContext()
-	const session = ctx.session as { userId?: string; email?: string; role?: string | null } | null
 	return createApiClient({
-		// The router only reads `userId`/`email` to decide whether a caller is logged
-		// in; anything else the dashboard session carries is passed through.
-		session: session?.userId
-			? {
-					userId: String(session.userId),
-					email: String(session.email ?? ""),
-					role: session.role ?? null,
-				}
-			: null,
+		session: sessionClaimsOf(await getSessionContext()),
 		useCases: getUseCases(),
 	})
 }

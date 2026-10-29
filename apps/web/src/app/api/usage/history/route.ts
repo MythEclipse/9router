@@ -1,24 +1,27 @@
-import { getSessionContext } from "@9router/auth/dashboardPermissions"
-import { usageScopeOf } from "9router-api/application/usage/report-usage"
-import { NextResponse } from "next/server"
-import { getUseCases } from "@/lib/useCases"
-
-export const dynamic = "force-dynamic"
-
 /**
  * GET /api/usage/history?format=csv
  *
  * The CSV shaping, including quoting and formula defusing, is in
- * `domain/csv-export.ts`; this handler chooses the reply.
+ * `domain/csv-export.ts`; this handler chooses the reply. The use-case returns a
+ * discriminated result — `csv` carries a body and a filename, anything else is a
+ * JSON payload — so the two shapes stay distinguishable instead of being sniffed
+ * from the string.
  */
-export async function GET(request) {
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
+import { NextResponse } from "next/server"
+import { createApiClient, sessionClaimsOf } from "@/lib/orpcClient"
+import { getUseCases } from "@/lib/useCases"
+
+export const dynamic = "force-dynamic"
+
+export async function GET(request: Request) {
 	try {
-		const { searchParams } = new URL(request.url)
-		const ctx = await getSessionContext()
-		const result = await getUseCases().usageReports.history(
-			searchParams.get("format"),
-			usageScopeOf(ctx),
-		)
+		const client = createApiClient({
+			session: sessionClaimsOf(await getSessionContext()),
+			useCases: getUseCases(),
+		})
+		const format = new URL(request.url).searchParams.get("format") ?? undefined
+		const result = await client.usage.history({ format })
 
 		if (result.kind === "csv") {
 			return new NextResponse(result.body, {
