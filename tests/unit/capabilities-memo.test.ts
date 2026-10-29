@@ -1,7 +1,7 @@
 // The capability lookup is memoized per (provider, model) — caching bugs are
 // silent, so pin the three properties that matter: same answer every time,
 // never a shared mutable object, and a real drop when the catalog changes.
-import { beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
 	DEFAULT_CAPABILITIES,
 	getCapabilitiesForModel,
@@ -88,5 +88,12 @@ describe("getCapabilitiesForModel memoization", () => {
 		// Same shape, different object: identity is what invalidates.
 		setCatalogSource(makeSource(222222))
 		expect(getCapabilitiesForModel("openai", MODEL).contextWindow).toBe(222222)
+	})
+
+	afterEach(() => {
+		// The slot lives on `globalThis`, so it outlives this file. A source left installed here
+		// rewrites every later file's `refine()`: those tests pass alone and fail only in a full
+		// run, which reads as a flake and costs a bisect to find.
+		setCatalogSource(null)
 	})
 })
