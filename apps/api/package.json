@@ -17,7 +17,8 @@
     "./application/proxy-pools/*": "./src/application/proxy-pools/*.ts",
     "./application/tunnel/*": "./src/application/tunnel/*.ts",
     "./application/oauth/*": "./src/application/oauth/*.ts",
-    "./application/cli-tools/*": "./src/application/cli-tools/*.ts"
+    "./application/cli-tools/*": "./src/application/cli-tools/*.ts",
+    "./application/claude-tools/*": "./src/application/claude-tools/*.ts"
   },
   "scripts": {
     "dev": "bun --watch src/main.ts",

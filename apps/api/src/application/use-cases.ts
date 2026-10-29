@@ -15,6 +15,15 @@ import { makeListApiKeys, makeRevokeApiKey } from "./api-keys/manage-api-keys.ts
 import { makeManageApiKeys } from "./api-keys/manage-api-keys-dashboard.ts"
 import { makeManageSingleKey } from "./api-keys/manage-single-key.ts"
 import { loadChangelog } from "./changelog.ts"
+import type {
+	ClaudeSettingsAnswer,
+	ClaudeSettingsPort,
+} from "./claude-tools/manage-claude-settings.ts"
+import {
+	readClaudeSettingsStatus,
+	resetClaudeSettings,
+	writeClaudeSettings,
+} from "./claude-tools/manage-claude-settings.ts"
 import type { ToolSettingsAnswer, ToolSettingsDeps } from "./cli-tools/manage-tool-settings.ts"
 import {
 	clearActiveModel,
@@ -314,6 +323,22 @@ export interface UseCases {
 		readonly resetToolSettings: (host: ToolSettingsDeps) => Promise<ToolSettingsAnswer>
 		readonly clearActiveModel: (config: ToolSettingsDeps["config"]) => Promise<ToolSettingsAnswer>
 		readonly removeToolModel: (modelId: string, host: ToolSettingsDeps) => Promise<ToolSettingsAnswer>
+	}
+	/**
+	 * Claude Code's settings screen, which speaks an `env` block rather than a provider entry
+	 * and so does not share the CLI-tool flow above.
+	 */
+	readonly claudeTools: {
+		readonly readSettingsStatus: (
+			port: ClaudeSettingsPort,
+			isInstalled: () => Promise<boolean>,
+		) => Promise<ClaudeSettingsAnswer>
+		readonly writeSettings: (
+			body: unknown,
+			port: ClaudeSettingsPort,
+			options?: { exaMcpEnabled?: boolean },
+		) => Promise<ClaudeSettingsAnswer>
+		readonly resetSettings: (port: ClaudeSettingsPort) => Promise<ClaudeSettingsAnswer>
 	}
 	/** Cloudflare tunnels and Tailscale funnels, as the network screen drives them. */
 	readonly tunnel: {
@@ -646,6 +671,11 @@ export function buildUseCases(deps: Dependencies): UseCases {
 			resetToolSettings: (host) => resetToolSettings(host),
 			clearActiveModel: (config) => clearActiveModel(config),
 			removeToolModel: (modelId, host) => removeToolModel(modelId, host),
+		},
+		claudeTools: {
+			readSettingsStatus: (port, isInstalled) => readClaudeSettingsStatus(port, isInstalled),
+			writeSettings: (body, port, options) => writeClaudeSettings(body, port, options),
+			resetSettings: (port) => resetClaudeSettings(port),
 		},
 		// The probe cache is process-wide and survives a hot reload, exactly like the module
 		// scope it replaced: one cache per process, not one per request.
