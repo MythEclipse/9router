@@ -1,31 +1,32 @@
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { NextResponse } from "next/server"
-import { KiroService } from "@/lib/oauth/services/kiro"
-import { generatePKCE } from "@/lib/oauth/utils/pkce"
+import { createApiClient, sessionClaimsOf } from "@/lib/orpcClient"
+import { failed } from "@/lib/routeErrors"
 import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
+async function client(request: Request) {
+	return createApiClient({
+		session: sessionClaimsOf(await getSessionContext()),
+		useCases: getUseCases(),
+		headers: request.headers,
+	})
+}
+
 /**
- * GET /api/oauth/kiro/social-authorize
- * Generate Google/GitHub social login URL for manual callback flow
- * Uses kiro:// custom protocol as required by AWS Cognito
+ * GET /api/oauth/kiro/social-authorize — Google/GitHub social login URL.
+ *
+ * Uses the `kiro://` custom protocol, as AWS Cognito requires. The verifier and state are
+ * answered to the client on purpose: the client pastes back the callback URL, so it has to
+ * hold them across a trip the server cannot observe.
  */
 export async function GET(request: Request) {
 	try {
-		const service = new KiroService()
-		const answer = getUseCases().oauth.authorizeKiroSocial(
-			new URL(request.url).searchParams.get("provider"),
-			{
-				generatePkce: generatePKCE,
-				buildLoginUrl: (provider, codeChallenge, state) =>
-					service.buildSocialLoginUrl(provider, codeChallenge, state),
-			},
-		)
+		const provider = new URL(request.url).searchParams.get("provider")
+		const answer = await (await client(request)).oauth.kiroSocial.authorize({ provider })
 		return NextResponse.json(answer.body, { status: answer.status })
 	} catch (error) {
-		return NextResponse.json(
-			{ error: error instanceof Error ? error.message : "Unknown error" },
-			{ status: 500 },
-		)
+		return failed(error, "Kiro social authorize failed", "oauth/kiro/social-authorize")
 	}
 }

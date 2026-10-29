@@ -1,30 +1,39 @@
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { NextResponse } from "next/server"
-import { isLocalRequest } from "@/dashboardGuard"
+import { createApiClient, sessionClaimsOf } from "@/lib/orpcClient"
+import { failed } from "@/lib/routeErrors"
 import { getUseCases } from "@/lib/useCases"
-import { createProviderConnection } from "@/models"
-import { fetchPublic } from "@/shared/utils/ssrfGuard"
 
 export const dynamic = "force-dynamic"
 
+async function client(request: Request) {
+	return createApiClient({
+		session: sessionClaimsOf(await getSessionContext()),
+		useCases: getUseCases(),
+		headers: request.headers,
+	})
+}
+
 /**
- * POST /api/oauth/gitlab/pat
- * Authenticate GitLab Duo with a Personal Access Token (PAT)
+ * POST /api/oauth/gitlab/pat — { token, baseUrl? }
+ *
+ * Authenticate GitLab Duo with a Personal Access Token. The base URL is client-supplied, so
+ * the procedure decides which fetch verifies it from the request headers: a remote caller
+ * goes through the SSRF guard, a local one keeps a self-hosted GitLab on a private network
+ * reachable. That choice moved out of this file so a second route cannot skip it.
  */
 export async function POST(request: Request) {
-	let body: unknown
 	try {
-		body = await request.json()
-	} catch {
-		return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
+		const body = (await request.json().catch(() => null)) as Record<string, unknown> | null
+		if (!body || typeof body.token !== "string" || !body.token) {
+			return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
+		}
+		const answer = await (await client(request)).oauth.gitlabPat({
+			token: body.token,
+			...(typeof body.baseUrl === "string" ? { baseUrl: body.baseUrl } : {}),
+		})
+		return NextResponse.json(answer.body, { status: answer.status })
+	} catch (error) {
+		return failed(error, "GitLab PAT import failed", "oauth/gitlab/pat")
 	}
-
-	// The base URL is client-supplied, so a remote caller must not be able to point the
-	// server at an internal/loopback/metadata host. Local callers keep self-hosted GitLab
-	// on a private network reachable (mirrors provider-nodes/validate + auth/oidc).
-	const answer = await getUseCases().oauth.importGitlabPat(body, {
-		fetchImpl: isLocalRequest(request) ? globalThis.fetch : fetchPublic,
-		createConnection: createProviderConnection,
-	})
-
-	return NextResponse.json(answer.body, { status: answer.status })
 }
