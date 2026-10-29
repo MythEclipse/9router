@@ -1118,3 +1118,46 @@ clean, biome clean, `bun run build` exit 0, gateway baseline unchanged (`/login`
 `/api/settings/database/jobs/x` 401, `/api/settings/proxy-test` 401).
 
 Remaining in `settings`: 1 of 9 (`auto-backup`). Remaining overall: 129 of 174.
+
+## settings, complete — the scheduled backup
+
+The last of the nine. Three operations on one screen, and the rules they share were
+spread across a GET, a PATCH and a POST that each knew a different part of the truth.
+
+What is now stated rather than implied:
+
+- **Secrets are write-only.** `publicConfig` never returned a token — that rule was
+  correct and undocumented. It is now a domain function with the reason attached: this
+  endpoint is reachable from a browser, and an echoed token lands in page memory, the
+  devtools log, and every screenshot the operator takes while asking for help.
+- **An empty secret means "keep the stored one."** The masked field sends nothing when
+  untouched, so without this rule editing the interval erases a token. The old PATCH
+  happened to be right; `backupPatchOf` now says why.
+- **An interval cannot be zero.** `clampIntervalHours` floors at one hour. Zero asks
+  the scheduler to run continuously; a negative one computes a due time in the past
+  and does the same. The old clamp had the floor but no ceiling; a year is now the cap,
+  because anything larger is a typo that removes the backup from the calendar.
+- **A chat id with no digits is refused, not stored empty.** An empty chat id fails at
+  *send* time, hours later, with nothing in the screen to explain it — the worst kind
+  of failure to leave silent.
+- **The countdown reports an overdue backup as overdue.** The old code already did
+  this, and the comment explaining it was the only place the reasoning survived. It is
+  now `nextBackupAt`, with the counterfactual named: pinning to "now" made the
+  countdown sit at 00:00:00 and read as stuck rather than overdue.
+
+The GET has a side effect on purpose — it re-arms a scheduler that a restart killed.
+That is written into the use-case rather than left as a comment, along with the detail
+that makes it work: the scheduler state is read *again* after arming, so the countdown
+answers with the timer that is now running and not the one that was not.
+
+A failed test send answers `ok: false` and not a 5xx. The request succeeded; the answer
+is "the backup could not be delivered, here is why", and the screen shows the provider's
+message. Throwing would route it through the generic error path and lose the only
+useful part of the response.
+
+Verification: 600 files / 6736 tests passing (74 skipped), both packages typecheck
+clean, biome clean, `bun run build` exit 0, gateway baseline unchanged (`/login` 200,
+`/api/health` 200, `/v1/models` 401, `/api/settings` 401, `/api/settings/auto-backup`
+401 for GET, PATCH and POST).
+
+**`settings` is done — 9 of 9.** Remaining overall: 128 of 174.
