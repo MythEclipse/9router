@@ -42,8 +42,15 @@ import { DEFAULT_LOCAL_API_KEY } from "@/shared/constants/config"
 		try {
 			const thisFile = fileURLToPath(import.meta.url)
 			const appSrc = dirname(dirname(thisFile))
-			const candidate = join(appSrc, "mitm", "server")
-			if (existsSync(candidate)) process.env.MITM_SERVER_PATH = candidate
+			// No extension: `src/mitm/server.ts` is what ships, and a `.js` sibling is
+			// only present after the CLI packaging step bundles it.
+			for (const ext of [".js", ".ts"]) {
+				const candidate = join(appSrc, "mitm", `server${ext}`)
+				if (existsSync(candidate)) {
+					process.env.MITM_SERVER_PATH = candidate
+					break
+				}
+			}
 		} catch {
 			/* ignore */
 		}

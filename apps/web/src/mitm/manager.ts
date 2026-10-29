@@ -73,14 +73,37 @@ let mitmLastStartTime = 0
 let mitmIsRestarting = false
 function resolveBundledServerPath() {
 	if (process.env.MITM_SERVER_PATH) return process.env.MITM_SERVER_PATH
-	const sibling = path.join(__dirname, "server.js")
-	if (fs.existsSync(sibling)) return sibling
-	const fromCwd = path.join(process.cwd(), "src", "mitm", "server.js")
-	if (fs.existsSync(fromCwd)) return fromCwd
-	const fromNext = path.join(process.cwd(), "..", "src", "mitm", "server.js")
-	if (fs.existsSync(fromNext)) return fromNext
-	return fromCwd
+	// Sources are TypeScript; the CLI packaging step (`cli/scripts/buildMitm.js`)
+	// bundles them to `server.js`. Both names exist in the wild, and checking only
+	// `.js` made a `.ts`-only tree look like a missing server.
+	const candidates = [
+		path.join(__dirname, "server.js"),
+		path.join(__dirname, "server.ts"),
+		path.join(process.cwd(), "src", "mitm", "server.js"),
+		path.join(process.cwd(), "src", "mitm", "server.ts"),
+		path.join(process.cwd(), "..", "src", "mitm", "server.js"),
+		path.join(process.cwd(), "..", "src", "mitm", "server.ts"),
+	]
+	return candidates.find((candidate) => fs.existsSync(candidate)) ?? candidates[0]
 }
+
+/**
+ * The MITM server file to run, given what exists on disk.
+ *
+ * Exported for tests: the search order is the rule, and a `.ts`-only tree looking
+ * like a missing server is exactly the bug this replaced.
+ *
+ * `server.js` wins over `server.ts` at the same location — it is the bundled
+ * artefact, and the child is started with a plain `node <path>` that cannot
+ * execute TypeScript.
+ */
+export function pickMitmServerPath(
+	candidates: readonly string[],
+	exists: (candidate: string) => boolean,
+): string {
+	return candidates.find(exists) ?? candidates[0]
+}
+
 // Copy bundled server.js into DATA_DIR so MITM doesn't lock node_modules
 // (prevents EBUSY on `npm i -g 9router@latest` while MITM is running).
 function ensureRuntimeServer(bundledPath) {

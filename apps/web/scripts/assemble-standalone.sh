@@ -35,6 +35,25 @@ for d in scripts src open-sse; do
   fi
 done
 
+# The MITM server is TypeScript in src/, and the child is started with
+# `node <path>` — which cannot execute a .ts file. Bundle it the way the CLI
+# packaging step does. Per-file transpiling is not enough: server.ts imports six
+# siblings by relative specifier, and those exist only as .ts.
+if [ -f "$S/src/mitm/server.ts" ]; then
+  node -e '
+    const esbuild = require("esbuild");
+    esbuild.build({
+      entryPoints: [process.argv[1]],
+      bundle: true, platform: "node", target: "node20", format: "esm",
+      outfile: process.argv[2], logLevel: "silent",
+    }).then(() => {}, (e) => {
+      console.error("[assembly]   MITM bundle failed: " + String(e).split("\n")[0]);
+      process.exit(1);
+    });
+  ' "$S/src/mitm/server.ts" "$S/src/mitm/server.js" || exit 1
+  echo "[assembly]   bundled src/mitm/server.js"
+fi
+
 # Next traces dashboardGuard.js only if some statically-analyzable import reaches
 # it; the guard loader builds its path with path.join, so that import never
 # exists. Copy it explicitly.
@@ -61,7 +80,7 @@ fi
 
 echo "[assembly] preflight"
 for f in scripts/auth-guard-hooks.mjs src/dashboardGuard.js custom-server.js \
-         CHANGELOG.md node_modules/next/server.js; do
+         src/mitm/server.js CHANGELOG.md node_modules/next/server.js; do
   if [ -e "$S/$f" ]; then
     echo "[assembly]   OK   $f"
   else

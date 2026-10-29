@@ -3,7 +3,7 @@ import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import ts from "typescript"
 
-export function copyStandaloneAssets({
+export async function copyStandaloneAssets({
 	projectRoot = process.cwd(),
 	distDir = process.env.NEXT_DIST_DIR || ".next",
 } = {}) {
@@ -95,6 +95,14 @@ export function copyStandaloneAssets({
 		console.log(`[standalone-assets] Copied ${dir}/ to ${dirDestination}`)
 	}
 
+	// `src/` is copied as source, so the MITM server is `server.ts` here while
+	// `resolveBundledServerPath` looks for a `.js`. The child is spawned as
+	// `process.execPath` + path, and that binary (node, at the supported versions)
+	// cannot execute a `.ts` file: enabling MITM would fail at spawn with an ENOENT
+	// that names no cause. The CLI packaging step does the same bundling, so both
+	// distributions run the same JavaScript.
+	await stageMitmServer(resolve(standaloneDir, "src", "mitm"), projectRoot)
+
 	// The oRPC use-cases run inside this server too, and they open the database
 	// and run the migrator on first use. The migrator walks up from its own
 	// location looking for a `migrations/` directory holding SQL; `next build`
@@ -154,6 +162,41 @@ export function copyStandaloneAssets({
 }
 
 /**
+ * Emit `src/mitm/server.js` beside its TypeScript source, the way CLI packaging
+ * does, so the child process can be started with a plain `node <path>`.
+ *
+ * Bundled, not transpiled per file: `src/mitm/` imports six siblings by relative
+ * specifier, so a per-file emit produces a `server.js` whose very first import
+ * (`./antigravityIdeVersion.js`) does not exist on disk. esbuild resolves them into
+ * one file that imports nothing but `node:*` builtins.
+ *
+ * A missing entry is not a failure — platforms without the MITM feature never
+ * load it, and the esbuild dependency is checked for the same reason.
+ */
+async function stageMitmServer(mitmDir, projectRoot) {
+	const entry = resolve(mitmDir, "server.ts")
+	if (!existsSync(entry)) return
+	let esbuild
+	try {
+		esbuild = await import("esbuild")
+	} catch {
+		console.log("[standalone-assets] esbuild unavailable; MITM server not bundled")
+		return
+	}
+	const destination = resolve(mitmDir, "server.js")
+	await esbuild.build({
+		entryPoints: [entry],
+		bundle: true,
+		platform: "node",
+		target: "node20",
+		format: "esm",
+		outfile: destination,
+		logLevel: "silent",
+	})
+	console.log(`[standalone-assets] Bundled MITM server to ${destination}`)
+}
+
+/**
  * The directory inside `standalone/` that holds the built app.
  *
  * With a workspace `outputFileTracingRoot` Next mirrors the repo layout, so the
@@ -171,5 +214,5 @@ if (
 	resolve(process.argv[1]) ===
 		resolve(dirname(fileURLToPath(import.meta.url)), "copy-standalone-assets.mjs")
 ) {
-	copyStandaloneAssets()
+	await copyStandaloneAssets()
 }
