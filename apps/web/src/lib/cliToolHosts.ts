@@ -755,7 +755,7 @@ async function isOpenCodeInstalled(): Promise<boolean> {
 }
 
 /** The models a save should carry: the array form, the legacy single string, or neither. */
-function openCodeModelsOf(input: { model: string; models?: unknown }): string[] {
+function requestedModelsOf(input: { model: string; models?: unknown }): string[] {
 	const list = Array.isArray(input.models) ? input.models.filter((m) => typeof m === "string") : []
 	return list.length > 0 ? list : input.model ? [input.model] : []
 }
@@ -791,7 +791,7 @@ export const openCodeSettingsConfig: ToolConfigPort = {
 		}
 
 		const models = { ...(entry.models ?? {}) }
-		for (const id of openCodeModelsOf(input)) {
+		for (const id of requestedModelsOf(input)) {
 			models[id] = {
 				name: resolveModelDisplayName(id, undefined),
 				modalities: { input: ["text", "image"], output: ["text"] },
@@ -804,7 +804,7 @@ export const openCodeSettingsConfig: ToolConfigPort = {
 			models,
 		}
 
-		const first = openCodeModelsOf(input)[0]
+		const first = requestedModelsOf(input)[0]
 		const agent = { ...(current.agent ?? {}) }
 		if (first) {
 			agent.explorer = {
@@ -872,3 +872,97 @@ export async function removeOpenCodeSettings(): Promise<void> {
 }
 
 export { isOpenCodeInstalled }
+
+/**
+ * Droid's layout: a `customModels` array where the *order* is the configuration.
+ *
+ * The first entry is the default model, ids are positional (`custom:9Router-<n>`), and the
+ * whole array is owned by this screen. Rebuilding rather than merging is therefore correct
+ * here — but only for our own entries: anything whose id does not carry our prefix belongs to
+ * the operator and has to survive the save.
+ */
+
+const DROID_DIR = () => path.join(os.homedir(), ".factory")
+const DROID_SETTINGS_PATH = () => path.join(DROID_DIR(), "settings.json")
+const DROID_PREFIX = "custom:9Router"
+
+type DroidModel = {
+	model: string
+	id: string
+	index: number
+	baseUrl: string
+	apiKey: string
+	displayName?: string
+	maxOutputTokens?: number
+	noImageSupport?: boolean
+	provider?: string
+}
+type DroidConfig = { customModels?: DroidModel[]; [key: string]: unknown }
+
+async function isDroidInstalled(): Promise<boolean> {
+	try {
+		const isWindows = os.platform() === "win32"
+		await execAsync(isWindows ? "where droid" : "which droid", { windowsHide: true })
+		return true
+	} catch {
+		try {
+			await fs.access(DROID_SETTINGS_PATH())
+			return true
+		} catch {
+			return false
+		}
+	}
+}
+
+export const droidSettingsConfig: ToolConfigPort = {
+	path: DROID_SETTINGS_PATH(),
+	read: () => readJson(DROID_SETTINGS_PATH()),
+	readForWrite: async () =>
+		readConfigForWrite(
+			fs,
+			DROID_SETTINGS_PATH(),
+			(raw) => JSON.parse(raw) as Record<string, unknown>,
+		),
+	write: async (text) => {
+		await fs.mkdir(DROID_DIR(), { recursive: true })
+		await fs.writeFile(DROID_SETTINGS_PATH(), text)
+	},
+	baseUrlSuffix: "with-v1",
+	required: ["baseUrl"],
+	resolveApiKey: (requested) => resolveCliApiKey(requested || null),
+	installKeys: [DROID_PREFIX],
+	storedBaseUrl: (config) => {
+		const ours = ((config as DroidConfig)?.customModels ?? []).find((m) =>
+			m.id?.startsWith(DROID_PREFIX),
+		)
+		return ours?.baseUrl ?? null
+	},
+	apply: (config, input) => {
+		const current = (config as DroidConfig) ?? {}
+		const requested = requestedModelsOf(input)
+		// Entries we own are rebuilt from the form; everyone else's stay exactly where they were.
+		const theirs = (current.customModels ?? []).filter((m) => !m.id?.startsWith(DROID_PREFIX))
+		const ours: DroidModel[] = requested.map((model, index) => ({
+			model,
+			id: `${DROID_PREFIX}-${index}`,
+			index,
+			baseUrl: input.baseUrl,
+			apiKey: input.apiKey || "your_api_key",
+			displayName: resolveModelDisplayName(model, undefined),
+			maxOutputTokens: 131072,
+			noImageSupport: false,
+			provider: "openai",
+		}))
+		return { ...current, customModels: [...ours, ...theirs] }
+	},
+}
+
+/** Droid's reset removes only the entries this screen created. */
+export async function removeDroidSettings(): Promise<void> {
+	const config = (await readJson(DROID_SETTINGS_PATH())) as DroidConfig | null
+	if (!config?.customModels) return
+	config.customModels = config.customModels.filter((m) => !m.id?.startsWith(DROID_PREFIX))
+	await fs.writeFile(DROID_SETTINGS_PATH(), JSON.stringify(config, null, 2))
+}
+
+export { isDroidInstalled }
