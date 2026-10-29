@@ -447,6 +447,60 @@ export async function removePiSettings(): Promise<void> {
 export { isPiInstalled, resolvePiModelsJsonPath }
 
 /**
+ * A TOML config with one `[openai]` table and a "managed by" header.
+ *
+ * CodeWhale and ForgeCode are the same shape down to the table name and the header comment, so
+ * they share one implementation: two copies would drift apart the first time either tool
+ * changes a key, and the screen would keep writing the old spelling to one of them.
+ *
+ * `readForWrite` rethrows on an unparseable file rather than answering `{}`, because a merge
+ * that starts from an empty object silently drops every other table the operator had.
+ */
+function openAiTomlConfig(options: {
+	readonly dir: () => string
+	readonly file: string
+	readonly header: string
+	readonly binary: string
+	readonly toolName: string
+}): ToolConfigPort {
+	const configPath = () => path.join(options.dir(), options.file)
+	return {
+		path: configPath(),
+		read: async () => {
+			const raw = await readText(configPath())
+			if (raw === null) return null
+			try {
+				return (parseTOML(raw) ?? {}) as Record<string, unknown>
+			} catch {
+				return null
+			}
+		},
+		readForWrite: async () =>
+			readConfigForWrite(fs, configPath(), (raw) => (parseTOML(raw) ?? {}) as Record<string, unknown>),
+		write: async (text) => {
+			await fs.mkdir(options.dir(), { recursive: true })
+			await fs.writeFile(configPath(), text, "utf-8")
+		},
+		format: "toml",
+		serialise: (config) => `${options.header}\n\n${stringifyTOML(config)}`,
+		baseUrlSuffix: "with-v1",
+		installKeys: ["openai"],
+		storedBaseUrl: (config) => {
+			const openai = (config as { openai?: Record<string, unknown> }).openai
+			return typeof openai?.base_url === "string" ? openai.base_url : null
+		},
+		apply: (config, input) => ({
+			...(config as Record<string, unknown>),
+			openai: {
+				api_key: input.apiKey,
+				base_url: input.baseUrl,
+				model: input.model || "provider/model-id",
+			},
+		}),
+	}
+}
+
+/**
  * CodeWhale's layout: `[openai]` in a TOML file, with every other table re-written untouched.
  *
  * This is the first TOML tool here, so the host supplies both halves of the format — the
@@ -457,83 +511,20 @@ export { isPiInstalled, resolvePiModelsJsonPath }
 const CODEWHALE_CONFIG_DIR = () => path.join(os.homedir(), ".codewhale")
 const CODEWHALE_CONFIG_PATH = () => path.join(CODEWHALE_CONFIG_DIR(), "config.toml")
 
-type CodewhaleConfig = { openai?: Record<string, unknown>; [key: string]: unknown }
-
-async function isCodewhaleInstalled(): Promise<boolean> {
-	try {
-		const isWindows = os.platform() === "win32"
-		await execAsync(isWindows ? "where codewhale" : "which codewhale", { windowsHide: true })
-		return true
-	} catch {
-		try {
-			await fs.access(CODEWHALE_CONFIG_PATH())
-			return true
-		} catch {
-			return false
-		}
-	}
-}
-
-export const codewhaleSettingsConfig: ToolConfigPort = {
-	path: CODEWHALE_CONFIG_PATH(),
-	read: async () => {
-		const raw = await readText(CODEWHALE_CONFIG_PATH())
-		if (raw === null) return null
-		try {
-			return (parseTOML(raw) ?? {}) as Record<string, unknown>
-		} catch {
-			return null
-		}
-	},
-	readForWrite: async () =>
-		readConfigForWrite(
-			fs,
-			CODEWHALE_CONFIG_PATH(),
-			(raw) => (parseTOML(raw) ?? {}) as Record<string, unknown>,
-		),
-	write: async (text) => {
-		await fs.mkdir(CODEWHALE_CONFIG_DIR(), { recursive: true })
-		await fs.writeFile(CODEWHALE_CONFIG_PATH(), text, "utf-8")
-	},
-	format: "toml",
-	// The file is ours from the first write, and the header says so; a tool that loses this
-	// comment still keeps working, so the marker is a courtesy rather than a mechanism.
-	serialise: (config) => `# CodeWhale config - managed by 9Router\n\n${stringifyTOML(config)}`,
-	baseUrlSuffix: "with-v1",
-	installKeys: ["openai"],
-	storedBaseUrl: (config) => {
-		const openai = (config as CodewhaleConfig)?.openai
-		return typeof openai?.base_url === "string" ? openai.base_url : null
-	},
-	apply: (config, input) => ({
-		...(config as CodewhaleConfig),
-		openai: {
-			base_url: input.baseUrl,
-			api_key: input.apiKey,
-			model: input.model || "provider/model-id",
-		},
-	}),
-}
+export const codewhaleSettingsConfig: ToolConfigPort = openAiTomlConfig({
+	dir: CODEWHALE_CONFIG_DIR,
+	file: "config.toml",
+	header: "# CodeWhale config - managed by 9Router",
+	binary: "codewhale",
+	toolName: "CodeWhale",
+})
 
 /** CodeWhale's reset drops the table, and the file only when no other table remains. */
 export async function removeCodewhaleSettings(): Promise<void> {
-	const raw = await readText(CODEWHALE_CONFIG_PATH())
-	if (raw === null) return
-	let config: CodewhaleConfig
-	try {
-		config = (parseTOML(raw) ?? {}) as CodewhaleConfig
-	} catch {
-		return
-	}
-	delete config.openai
-	if (Object.keys(config).length === 0) {
-		await fs.rm(CODEWHALE_CONFIG_PATH(), { force: true })
-		return
-	}
-	await fs.writeFile(CODEWHALE_CONFIG_PATH(), stringifyTOML(config), "utf-8")
+	await removeOpenAiTomlTable(CODEWHALE_CONFIG_PATH())
 }
 
-export { isCodewhaleInstalled }
+export const isCodewhaleInstalled = () => detectInstall("codewhale", CODEWHALE_CONFIG_PATH())
 
 /**
  * OpenClaw's layout: a nested `openclaw.json` plus a `models.json` inside every agent folder.
@@ -1224,3 +1215,58 @@ export async function removeCopilotSettings(): Promise<void> {
 }
 
 export { isCopilotInstalled }
+
+/** Is the tool's binary on PATH, or does its config already exist? */
+async function detectInstall(binary: string, configPath: string): Promise<boolean> {
+	try {
+		const isWindows = os.platform() === "win32"
+		await execAsync(isWindows ? `where ${binary}` : `which ${binary}`, { windowsHide: true })
+		return true
+	} catch {
+		try {
+			await fs.access(configPath)
+			return true
+		} catch {
+			return false
+		}
+	}
+}
+
+/** Drops the `[openai]` table, and the file only when no other table remains. */
+async function removeOpenAiTomlTable(configPath: string): Promise<void> {
+	const raw = await readText(configPath)
+	if (raw === null) return
+	let config: Record<string, unknown>
+	try {
+		config = (parseTOML(raw) ?? {}) as Record<string, unknown>
+	} catch {
+		return
+	}
+	delete config.openai
+	if (Object.keys(config).length === 0) {
+		await fs.rm(configPath, { force: true })
+		return
+	}
+	await fs.writeFile(configPath, stringifyTOML(config), "utf-8")
+}
+
+const FORGE_DIR = () => path.join(os.homedir(), ".forge")
+const FORGE_CONFIG_PATH = () => path.join(FORGE_DIR(), "config.toml")
+
+export const forgeSettingsConfig: ToolConfigPort = {
+	...openAiTomlConfig({
+		dir: FORGE_DIR,
+		file: "config.toml",
+		header: "# Forge config - managed by 9Router",
+		binary: "forge",
+		toolName: "ForgeCode",
+	}),
+	resolveApiKey: (requested) => resolveCliApiKey(requested || null),
+}
+
+/** ForgeCode's reset drops its table and keeps every other one. */
+export async function removeForgeSettings(): Promise<void> {
+	await removeOpenAiTomlTable(FORGE_CONFIG_PATH())
+}
+
+export const isForgeInstalled = () => detectInstall("forge", FORGE_CONFIG_PATH())

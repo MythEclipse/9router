@@ -1,159 +1,36 @@
-import { exec } from "node:child_process"
-import fs from "node:fs/promises"
-import os from "node:os"
-import path from "node:path"
-import { promisify } from "node:util"
-import { parseTOML, stringifyTOML } from "confbox"
 import { NextResponse } from "next/server"
-import { readConfigForWrite } from "@/lib/cliTools/configWrite"
-import { resolveCliApiKey } from "../resolveApiKey.ts"
+import { forgeSettingsConfig, isForgeInstalled, removeForgeSettings } from "@/lib/cliToolHosts"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-/**
- * ForgeCode config.toml — this route only owns the `[openai]` table; every
- * other table is read back and re-serialized untouched.
- */
-interface ForgeConfig {
-	openai?: {
-		api_key?: string
-		base_url?: string
-		model?: string
-	}
-	[key: string]: unknown
-}
-
-const execAsync = promisify(exec)
-
-const getForgeDir = () => path.join(os.homedir(), ".forge")
-const getForgeConfigPath = () => path.join(getForgeDir(), "config.toml")
-
-const checkForgeInstalled = async () => {
-	const isWindows = os.platform() === "win32"
-	try {
-		const command = isWindows ? "where forge" : "which forge"
-		await execAsync(command, { windowsHide: true })
-		return true
-	} catch {
-		try {
-			await fs.access(getForgeConfigPath())
-			return true
-		} catch {
-			return false
-		}
-	}
-}
-
-const has9RouterConfig = (content) => {
-	if (!content) return false
-	return content.includes("managed by 9Router") || content.includes("localhost:20128")
-}
-
-const readConfig = async () => {
-	try {
-		return await fs.readFile(getForgeConfigPath(), "utf-8")
-	} catch {
-		return null
-	}
-}
+/** ForgeCode keeps `[openai]` in a TOML file; it shares CodeWhale's implementation. */
+const deps = () => ({
+	isInstalled: isForgeInstalled,
+	config: forgeSettingsConfig,
+	sideRemovals: [removeForgeSettings],
+	notInstalledMessage: "ForgeCode CLI is not installed",
+	appliedMessage: "ForgeCode settings applied successfully!",
+	resetMessage: "9Router removed from ForgeCode",
+})
 
 export async function GET() {
-	try {
-		const installed = await checkForgeInstalled()
-		if (!installed) {
-			return NextResponse.json({
-				installed: false,
-				config: null,
-				message: "ForgeCode CLI is not installed",
-			})
-		}
-
-		const content = await readConfig()
-		let config = null
-		try {
-			if (content) config = parseTOML(content)
-		} catch {}
-
-		return NextResponse.json({
-			installed: true,
-			config,
-			has9Router: has9RouterConfig(content),
-			configPath: getForgeConfigPath(),
-		})
-	} catch (err) {
-		return NextResponse.json({ error: { message: err.message } }, { status: 500 })
-	}
+	const answer = await getUseCases().cliTools.readToolSettingsStatus(deps())
+	return NextResponse.json(answer.body, { status: answer.status })
 }
 
-export async function POST(request) {
-	let rawBody
+export async function POST(request: Request) {
+	let body: unknown
 	try {
-		rawBody = await request.json()
+		body = await request.json()
 	} catch {
 		return NextResponse.json({ error: { message: "Invalid JSON body" } }, { status: 400 })
 	}
-
-	try {
-		const { baseUrl, apiKey, model } = rawBody || {}
-		if (!baseUrl) {
-			return NextResponse.json({ error: { message: "baseUrl is required" } }, { status: 400 })
-		}
-
-		const configPath = getForgeConfigPath()
-		await fs.mkdir(getForgeDir(), { recursive: true })
-
-		// An absent file means a fresh config; an unreadable one must abort the write
-		// rather than let the merge below drop every other setting the user had.
-		const existing: ForgeConfig = await readConfigForWrite(
-			fs,
-			configPath,
-			(raw) => parseTOML<ForgeConfig>(raw) ?? {},
-		)
-
-		const normalizedBaseUrl = baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`
-
-		existing.openai = {
-			api_key: await resolveCliApiKey(apiKey),
-			base_url: normalizedBaseUrl,
-			model: model || "provider/model-id",
-		}
-
-		const header = "# Forge config - managed by 9Router\n\n"
-		const content = header + stringifyTOML(existing)
-
-		await fs.writeFile(configPath, content, "utf-8")
-
-		return NextResponse.json({
-			success: true,
-			message: "ForgeCode settings applied successfully!",
-			configPath,
-		})
-	} catch (err) {
-		return NextResponse.json({ error: { message: err.message } }, { status: 500 })
-	}
+	const answer = await getUseCases().cliTools.writeToolSettings(body, deps())
+	return NextResponse.json(answer.body, { status: answer.status })
 }
 
 export async function DELETE() {
-	try {
-		const configPath = getForgeConfigPath()
-		let existing: ForgeConfig = {}
-		try {
-			const raw = await fs.readFile(configPath, "utf-8")
-			existing = parseTOML<ForgeConfig>(raw) ?? {}
-		} catch {
-			return NextResponse.json({ success: true, message: "No config file to reset" })
-		}
-
-		delete existing.openai
-
-		if (Object.keys(existing).length === 0) {
-			await fs.rm(configPath, { force: true })
-		} else {
-			await fs.writeFile(configPath, stringifyTOML(existing), "utf-8")
-		}
-
-		return NextResponse.json({ success: true, message: "9Router removed from ForgeCode" })
-	} catch (err) {
-		return NextResponse.json({ error: { message: err.message } }, { status: 500 })
-	}
+	const answer = await getUseCases().cliTools.resetToolSettings(deps())
+	return NextResponse.json(answer.body, { status: answer.status })
 }
