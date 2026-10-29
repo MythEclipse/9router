@@ -181,3 +181,44 @@ a parallel transport, not remove a defect.
 area end-to-end — `combos`, whose procedures already exceed its route — would prove
 the transport without a 163-file rewrite. Recorded as the next step rather than
 claiming the sweep is incomplete.
+
+## The usage procedures are not safe to adopt as-is
+
+Continuing the transport work to `usage`, the pattern from `combos` did **not**
+hold. `combos` was safe because its procedure called the same use-cases with the
+same arguments. `usage` is not:
+
+```ts
+// apps/api/src/presentation/orpc/routers/usage.ts:22
+const scope = { apiKeyFilter: null, allowedModels: "*" } as const
+```
+
+Every usage procedure passes that constant. The REST route passes
+`usageScopeOf(ctx)`, which narrows the report to the caller's own key and admitted
+models:
+
+```ts
+// apps/web/src/app/api/usage/stats/route.ts
+usageReports.stats(searchParams.get("period"), usageScopeOf(ctx))
+```
+
+The router's own docstring names the gap and accepts it: "This transport
+authenticates with better-auth, so a caller here is a password session and sees
+every key; the per-key filter exists on the REST route, where an API key can be the
+caller."
+
+**So moving a usage route onto the router would widen what an API-key session can
+see from its own usage to every key's usage.** That is a data leak introduced by a
+refactor that looks mechanical. The transport move cannot be applied per-area
+uniformly — it has to be checked for argument equivalence first, and here it fails.
+
+The fix is small but it is not the one I expected: the scope belongs in the
+procedure *context*, not in a module constant. `usageScopeOf` already lives in
+`apps/api/src/application/usage/report-usage.ts` as a pure function; it needs the
+session's `apiKeyFilter`/`allowedModels`, which `getSessionContext()` already
+returns at top level. Passing them through `RouterContext` closes the gap for the
+dashboard *and* for any future HTTP caller.
+
+Until then the usage routes stay where they are. This is recorded rather than
+worked around: a route that answers with correct scoping is better than a procedure
+that answers faster with someone else's data.

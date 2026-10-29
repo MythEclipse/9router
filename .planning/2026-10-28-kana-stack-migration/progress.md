@@ -2015,3 +2015,36 @@ use-cases directly. Verified end-to-end: `POST` 201 with a real id, `GET` return
 
 `9router-api` gained a `./presentation/orpc/router` export; `apps/api` `dev`/`start`
 scripts gained `--conditions=react-server`, without which both crash on `server-only`.
+
+## usage: the transport move was safe only after the scope moved
+
+`usage` did not go the way `combos` did, and the difference is the whole lesson.
+
+`combos` was safe because its procedures called the same use-cases with the same
+arguments. Checking `usage` for that same property is what caught the problem
+before any route was touched: every procedure passed a constant
+`{ apiKeyFilter: null, allowedModels: "*" }`, while the REST route passed
+`usageScopeOf(ctx)`. Moving the route would have widened an API-key session from
+its own usage to every key's. The transport move is not uniformly mechanical — it
+has argument-equivalence as a precondition, and here it failed.
+
+So the order inverted: the scope moved first (`base.ts` gained `SessionClaims`,
+`usage.ts` called `usageScopeOf(context.session)`), the routes moved second. The
+first commit is the one a reviewer should read; the second is wiring.
+
+Verified at the port rather than in types — two sessions through the real router
+now pass different scopes down:
+
+    password session -> { apiKeyFilter: null, allowedModels: "*" }
+    apikey session   -> { apiKeyFilter: "sk-alpha", allowedModels: "gpt-4o" }
+
+`sessionClaimsOf` exists because the combos route had hand-written that mapping
+and dropped `apiKeyFilter` — the same defect, one route earlier, caught by looking.
+
+Gates: typecheck 0, 7714 passed / 0 failed (5 new), all six routes 200 against a
+live dev server, `?period=90d` still 400 with the rule's own message, CSV still
+`text/csv`.
+
+Restored two files that were dirty but not mine: `apps/web/tsconfig.json`
+(reformatted by `next dev`, plus `.next-dev` include entries) and `apps/web/AGENTS.md`
+(written by Next 16 on first boot). Neither belongs in a commit about routes.
