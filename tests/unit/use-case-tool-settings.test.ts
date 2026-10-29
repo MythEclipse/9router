@@ -1,0 +1,266 @@
+import { describe, expect, it, vi } from "vitest"
+import {
+	readToolSettingsStatus,
+	resetToolSettings,
+	writeToolSettings,
+} from "../../apps/api/src/application/cli-tools/manage-tool-settings.ts"
+import {
+	NOTHING_TO_RESET,
+	normaliseBaseUrl,
+	pointsAtThisInstall,
+	readToolSettings,
+	removeInstallEntry,
+	settingsFileText,
+	THIS_INSTALL_HOSTS,
+} from "../../apps/api/src/domain/cli-tool-settings.ts"
+
+describe("normaliseBaseUrl", () => {
+	it("appends /v1, which every OpenAI-compatible tool requires", () => {
+		expect(normaliseBaseUrl("http://localhost:20128")).toBe("http://localhost:20128/v1")
+	})
+
+	it("leaves a URL that already names /v1 alone", () => {
+		expect(normaliseBaseUrl("http://localhost:20128/v1")).toBe("http://localhost:20128/v1")
+	})
+
+	it("drops trailing slashes rather than producing /v1/", () => {
+		expect(normaliseBaseUrl("http://localhost:20128//")).toBe("http://localhost:20128/v1")
+		expect(normaliseBaseUrl("http://localhost:20128/v1/")).toBe("http://localhost:20128/v1")
+	})
+
+	it("trims the whitespace a paste carries", () => {
+		expect(normaliseBaseUrl("  http://localhost:20128  ")).toBe("http://localhost:20128/v1")
+	})
+})
+
+describe("pointsAtThisInstall", () => {
+	it("recognises the default local address", () => {
+		expect(pointsAtThisInstall("http://localhost:20128/v1", THIS_INSTALL_HOSTS)).toBe(true)
+		expect(pointsAtThisInstall("http://127.0.0.1:20128/v1", THIS_INSTALL_HOSTS)).toBe(true)
+	})
+
+	it("recognises a public host that names the product", () => {
+		expect(pointsAtThisInstall("https://9router.example.com/v1", THIS_INSTALL_HOSTS)).toBe(true)
+	})
+
+	it("ignores case, because a host is not case-sensitive", () => {
+		expect(pointsAtThisInstall("HTTP://LOCALHOST:20128/v1", THIS_INSTALL_HOSTS)).toBe(true)
+	})
+
+	it("does not claim a third-party endpoint", () => {
+		expect(pointsAtThisInstall("https://api.openai.com/v1", THIS_INSTALL_HOSTS)).toBe(false)
+	})
+
+	it("answers false for a value that is not a string", () => {
+		expect(pointsAtThisInstall(undefined, THIS_INSTALL_HOSTS)).toBe(false)
+		expect(pointsAtThisInstall(null, THIS_INSTALL_HOSTS)).toBe(false)
+	})
+})
+
+describe("readToolSettings", () => {
+	it("reads and normalises the three required fields", () => {
+		const read = readToolSettings({
+			baseUrl: "http://localhost:20128",
+			apiKey: "sk-1",
+			model: "gpt-4",
+		})
+		expect(read.input).toEqual({
+			baseUrl: "http://localhost:20128/v1",
+			apiKey: "sk-1",
+			model: "gpt-4",
+		})
+	})
+
+	it("refuses a half-filled form and says so once", () => {
+		// A config missing any field is one the tool cannot use, and it fails inside the
+		// tool, where the operator cannot see that the screen accepted half a form.
+		expect(readToolSettings({ baseUrl: "http://x", apiKey: "k" })).toEqual({
+			ok: false,
+			error: "baseUrl, apiKey and model are required",
+		})
+	})
+
+	it("treats a whitespace-only field as missing", () => {
+		expect(readToolSettings({ baseUrl: "  ", apiKey: "k", model: "m" }).ok).toBe(false)
+	})
+
+	it("refuses a body that is not an object", () => {
+		expect(readToolSettings(null).ok).toBe(false)
+	})
+})
+
+describe("removeInstallEntry", () => {
+	it("removes both spellings and reports that something changed", () => {
+		const config: Record<string, unknown> = { "openai-compatible": {}, "9router": {}, other: 1 }
+		expect(removeInstallEntry(config, ["openai-compatible", "9router"])).toBe(true)
+		expect(config).toEqual({ other: 1 })
+	})
+
+	it("reports nothing changed when the file had no entry", () => {
+		// The caller distinguishes "removed" from "was not there" to pick its message.
+		const config: Record<string, unknown> = { other: 1 }
+		expect(removeInstallEntry(config, ["openai-compatible"])).toBe(false)
+	})
+})
+
+describe("settingsFileText", () => {
+	it("pretty-prints with a trailing newline, so the file is diff-clean", () => {
+		expect(settingsFileText({ a: 1 })).toBe('{\n  "a": 1\n}\n')
+	})
+})
+
+/** A tool whose config is an in-memory object, recording the writes. */
+function tool(overrides: Record<string, unknown> = {}) {
+	const written: string[] = []
+	let config: Record<string, unknown> | null = { "openai-compatible": { baseUrl: "x" } }
+	const deps = {
+		written,
+		getConfig: () => config,
+		isInstalled: vi.fn(async () => true),
+		config: {
+			path: "/home/u/.tool/auth.json",
+			read: vi.fn(async () => config),
+			write: vi.fn(async (text: string) => {
+				written.push(text)
+				config = JSON.parse(text)
+			}),
+			installKeys: ["openai-compatible", "9router"],
+			storedBaseUrl: (c: Record<string, unknown> | null) => {
+				const entry = c?.["openai-compatible"] as Record<string, unknown> | undefined
+				return typeof entry?.baseUrl === "string" ? entry.baseUrl : null
+			},
+			apply: (
+				c: Record<string, unknown>,
+				input: { baseUrl: string; apiKey: string; model: string },
+			) => ({
+				...c,
+				"openai-compatible": {
+					baseUrl: input.baseUrl,
+					apiKey: input.apiKey,
+					model: input.model,
+				},
+			}),
+		},
+		notInstalledMessage: "not installed",
+		appliedMessage: "applied",
+		resetMessage: "reset",
+	}
+	return Object.assign(deps, overrides)
+}
+
+describe("readToolSettingsStatus", () => {
+	it("answers installed with whether it already points here", async () => {
+		const deps = tool()
+		deps.config.read.mockResolvedValueOnce({
+			"openai-compatible": { baseUrl: "http://localhost:20128/v1" },
+		})
+		const answer = await readToolSettingsStatus(deps as never)
+
+		expect(answer.status).toBe(200)
+		expect(answer.body.installed).toBe(true)
+		expect(answer.body.has9Router).toBe(true)
+	})
+
+	it("answers 200 with installed:false rather than 404 for a missing tool", async () => {
+		// A 404 reads as "this endpoint does not exist" and the screen would not render the
+		// install panel.
+		const deps = tool({ isInstalled: async () => false, installUrl: "https://tool.dev" })
+		const answer = await readToolSettingsStatus(deps as never)
+
+		expect(answer.status).toBe(200)
+		expect(answer.body).toMatchObject({ installed: false, installUrl: "https://tool.dev" })
+	})
+})
+
+describe("writeToolSettings", () => {
+	it("writes the normalised config in the tool's own shape", async () => {
+		const deps = tool()
+		const answer = await writeToolSettings(
+			{ baseUrl: "http://localhost:20128", apiKey: "k", model: "m" },
+			deps as never,
+		)
+
+		expect(answer.ok).toBe(true)
+		expect(deps.getConfig()).toMatchObject({
+			"openai-compatible": {
+				baseUrl: "http://localhost:20128/v1",
+				apiKey: "k",
+				model: "m",
+			},
+		})
+	})
+
+	it("keeps the tool's other provider entries", async () => {
+		const deps = tool()
+		deps.config.read.mockResolvedValueOnce({ anthropic: { key: "a" } })
+		await writeToolSettings({ baseUrl: "http://x", apiKey: "k", model: "m" }, deps as never)
+
+		expect(deps.getConfig()).toMatchObject({ anthropic: { key: "a" } })
+	})
+
+	it("refuses before writing anything when the form is incomplete", async () => {
+		const deps = tool()
+		const answer = await writeToolSettings({ baseUrl: "http://x" }, deps as never)
+
+		expect(answer.status).toBe(400)
+		expect(deps.config.write).not.toHaveBeenCalled()
+	})
+
+	it("refuses to configure a tool that is not installed", async () => {
+		const deps = tool({ isInstalled: async () => false })
+		const answer = await writeToolSettings(
+			{ baseUrl: "http://x", apiKey: "k", model: "m" },
+			deps as never,
+		)
+
+		expect(answer.status).toBe(400)
+		expect(deps.config.write).not.toHaveBeenCalled()
+	})
+
+	it("still succeeds when a side write fails, because the tool already works", async () => {
+		// The side write is an editor's settings file; refusing the whole request would tell
+		// the operator they configured nothing while the tool is configured.
+		const sideWrite = vi.fn(async () => {
+			throw new Error("EACCES")
+		})
+		const deps = tool({ sideWrites: [sideWrite] })
+		const answer = await writeToolSettings(
+			{ baseUrl: "http://x", apiKey: "k", model: "m" },
+			deps as never,
+		)
+
+		expect(answer.ok).toBe(true)
+		expect(sideWrite).toHaveBeenCalled()
+		expect(deps.config.write).toHaveBeenCalled()
+	})
+})
+
+describe("resetToolSettings", () => {
+	it("removes the install entry and keeps everything else", async () => {
+		const deps = tool()
+		deps.config.read.mockResolvedValueOnce({ "openai-compatible": {}, anthropic: { k: 1 } })
+		const answer = await resetToolSettings(deps as never)
+
+		expect(answer.body).toEqual({ success: true, message: "reset" })
+		expect(deps.getConfig()).toEqual({ anthropic: { k: 1 } })
+	})
+
+	it("succeeds with a different message when there was no file", async () => {
+		// The operator asked the tool to stop pointing here, and it already does not.
+		const deps = tool()
+		deps.config.read.mockResolvedValueOnce(null)
+		const answer = await resetToolSettings(deps as never)
+
+		expect(answer.body).toEqual({ success: true, message: NOTHING_TO_RESET })
+		expect(deps.config.write).not.toHaveBeenCalled()
+	})
+
+	it("answers 500 with the reason when the file cannot be written", async () => {
+		const deps = tool()
+		deps.config.write.mockRejectedValueOnce(new Error("EROFS: read-only file system"))
+		const answer = await resetToolSettings(deps as never)
+
+		expect(answer).toMatchObject({ ok: false, status: 500 })
+		expect(String(answer.body.error)).toContain("read-only")
+	})
+})

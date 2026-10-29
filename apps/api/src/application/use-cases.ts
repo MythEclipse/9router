@@ -15,6 +15,12 @@ import { makeListApiKeys, makeRevokeApiKey } from "./api-keys/manage-api-keys.ts
 import { makeManageApiKeys } from "./api-keys/manage-api-keys-dashboard.ts"
 import { makeManageSingleKey } from "./api-keys/manage-single-key.ts"
 import { loadChangelog } from "./changelog.ts"
+import type { ToolSettingsAnswer, ToolSettingsDeps } from "./cli-tools/manage-tool-settings.ts"
+import {
+	readToolSettingsStatus,
+	resetToolSettings,
+	writeToolSettings,
+} from "./cli-tools/manage-tool-settings.ts"
 import {
 	makeCheckComboCycle,
 	makeCreateCombo,
@@ -293,6 +299,17 @@ export interface UseCases {
 		readonly pollSession: (provider: string, state: string | null) => Promise<DispatchAnswer>
 		readonly stopProxy: (provider: string) => DispatchAnswer
 		readonly ideStatus: (provider: string) => Promise<DispatchAnswer>
+	}
+	/**
+	 * Wiring a CLI tool to this install.
+	 *
+	 * One flow for every tool: is it installed, does it point here, put it here or take it
+	 * away. What differs per tool is its config file, which the host supplies.
+	 */
+	readonly cliTools: {
+		readonly readToolSettingsStatus: (host: ToolSettingsDeps) => Promise<ToolSettingsAnswer>
+		readonly writeToolSettings: (body: unknown, host: ToolSettingsDeps) => Promise<ToolSettingsAnswer>
+		readonly resetToolSettings: (host: ToolSettingsDeps) => Promise<ToolSettingsAnswer>
 	}
 	/** Cloudflare tunnels and Tailscale funnels, as the network screen drives them. */
 	readonly tunnel: {
@@ -618,6 +635,11 @@ export function buildUseCases(deps: Dependencies): UseCases {
 			startMimoLogin: (body, host) => startMimoLogin(body, host),
 			authorizeKiroSocial: (provider, host) => authorizeKiroSocial(provider, host),
 			exchangeKiroSocial: (body, host) => exchangeKiroSocial(body, host),
+		},
+		cliTools: {
+			readToolSettingsStatus: (host) => readToolSettingsStatus(host),
+			writeToolSettings: (body, host) => writeToolSettings(body, host),
+			resetToolSettings: (host) => resetToolSettings(host),
 		},
 		// The probe cache is process-wide and survives a hot reload, exactly like the module
 		// scope it replaced: one cache per process, not one per request.
