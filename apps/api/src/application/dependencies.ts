@@ -275,6 +275,33 @@ export interface Dependencies {
 	readonly probeModel: (modelRef: string, kind: string) => Promise<Record<string, unknown>>
 	/** Whether this provider serves one request at a time. */
 	readonly isSerialProbe: (provider: string) => boolean
+	/** The free/oauth/apikey/compatible questions a batch test groups by. */
+	readonly batchClassifiers: import("../domain/batch-selection.ts").ProviderClassifiers
+	/** What the client listing asks the catalogue about usage eligibility and order. */
+	readonly clientListingRegistry: import("./providers/list-client-connections.ts").ClientListingRegistry
+	/** Probes one connection and reports its verdict, writing back test status. */
+	readonly probeConnection: (
+		connectionId: string,
+	) => Promise<import("../domain/batch-result.ts").ProbeOutcome>
+	/** Repairs OAuth connection emails before the client listing reads them. */
+	readonly backfillConnectionEmails: () => Promise<void>
+	/**
+	 * The catalogue filters the suggested-models picker applies, keyed by fetcher
+	 * type, with the built-in fallback entries for each.
+	 */
+	readonly suggestedCatalogue: import("../domain/model-catalogue.ts").CatalogueFilters
+	/** The registry entry whose fetcher matches this url and type, if any. */
+	readonly findSyncableCatalogue: (url: string, type: string) => { readonly id: string } | null
+	/** The stored copy of a synced catalogue. */
+	readonly readSyncedCatalogue: (
+		entryId: string,
+	) => Promise<import("./providers/suggest-models.ts").SyncedCatalogue | null>
+	/** Refresh a stored catalogue copy in the background. */
+	readonly refreshSyncedCatalogue: (entryId: string) => void
+	/** Fetch an arbitrary catalogue URL, with the type's required headers. */
+	readonly fetchCatalogueUrl: (url: string, type: string) => Promise<unknown>
+	/** Arm the background free-catalogue syncer; idempotent. */
+	readonly armCatalogueSyncer: () => void
 	/** Maps a provider alias to the provider id the router uses. */
 	readonly resolveProviderAlias: (prefix: string) => string
 	/** Probes a base URL with a key, before a node is saved. */

@@ -6,13 +6,22 @@
  * app supplies them as functions and the use-case only sees ports.
  */
 
+import type { ClientListingRegistry } from "9router-api/application/providers/list-client-connections"
+import type { SyncedCatalogue } from "9router-api/application/providers/suggest-models"
+import type { ProviderClassifiers } from "9router-api/domain/batch-selection"
+import type { CatalogueFilters, SuggestedModel } from "9router-api/domain/model-catalogue"
 import type { ConnectionHost } from "9router-api/infrastructure/db/repositories/provider-connection-repository"
 import { createProviderCatalogue } from "9router-api/infrastructure/db/repositories/provider-connection-repository"
 import { getProviderModels, PROVIDER_ID_TO_ALIAS } from "open-sse/config/providerModels"
 import { PROVIDERS } from "open-sse/config/providers"
+import REGISTRY from "open-sse/providers/registry/index"
 import { resolveProviderAlias } from "open-sse/services/model"
+import { fetch as undiciFetch } from "undici"
 import { pingModelByKind, WEB_COOKIE_PROVIDERS } from "@/app/api/models/test/ping"
+import { testSingleConnection } from "@/app/api/providers/[id]/test/testUtils"
+import { FALLBACK_SUGGESTIONS, FILTERS } from "@/app/api/providers/suggested-models/filters"
 import { getSettings, updateSettings } from "@/lib/localDb"
+import { backfillCodexEmails } from "@/lib/oauth/providers"
 import {
 	createProviderConnection,
 	deleteProviderConnection,
@@ -26,12 +35,24 @@ import {
 import { APIKEY_PROVIDERS, SERVER_CONFIG } from "@/shared/constants/config"
 import {
 	AI_PROVIDERS,
+	ANTHROPIC_COMPATIBLE_PREFIX,
+	APIKEY_PROVIDERS as APIKEY_PROVIDER_IDS,
+	FREE_PROVIDERS,
 	FREE_TIER_PROVIDERS,
 	isAnthropicCompatibleProvider,
 	isCustomEmbeddingProvider,
 	isOpenAICompatibleProvider,
+	OAUTH_PROVIDERS,
+	OPENAI_COMPATIBLE_PREFIX,
+	USAGE_APIKEY_PROVIDERS,
+	USAGE_SUPPORTED_PROVIDERS,
 	WEB_COOKIE_PROVIDERS as WEB_COOKIE_PROVIDER_IDS,
 } from "@/shared/constants/providers"
+import {
+	getSyncedFreeCatalog,
+	startFreeCatalogSync,
+	syncOneFreeCatalog,
+} from "@/shared/services/freeCatalogSync"
 import { toProviderConnectionResponse, usesAwsCredentialForm } from "./providerConnectionResponse"
 import { normalizeProviderId, normalizeProviderSpecificData } from "./providerNormalization"
 
@@ -180,3 +201,114 @@ export async function probeModel(modelRef: string, kind: string): Promise<Record
 export function isSerialProbe(provider: string): boolean {
 	return WEB_COOKIE_PROVIDERS.has(provider)
 }
+
+// ---------------------------------------------------------------------------
+// Batch testing, the client listing, and suggested models
+// ---------------------------------------------------------------------------
+
+/** The free/oauth/apikey/compatible questions a batch test groups by. */
+export const batchClassifiers: ProviderClassifiers = {
+	isFree: (provider) => !!FREE_PROVIDERS[provider],
+	isOAuth: (provider) => !!OAUTH_PROVIDERS[provider],
+	isApiKey: (provider) => !!APIKEY_PROVIDER_IDS[provider],
+	isCompatible: (provider) =>
+		typeof provider === "string" &&
+		(provider.startsWith(OPENAI_COMPATIBLE_PREFIX) ||
+			provider.startsWith(ANTHROPIC_COMPATIBLE_PREFIX)),
+}
+
+/**
+ * What the client listing asks the catalogue about usage eligibility and order.
+ *
+ * `usageOrder` is the registry's own `USAGE_SUPPORTED_PROVIDERS` array: the panel
+ * lists providers in that order, so sorting by it keeps the two views agreeing.
+ */
+export const clientListingRegistry: ClientListingRegistry = {
+	isCompatible: (provider) =>
+		isOpenAICompatibleProvider(provider) || isAnthropicCompatibleProvider(provider),
+	supportsUsage: (provider) => USAGE_SUPPORTED_PROVIDERS.includes(provider),
+	supportsApiKeyUsage: (provider) => USAGE_APIKEY_PROVIDERS.includes(provider),
+	usageOrder: USAGE_SUPPORTED_PROVIDERS,
+}
+
+/** Repairs OAuth connection emails before the client listing reads them. */
+export const backfillConnectionEmails = () => backfillCodexEmails()
+
+/**
+ * The suggested-models filter table, with a built-in fallback per type.
+ *
+ * The filters are imported rather than reimplemented: two of them lean on the
+ * `open-sse` registry, which only this app can import at build time.
+ */
+export const suggestedCatalogue: CatalogueFilters = {
+	filters: FILTERS,
+	fallbacks: FALLBACK_SUGGESTIONS,
+}
+
+/**
+ * The registry entry whose `modelsFetcher` matches this url and type, if any.
+ *
+ * Only an entry with `noAuth` and not `hidden` has a stable id worth storing a
+ * copy under — the rest are keyed fetchers whose catalogue differs per account,
+ * so a stored copy of one would be wrong for the next.
+ */
+export function findSyncableCatalogue(url: string, type: string): { readonly id: string } | null {
+	for (const entry of REGISTRY || []) {
+		const fetcher = entry?.modelsFetcher
+		if (fetcher && fetcher.url === url && fetcher.type === type && entry.noAuth && !entry.hidden) {
+			return entry as { id: string }
+		}
+	}
+	return null
+}
+
+/** The stored copy of a synced catalogue, or null when none was stored. */
+export async function readSyncedCatalogue(entryId: string): Promise<SyncedCatalogue | null> {
+	const synced = await getSyncedFreeCatalog(entryId)
+	if (!synced) return null
+	return { data: synced.data as readonly SuggestedModel[], syncedAt: synced.syncedAt }
+}
+
+/** Refresh a stored catalogue copy in the background; failure only costs freshness. */
+export function refreshSyncedCatalogue(entryId: string): void {
+	const entry = findSyncableCatalogueById(entryId)
+	if (entry) syncOneFreeCatalog(entry).catch(() => {})
+}
+
+function findSyncableCatalogueById(entryId: string) {
+	for (const entry of REGISTRY || []) {
+		if (entry?.id === entryId) return entry
+	}
+	return null
+}
+
+/**
+ * Fetch an arbitrary catalogue URL.
+ *
+ * opencode.ai only lists public models to requests carrying its desktop client
+ * header; without it the catalogue can 403 or hang, so the header is per-type.
+ */
+export async function fetchCatalogueUrl(url: string, type: string): Promise<unknown> {
+	const headers = type === "opencode-free" ? { "x-opencode-client": "cli" } : undefined
+	const res = await undiciFetch(url, {
+		signal: AbortSignal.timeout(15_000),
+		...(headers ? { headers } : {}),
+	})
+	if (!res.ok) throw new Error(`catalogue fetch failed with ${res.status}`)
+	return res.json()
+}
+
+/** Arm the background free-catalogue syncer; the route calls it once. */
+export function armCatalogueSyncer(): void {
+	startFreeCatalogSync()
+}
+
+/**
+ * Probe one connection, writing back its test status and any refreshed tokens.
+ *
+ * The tester is the single place that knows how each auth type is probed, so it is
+ * injected as-is. Its `Connection not found` verdict is a return value, not a
+ * throw — `check-connection.ts` turns it into a 404 and the batch path into a
+ * failed row, so both stay consistent with one string.
+ */
+export const probeConnection = (connectionId: string) => testSingleConnection(connectionId)

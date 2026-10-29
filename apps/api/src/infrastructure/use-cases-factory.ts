@@ -13,9 +13,13 @@ import { randomUUID } from "node:crypto"
 import { CUSTOM_PLUGIN_KEYS } from "@9router/db/shared/pluginKeys"
 import type { ComboPresetPort, OverrideStore } from "../application/dependencies.ts"
 import type { PluginCache } from "../application/plugins/manage-plugins.ts"
+import type { ClientListingRegistry } from "../application/providers/list-client-connections.ts"
 import type { ProviderCatalogue, StoredConnection } from "../application/providers/ports.ts"
+import type { SyncedCatalogue } from "../application/providers/suggest-models.ts"
 import { buildUseCases, type UseCases } from "../application/use-cases.ts"
+import type { ProviderClassifiers } from "../domain/batch-selection.ts"
 import type { CacheEntry, FreeModel, KiloModel } from "../domain/free-model-cache.ts"
+import type { CatalogueFilters } from "../domain/model-catalogue.ts"
 import type { ProbeTarget } from "../domain/model-probe.ts"
 import { createChangelogSourceFromDisk } from "./changelog-source.ts"
 import { createComboRotationPort } from "./combo-rotation-port.ts"
@@ -160,6 +164,28 @@ export interface UseCaseOptions {
 	readonly probeModel?: (modelRef: string, kind: string) => Promise<Record<string, unknown>>
 	/** Whether this provider serves one request at a time. */
 	readonly isSerialProbe?: (provider: string) => boolean
+	/** The free/oauth/apikey/compatible questions a batch test groups by. */
+	readonly batchClassifiers?: ProviderClassifiers
+	/** What the client listing asks the catalogue about usage eligibility and order. */
+	readonly clientListingRegistry?: ClientListingRegistry
+	/** Probes one connection and reports its verdict. */
+	readonly probeConnection?: (
+		connectionId: string,
+	) => Promise<import("../domain/batch-result.ts").ProbeOutcome>
+	/** Repairs OAuth connection emails before the client listing reads them. */
+	readonly backfillConnectionEmails?: () => Promise<void>
+	/** The suggested-models filter table and its built-in fallbacks. */
+	readonly suggestedCatalogue?: CatalogueFilters
+	/** The registry entry whose fetcher matches this url and type. */
+	readonly findSyncableCatalogue?: (url: string, type: string) => { readonly id: string } | null
+	/** The stored copy of a synced catalogue. */
+	readonly readSyncedCatalogue?: (entryId: string) => Promise<SyncedCatalogue | null>
+	/** Refresh a stored catalogue copy in the background. */
+	readonly refreshSyncedCatalogue?: (entryId: string) => void
+	/** Fetch an arbitrary catalogue URL. */
+	readonly fetchCatalogueUrl?: (url: string, type: string) => Promise<unknown>
+	/** Arm the background free-catalogue syncer; idempotent. */
+	readonly armCatalogueSyncer?: () => void
 	/**
 	 * The studio cycle guard walks the combo graph, which lives in `apps/web`.
 	 * Absent means no guard, and a cycle would only surface as a request timeout.
@@ -298,6 +324,25 @@ export function createUseCases(
 		fetchConnectionModels: options.fetchConnectionModels ?? (async () => null),
 		probeModel: options.probeModel ?? (async () => ({ valid: false, error: "not available" })),
 		isSerialProbe: options.isSerialProbe ?? (() => false),
+		batchClassifiers: options.batchClassifiers ?? ungroupableProviders(),
+		clientListingRegistry: options.clientListingRegistry ?? unlistableProviders(),
+		probeConnection:
+			options.probeConnection ??
+			(async () => ({
+				valid: false,
+				error: "not available",
+			})),
+		backfillConnectionEmails: options.backfillConnectionEmails ?? (async () => {}),
+		suggestedCatalogue: options.suggestedCatalogue ?? { filters: {}, fallbacks: {} },
+		findSyncableCatalogue: options.findSyncableCatalogue ?? (() => null),
+		readSyncedCatalogue: options.readSyncedCatalogue ?? (async () => null),
+		refreshSyncedCatalogue: options.refreshSyncedCatalogue ?? (() => {}),
+		fetchCatalogueUrl:
+			options.fetchCatalogueUrl ??
+			(async () => {
+				throw new Error("catalogue fetch is not configured")
+			}),
+		armCatalogueSyncer: options.armCatalogueSyncer ?? (() => {}),
 		// The cycle guard walks the combo graph and lives beside it in `apps/web`.
 		findStudioCycle: options.findStudioCycle ?? (() => null),
 		resolveProviderAlias: options.resolveProviderAlias ?? ((prefix) => prefix),
@@ -401,4 +446,37 @@ function unavailableOverrideStore(): OverrideStore {
 /** A host that supplies no Kilo fetcher gets an explicit failure, not an empty list. */
 async function failingKiloFetch(): Promise<never> {
 	throw new Error("No Kilo catalogue fetcher was supplied")
+}
+
+/**
+ * No classifiers: every connection groups as `apikey`.
+ *
+ * A host that cannot answer the free/oauth/apikey question must not silently make
+ * `oauth` or `free` select nothing — an empty batch would read as "nothing to
+ * test" when the truth is "this host cannot tell". Falling back to `apikey` puts
+ * every connection in the group the route used as its own default.
+ */
+function ungroupableProviders(): ProviderClassifiers {
+	return {
+		isFree: () => false,
+		isOAuth: () => false,
+		isApiKey: () => false,
+		isCompatible: () => false,
+	}
+}
+
+/**
+ * No registry: nothing is usage-eligible, so the client listing is empty.
+ *
+ * Empty rather than everything: this endpoint discloses connection details, and a
+ * host that cannot say which providers support usage has no business answering
+ * with a full list.
+ */
+function unlistableProviders(): ClientListingRegistry {
+	return {
+		isCompatible: () => false,
+		supportsUsage: () => false,
+		supportsApiKeyUsage: () => false,
+		usageOrder: [],
+	}
 }

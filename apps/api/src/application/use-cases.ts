@@ -34,10 +34,14 @@ import { makeProviderNodes } from "./models/manage-provider-nodes.ts"
 import { makeStudioModels } from "./models/manage-studio-models.ts"
 import { makeReadPlugins, makeWritePlugins } from "./plugins/manage-plugins.ts"
 import { makeGetPricing, makeResetPricing, makeUpdatePricing } from "./pricing/manage-pricing.ts"
+import { makeCheckConnection } from "./providers/check-connection.ts"
+import { makeListClientConnections } from "./providers/list-client-connections.ts"
 import { makeFreeModels } from "./providers/list-free-models.ts"
 import { makeConnections } from "./providers/manage-connections.ts"
 import { makeOverrides } from "./providers/manage-overrides.ts"
 import { makeProbeModels } from "./providers/probe-models.ts"
+import { makeSuggestModels } from "./providers/suggest-models.ts"
+import { makeTestConnections } from "./providers/test-connections.ts"
 import { makePxpipe } from "./pxpipe/manage-pxpipe.ts"
 import { assertSupportedLocale } from "./settings/locale.ts"
 import { readLoginGate } from "./settings/login-gate.ts"
@@ -98,6 +102,10 @@ export interface UseCases {
 	readonly overrides: ReturnType<typeof makeOverrides>
 	readonly freeModels: ReturnType<typeof makeFreeModels>
 	readonly probeModels: ReturnType<typeof makeProbeModels>
+	readonly testConnections: ReturnType<typeof makeTestConnections>
+	readonly checkConnection: ReturnType<typeof makeCheckConnection>
+	readonly listClientConnections: ReturnType<typeof makeListClientConnections>
+	readonly suggestModels: ReturnType<typeof makeSuggestModels>
 	readonly customModels: ReturnType<typeof makeCustomModels>
 	readonly disabledModels: ReturnType<typeof makeDisabledModels>
 	readonly studioModels: ReturnType<typeof makeStudioModels>
@@ -188,6 +196,28 @@ export function buildUseCases(deps: Dependencies): UseCases {
 			liveModels: deps.fetchConnectionModels,
 			probe: deps.probeModel,
 			isSerialProbe: deps.isSerialProbe,
+		}),
+		testConnections: makeTestConnections({
+			connections: deps.connections,
+			classifiers: deps.batchClassifiers,
+			probe: deps.probeConnection,
+			now: () => new Date().toISOString(),
+		}),
+		checkConnection: makeCheckConnection({ probe: deps.probeConnection }),
+		listClientConnections: makeListClientConnections({
+			connections: deps.connections,
+			nodes: deps.connectionNodes,
+			registry: deps.clientListingRegistry,
+			backfill: deps.backfillConnectionEmails,
+		}),
+		suggestModels: makeSuggestModels({
+			catalogue: deps.suggestedCatalogue,
+			findSyncable: deps.findSyncableCatalogue,
+			readSynced: deps.readSyncedCatalogue,
+			refreshSynced: deps.refreshSyncedCatalogue,
+			fetchCatalogue: deps.fetchCatalogueUrl,
+			armSyncer: deps.armCatalogueSyncer,
+			timeoutMs: 12_000,
 		}),
 		freeModels: makeFreeModels({
 			fetchCatalogue: deps.fetchKiloCatalogue,
