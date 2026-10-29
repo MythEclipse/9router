@@ -189,6 +189,11 @@ export interface UseCaseOptions {
 	) => Promise<import("../domain/batch-result.ts").ProbeOutcome>
 	/** Repairs OAuth connection emails before the client listing reads them. */
 	readonly backfillConnectionEmails?: () => Promise<void>
+	/** The settings audit trail and the revert that consumes it. */
+	readonly settingsHistory?: Pick<
+		import("../application/settings/settings-history.ts").SettingsHistoryDependencies,
+		"history" | "sanitize" | "recordSecurityEvent" | "redact"
+	>
 	/** The settings row as a whole, for the general settings use-case. */
 	readonly settingsStore?: import("../application/settings/manage-settings.ts").SettingsDependencies["store"]
 	/** Hashing and comparison for the settings row's password. */
@@ -379,6 +384,16 @@ export function createUseCases(
 			})),
 		backfillConnectionEmails: options.backfillConnectionEmails ?? (async () => {}),
 		settingsStore: settingsRow,
+		settingsHistory: options.settingsHistory ?? {
+			history: {
+				list: async () => [],
+				count: async () => 0,
+				find: async () => null,
+			},
+			sanitize: (patch) => patch,
+			recordSecurityEvent: async () => {},
+			redact: (settings) => settings,
+		},
 		settingsPassword: options.settingsPassword ?? {
 			comparePassword: async () => false,
 			hashPassword: async (plain) => plain,

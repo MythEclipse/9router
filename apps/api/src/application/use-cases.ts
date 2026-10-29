@@ -49,6 +49,7 @@ import { makePxpipe } from "./pxpipe/manage-pxpipe.ts"
 import { assertSupportedLocale } from "./settings/locale.ts"
 import { readLoginGate } from "./settings/login-gate.ts"
 import { makeManageSettings } from "./settings/manage-settings.ts"
+import { makeSettingsHistory } from "./settings/settings-history.ts"
 import { makeGetTheme, makeSetTheme } from "./settings/theme.ts"
 import { makeCacheStats } from "./system/cache-stats.ts"
 import { makeDashboardJobs } from "./system/dashboard-jobs.ts"
@@ -79,6 +80,7 @@ export interface UseCases {
 	readonly listErrorLogs: ReturnType<typeof makeListErrorLogs>
 	readonly clearErrorLogs: ReturnType<typeof makeClearErrorLogs>
 	readonly settings: ReturnType<typeof makeManageSettings>
+	readonly settingsHistory: ReturnType<typeof makeSettingsHistory>
 	readonly getTheme: ReturnType<typeof makeGetTheme>
 	readonly setTheme: ReturnType<typeof makeSetTheme>
 	/**
@@ -177,6 +179,14 @@ export function buildUseCases(deps: Dependencies): UseCases {
 			store: deps.settingsStore,
 			...deps.settingsPassword,
 			...deps.settingsWriteBack,
+		}),
+		settingsHistory: makeSettingsHistory({
+			history: deps.settingsHistory.history,
+			sanitize: deps.settingsHistory.sanitize,
+			recordSecurityEvent: deps.settingsHistory.recordSecurityEvent,
+			redact: deps.settingsHistory.redact,
+			settings: deps.settingsStore,
+			snapshot: async (before, actor, reason) => deps.settingsWriteBack.snapshot(before, reason),
 		}),
 		getTheme: makeGetTheme(deps.settings),
 		setTheme: makeSetTheme(deps.settings),

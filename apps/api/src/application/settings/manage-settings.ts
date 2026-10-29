@@ -26,6 +26,7 @@ import { invalid, unauthorized } from "../../domain/errors.ts"
 import {
 	adminOnlyAttempt,
 	dropBlankOidcSecret,
+	loginGateView,
 	passwordChangeOf,
 	publicSettings,
 	refusesAdminOnlyWrite,
@@ -95,6 +96,27 @@ export function makeManageSettings({
 				...publicSettings(settings),
 				enableRequestLogs: flags.requestLogs,
 				enableTranslator: flags.translator,
+			}
+		},
+
+		/**
+		 * The login gate, and the two URLs the dashboard needs before it renders.
+		 *
+		 * A read failure answers the safe default rather than an error: this is what
+		 * the login page asks for, and a 500 there locks the operator out of the very
+		 * screen they would use to fix it.
+		 */
+		async loginGate(): Promise<{
+			requireLogin: boolean
+			tunnelDashboardAccess: boolean
+			tunnelUrl: string
+			tailscaleUrl: string
+		}> {
+			try {
+				return loginGateView(await store.read())
+			} catch (error) {
+				logWarning("[settings] login gate read failed", error)
+				return { requireLogin: true, tunnelDashboardAccess: true, tunnelUrl: "", tailscaleUrl: "" }
 			}
 		},
 

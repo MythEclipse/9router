@@ -1,7 +1,6 @@
-import { getDashboardAuthSession } from "@9router/auth/dashboardSession"
-import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 import { failed } from "@/lib/routeErrors"
+import { sessionRole } from "@/lib/sessionRole"
 import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
@@ -41,11 +40,8 @@ export async function PUT(request: Request) {
  */
 export async function PATCH(request: Request) {
 	try {
-		const cookieStore = await cookies()
-		const session = await getDashboardAuthSession(cookieStore.get("auth_token")?.value)
-		const role = typeof session?.role === "string" ? session.role : null
 		const body = (await request.json()) as Record<string, unknown>
-		const settings = await getUseCases().settings.write({ body, role })
+		const settings = await getUseCases().settings.write({ body, role: await sessionRole() })
 		return NextResponse.json(settings, { headers: SETTINGS_RESPONSE_HEADERS })
 	} catch (error) {
 		console.log("Error updating settings:", error)

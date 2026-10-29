@@ -200,6 +200,11 @@ export interface Dependencies {
 		import("./settings/manage-settings.ts").SettingsDependencies,
 		"comparePassword" | "hashPassword"
 	>
+	/** The settings audit trail and the revert that consumes it. */
+	readonly settingsHistory: Pick<
+		import("./settings/settings-history.ts").SettingsHistoryDependencies,
+		"history" | "sanitize" | "recordSecurityEvent" | "redact"
+	>
 	/** The before-image store and the effects a settings write owes the process. */
 	readonly settingsWriteBack: Pick<
 		import("./settings/manage-settings.ts").SettingsDependencies,

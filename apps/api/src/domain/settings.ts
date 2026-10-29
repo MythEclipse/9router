@@ -157,3 +157,67 @@ export function sideEffectsOf(body: Record<string, unknown>): SettingsSideEffect
 		reconfigureAutoPing: has("claudeAutoPing") || has("codexAutoPing"),
 	}
 }
+
+/**
+ * The settings the dashboard needs before it can render a login form.
+ *
+ * Both booleans default to *true when the stored value is anything but an explicit
+ * `false`. That is the safe direction: a row written before the field existed, or
+ * a row that failed to parse, must not silently switch the login gate off.
+ */
+export function loginGateView(settings: Record<string, unknown>): {
+	requireLogin: boolean
+	tunnelDashboardAccess: boolean
+	tunnelUrl: string
+	tailscaleUrl: string
+} {
+	return {
+		requireLogin: settings.requireLogin !== false,
+		tunnelDashboardAccess: settings.tunnelDashboardAccess !== false,
+		tunnelUrl: typeof settings.tunnelUrl === "string" ? settings.tunnelUrl : "",
+		tailscaleUrl: typeof settings.tailscaleUrl === "string" ? settings.tailscaleUrl : "",
+	}
+}
+
+/**
+ * Whether this session may read history and revert a change.
+ *
+ * Only a password sign-in may: history contains the install's configuration, and a
+ * revert rewrites it. Answering `false` without a session means an unauthenticated
+ * caller gets the same 401 as a key-signed one, which is what the routes did.
+ */
+export function mayRevertSettings(role: string | null | undefined): boolean {
+	if (!role) return false
+	return role !== "apikey"
+}
+
+/**
+ * Narrow a stored snapshot to the keys the caller asked to restore.
+ *
+ * With no `keys`, every key is restored. With `keys`, only those present in the
+ * snapshot are kept — asking for a key the snapshot does not carry restores
+ * nothing for it rather than writing `undefined`, which would delete the setting.
+ */
+export function revertPatchOf(
+	snapshot: Record<string, unknown>,
+	keys: unknown,
+): Record<string, unknown> {
+	if (!Array.isArray(keys) || keys.length === 0) return { ...snapshot }
+	const allowed = new Set(keys.map(String))
+	const patch: Record<string, unknown> = {}
+	for (const [key, value] of Object.entries(snapshot)) {
+		if (allowed.has(key)) patch[key] = value
+	}
+	return patch
+}
+
+/**
+ * A revert with nothing to apply is refused rather than reported as success.
+ *
+ * This happens when every key in the snapshot is a secret, or when the caller asked
+ * only for keys the snapshot does not have. Saying "ok, nothing restored" would
+ * leave the operator believing the change was undone.
+ */
+export function revertIsEmpty(patch: Record<string, unknown>): boolean {
+	return Object.keys(patch).length === 0
+}

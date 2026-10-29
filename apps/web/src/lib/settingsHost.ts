@@ -1,4 +1,11 @@
-import { snapshotSettings } from "@9router/db/repos/settingsHistoryRepo"
+import { recordSecurityEvent } from "@9router/db/repos/securityLogRepo"
+import {
+	getSettingsSnapshot,
+	getSettingsSnapshotCount,
+	listSettingsHistory,
+	sanitizeHistorySnapshot,
+	snapshotSettings,
+} from "@9router/db/repos/settingsHistoryRepo"
 import bcrypt from "bcryptjs"
 import { resetComboRotation } from "open-sse/services/combo"
 import { getSettings, updateSettings } from "@/lib/localDb"
@@ -66,5 +73,43 @@ export const settingsStore = {
 	read: async () => (await getSettings()) as Record<string, unknown>,
 	update: async (changes: Record<string, unknown>) => {
 		await updateSettings(changes)
+	},
+}
+
+/**
+ * The settings audit trail, and the three things a revert needs beyond it.
+ *
+ * `sanitizeHistorySnapshot` is imported rather than reimplemented: it is the one
+ * place that knows which keys must never be restored, and a second copy of that
+ * list would drift.
+ */
+export const settingsHistoryHost = {
+	history: {
+		list: () => listSettingsHistory(),
+		count: () => getSettingsSnapshotCount(),
+		/**
+		 * Normalised here because the repository's row type is `unknown` per column
+		 * (it reads a `SELECT` with no schema). The use-case's contract is typed, so
+		 * the loose row stops at this boundary rather than leaking inward.
+		 */
+		find: async (id: string) => {
+			const row = await getSettingsSnapshot(id)
+			if (!row) return null
+			return {
+				id: String(row.id),
+				at: row.at == null ? null : String(row.at),
+				actor: row.actor == null ? null : String(row.actor),
+				reason: row.reason == null ? null : String(row.reason),
+				snapshot: row.snapshot,
+			}
+		},
+	},
+	sanitize: (patch: Record<string, unknown>) => sanitizeHistorySnapshot(patch),
+	recordSecurityEvent: async (event: Parameters<typeof recordSecurityEvent>[0]) => {
+		await recordSecurityEvent(event)
+	},
+	redact: (settings: Record<string, unknown>) => {
+		const { password, oidcClientSecret, ...safe } = settings
+		return { ...safe, hasPassword: Boolean(password) }
 	},
 }

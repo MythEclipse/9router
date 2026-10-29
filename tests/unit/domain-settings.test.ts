@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest"
 import {
 	adminOnlyAttempt,
 	dropBlankOidcSecret,
+	loginGateView,
+	mayRevertSettings,
 	passwordChangeOf,
 	publicSettings,
 	refusesAdminOnlyWrite,
+	revertIsEmpty,
+	revertPatchOf,
 	sideEffectsOf,
 	stripProtectedKeys,
 } from "../../apps/api/src/domain/settings.ts"
@@ -208,5 +212,80 @@ describe("sideEffectsOf", () => {
 		expect(owed.resetComboRotation).toBe(true)
 		expect(owed.resetProxyHealth).toBe(true)
 		expect(owed.reconfigureAutoPing).toBe(true)
+	})
+})
+
+describe("loginGateView", () => {
+	it("defaults both gates to on when the fields are missing", () => {
+		expect(loginGateView({})).toMatchObject({
+			requireLogin: true,
+			tunnelDashboardAccess: true,
+		})
+	})
+
+	it("turns a gate off only for an explicit false", () => {
+		expect(loginGateView({ requireLogin: false }).requireLogin).toBe(false)
+		expect(loginGateView({ requireLogin: "no" }).requireLogin).toBe(true)
+	})
+
+	it("answers empty strings rather than undefined for the two URLs", () => {
+		expect(loginGateView({})).toMatchObject({ tunnelUrl: "", tailscaleUrl: "" })
+	})
+
+	it("passes a set URL through", () => {
+		expect(loginGateView({ tunnelUrl: "https://t.example.com" }).tunnelUrl).toBe(
+			"https://t.example.com",
+		)
+	})
+})
+
+describe("mayRevertSettings", () => {
+	it("refuses an unauthenticated caller", () => {
+		expect(mayRevertSettings(null)).toBe(false)
+		expect(mayRevertSettings(undefined)).toBe(false)
+		expect(mayRevertSettings("")).toBe(false)
+	})
+
+	it("refuses a key-signed session", () => {
+		expect(mayRevertSettings("apikey")).toBe(false)
+	})
+
+	it("allows a password sign-in", () => {
+		expect(mayRevertSettings("admin")).toBe(true)
+	})
+})
+
+describe("revertPatchOf", () => {
+	const snapshot = { theme: "dark", comboStrategy: "sticky", requireLogin: true }
+
+	it("restores every key when no subset was asked for", () => {
+		expect(revertPatchOf(snapshot, undefined)).toEqual(snapshot)
+	})
+
+	it("restores every key for an empty subset", () => {
+		expect(revertPatchOf(snapshot, [])).toEqual(snapshot)
+	})
+
+	it("restores only the keys asked for", () => {
+		expect(revertPatchOf(snapshot, ["theme"])).toEqual({ theme: "dark" })
+	})
+
+	it("does not invent a key the snapshot lacks", () => {
+		expect(revertPatchOf(snapshot, ["nope"])).toEqual({})
+	})
+
+	it("does not mutate the snapshot", () => {
+		revertPatchOf(snapshot, ["theme"])
+		expect(snapshot).toHaveProperty("comboStrategy")
+	})
+})
+
+describe("revertIsEmpty", () => {
+	it("treats an empty patch as nothing to restore", () => {
+		expect(revertIsEmpty({})).toBe(true)
+	})
+
+	it("treats one restored key as something", () => {
+		expect(revertIsEmpty({ theme: "dark" })).toBe(false)
 	})
 })

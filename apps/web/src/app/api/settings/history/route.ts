@@ -1,56 +1,44 @@
-import { getDashboardAuthSession } from "@9router/auth/dashboardSession"
-import {
-	getSettingsSnapshot,
-	getSettingsSnapshotCount,
-	listSettingsHistory,
-} from "@9router/db/repos/settingsHistoryRepo"
-import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
+import { failed } from "@/lib/routeErrors"
+import { sessionRole } from "@/lib/sessionRole"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
 /**
- * GET /api/settings/history - the before-images of the last settings mutations.
- * Exposed as part of the security trail: "what did this install look like just
- * before that change" is the question a revert needs answered first.
+ * GET /api/settings/history — the before-images of the last settings mutations.
+ *
+ * Part of the security trail: "what did this install look like just before that
+ * change" is the question a revert asks first.
  */
-async function requireAdmin() {
-	const cookieStore = await cookies()
-	const session = await getDashboardAuthSession(cookieStore.get("auth_token")?.value)
-	if (!session || session.role === "apikey") return false
-	return true
-}
-
 export async function GET() {
 	try {
-		if (!(await requireAdmin())) {
-			return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-		}
-		const [entries, count] = await Promise.all([listSettingsHistory(), getSettingsSnapshotCount()])
-		return NextResponse.json(
-			{ history: entries, total: count },
-			{ headers: { "Cache-Control": "no-store" } },
-		)
+		const role = await sessionRole()
+		const { history, total } = await getUseCases().settingsHistory.list({ role })
+		return NextResponse.json({ history, total }, { headers: { "Cache-Control": "no-store" } })
 	} catch (error) {
 		console.log("Error listing settings history:", error)
-		return NextResponse.json({ error: "Failed to load settings history" }, { status: 500 })
+		return failed(error, "Failed to load settings history", "Error listing settings history")
 	}
 }
 
-export async function POST(request) {
+/**
+ * POST /api/settings/history — one entry in full, so a revert can be previewed.
+ *
+ * A POST that reads is not a mistake: the id travels in the body so it stays out of
+ * the URL, and the answer carries the whole configuration that entry would restore.
+ */
+export async function POST(request: Request) {
 	try {
-		if (!(await requireAdmin())) {
-			return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-		}
-		const body = await request.json().catch(() => ({}))
-		const id = String(body?.id || "")
-		if (!id) return NextResponse.json({ error: "Missing history id" }, { status: 400 })
-		const snapshot = await getSettingsSnapshot(id)
-		if (!snapshot) return NextResponse.json({ error: "History entry not found" }, { status: 404 })
-		// Return the body so the caller can show what a revert would apply.
-		return NextResponse.json({ snapshot })
+		const body = (await request.json().catch(() => ({}))) as { id?: unknown }
+		const role = await sessionRole()
+		const result = await getUseCases().settingsHistory.read({
+			id: String(body?.id ?? ""),
+			role,
+		})
+		return NextResponse.json(result)
 	} catch (error) {
 		console.log("Error reading settings history:", error)
-		return NextResponse.json({ error: "Failed to read settings history" }, { status: 500 })
+		return failed(error, "Failed to read settings history", "Error reading settings history")
 	}
 }
