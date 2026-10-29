@@ -2,6 +2,14 @@
 import "open-sse/index"
 
 import {
+	canRetryAfterExpiry,
+	codexEligibility,
+	codexProxyOptions,
+	consumeOutcome,
+	isAuthExpired,
+	isCodexRefusal,
+} from "9router-api/domain/codex-reset-credits"
+import {
 	consumeCodexRateLimitResetCredit,
 	getCodexRateLimitResetCredits,
 } from "open-sse/services/usage"
@@ -11,98 +19,63 @@ import { refreshAndUpdateCredentials } from "../route.ts"
 
 export const dynamic = "force-dynamic"
 
-const AUTH_EXPIRED_PATTERNS = ["expired", "authentication", "unauthorized", "401", "re-authorize"]
+/**
+ * A connection ready to call upstream, or the response that already answers the caller.
+ *
+ * One shape for every step that can refuse: the eligibility check, the OAuth refresh, and the
+ * handlers all speak this, so a refusal can never be mistaken for a result.
+ */
+type PreparedConnection =
+	| {
+			readonly ok: true
+			readonly connection: Record<string, unknown>
+			readonly isOAuth: boolean
+			readonly proxyOptions: Record<string, unknown>
+	  }
+	| { readonly ok: false; readonly response: Response }
 
-function isAuthExpiredResult(result) {
-	const values = [result?.message, result?.code, result?.raw?.detail, result?.raw?.error]
-		.filter(Boolean)
-		.map((value) => String(value).toLowerCase())
-	return values.some((value) => AUTH_EXPIRED_PATTERNS.some((pattern) => value.includes(pattern)))
+/**
+ * A refusal, narrowed.
+ *
+ * `apps/web` compiles with `strict: false`, where `if (!step.ok)` does not narrow the union above.
+ * A type predicate does, and it keeps working unchanged if strict is turned on later.
+ */
+function isRefused(step: PreparedConnection): step is Extract<PreparedConnection, { ok: false }> {
+	return !step.ok
 }
 
-function isAuthExpiredError(error) {
-	return isAuthExpiredResult({ message: error?.message })
-}
-
-function getResponseForConsumeResult(result, redeemRequestId) {
-	if (result.ok) {
-		return Response.json({
-			code: result.code,
-			reset: true,
-			windows_reset: result.windowsReset,
-			redeemRequestId,
-			credit: result.raw?.credit || null,
-		})
+/**
+ * Resolves the connection and proxy options, or the response that already answers the caller.
+ *
+ * The eligibility rule lives in `domain/codex-reset-credits.ts`; this does only the I/O around it.
+ */
+async function resolveCodexConnection(connectionId: unknown): Promise<PreparedConnection> {
+	const connection = await getProviderConnectionById(connectionId as string)
+	const verdict = codexEligibility(connection)
+	if (isCodexRefusal(verdict)) {
+		return {
+			ok: false,
+			response: Response.json({ error: verdict.message }, { status: verdict.status }),
+		}
 	}
-
-	if (result.noCredit) {
-		return Response.json(
-			{
-				code: "no_credit",
-				reset: false,
-				windows_reset: result.windowsReset,
-				message: "No Codex reset credits available.",
-			},
-			{ status: 409 },
-		)
-	}
-
-	return Response.json(
-		{
-			code: result.code || "unknown_response",
-			reset: false,
-			windows_reset: result.windowsReset,
-			message: result.message || "Codex reset credit consume returned an unexpected response.",
-		},
-		{ status: result.status >= 400 && result.status < 500 ? result.status : 502 },
+	const proxyOptions = codexProxyOptions(
+		await resolveConnectionProxyConfig(connection.providerSpecificData),
 	)
+	return { ok: true, connection, isOAuth: verdict.isOAuth, proxyOptions }
 }
 
-async function getCodexConnection(connectionId) {
-	const connection = await getProviderConnectionById(connectionId)
-	if (!connection) {
-		return { response: Response.json({ error: "Connection not found" }, { status: 404 }) }
-	}
-
-	if (connection.provider !== "codex") {
-		return {
-			response: Response.json(
-				{ error: "Codex reset credits are only available for Codex connections." },
-				{ status: 400 },
-			),
-		}
-	}
-
-	const isOAuth = connection.authType === "oauth"
-	const isAccessToken = connection.authType === "access_token"
-	if (!isOAuth && !isAccessToken) {
-		return {
-			response: Response.json(
-				{ error: "Codex reset credits require an OAuth or access-token connection." },
-				{ status: 400 },
-			),
-		}
-	}
-
-	const proxyConfig = await resolveConnectionProxyConfig(connection.providerSpecificData)
-	const proxyOptions = {
-		connectionProxyEnabled: proxyConfig.connectionProxyEnabled === true,
-		connectionProxyUrl: proxyConfig.connectionProxyUrl || "",
-		connectionNoProxy: proxyConfig.connectionNoProxy || "",
-		vercelRelayUrl: proxyConfig.vercelRelayUrl || "",
-		strictProxy: false,
-	}
-
-	return { connection, isOAuth, proxyOptions }
-}
-
-async function refreshCodexConnection(connection, proxyOptions) {
+/** The refreshed connection, or the response that answers 401 when the refresh fails. */
+async function refreshCodexConnection(
+	connection: Record<string, unknown>,
+	proxyOptions: Record<string, unknown>,
+): Promise<PreparedConnection> {
 	try {
 		const result = await refreshAndUpdateCredentials(connection, false, proxyOptions)
-		return { connection: result.connection }
+		return { ok: true, connection: result.connection, isOAuth: true, proxyOptions }
 	} catch (refreshError) {
 		console.error("[Codex Reset Credits API] Credential refresh failed:", refreshError)
 		return {
+			ok: false,
 			response: Response.json(
 				{ error: `Credential refresh failed: ${refreshError.message}` },
 				{ status: 401 },
@@ -111,20 +84,27 @@ async function refreshCodexConnection(connection, proxyOptions) {
 	}
 }
 
+/** Refreshes first when the connection is OAuth, so the upstream sees a live credential. */
+async function prepareConnection(
+	resolved: Extract<PreparedConnection, { ok: true }>,
+): Promise<PreparedConnection> {
+	if (!resolved.isOAuth) return resolved
+	const attempt = await refreshCodexConnection(resolved.connection, resolved.proxyOptions)
+	if (isRefused(attempt)) return attempt
+	return attempt
+}
+
 export async function GET(_request, { params }) {
 	let connection
 	try {
 		const { connectionId } = await params
-		const resolved = await getCodexConnection(connectionId)
-		if (resolved.response) return resolved.response
-		;({ connection } = resolved)
+		const resolved = await resolveCodexConnection(connectionId)
+		if (isRefused(resolved)) return resolved.response
 		const { isOAuth, proxyOptions } = resolved
 
-		if (isOAuth) {
-			const refreshed = await refreshCodexConnection(connection, proxyOptions)
-			if (refreshed.response) return refreshed.response
-			connection = refreshed.connection
-		}
+		const prepared = await prepareConnection(resolved)
+		if (isRefused(prepared)) return prepared.response
+		connection = prepared.connection
 
 		let result
 		try {
@@ -134,7 +114,13 @@ export async function GET(_request, { params }) {
 				connection.providerSpecificData,
 			)
 		} catch (fetchError) {
-			if (!isOAuth || !connection.refreshToken || !isAuthExpiredError(fetchError)) throw fetchError
+			// One retry, and only when a refresh token exists to make it worth anything.
+			const retryable = canRetryAfterExpiry(
+				isOAuth,
+				Boolean(connection.refreshToken),
+				isAuthExpired(fetchError),
+			)
+			if (!retryable) throw fetchError
 			const retryResult = await refreshAndUpdateCredentials(connection, true, proxyOptions)
 			connection = retryResult.connection
 			result = await getCodexRateLimitResetCredits(
@@ -156,18 +142,15 @@ export async function POST(_request, { params }) {
 	let connection
 	try {
 		const { connectionId } = await params
-		const resolved = await getCodexConnection(connectionId)
-		if (resolved.response) return resolved.response
-		;({ connection } = resolved)
+		const resolved = await resolveCodexConnection(connectionId)
+		if (isRefused(resolved)) return resolved.response
 		const { isOAuth, proxyOptions } = resolved
 
-		if (isOAuth) {
-			const refreshed = await refreshCodexConnection(connection, proxyOptions)
-			if (refreshed.response) return refreshed.response
-			connection = refreshed.connection
-		}
+		const prepared = await prepareConnection(resolved)
+		if (isRefused(prepared)) return prepared.response
+		connection = prepared.connection
 
-		// Server-generated redeem id prevents client-controlled replay
+		// Server-generated redeem id prevents client-controlled replay.
 		const redeemRequestId = crypto.randomUUID()
 		let consumeResult = await consumeCodexRateLimitResetCredit(
 			connection.accessToken,
@@ -175,7 +158,12 @@ export async function POST(_request, { params }) {
 			proxyOptions,
 		)
 
-		if (isOAuth && isAuthExpiredResult(consumeResult) && connection.refreshToken) {
+		const retryable = canRetryAfterExpiry(
+			isOAuth,
+			Boolean(connection.refreshToken),
+			isAuthExpired(consumeResult),
+		)
+		if (retryable) {
 			try {
 				const retryResult = await refreshAndUpdateCredentials(connection, true, proxyOptions)
 				connection = retryResult.connection
@@ -185,11 +173,13 @@ export async function POST(_request, { params }) {
 					proxyOptions,
 				)
 			} catch (retryError) {
+				// The first result stands: it is still the truthful answer from upstream.
 				console.warn(`[Codex Reset Credits] force refresh failed: ${retryError.message}`)
 			}
 		}
 
-		return getResponseForConsumeResult(consumeResult, redeemRequestId)
+		const outcome = consumeOutcome(consumeResult, redeemRequestId)
+		return Response.json(outcome.body, { status: outcome.status })
 	} catch (error) {
 		const provider = connection?.provider ?? "unknown"
 		console.warn(`[Codex Reset Credits] ${provider}: ${error.message}`)
