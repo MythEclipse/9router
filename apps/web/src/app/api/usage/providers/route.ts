@@ -1,5 +1,6 @@
 import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { parseAllowedModels } from "@9router/db/repos/allowedModels"
+import { providerOptions } from "9router-api/domain/provider-options"
 import { NextResponse } from "next/server"
 import { getProviderNodes } from "@/lib/localDb"
 import { getDistinctProviders } from "@/lib/requestDetailsDb"
@@ -8,42 +9,31 @@ import { AI_PROVIDERS, getProviderByAlias } from "@/shared/constants/providers"
 export const dynamic = "force-dynamic"
 
 /**
- * GET /api/usage/providers
- * Returns list of unique providers from request details
+ * GET /api/usage/providers - the providers the filter can offer.
+ *
+ * An API-key session only sees providers that served one of its allowed models, so the filter
+ * cannot be used to discover unrelated providers. That narrowing happens in SQL (the repo takes
+ * the patterns); the labelling rule lives in `domain/provider-options.ts`.
  */
 export async function GET() {
 	try {
-		// An API-key session only sees providers that served one of its allowed models,
-		// so the filter dropdown cannot be used to discover unrelated providers.
 		const ctx = await getSessionContext()
 		const allowedModelPatterns = parseAllowedModels(ctx.allowedModels || "*")
 
-		// Query DISTINCT provider column directly - avoids parsing every row's
-		// full JSON blob (can be hundreds of MB), which previously caused OOM.
-		// Rows come back with `unknown` columns, so the provider id is narrowed
-		// to a string here; every adapter stores it as TEXT.
-		const providerIds = (await getDistinctProviders(allowedModelPatterns))
-			.map((providerId) => (typeof providerId === "string" ? providerId : ""))
-			.filter(Boolean)
+		// Query the DISTINCT provider column directly: parsing every row's JSON blob (hundreds
+		// of MB) is what used to OOM this endpoint.
+		const providerIds = await getDistinctProviders(allowedModelPatterns)
 
-		const providerNodes = await getProviderNodes()
-		const nodeMap: Record<string, { name: string; logo: string | null }> = {}
-		for (const node of providerNodes) {
-			nodeMap[node.id] = { name: node.name, logo: node.logo || null }
+		const nodes = {}
+		for (const node of await getProviderNodes()) {
+			nodes[node.id] = { name: node.name, logo: node.logo }
 		}
 
-		const providers = providerIds.map((providerId) => {
-			let name = providerId
-			let nodeLogo = null
-			if (nodeMap[providerId]) {
-				name = nodeMap[providerId].name
-				nodeLogo = nodeMap[providerId].logo
-			} else {
-				const providerConfig = getProviderByAlias(providerId) || AI_PROVIDERS[providerId]
-				if (providerConfig?.name) name = providerConfig.name
-			}
-			return { id: providerId, name, provider: providerId, nodeName: name, nodeLogo, logo: nodeLogo }
-		})
+		const providers = providerOptions(
+			providerIds,
+			nodes,
+			(id) => getProviderByAlias(id) || AI_PROVIDERS[id],
+		)
 
 		return NextResponse.json({ providers })
 	} catch (error) {
