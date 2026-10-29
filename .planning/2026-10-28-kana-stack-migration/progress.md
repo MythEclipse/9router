@@ -881,3 +881,52 @@ clean, `bun run build` exit 0, gateway baseline unchanged (`/login` 200,
 `/api/health` 200, `/v1/models` 401, `/api/providers/*` 401).
 
 Remaining: 147 of 168 handlers (3 of 12 in `providers`).
+
+## providers batch, part 4 (credential validation, interactive web login)
+
+**Credential validation** (`domain/credential-verdict.ts`,
+`application/providers/validate-credential.ts`). The handler was an 848-line
+`switch` in which each provider ended in its own status test. "401 means a bad
+key" is true for most providers and wrong for four of them, and those four are the
+entire content of the rule:
+
+| Provider | Reading | Why the default is wrong |
+| -------- | ------- | ------------------------ |
+| xai | 200 or 403 = valid | answers **400 for a bad key** and 403 for a good key with no credit, so the default calls a bad key valid and a good key invalid |
+| xiaomi-tokenplan | anything but 401 = valid | 403 means the key is fine and merely lacks list permission |
+| blackbox | 200 or 400 = valid | 400 is the malformed-request answer |
+| cloudflare-ai | not 401/403/**404** = valid | 404 means the *account id* is wrong, so reporting the key valid would hide a fixable mistake |
+| anthropic | not 401 = valid | 529 is "overloaded"; the key is proven good |
+
+`readerFor` gives each its own reading and everything else `notRefused`, which is
+what the generic branch used. One real bug fell out: an anthropic-compatible node
+whose base URL was pasted as the full `.../v1/messages` had `/v1/messages`
+appended again, producing `/v1/v1/messages`. The old code stripped the last path
+segment only.
+
+Two judgement calls now written down rather than implied: a provider whose auth
+scheme needs data this endpoint does not carry (PlayHT's two headers, sigv4) is
+answered "cannot check" instead of falling through to "not supported"; and a
+provider that reaches the end unresolved is **refused** rather than reported
+valid — a validation endpoint that says "fine" when it checked nothing is worse
+than one that admits it.
+
+**Interactive web login** (`domain/web-login.ts`,
+`application/providers/web-login.ts`). The save-on-success step sat in the middle
+of the GET handler, and the matching rule across an `if/else` plus a cleanup loop.
+The rules, none of them previously stated: match by email so a second account
+keeps its own row; adopt the single email-less row; **refuse to guess** between two
+email-less rows; delete only same-email duplicates; never delete anything when no
+email was revealed, because every such row compares equal.
+
+A test-infrastructure note: route tests that imported a handler directly need the
+graph, and `createDb` refuses two SQLite handles under Vitest. Assembling the one
+use-case over the *real* host functions keeps the behaviour under test real — that
+is how the Nous validation tests still assert the real probe path.
+
+Verification: 591 files / 6498 tests passing, both packages typecheck clean, biome
+clean, `bun run build` exit 0, gateway baseline unchanged (`/login` 200,
+`/api/health` 200, `/v1/models` 401, `/api/providers/validate` 401,
+`/api/providers/web-login` 401).
+
+Remaining: 146 of 168 handlers (1 of 12 in `providers`).

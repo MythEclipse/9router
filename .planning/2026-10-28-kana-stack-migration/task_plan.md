@@ -57,7 +57,7 @@ three packages report 0 `tsc` errors and `biome check` is clean.
 | `shutdown`     | 2      | done — one sequence, two gates; 403 vs 401 kept distinct |
 | `pxpipe`       | 8      | done — one list-limit rule; engine codes no longer flattened |
 | `model-registry` | 12 | done — list/alias/availability/custom/studio/nodes/catalogue; transport whitelist now actually applied |
-| `providers`    | 12 | **9 of 12 done** — connection CRUD, overrides, kilo/free-models, test-models, test-batch, client, `[id]/test`, suggested-models; 3 remaining (`[id]/models` 802, `validate` 600, `web-login` 156) |
+| `providers`    | 12 | **11 of 12 done** — connection CRUD, overrides, kilo/free-models, test-models, test-batch, client, `[id]/test`, suggested-models, `validate`, `web-login`; 1 remaining (`[id]/models`, 802 lines) |
 | (136 more)     | 136    | pending |
 
 Done: 36 of 168 route handlers. `tags` is deliberately **not** ported: it
