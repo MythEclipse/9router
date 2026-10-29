@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest"
 import {
+	clearActiveModel,
 	readToolSettingsStatus,
+	removeToolModel,
 	resetToolSettings,
 	writeToolSettings,
 } from "../../apps/api/src/application/cli-tools/manage-tool-settings.ts"
@@ -374,5 +376,82 @@ describe("settings file format", () => {
 
 	it("refuses to guess a TOML serialiser", () => {
 		expect(() => settingsFileText({ a: 1 }, "toml")).toThrow(/TOML serialiser/)
+	})
+})
+
+describe("removing a model from a tool that keeps a list", () => {
+	const configWith = (models: Record<string, unknown>, active?: string) => {
+		let stored: Record<string, unknown> = {
+			provider: { "9router": { models } },
+			...(active ? { model: active } : {}),
+		}
+		return {
+			path: "/tmp/x",
+			read: async () => stored,
+			readForWrite: async () => stored,
+			write: async (text: string) => {
+				stored = JSON.parse(text)
+			},
+			baseUrlSuffix: "with-v1" as const,
+			installKeys: ["9router"],
+			storedBaseUrl: () => null,
+			apply: (config: Record<string, unknown>) => config,
+			removeModel: (config: Record<string, unknown>, modelId: string) => {
+				const provider = { ...(config.provider as Record<string, { models?: object }>) }
+				const entry = { ...provider["9router"] }
+				const models = { ...(entry.models as Record<string, unknown>) }
+				delete models[modelId]
+				if (Object.keys(models).length === 0) {
+					delete provider["9router"]
+					const { model: _m, ...rest } = config
+					return { ...rest, provider }
+				}
+				provider["9router"] = { ...entry, models }
+				const remaining = Object.keys(models)
+				return {
+					...config,
+					provider,
+					...(config.model === `9router/${modelId}` ? { model: `9router/${remaining[0]}` } : {}),
+				}
+			},
+			get: () => stored,
+		}
+	}
+
+	it("moves the active pointer when the model in use is removed", async () => {
+		// The bug this guards: the pointer keeps naming a model the config no longer offers, and
+		// the tool starts on a model that is not there.
+		const config = configWith({ a: {}, b: {} }, "9router/a")
+		await removeToolModel("a", { config } as never)
+
+		expect(config.get()).toMatchObject({ model: "9router/b" })
+		expect(Object.keys((config.get().provider as never)["9router"].models)).toEqual(["b"])
+	})
+
+	it("drops the pointer with the last model, rather than leaving it dangling", async () => {
+		const config = configWith({ a: {} }, "9router/a")
+		await removeToolModel("a", { config } as never)
+
+		expect(config.get().model).toBeUndefined()
+		expect((config.get().provider as Record<string, unknown>)["9router"]).toBeUndefined()
+	})
+
+	it("clears the active model without dropping the list", async () => {
+		// Clearing the pointer means "none selected", not "none available".
+		const config = configWith({ a: {}, b: {} }, "9router/a")
+		const answer = await clearActiveModel({
+			...config,
+			clearActive: (c: Record<string, unknown>) => ({ ...c, model: "" }),
+		} as never)
+
+		expect(answer.status).toBe(200)
+		expect(config.get().model).toBe("")
+		expect((config.get().provider as never)["9router"].models).toEqual({ a: {}, b: {} })
+	})
+
+	it("refuses to clear when the tool has no active model", async () => {
+		const config = configWith({ a: {} })
+		const answer = await clearActiveModel(config as never)
+		expect(answer.status).toBe(400)
 	})
 })

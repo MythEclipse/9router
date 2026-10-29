@@ -53,6 +53,13 @@ export interface ToolConfigPort {
 	 * a one-field form into a 400 the operator cannot get past.
 	 */
 	readonly required?: readonly (keyof ToolSettingsInput)[]
+	/** Clears the active-model pointer, leaving the model list intact. */
+	readonly clearActive?: (config: Record<string, unknown>) => Record<string, unknown>
+	/** Removes one model from the list, refusing when it is not there. */
+	readonly removeModel?: (
+		config: Record<string, unknown>,
+		modelId: string,
+	) => Record<string, unknown>
 	/** Which format the config file is written in; must match what `readForWrite` parses. */
 	readonly format?: SettingsFormat
 	/** Serialises TOML, supplied by the host because the parser lives there. */
@@ -211,5 +218,58 @@ function notInstalled(deps: ToolSettingsDeps): ToolSettingsAnswer {
 			message: deps.notInstalledMessage,
 			...(deps.installUrl ? { installUrl: deps.installUrl } : {}),
 		},
+	}
+}
+
+/**
+ * Clears the active-model pointer without touching the model list.
+ *
+ * A tool that keeps a list *and* an active pointer can be left pointing at a model after the
+ * operator removes it. Clearing the pointer is what makes the next start pick a working
+ * default instead of failing on a model that is no longer there.
+ */
+export async function clearActiveModel(config: ToolConfigPort): Promise<ToolSettingsAnswer> {
+	try {
+		if (!config.clearActive) {
+			return { ok: false, status: 400, body: { error: "This tool has no active model" } }
+		}
+		const existing = await config.readForWrite()
+		await config.write(
+			settingsFileText(config.clearActive(existing), config.format ?? "json", config.serialise),
+		)
+		return { ok: true, status: 200, body: { success: true, message: "Settings updated" } }
+	} catch (error) {
+		return {
+			ok: false,
+			status: 500,
+			body: { error: error instanceof Error ? error.message : "Failed to patch settings" },
+		}
+	}
+}
+
+/** Removes one model, leaving the provider in place unless that was its last model. */
+export async function removeToolModel(
+	modelId: string,
+	deps: ToolSettingsDeps,
+): Promise<ToolSettingsAnswer> {
+	if (!deps.config.removeModel) {
+		return { ok: false, status: 400, body: { error: "This tool keeps no model list" } }
+	}
+	try {
+		const existing = await deps.config.readForWrite()
+		await deps.config.write(
+			settingsFileText(
+				deps.config.removeModel(existing, modelId),
+				deps.config.format ?? "json",
+				deps.config.serialise,
+			),
+		)
+		return { ok: true, status: 200, body: { success: true, message: `Model "${modelId}" removed` } }
+	} catch (error) {
+		return {
+			ok: false,
+			status: 500,
+			body: { error: error instanceof Error ? error.message : "Failed to reset settings" },
+		}
 	}
 }

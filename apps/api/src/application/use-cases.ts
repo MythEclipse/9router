@@ -17,7 +17,9 @@ import { makeManageSingleKey } from "./api-keys/manage-single-key.ts"
 import { loadChangelog } from "./changelog.ts"
 import type { ToolSettingsAnswer, ToolSettingsDeps } from "./cli-tools/manage-tool-settings.ts"
 import {
+	clearActiveModel,
 	readToolSettingsStatus,
+	removeToolModel,
 	resetToolSettings,
 	writeToolSettings,
 } from "./cli-tools/manage-tool-settings.ts"
@@ -310,6 +312,8 @@ export interface UseCases {
 		readonly readToolSettingsStatus: (host: ToolSettingsDeps) => Promise<ToolSettingsAnswer>
 		readonly writeToolSettings: (body: unknown, host: ToolSettingsDeps) => Promise<ToolSettingsAnswer>
 		readonly resetToolSettings: (host: ToolSettingsDeps) => Promise<ToolSettingsAnswer>
+		readonly clearActiveModel: (config: ToolSettingsDeps["config"]) => Promise<ToolSettingsAnswer>
+		readonly removeToolModel: (modelId: string, host: ToolSettingsDeps) => Promise<ToolSettingsAnswer>
 	}
 	/** Cloudflare tunnels and Tailscale funnels, as the network screen drives them. */
 	readonly tunnel: {
@@ -640,6 +644,8 @@ export function buildUseCases(deps: Dependencies): UseCases {
 			readToolSettingsStatus: (host) => readToolSettingsStatus(host),
 			writeToolSettings: (body, host) => writeToolSettings(body, host),
 			resetToolSettings: (host) => resetToolSettings(host),
+			clearActiveModel: (config) => clearActiveModel(config),
+			removeToolModel: (modelId, host) => removeToolModel(modelId, host),
 		},
 		// The probe cache is process-wide and survives a hot reload, exactly like the module
 		// scope it replaced: one cache per process, not one per request.

@@ -707,3 +707,168 @@ export async function removeOpenClawSettings(): Promise<void> {
 }
 
 export { isOpenClawInstalled }
+
+/**
+ * OpenCode's layout: `provider["9router"]` in `~/.config/opencode/opencode.json`, plus a
+ * top-level active `model` and an `agent.explorer` subagent that both name a model.
+ *
+ * OpenCode keeps models as a *map* keyed by id rather than a list, and it addresses the active
+ * one as `9router/<id>`. Three pointers can therefore dangle at once — the provider map, the
+ * active model, and the explorer subagent — and removing a model has to deal with all three or
+ * OpenCode starts on a model that no longer exists.
+ */
+
+const OPENCODE_DIR = () => path.join(os.homedir(), ".config", "opencode")
+const OPENCODE_CONFIG_PATH = () => path.join(OPENCODE_DIR(), "opencode.json")
+const OPENCODE_PREFIX = "9router/"
+
+type OpenCodeProvider = {
+	npm?: string
+	options?: { baseURL?: string; apiKey?: string; [key: string]: unknown }
+	models?: Record<string, { name?: string; [key: string]: unknown }>
+	[key: string]: unknown
+}
+type OpenCodeConfig = {
+	model?: string
+	provider?: Record<string, OpenCodeProvider>
+	agent?: Record<string, unknown> & { explorer?: { model?: string; [key: string]: unknown } }
+	[key: string]: unknown
+}
+
+async function isOpenCodeInstalled(): Promise<boolean> {
+	try {
+		const isWindows = os.platform() === "win32"
+		const command = isWindows ? "where opencode" : "which opencode"
+		const env = isWindows
+			? { ...process.env, PATH: `${process.env.APPDATA}\\npm;${process.env.PATH}` }
+			: process.env
+		await execAsync(command, { windowsHide: true, env })
+		return true
+	} catch {
+		try {
+			await fs.access(OPENCODE_CONFIG_PATH())
+			return true
+		} catch {
+			return false
+		}
+	}
+}
+
+/** The models a save should carry: the array form, the legacy single string, or neither. */
+function openCodeModelsOf(input: { model: string; models?: unknown }): string[] {
+	const list = Array.isArray(input.models) ? input.models.filter((m) => typeof m === "string") : []
+	return list.length > 0 ? list : input.model ? [input.model] : []
+}
+
+export const openCodeSettingsConfig: ToolConfigPort = {
+	path: OPENCODE_CONFIG_PATH(),
+	read: () => readJson(OPENCODE_CONFIG_PATH()),
+	readForWrite: async () =>
+		readConfigForWrite(
+			fs,
+			OPENCODE_CONFIG_PATH(),
+			(raw) => JSON.parse(raw) as Record<string, unknown>,
+		),
+	write: async (text) => {
+		await fs.mkdir(OPENCODE_DIR(), { recursive: true })
+		await fs.writeFile(OPENCODE_CONFIG_PATH(), text)
+	},
+	baseUrlSuffix: "with-v1",
+	required: ["baseUrl"],
+	resolveApiKey: (requested) => resolveCliApiKey(requested || null),
+	installKeys: ["9router"],
+	storedBaseUrl: (config) => {
+		const provider = (config as OpenCodeConfig)?.provider?.["9router"]
+		return provider?.options?.baseURL ?? null
+	},
+	apply: (config, input) => {
+		const current = (config as OpenCodeConfig) ?? {}
+		const provider = { ...(current.provider ?? {}) }
+		const entry: OpenCodeProvider = provider["9router"] ?? {
+			npm: "@ai-sdk/openai-compatible",
+			options: {},
+			models: {},
+		}
+
+		const models = { ...(entry.models ?? {}) }
+		for (const id of openCodeModelsOf(input)) {
+			models[id] = {
+				name: resolveModelDisplayName(id, undefined),
+				modalities: { input: ["text", "image"], output: ["text"] },
+			}
+		}
+
+		provider["9router"] = {
+			...entry,
+			options: { ...(entry.options ?? {}), baseURL: input.baseUrl, apiKey: input.apiKey },
+			models,
+		}
+
+		const first = openCodeModelsOf(input)[0]
+		const agent = { ...(current.agent ?? {}) }
+		if (first) {
+			agent.explorer = {
+				description: "Fast explorer subagent for codebase exploration",
+				mode: "subagent",
+				model: `${OPENCODE_PREFIX}${first}`,
+			}
+		}
+
+		return {
+			...current,
+			provider,
+			// An explicit empty string means "no active model", which is not the same as unset.
+			...(typeof input.model === "string" ? { model: first ? `${OPENCODE_PREFIX}${first}` : "" } : {}),
+			agent,
+		}
+	},
+	clearActive: (config) => {
+		const current = (config as OpenCodeConfig) ?? {}
+		// Clearing the pointer keeps the models: the operator wants none selected, not none
+		// available.
+		if (current.model?.startsWith(OPENCODE_PREFIX)) return { ...current, model: "" }
+		return current
+	},
+	removeModel: (config, modelId) => {
+		const current = (config as OpenCodeConfig) ?? {}
+		const entry = current.provider?.["9router"]
+		if (!entry?.models?.[modelId]) return current
+
+		const models = { ...entry.models }
+		delete models[modelId]
+		const provider = { ...(current.provider ?? {}) }
+
+		if (Object.keys(models).length === 0) {
+			delete provider["9router"]
+			const { model: _dropped, ...rest } = current
+			return { ...rest, provider }
+		}
+
+		provider["9router"] = { ...entry, models }
+		const remaining = Object.keys(models)
+		return {
+			...current,
+			provider,
+			// Removing the model that was in use has to move the pointer, or OpenCode starts on
+			// a model this config no longer offers.
+			...(current.model === `${OPENCODE_PREFIX}${modelId}`
+				? { model: `${OPENCODE_PREFIX}${remaining[0]}` }
+				: {}),
+		}
+	},
+}
+
+/** OpenCode's reset drops the provider, the pointers that name it, and nothing else. */
+export async function removeOpenCodeSettings(): Promise<void> {
+	const config = (await readJson(OPENCODE_CONFIG_PATH())) as OpenCodeConfig | null
+	if (!config) return
+	if (config.provider) delete config.provider["9router"]
+	if (config.model?.startsWith(OPENCODE_PREFIX)) delete config.model
+	if (config.agent?.explorer?.model?.startsWith(OPENCODE_PREFIX)) {
+		delete config.agent.explorer
+		if (Object.keys(config.agent).length === 0) delete config.agent
+	}
+	await fs.writeFile(OPENCODE_CONFIG_PATH(), JSON.stringify(config, null, 2))
+}
+
+export { isOpenCodeInstalled }
