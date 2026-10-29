@@ -21,6 +21,7 @@ export async function GET(request: Request) {
 		const client = createApiClient({
 			session: sessionClaimsOf(await getSessionContext()),
 			useCases: getUseCases(),
+			headers: request.headers,
 		})
 		const period = new URL(request.url).searchParams.get("period") ?? undefined
 		return NextResponse.json(await client.usage.stats({ period }))

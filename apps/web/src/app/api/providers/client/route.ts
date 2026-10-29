@@ -18,6 +18,7 @@ export async function GET(request: Request) {
 		const client = createApiClient({
 			session: sessionClaimsOf(await getSessionContext()),
 			useCases: getUseCases(),
+			headers: request.headers,
 		})
 		return NextResponse.json(
 			await client.providers.clientList({

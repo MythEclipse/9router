@@ -18,6 +18,7 @@ export async function GET() {
 	const client = createApiClient({
 		session: sessionClaimsOf(await getSessionContext()),
 		useCases: getUseCases(),
+		headers: new Headers(),
 	})
 	const result = await client.providers.freeModels()
 

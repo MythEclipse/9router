@@ -18,6 +18,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
 		const client = createApiClient({
 			session: sessionClaimsOf(await getSessionContext()),
 			useCases: getUseCases(),
+			headers: _request.headers,
 		})
 		return NextResponse.json(await client.providers.testModels({ id }))
 	} catch (error) {

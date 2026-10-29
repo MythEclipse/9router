@@ -25,6 +25,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 		const client = createApiClient({
 			session: sessionClaimsOf(await getSessionContext()),
 			useCases: getUseCases(),
+			headers: _request.headers,
 		})
 		return NextResponse.json(await client.providers.models({ id }))
 	} catch (error) {

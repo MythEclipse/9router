@@ -23,6 +23,7 @@ async function client() {
 	return createApiClient({
 		session: sessionClaimsOf(await getSessionContext()),
 		useCases: getUseCases(),
+		headers: new Headers(),
 	})
 }
 

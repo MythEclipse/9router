@@ -22,6 +22,7 @@ export async function POST() {
 		const client = createApiClient({
 			session: sessionClaimsOf(await getSessionContext()),
 			useCases: getUseCases(),
+			headers: new Headers(),
 		})
 		return NextResponse.json(await client.pxpipe.reload())
 	} catch (error) {

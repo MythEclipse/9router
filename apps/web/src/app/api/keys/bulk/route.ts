@@ -30,7 +30,7 @@ export async function PATCH(request: Request) {
 		// does not get its own opinion about whether a blank `userId` is logged in.
 		const session = sessionFromClaims((payload ?? {}) as Record<string, unknown>)
 
-		const client = createApiClient({ session, useCases: getUseCases() })
+		const client = createApiClient({ session, useCases: getUseCases(), headers: request.headers })
 		const body: unknown = await request.json().catch(() => ({}))
 		const fields = (body ?? {}) as { ids?: unknown; patch?: unknown }
 		const result = await client.dashboardKeys.bulkEdit({ ids: fields.ids, patch: fields.patch })

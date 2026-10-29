@@ -21,6 +21,7 @@ export async function POST(request: Request) {
 		const client = createApiClient({
 			session: sessionClaimsOf(await getSessionContext()),
 			useCases: getUseCases(),
+			headers: request.headers,
 		})
 		return NextResponse.json(await client.models.probe(body))
 	} catch (error) {

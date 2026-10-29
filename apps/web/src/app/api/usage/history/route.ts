@@ -19,6 +19,7 @@ export async function GET(request: Request) {
 		const client = createApiClient({
 			session: sessionClaimsOf(await getSessionContext()),
 			useCases: getUseCases(),
+			headers: request.headers,
 		})
 		const format = new URL(request.url).searchParams.get("format") ?? undefined
 		const result = await client.usage.history({ format })

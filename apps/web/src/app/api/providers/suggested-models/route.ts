@@ -18,6 +18,7 @@ export async function GET(request: Request) {
 		const client = createApiClient({
 			session: sessionClaimsOf(await getSessionContext()),
 			useCases: getUseCases(),
+			headers: request.headers,
 		})
 		const answer = await client.providers.suggestModels({
 			url: searchParams.get("url"),

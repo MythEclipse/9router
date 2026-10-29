@@ -26,7 +26,7 @@ export const dynamic = "force-dynamic"
 // one non-sensitive value.
 export async function GET() {
 	try {
-		const client = createApiClient({ session: null, useCases: getUseCases() })
+		const client = createApiClient({ session: null, useCases: getUseCases(), headers: new Headers() })
 		const { theme } = await client.theme.get()
 		return NextResponse.json({ theme }, { headers: { "Cache-Control": "no-store" } })
 	} catch {
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
 		// this route does not carry its own opinion about a blank `userId`.
 		const session = sessionFromClaims((payload ?? {}) as Record<string, unknown>)
 		const body = await request.json().catch(() => ({}))
-		const client = createApiClient({ session, useCases: getUseCases() })
+		const client = createApiClient({ session, useCases: getUseCases(), headers: request.headers })
 		return NextResponse.json(await client.theme.set({ theme: body?.theme }))
 	} catch (error) {
 		return toResponse(error)
