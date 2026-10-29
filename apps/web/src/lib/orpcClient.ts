@@ -26,6 +26,15 @@ export type DashboardSession = SessionClaims
 export interface RouterContext {
 	readonly session: DashboardSession | null
 	readonly useCases: UseCases
+	/**
+	 * The inbound request's headers, so a procedure can read a credential that is not a
+	 * session — the database endpoints use `x-9r-password` / `x-9r-cli-token` /
+	 * `x-9r-poll-token`. Required rather than optional: a procedure that reads a credential
+	 * must not be able to run against a context that has no headers at all, which would
+	 * look like "no password presented" and refuse for the wrong reason. Use `new Headers()`
+	 * when a caller genuinely has none.
+	 */
+	readonly headers: Headers
 }
 
 /**

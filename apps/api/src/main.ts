@@ -60,7 +60,7 @@ const server = Bun.serve({
 		// handler reads the app context straight out of it. Wrapping it as
 		// `{ context: ... }` type-checks but leaves `context.session` undefined,
 		// so every authenticated call silently becomes a 401.
-		return app.fetch(request, { session, useCases })
+		return app.fetch(request, { session, useCases, headers: request.headers })
 	},
 })
 

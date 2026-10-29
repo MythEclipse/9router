@@ -64,6 +64,17 @@ export interface SessionClaims {
 export interface RequestContext {
 	/** Resolved by the auth middleware; `null` on routes that allow anonymous. */
 	readonly session: SessionClaims | null
+	/**
+	 * The request's own headers, for the few credentials that are not a session.
+	 *
+	 * The database export/import endpoints prove identity with `x-9r-password`,
+	 * `x-9r-cli-token` and `x-9r-poll-token` rather than the cookie — the CLI has no cookie,
+	 * and a mid-import poll has to keep working while the password row is being replaced.
+	 * They are read here rather than accepted as procedure input: a remote caller could put
+	 * `{ cli: true }` in a body, and the rules in `domain/database-access.ts` would then be
+	 * satisfied by a claim instead of a proof.
+	 */
+	readonly headers: Headers
 }
 
 export interface AppContext extends RequestContext {
