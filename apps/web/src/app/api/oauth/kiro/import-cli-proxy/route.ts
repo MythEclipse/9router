@@ -1,3 +1,9 @@
+import {
+	KIRO_IMPORT_REFUSAL_STATUS,
+	kiroImportPayload,
+	kiroImportRefusalMessage,
+	kiroImportSummary,
+} from "9router-api/domain/kiro-import"
 import { NextResponse } from "next/server"
 import { normalizeKiroExternalIdpAuth } from "@/lib/oauth/kiroExternalIdp"
 import { createProviderConnection } from "@/models"
@@ -7,12 +13,14 @@ export const dynamic = "force-dynamic"
 /**
  * POST /api/oauth/kiro/import-cli-proxy
  * Import Kiro CLIProxyAPI auth JSON for Microsoft external_idp accounts.
+ *
+ * The envelope guess and the refusal message are in `domain/kiro-import`; the normaliser stays
+ * here because it is the component that knows which fields a Kiro auth blob must carry.
  */
 export async function POST(request) {
 	try {
 		const body = await request.json()
-		const rawAuth = body?.cliProxyAuth ?? body?.auth ?? body?.json ?? body
-		const tokenData = normalizeKiroExternalIdpAuth(rawAuth)
+		const tokenData = normalizeKiroExternalIdpAuth(kiroImportPayload(body))
 
 		const connection = await createProviderConnection({
 			provider: "kiro",
@@ -25,18 +33,11 @@ export async function POST(request) {
 			testStatus: "active",
 		})
 
-		return NextResponse.json({
-			success: true,
-			connection: {
-				id: connection.id,
-				provider: connection.provider,
-				email: connection.email,
-			},
-		})
+		return NextResponse.json(kiroImportSummary(connection))
 	} catch (error) {
 		return NextResponse.json(
-			{ error: error?.message || "CLIProxyAPI import failed" },
-			{ status: 400 },
+			{ error: kiroImportRefusalMessage(error) },
+			{ status: KIRO_IMPORT_REFUSAL_STATUS },
 		)
 	}
 }

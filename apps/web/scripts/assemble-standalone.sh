@@ -7,6 +7,7 @@
 #
 #   scripts/auth-guard-hooks.mjs   <- path.join(__dirname, "scripts", ...)
 #   src/dashboardGuard.js          <- path.join(__dirname, "src", ...)
+#   CHANGELOG.md                   <- read by /api/changelog relative to cwd
 #   open-sse/**                    <- imported by name inside the trace,
 #                                     but only a subset gets bundled
 #
@@ -42,6 +43,14 @@ if [ -f src/dashboardGuard.js ]; then
   echo "[assembly]   copied src/dashboardGuard.js"
 fi
 
+# /api/changelog reads CHANGELOG.md from cwd, and the trace cannot prove that a
+# readFileSync path is needed. Without this copy the standalone dashboard shows
+# only the upstream changelog and silently drops this build's own release notes.
+if [ -f ../../CHANGELOG.md ]; then
+  cp -a ../../CHANGELOG.md "$S/CHANGELOG.md"
+  echo "[assembly]   copied CHANGELOG.md"
+fi
+
 # `next/server` must exist: the guard loader does require("node:module").register
 # and then imports dashboardGuard.js, which imports next/server.
 if [ ! -f "$S/node_modules/next/server.js" ]; then
@@ -52,7 +61,7 @@ fi
 
 echo "[assembly] preflight"
 for f in scripts/auth-guard-hooks.mjs src/dashboardGuard.js custom-server.js \
-         node_modules/next/server.js; do
+         CHANGELOG.md node_modules/next/server.js; do
   if [ -e "$S/$f" ]; then
     echo "[assembly]   OK   $f"
   else
