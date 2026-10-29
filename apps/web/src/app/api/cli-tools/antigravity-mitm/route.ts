@@ -1,4 +1,15 @@
 import { execSync } from "node:child_process"
+import {
+	isMitmFailure,
+	type MitmPlatform,
+	mitmHasPrivilege,
+	mitmPrivilegeRefusal,
+	normaliseMitmRouterBaseUrl,
+	presentMitmStatus,
+	readMitmStartRequest,
+	readMitmToolToggle,
+	resolveMitmPassword,
+} from "9router-api/domain/mitm-panel"
 import { NextResponse } from "next/server"
 import { getSettings, updateSettings } from "@/lib/localDb"
 import {
@@ -19,74 +30,59 @@ export const dynamic = "force-dynamic"
 
 initDbHooks(getSettings, updateSettings)
 
-const DEFAULT_MITM_ROUTER_BASE = "http://localhost:20128"
-
-function normalizeMitmRouterBaseUrlInput(input) {
-	if (input == null || String(input).trim() === "") {
-		return DEFAULT_MITM_ROUTER_BASE
-	}
-	const t = String(input).trim().replace(/\/+$/, "")
-	let u
-	try {
-		u = new URL(t)
-	} catch {
-		throw new Error("Invalid MITM router URL")
-	}
-	if (u.protocol !== "http:" && u.protocol !== "https:") {
-		throw new Error("MITM router URL must use http or https")
-	}
-	return t
-}
-
 const isWin = process.platform === "win32"
 
-function getPassword(provided) {
-	return provided || getCachedPassword() || null
-}
-
-function requiresSudoPassword(pwd) {
-	return !isWin && !pwd && isSudoPasswordRequired()
-}
-
-function checkIsAdmin() {
+/**
+ * Whether this process can already write the hosts file without help.
+ *
+ * The elevated check on Windows is a probe, not a property, so it runs here where the shell is
+ * available; the domain only ever sees the resulting level.
+ */
+function detectPrivilege(): MitmPlatform["privilege"] {
 	if (isWin) {
 		try {
 			execSync("net session >nul 2>&1", { windowsHide: true })
-			return true
+			return "windows-admin"
 		} catch {
-			return false
+			return "user"
 		}
 	}
-	return typeof process.getuid === "function" && process.getuid() === 0
+	return typeof process.getuid === "function" && process.getuid() === 0 ? "root" : "user"
 }
 
-function checkPrivilege(pwd) {
-	if (checkIsAdmin()) return true
-	if (isWin) return false
-	if (!isSudoPasswordRequired()) return true
-	return !!pwd
+function platform(): MitmPlatform {
+	return {
+		isWindows: isWin,
+		privilege: detectPrivilege(),
+		sudoPasswordRequired: isSudoPasswordRequired(),
+	}
+}
+
+/** The password this request will use, resolved from request → cache → encrypted store. */
+async function passwordFor(provided: string | undefined): Promise<string> {
+	return resolveMitmPassword({
+		provided,
+		cached: getCachedPassword(),
+		stored: await loadEncryptedPassword(),
+	})
+}
+
+async function hasAnyPassword(): Promise<boolean> {
+	return !!getCachedPassword() || !!(await loadEncryptedPassword())
 }
 
 // GET - Full MITM status (server + per-tool DNS)
 export async function GET() {
 	try {
-		const status = await getMitmStatus()
 		const settings = await getSettings()
-		const hasCachedPassword = !!getCachedPassword() || !!(await loadEncryptedPassword())
-		return NextResponse.json({
-			running: status.running,
-			pid: status.pid || null,
-			certExists: status.certExists || false,
-			certTrusted: status.certTrusted || false,
-			dnsStatus: status.dnsStatus || {},
-			hasCachedPassword,
-			isWin,
-			needsSudoPassword: !isWin && !hasCachedPassword && isSudoPasswordRequired(),
-			isAdmin: checkIsAdmin(),
-			mitmRouterBaseUrl:
-				(settings.mitmRouterBaseUrl && String(settings.mitmRouterBaseUrl).trim()) ||
-				DEFAULT_MITM_ROUTER_BASE,
-		})
+		return NextResponse.json(
+			presentMitmStatus({
+				platform: platform(),
+				status: await getMitmStatus(),
+				hasCachedPassword: await hasAnyPassword(),
+				storedRouterBaseUrl: settings.mitmRouterBaseUrl,
+			}),
+		)
 	} catch (error) {
 		console.log("Error getting MITM status:", error.message)
 		return NextResponse.json({ error: "Failed to get MITM status" }, { status: 500 })
@@ -96,37 +92,27 @@ export async function GET() {
 // POST - Start MITM server (cert + server, no DNS)
 export async function POST(request) {
 	try {
-		const { apiKey, sudoPassword, mitmRouterBaseUrl, forceKillPort443 } = await request.json()
-		const pwd = getPassword(sudoPassword) || (await loadEncryptedPassword()) || ""
-
-		if (!apiKey || requiresSudoPassword(pwd)) {
-			return NextResponse.json(
-				{ error: !apiKey ? "Missing apiKey" : "Missing sudoPassword" },
-				{ status: 400 },
-			)
+		const parsed = readMitmStartRequest(await request.json())
+		if (isMitmFailure(parsed)) {
+			return NextResponse.json({ error: parsed.error }, { status: parsed.status })
 		}
+		const { apiKey, sudoPassword, mitmRouterBaseUrl, forceKillPort443 } = parsed.value
+		const host = platform()
+		const pwd = await passwordFor(sudoPassword)
 
-		if (!checkPrivilege(pwd)) {
-			return NextResponse.json(
-				{
-					error: isWin
-						? "Administrator required - restart 9Router as Administrator"
-						: "Root or sudo password required to start MITM",
-				},
-				{ status: 403 },
-			)
+		if (!mitmHasPrivilege(host, pwd)) {
+			return NextResponse.json({ error: mitmPrivilegeRefusal(host, "start MITM") }, { status: 403 })
 		}
 
 		if (mitmRouterBaseUrl !== undefined && mitmRouterBaseUrl !== null) {
-			try {
-				const normalized = normalizeMitmRouterBaseUrlInput(mitmRouterBaseUrl)
-				await updateSettings({ mitmRouterBaseUrl: normalized })
-			} catch (e) {
-				return NextResponse.json({ error: e.message || "Invalid MITM router URL" }, { status: 400 })
+			const normalised = normaliseMitmRouterBaseUrl(mitmRouterBaseUrl)
+			if (isMitmFailure(normalised)) {
+				return NextResponse.json({ error: normalised.error }, { status: normalised.status })
 			}
+			await updateSettings({ mitmRouterBaseUrl: normalised.value })
 		}
 
-		const result = await startServer(apiKey, pwd, !!forceKillPort443)
+		const result = await startServer(apiKey, pwd, forceKillPort443)
 		if (!isWin) setCachedPassword(pwd)
 
 		return NextResponse.json({ success: true, running: result.running, pid: result.pid })
@@ -149,15 +135,16 @@ export async function POST(request) {
 export async function DELETE(request) {
 	try {
 		const body = await request.json().catch(() => ({}))
-		const { sudoPassword } = body
-		const pwd = getPassword(sudoPassword) || (await loadEncryptedPassword()) || ""
+		const provided = typeof body?.sudoPassword === "string" ? body.sudoPassword : undefined
+		const host = platform()
+		const pwd = await passwordFor(provided)
 
-		if (requiresSudoPassword(pwd)) {
-			return NextResponse.json({ error: "Missing sudoPassword" }, { status: 400 })
+		if (!mitmHasPrivilege(host, pwd)) {
+			return NextResponse.json({ error: mitmPrivilegeRefusal(host, "stop MITM") }, { status: 403 })
 		}
 
 		await stopServer(pwd)
-		if (!isWin && sudoPassword) setCachedPassword(sudoPassword)
+		if (!isWin && provided) setCachedPassword(provided)
 
 		return NextResponse.json({ success: true, running: false })
 	} catch (error) {
@@ -169,43 +156,30 @@ export async function DELETE(request) {
 	}
 }
 
-// PATCH - Toggle DNS for a specific tool (enable/disable)
+// PATCH - Toggle DNS for a specific tool (enable/disable) or trust the certificate
 export async function PATCH(request) {
 	try {
-		const { tool, action, sudoPassword } = await request.json()
-		const pwd = getPassword(sudoPassword) || (await loadEncryptedPassword()) || ""
+		const parsed = readMitmToolToggle(await request.json())
+		if (isMitmFailure(parsed)) {
+			return NextResponse.json({ error: parsed.error }, { status: parsed.status })
+		}
+		const { tool, action, sudoPassword } = parsed.value
+		const host = platform()
+		const pwd = await passwordFor(sudoPassword)
 
-		if (!tool || !action) {
-			return NextResponse.json({ error: "tool and action required" }, { status: 400 })
-		}
-		if (requiresSudoPassword(pwd)) {
-			return NextResponse.json({ error: "Missing sudoPassword" }, { status: 400 })
-		}
-		if (!checkPrivilege(pwd)) {
-			return NextResponse.json(
-				{
-					error: isWin
-						? "Administrator required - restart 9Router as Administrator"
-						: "Root or sudo password required to modify DNS",
-				},
-				{ status: 403 },
-			)
+		if (!mitmHasPrivilege(host, pwd)) {
+			return NextResponse.json({ error: mitmPrivilegeRefusal(host, "modify DNS") }, { status: 403 })
 		}
 
 		if (action === "enable") {
 			await enableToolDNS(tool, pwd)
 		} else if (action === "disable") {
 			await disableToolDNS(tool, pwd)
-		} else if (action === "trust-cert") {
+		} else {
 			await trustCert(pwd)
 			if (!isWin && sudoPassword) setCachedPassword(sudoPassword)
 			const status = await getMitmStatus()
 			return NextResponse.json({ success: true, certTrusted: status.certTrusted })
-		} else {
-			return NextResponse.json(
-				{ error: "action must be enable, disable, or trust-cert" },
-				{ status: 400 },
-			)
 		}
 
 		if (!isWin && sudoPassword) setCachedPassword(sudoPassword)
