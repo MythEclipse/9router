@@ -1,66 +1,27 @@
-import { verifyDashboardPassword } from "@9router/auth/dashboardSession"
+import { credentialsFrom } from "9router-api/application/settings/manage-database"
 import { NextResponse } from "next/server"
+import { failed } from "@/lib/routeErrors"
+import { getUseCases } from "@/lib/useCases"
+import "@/lib/db/registerPostImportHooks"
 
 export const dynamic = "force-dynamic"
 
-import { PASSWORD_HEADER, verifyPollToken } from "@9router/db/importJobAuth"
-import { getImportJob } from "@9router/db/importJobs"
-import "@/lib/db/registerPostImportHooks"
-
-const CLI_TOKEN_HEADER = "x-9r-cli-token"
-
-// CLI token requests are already trusted (local machine); skip password re-auth.
-function isCliRequest(request) {
-	return Boolean(request.headers.get(CLI_TOKEN_HEADER))
-}
-
-export async function GET(request, context) {
+/**
+ * GET /api/settings/database/jobs/[jobId] — how far the restore has got.
+ *
+ * The poll token is checked before the password, because mid-import the password is
+ * compared against the row being replaced.
+ */
+export async function GET(request: Request, context: { params: Promise<{ jobId: string }> }) {
 	try {
-		const jobId = (await context?.params)?.jobId
-		if (!jobId) {
-			return NextResponse.json({ error: "Missing job id" }, { status: 400 })
-		}
-
-		const job = getImportJob(jobId)
-		if (!job) {
-			return NextResponse.json({ error: "Job not found" }, { status: 404 })
-		}
-
-		// The poll credential issued when this job was created is checked first.
-		// Password auth stays as a fallback for CLI callers and for jobs created
-		// before the token existed, but it must not be the primary path: the
-		// import replaces the very settings row that stores the password hash, so
-		// comparing against it mid-import 401s an already-authenticated poll.
-		const pollToken = request.headers.get("x-9r-poll-token") || ""
-		const authorized =
-			isCliRequest(request) ||
-			verifyPollToken(job, pollToken) ||
-			(await verifyDashboardPassword(request.headers.get(PASSWORD_HEADER)))
-		if (!authorized) {
-			return NextResponse.json({ error: "Invalid password" }, { status: 401 })
-		}
-
-		// `error` is only present on a failed job, so the response shape is
-		// declared with it optional instead of relying on inference from the
-		// literal, which knows nothing about the branch below.
-		const response: {
-			status: string
-			progress: number
-			section: string | null
-			message: string | null
-			error?: string
-		} = {
-			status: job.status,
-			progress: job.progress?.percent ?? 0,
-			section: job.progress?.currentSection || null,
-			message: job.message || null,
-		}
-		if (job.status === "error") {
-			response.error = job.error || "Failed to import database"
-		}
-		return NextResponse.json(response)
+		const { jobId } = await context.params
+		const progress = await getUseCases().database.readJob({
+			jobId,
+			credentials: credentialsFrom(request.headers),
+		})
+		return NextResponse.json(progress)
 	} catch (error) {
 		console.log("Error reading database import job:", error)
-		return NextResponse.json({ error: "Failed to read import job" }, { status: 500 })
+		return failed(error, "Failed to read import job", "Error reading database import job")
 	}
 }

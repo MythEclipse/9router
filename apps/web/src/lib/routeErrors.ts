@@ -12,6 +12,7 @@ import { NextResponse } from "next/server"
 /** How each `AppErrorCode` maps to a status. */
 const STATUS_BY_CODE: Record<string, number> = {
 	VALIDATION: 400,
+	PAYLOAD_TOO_LARGE: 413,
 	UNAUTHORIZED: 401,
 	FORBIDDEN: 403,
 	NOT_FOUND: 404,

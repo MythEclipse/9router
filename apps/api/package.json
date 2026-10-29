@@ -12,7 +12,8 @@
     "./application/usage/*": "./src/application/usage/*.ts",
     "./infrastructure/runtime-ports": "./src/infrastructure/runtime-ports.ts",
     "./application/models/*": "./src/application/models/*.ts",
-    "./application/providers/*": "./src/application/providers/*.ts"
+    "./application/providers/*": "./src/application/providers/*.ts",
+    "./application/settings/*": "./src/application/settings/*.ts"
   },
   "scripts": {
     "dev": "bun --watch src/main.ts",

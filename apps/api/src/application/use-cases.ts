@@ -48,6 +48,12 @@ import { makeWebLogin } from "./providers/web-login.ts"
 import { makePxpipe } from "./pxpipe/manage-pxpipe.ts"
 import { assertSupportedLocale } from "./settings/locale.ts"
 import { readLoginGate } from "./settings/login-gate.ts"
+import {
+	readDatabase,
+	readDatabaseJob,
+	startDatabaseJob,
+	writeDatabase,
+} from "./settings/manage-database.ts"
 import { makeManageSettings } from "./settings/manage-settings.ts"
 import { makeSettingsHistory } from "./settings/settings-history.ts"
 import { makeGetTheme, makeSetTheme } from "./settings/theme.ts"
@@ -81,6 +87,23 @@ export interface UseCases {
 	readonly clearErrorLogs: ReturnType<typeof makeClearErrorLogs>
 	readonly settings: ReturnType<typeof makeManageSettings>
 	readonly settingsHistory: ReturnType<typeof makeSettingsHistory>
+	/** Whole-install export and import, synchronous and as a polled job. */
+	readonly database: {
+		readonly read: (input: import("./settings/manage-database.ts").DatabaseInput) => Promise<unknown>
+		readonly write: (input: {
+			readonly body: Record<string, unknown>
+			readonly credentials: import("./settings/manage-database.ts").DatabaseCredentials
+		}) => Promise<{ success: true }>
+		readonly startJob: (input: {
+			readonly body: Record<string, unknown>
+			readonly credentials: import("./settings/manage-database.ts").DatabaseCredentials
+			readonly contentLength: string | null
+		}) => Promise<import("./settings/manage-database.ts").StartedJob>
+		readonly readJob: (input: {
+			readonly jobId: string
+			readonly credentials: import("./settings/manage-database.ts").DatabaseCredentials
+		}) => Promise<import("../domain/database-access.ts").ImportJobProgress>
+	}
 	readonly getTheme: ReturnType<typeof makeGetTheme>
 	readonly setTheme: ReturnType<typeof makeSetTheme>
 	/**
@@ -180,6 +203,12 @@ export function buildUseCases(deps: Dependencies): UseCases {
 			...deps.settingsPassword,
 			...deps.settingsWriteBack,
 		}),
+		database: {
+			read: (input) => readDatabase(input, deps.database),
+			write: (input) => writeDatabase(input, deps.database),
+			startJob: (input) => startDatabaseJob(input, deps.database),
+			readJob: (input) => readDatabaseJob(input, deps.database),
+		},
 		settingsHistory: makeSettingsHistory({
 			history: deps.settingsHistory.history,
 			sanitize: deps.settingsHistory.sanitize,

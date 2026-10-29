@@ -1,59 +1,32 @@
-import { verifyDashboardPassword } from "@9router/auth/dashboardSession"
+import { credentialsFrom } from "9router-api/application/settings/manage-database"
 import { NextResponse } from "next/server"
+import { failed } from "@/lib/routeErrors"
+import { getUseCases } from "@/lib/useCases"
+import "@/lib/db/registerPostImportHooks"
 
 export const dynamic = "force-dynamic"
 
-import { createImportJob } from "@9router/db/importJobs"
-import "@/lib/db/registerPostImportHooks"
-
-const CLI_TOKEN_HEADER = "x-9r-cli-token"
-const MAX_IMPORT_BYTES = 50 * 1024 * 1024
-
-// CLI token requests are already trusted (local machine); skip password re-auth.
-function isCliRequest(request) {
-	return Boolean(request.headers.get(CLI_TOKEN_HEADER))
-}
-
-export async function POST(request) {
+/**
+ * POST /api/settings/database/jobs — replace the install in the background.
+ *
+ * Answers 202 with a poll token. The token matters: the import replaces the settings
+ * row holding the password hash, so a client polling with its password would be
+ * told the password was wrong over a restore that had committed.
+ */
+export async function POST(request: Request) {
 	try {
-		const contentLength = Number(request.headers.get("content-length") || 0)
-		if (contentLength > MAX_IMPORT_BYTES) {
-			return NextResponse.json({ error: "Payload too large" }, { status: 413 })
-		}
-
-		let body
-		try {
-			body = await request.json()
-		} catch {
+		const body = (await request.json().catch(() => null)) as Record<string, unknown> | null
+		if (!body) {
 			return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
 		}
-
-		const { password, ...payload } = body || {}
-		if (!isCliRequest(request) && !(await verifyDashboardPassword(password))) {
-			return NextResponse.json({ error: "Invalid password" }, { status: 401 })
-		}
-
-		let job
-		try {
-			job = createImportJob(payload)
-		} catch (err) {
-			return NextResponse.json({ error: err?.message || "Failed to import database" }, { status: 400 })
-		}
-
-		// The poll credential leaves with this response. The import will replace
-		// the settings row that stores the password hash, so the client presents
-		// this token on every poll instead of re-authenticating with the password;
-		// without it the password fallback 401s mid-restore and the UI reports
-		// "Invalid password" over a restore that actually commits.
-		return NextResponse.json(
-			{ jobId: job.jobId, status: job.status, pollToken: job.pollToken },
-			{ status: 202 },
-		)
+		const job = await getUseCases().database.startJob({
+			body,
+			credentials: credentialsFrom(request.headers),
+			contentLength: request.headers.get("content-length"),
+		})
+		return NextResponse.json(job, { status: 202 })
 	} catch (error) {
 		console.log("Error starting database import job:", error)
-		return NextResponse.json(
-			{ error: error?.message || "Failed to import database" },
-			{ status: 400 },
-		)
+		return failed(error, "Failed to import database", "Error starting database import job")
 	}
 }

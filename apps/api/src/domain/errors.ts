@@ -11,6 +11,7 @@ export type AppErrorCode =
 	| "FORBIDDEN"
 	| "NOT_FOUND"
 	| "VALIDATION"
+	| "PAYLOAD_TOO_LARGE"
 	| "CONFLICT"
 	| "UPSTREAM"
 	| "INTERNAL"
@@ -40,6 +41,8 @@ export const notFound = (what: string) => new AppError("NOT_FOUND", `${what} not
 export const invalid = (message: string, detail?: string) =>
 	new AppError("VALIDATION", message, { detail })
 export const conflict = (message: string) => new AppError("CONFLICT", message)
+export const tooLarge = (message = "Payload too large") =>
+	new AppError("PAYLOAD_TOO_LARGE", message)
 export const upstream = (message: string, cause?: unknown) =>
 	new AppError("UPSTREAM", message, { cause })
 export const internal = (message: string, cause?: unknown) =>

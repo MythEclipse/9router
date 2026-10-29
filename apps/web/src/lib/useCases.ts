@@ -20,6 +20,7 @@ import { getSemanticCacheStats, resetSemanticCacheStats } from "open-sse/rtk/sem
 import { createApiKeyStore } from "./apiKeyStore"
 import { killAppProcesses } from "./appProcessManager"
 import { createComboPresetPort } from "./comboPresetPort"
+import { createDatabaseDeps } from "./databaseHost"
 import {
 	catalogueHost,
 	knownSttTransport,
@@ -117,6 +118,7 @@ function cache(): Cache {
 			settingsPassword,
 			settingsWriteBack,
 			settingsStore,
+			database: createDatabaseDeps(),
 			settingsHistory: settingsHistoryHost,
 			// The dashboard is the process that holds the plugin runtime, so it is
 			// the one that can invalidate the cached configuration.

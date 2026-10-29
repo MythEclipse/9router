@@ -194,6 +194,12 @@ export interface UseCaseOptions {
 		import("../application/settings/settings-history.ts").SettingsHistoryDependencies,
 		"history" | "sanitize" | "recordSecurityEvent" | "redact"
 	>
+	/**
+	 * The install's own storage. Optional so a caller that only exercises the
+	 * settings row (most tests) need not stand up a database exporter; the default
+	 * refuses every attempt rather than pretending a backup succeeded.
+	 */
+	readonly database?: import("../application/settings/manage-database.ts").DatabaseDeps
 	/** The settings row as a whole, for the general settings use-case. */
 	readonly settingsStore?: import("../application/settings/manage-settings.ts").SettingsDependencies["store"]
 	/** Hashing and comparison for the settings row's password. */
@@ -384,6 +390,20 @@ export function createUseCases(
 			})),
 		backfillConnectionEmails: options.backfillConnectionEmails ?? (async () => {}),
 		settingsStore: settingsRow,
+		database: options.database ?? {
+			verifyPassword: async () => false,
+			summary: async () => ({ available: false }),
+			exportSections: async () => ({ available: false }),
+			importPayload: async () => {
+				throw new Error("Database import is not available in this process")
+			},
+			afterImport: async () => {},
+			startJob: () => {
+				throw new Error("Database import is not available in this process")
+			},
+			findJob: () => null,
+			verifyPollToken: () => false,
+		},
 		settingsHistory: options.settingsHistory ?? {
 			history: {
 				list: async () => [],

@@ -1,83 +1,47 @@
-import { verifyDashboardPassword } from "@9router/auth/dashboardSession"
+import { credentialsFrom } from "9router-api/application/settings/manage-database"
 import { NextResponse } from "next/server"
-import { exportDb, getDbSummary, getSettings, importDb } from "@/lib/localDb"
-import { applyOutboundProxyEnv } from "@/lib/network/outboundProxy"
-import { configureTelegramBackup } from "@/shared/services/telegramBackup"
+import { failed } from "@/lib/routeErrors"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-const CLI_TOKEN_HEADER = "x-9r-cli-token"
-const PASSWORD_HEADER = "x-9r-password"
-
-// CLI token requests are already trusted (local machine); skip password re-auth.
-function isCliRequest(request) {
-	return Boolean(request.headers.get(CLI_TOKEN_HEADER))
-}
-
-export async function GET(request) {
+/**
+ * GET /api/settings/database — the whole install, or a summary of it.
+ *
+ * `?summary=true` needs no credential: it is what the login screen reads before
+ * anyone has signed in.
+ */
+export async function GET(request: Request) {
 	try {
 		const { searchParams } = new URL(request.url)
-		const isSummary = searchParams.get("summary") === "true"
-
-		if (
-			!isSummary &&
-			!isCliRequest(request) &&
-			!(await verifyDashboardPassword(request.headers.get(PASSWORD_HEADER)))
-		) {
-			return NextResponse.json({ error: "Invalid password" }, { status: 401 })
-		}
-
-		if (isSummary) {
-			const summary = await getDbSummary()
-			return NextResponse.json(summary)
-		}
-
-		const sectionsParam = searchParams.get("sections")
-		const options = sectionsParam
-			? sectionsParam
-					.split(",")
-					.map((s) => s.trim())
-					.filter(Boolean)
-			: null
-		const payload = await exportDb(options)
+		const payload = await getUseCases().database.read({
+			searchParams,
+			credentials: credentialsFrom(request.headers),
+			contentLength: request.headers.get("content-length"),
+		})
 		return NextResponse.json(payload)
 	} catch (error) {
 		console.log("Error exporting database:", error)
-		return NextResponse.json({ error: "Failed to export database" }, { status: 500 })
+		return failed(error, "Failed to export database", "Error exporting database")
 	}
 }
 
-export async function POST(request) {
+/**
+ * POST /api/settings/database — replace the install, synchronously.
+ *
+ * The body carries both the password and the database, so the browser posts it as
+ * JSON rather than a form. The use-case removes the password before writing.
+ */
+export async function POST(request: Request) {
 	try {
-		const { password, ...payload } = await request.json()
-		if (!isCliRequest(request) && !(await verifyDashboardPassword(password))) {
-			return NextResponse.json({ error: "Invalid password" }, { status: 401 })
-		}
-		await importDb(payload)
-
-		// Ensure proxy settings take effect immediately after a DB import.
-		try {
-			const settings = await getSettings()
-			applyOutboundProxyEnv(settings)
-		} catch (err) {
-			console.warn("[Settings][DatabaseImport] Failed to re-apply outbound proxy env:", err)
-		}
-
-		// The import may have replaced the auto-backup config/status (full backups
-		// carry the autoBackup KV scope). Re-arm the scheduler against whatever is
-		// now stored so the schedule survives imports; fails open when disabled.
-		try {
-			await configureTelegramBackup()
-		} catch (err) {
-			console.warn("[Settings][DatabaseImport] Failed to reschedule auto backup:", err.message)
-		}
-
-		return NextResponse.json({ success: true })
+		const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+		const result = await getUseCases().database.write({
+			body,
+			credentials: credentialsFrom(request.headers),
+		})
+		return NextResponse.json(result)
 	} catch (error) {
 		console.log("Error importing database:", error)
-		return NextResponse.json(
-			{ error: error?.message || "Failed to import database" },
-			{ status: 400 },
-		)
+		return failed(error, "Failed to import database", "Error importing database")
 	}
 }

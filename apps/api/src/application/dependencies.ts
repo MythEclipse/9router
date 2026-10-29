@@ -205,6 +205,13 @@ export interface Dependencies {
 		import("./settings/settings-history.ts").SettingsHistoryDependencies,
 		"history" | "sanitize" | "recordSecurityEvent" | "redact"
 	>
+	/**
+	 * The install's own storage, for export and import.
+	 *
+	 * A whole-install restore is not a settings write: it replaces every row at once,
+	 * so it gets its own ports rather than reaching into the settings ones.
+	 */
+	readonly database: import("./settings/manage-database.ts").DatabaseDeps
 	/** The before-image store and the effects a settings write owes the process. */
 	readonly settingsWriteBack: Pick<
 		import("./settings/manage-settings.ts").SettingsDependencies,
