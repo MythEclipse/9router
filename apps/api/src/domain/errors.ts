@@ -22,12 +22,21 @@ export interface AppErrorOptions {
 	readonly cause?: unknown
 	/** Structured facts a client needs to act on — e.g. which row holds a name. */
 	readonly data?: Record<string, unknown>
+	/**
+	 * Carried HTTP status, when the failure came from somewhere that already decided one.
+	 *
+	 * A provider that answers 429 while we list its models must reach the dashboard as a
+	 * 429 — "try again later" — not as a 500, and not as whatever `code` would imply. The
+	 * code still describes the *kind* of failure; this describes the number the caller saw.
+	 */
+	readonly status?: number
 }
 
 export class AppError extends Error {
 	readonly code: AppErrorCode
 	readonly detail: string | undefined
 	readonly data: Record<string, unknown> | undefined
+	readonly status: number | undefined
 
 	constructor(code: AppErrorCode, message: string, options: AppErrorOptions = {}) {
 		super(message, { cause: options.cause })
@@ -35,6 +44,7 @@ export class AppError extends Error {
 		this.code = code
 		this.detail = options.detail
 		this.data = options.data
+		this.status = options.status
 	}
 }
 

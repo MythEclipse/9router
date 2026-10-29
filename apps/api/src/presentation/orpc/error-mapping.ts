@@ -24,6 +24,30 @@ export function statusFor(code: AppErrorCode): number {
 }
 
 /**
+ * Whether this throw is an `AppError`, without asking `instanceof`.
+ *
+ * `instanceof` is unreliable here: the dashboard loads `apps/api` through Next's
+ * transpile pipeline, and `domain/errors.ts` ends up evaluated once for the router chunk
+ * and once for the route chunk. Both copies produce structurally identical errors, but a
+ * class check across them answers `false` and every `NOT_FOUND`, `VALIDATION` or
+ * `CONFLICT` collapses into a bare 500 — which is exactly what a live probe of
+ * `/api/providers/nope/test` showed while the unit tests were green.
+ *
+ * The shape is checked instead: a `code` this vocabulary defines. It cannot be forged by
+ * an arbitrary throw into a client-visible status unless the throw already names one of
+ * our codes, and an error that does is indistinguishable from the real thing by design.
+ */
+function appErrorOf(error: unknown): AppError | null {
+	if (error instanceof AppError) return error
+	if (typeof error !== "object" || error === null) return null
+	const code = (error as { code?: unknown }).code
+	if (typeof code !== "string" || !(code in STATUS_BY_CODE)) return null
+	const message = (error as { message?: unknown }).message
+	if (typeof message !== "string") return null
+	return error as AppError
+}
+
+/**
  * Convert anything thrown by a use-case into an `ORPCError`.
  *
  * An unrecognised throw is reported as INTERNAL with a generic message: an
@@ -32,14 +56,18 @@ export function statusFor(code: AppErrorCode): number {
  * server-side log.
  */
 export function toORPCError(error: unknown): ORPCError<string, unknown> {
-	if (error instanceof AppError) {
-		return new ORPCError(error.code, {
-			status: statusFor(error.code),
-			message: error.message,
-			cause: error,
+	const appError = appErrorOf(error)
+	if (appError) {
+		return new ORPCError(appError.code, {
+			// A carried status wins: the provider already said 429, and reporting 502
+			// because UPSTREAM maps there would throw away the one fact that tells the
+			// operator to retry later rather than call support.
+			status: appError.status ?? statusFor(appError.code),
+			message: appError.message,
+			cause: appError,
 			// `detail` is for the log; `data` is what a client acts on, so the two are
 			// carried separately and a structured conflict reaches the dashboard intact.
-			data: error.data ?? (error.detail ? { detail: error.detail } : undefined),
+			data: appError.data ?? (appError.detail ? { detail: appError.detail } : undefined),
 		})
 	}
 	return new ORPCError("INTERNAL", {

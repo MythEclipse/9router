@@ -38,6 +38,12 @@ const STATUS_BY_CODE: Record<string, number> = {
 /** The status a thrown value deserves, defaulting to 500. */
 export function statusOf(error: unknown): number {
 	if (typeof error !== "object" || error === null) return 500
+	// A carried status wins over the code's default. `listProviderModels` raises a
+	// refusal with whatever the provider answered — a 429 must stay a 429, because that
+	// is the difference between "try again later" and "something broke here", and the
+	// code it maps to (UPSTREAM → 502) says the wrong one.
+	const carried = (error as { status?: unknown }).status
+	if (typeof carried === "number" && carried >= 400 && carried <= 599) return carried
 	const code = (error as { code?: unknown }).code
 	if (typeof code !== "string") return 500
 	return STATUS_BY_CODE[code] ?? 500

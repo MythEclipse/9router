@@ -22,7 +22,7 @@
  * User instruction, verbatim: "lanjut kenapa malah berhenti".
  */
 
-import { invalid, notFound } from "../../domain/errors.ts"
+import { AppError, invalid, notFound } from "../../domain/errors.ts"
 import { anthropicModelsBaseUrl, modelsEndpoint } from "../../domain/model-list.ts"
 import type { ProviderCatalogue, StoredConnection } from "./ports.ts"
 
@@ -270,11 +270,19 @@ function readList(payload: unknown): unknown[] {
  * a 429 from the provider must reach the dashboard as a 429 so it can say "try
  * again later" instead of "your request was wrong".
  */
-export class ProviderRefusal extends Error {
-	readonly status: number
+/**
+ * A refusal that came with its own status — the provider said 429, the connection is
+ * gone (404), or the answer never arrived (504).
+ *
+ * It extends `AppError` rather than `Error` so it survives the transport: the dashboard
+ * matches on this class, and `toORPCError` can only carry a status for errors it
+ * recognises. The three call sites that throw it keep working unchanged.
+ */
+export class ProviderRefusal extends AppError {
 	constructor(message: string, status: number) {
-		super(message)
+		super(status >= 500 ? "UPSTREAM" : status === 404 ? "NOT_FOUND" : "VALIDATION", message, {
+			status,
+		})
 		this.name = "ProviderRefusal"
-		this.status = status
 	}
 }
