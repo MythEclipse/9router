@@ -200,6 +200,12 @@ export interface UseCaseOptions {
 	 * refuses every attempt rather than pretending a backup succeeded.
 	 */
 	readonly database?: import("../application/settings/manage-database.ts").DatabaseDeps
+	/**
+	 * The backup scheduler. Optional for the same reason as `database`: a caller that
+	 * only exercises the settings row should not have to own a scheduler, and the
+	 * default reports "off" rather than pretending a backup is armed.
+	 */
+	readonly autoBackup?: import("../application/settings/manage-auto-backup.ts").AutoBackupDeps
 	/** The settings row as a whole, for the general settings use-case. */
 	readonly settingsStore?: import("../application/settings/manage-settings.ts").SettingsDependencies["store"]
 	/** Hashing and comparison for the settings row's password. */
@@ -390,6 +396,17 @@ export function createUseCases(
 			})),
 		backfillConnectionEmails: options.backfillConnectionEmails ?? (async () => {}),
 		settingsStore: settingsRow,
+		autoBackup: options.autoBackup ?? {
+			config: async () => ({ enabled: false, channel: "telegram", intervalHours: 1 }),
+			status: async () => ({}),
+			saveConfig: async () => ({ enabled: false, channel: "telegram", intervalHours: 1 }),
+			scheduler: () => ({ schedulerActive: false, nextRunAt: null }),
+			configure: async () => {},
+			sendNow: async () => {
+				throw new Error("Backups are not available in this process")
+			},
+			verifyPassword: async () => false,
+		},
 		database: options.database ?? {
 			verifyPassword: async () => false,
 			summary: async () => ({ available: false }),

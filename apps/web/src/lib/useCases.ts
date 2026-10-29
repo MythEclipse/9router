@@ -19,6 +19,7 @@ import {
 import { getSemanticCacheStats, resetSemanticCacheStats } from "open-sse/rtk/semanticCache"
 import { createApiKeyStore } from "./apiKeyStore"
 import { killAppProcesses } from "./appProcessManager"
+import { createAutoBackupDeps } from "./autoBackupHost"
 import { createComboPresetPort } from "./comboPresetPort"
 import { createDatabaseDeps } from "./databaseHost"
 import {
@@ -118,6 +119,7 @@ function cache(): Cache {
 			settingsPassword,
 			settingsWriteBack,
 			settingsStore,
+			autoBackup: createAutoBackupDeps(),
 			database: createDatabaseDeps(),
 			settingsHistory: settingsHistoryHost,
 			// The dashboard is the process that holds the plugin runtime, so it is

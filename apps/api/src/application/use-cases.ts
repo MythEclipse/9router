@@ -49,6 +49,11 @@ import { makePxpipe } from "./pxpipe/manage-pxpipe.ts"
 import { assertSupportedLocale } from "./settings/locale.ts"
 import { readLoginGate } from "./settings/login-gate.ts"
 import {
+	readAutoBackup,
+	sendAutoBackupNow,
+	writeAutoBackup,
+} from "./settings/manage-auto-backup.ts"
+import {
 	readDatabase,
 	readDatabaseJob,
 	startDatabaseJob,
@@ -87,6 +92,17 @@ export interface UseCases {
 	readonly clearErrorLogs: ReturnType<typeof makeClearErrorLogs>
 	readonly settings: ReturnType<typeof makeManageSettings>
 	readonly settingsHistory: ReturnType<typeof makeSettingsHistory>
+	/** The scheduled backup, as the settings screen reads and edits it. */
+	readonly autoBackup: {
+		readonly read: () => Promise<import("./settings/manage-auto-backup.ts").BackupView>
+		readonly write: (
+			body: Record<string, unknown>,
+		) => Promise<import("./settings/manage-auto-backup.ts").BackupView>
+		readonly sendNow: (input: {
+			readonly action: unknown
+			readonly password: string | null
+		}) => Promise<{ ok: true; sizeBytes: number; channel: string } | { ok: false; error: string }>
+	}
 	/** Whole-install export and import, synchronous and as a polled job. */
 	readonly database: {
 		readonly read: (input: import("./settings/manage-database.ts").DatabaseInput) => Promise<unknown>
@@ -203,6 +219,11 @@ export function buildUseCases(deps: Dependencies): UseCases {
 			...deps.settingsPassword,
 			...deps.settingsWriteBack,
 		}),
+		autoBackup: {
+			read: () => readAutoBackup(deps.autoBackup),
+			write: (body) => writeAutoBackup(body, deps.autoBackup),
+			sendNow: (input) => sendAutoBackupNow(input, deps.autoBackup),
+		},
 		database: {
 			read: (input) => readDatabase(input, deps.database),
 			write: (input) => writeDatabase(input, deps.database),

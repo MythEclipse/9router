@@ -212,6 +212,8 @@ export interface Dependencies {
 	 * so it gets its own ports rather than reaching into the settings ones.
 	 */
 	readonly database: import("./settings/manage-database.ts").DatabaseDeps
+	/** The scheduled backup: its stored config, its status, and its live scheduler. */
+	readonly autoBackup: import("./settings/manage-auto-backup.ts").AutoBackupDeps
 	/** The before-image store and the effects a settings write owes the process. */
 	readonly settingsWriteBack: Pick<
 		import("./settings/manage-settings.ts").SettingsDependencies,
