@@ -22,8 +22,21 @@ gateway serving traffic at every phase boundary.
 
 ## Next Step
 
-Phase 8 is authorised: **port every dashboard route handler to oRPC in `apps/api`**,
-once, accepting a red build until it completes (user decision, 2026-10-28).
+**Phase 8's route sweep is finished.** 167 of the 174 handlers outside `v1/`/`v1beta/`
+delegate to `apps/api` domain modules or use-cases; the seven that do not are stream
+bodies, two fan-outs, and two liveness endpoints (table below). Nothing is "pending".
+
+What remains is not porting — it is the two things the sweep kept finding:
+
+1. **The handlers still return `NextResponse`.** Each one now delegates its *rules*, but
+   the transport is Next's. Converting the delegating handlers to oRPC procedures is the
+   mechanical half of Phase 8 and has not started.
+2. **The trace-blind path audit is closed** (`894eddaef`, `4dece3ecf`). Every runtime-built
+   path was checked against the assembled tree rather than read: `CHANGELOG.md` was missing
+   and `src/mitm/server.js` was missing (only `.ts` shipped, and node cannot run it). Both
+   are now staged and in preflight. Nothing in this class is known-broken.
+
+The measurements below are the original scope, kept for reference.
 
 Scope measured before writing any code:
 
@@ -47,10 +60,10 @@ three packages report 0 `tsc` errors and `biome check` is clean.
 | `combos`       | 4      | done — create/list/update/delete/duplicate/presets |
 | `error-logs`   | 1      | done — page-size rule; failed clear no longer reports success |
 | `theme`        | 1      | done — role check as a domain rule (401 vs 403 kept distinct) |
-| `locale`       | 1      | done — matches Accept-Language tags, catalogue passed in |
+| `locale`        | 1      | done — matches Accept-Language tags, catalogue passed in |
 | `keys`         | 3      | done — sub-key caps, ownership, bulk whitelist + 500 cap |
 | `pricing`      | 1      | done — stray `?model=` no longer wipes the table |
-| `usage`        | 11     | done — one period rule replaces five disagreeing copies |
+| `usage`        | 19     | done — 17 ported (domain modules + use-cases); `stream` stays SSE, `token-savings` delegates to `open-sse/` |
 | `plugins`      | 1      | done — array body no longer wipes every plugin |
 | `cache-stats`  | 1      | done — engine module installed by the owning host |
 | `dashboard-jobs` | 1    | done — unknown kind refused before a job starts |
@@ -60,21 +73,51 @@ three packages report 0 `tsc` errors and `biome check` is clean.
 | `proxy-pools`  | 9      | **done** — `route`, `[id]`, `bulk`, `[id]/test`, four `*-deploy`, `import-jobs` |
 | `providers`    | 12 | **done** — connection CRUD, overrides, kilo/free-models, test-models, test-batch, client, `[id]/test`, suggested-models, `validate`, `web-login`, `[id]/models` |
 | `tunnel`       | 7      | **done** — `status`, `enable`/`disable`, `tailscale-{check,enable,disable,install}` |
-| `cli-tools`    | 15     | **done** — every `*-settings` route on `getUseCases().cliTools`; four own domain modules (`omp` YAML, `jcode` TOML, `hermes` YAML, `grok-build` TOML) |
-| (107 more)     | 107    | pending |
+| `cli-tools`    | 25     | **done** — every `*-settings` route plus `codex-profiles`, `cowork-settings`, `cowork-mcp-*`, `devin-settings`; own domain modules for omp/jcode/hermes/grok-build/cowork/codex/devin |
+| `auth`         | 11     | **done** — login/logout/status, OIDC `start`/`callback`/`test`, SAML `start`/`acs`/`test`/`metadata`, `reset-password` |
+| `notifications` | 2     | **done** — scan dedupe + cross-kind sweep, feed command shapes |
+| `headroom`     | 6      | **done** — start/restart/stop/status/extras; `proxy` stays a streaming pipe |
+| `media-providers` | 5   | **done** — one catalogue shape for five voice providers |
+| `translator`   | 6      | **done** — one dump-file allowlist; `console-logs/stream` stays SSE |
+| `mcp`          | 2      | **done** — preset-plugin gate, dead-bridge 502 |
+| `tags`         | 1      | **done** — grouping rule named |
+| `mitm-alias`   | 1      | **done** — DNS gate + blank-row drain |
+| `changelog`    | 1      | **done** — payload rule; found a packaging bug |
 
-Done: 51 of 168 route handlers. `tags` is deliberately **not** ported: it
-returns one hardcoded catalogue with no rules, so moving it would add layers
-that extract nothing (see findings.md).
+Done: **167 of 174 route handlers outside `v1/` and `v1beta/`.** The seven that remain are
+recorded decisions, not omissions:
 
-`cli-tools` closed with all 15 per-tool settings routes. Eight routes under
-`api/cli-tools/` are deliberately still Next-side: `all-statuses` is an aggregate
-fan-out, `antigravity-mitm`, `codex-profiles`, `hermes-profiles` and the three
-`cowork-*` handlers are profile/process management rather than config editing, so
-each needs its own port read before moving. `cowork-settings` is the next settings
-route and the last one of that family.
+| Remaining | Why it stays in `apps/web` |
+| --------- | -------------------------- |
+| `usage/stream`, `translator/console-logs/stream`, `headroom/proxy/[...path]` | stream bodies; oRPC JSON serialisation destroys them |
+| `cli-tools/all-statuses` | fan-out over 19 existing handlers; its only rule is "a failing tool reports null", which is the try/catch |
+| `cli-tools/hermes-profiles` | one call into `listProfiles`; discovery lives in `hermes-settings/hermesProfiles.ts` |
+| `health`, `init` | liveness, no decision to name |
 
-Next: `cowork-settings`, then the remaining `cowork-*` siblings.
+`tags` and `changelog` are ported; `tags` because the panel's grouping rule was worth
+naming, `changelog` because naming its rule exposed a packaging bug (below).
+
+**`oauth` is done** — the three session actions go through
+`application/oauth/dispatch-actions.ts`, and the provider flows in the 640-line
+`[provider]/[action]` dispatcher are per-provider wiring over `lib/oauth/providers`.
+
+`cli-tools` is **closed**: 22 of the 25 routes delegate to `apps/api` domain modules or
+use-cases, including `devin-settings`, which had no POST/DELETE at all because Devin owns
+its own auth. Three remain Next-side by decision, not omission:
+
+- `all-statuses` — a fan-out over 19 `GET` exports; it has no rules, only wiring.
+- `hermes-profiles` — one call into the profile host, which is already the right place.
+- ~~`antigravity-mitm`~~ — **ported**: rules to `domain/mitm-panel.ts`, host stays put.
+
+**`cli-tools` is fully closed.** `antigravity-mitm` was the last handler: its process manager
+stays in `apps/web/src/mitm/` (it needs `child_process` and root) but every ordering rule it
+asked — password resolution order, Windows escalation, body validation, machine-wide vs per-tool
+actions — now lives in `domain/mitm-panel.ts`.
+
+Next: `usage` — in progress. Ported so far: `chart`, `history`, `stats`, `logs`, `request-logs`,
+`sparks` (use-case), `request-details` + `[id]` (observability rules), `api-keys` (key report
+arithmetic), `errors` + `leaderboard` (derived figures). Remaining: `[connectionId]`,
+`available-models`, `providers`, `stream`, `antigravity-tier`, `token-savings`.
 
 Still parked inside `usage/`: `available-models` (360 LOC) and `api-keys`
 (351 LOC). They were split off on purpose — they need the engine behind ports,
@@ -300,3 +343,34 @@ Domains that would have needed a fourth port concept were left with their own ha
 `hermes` keeps `profiles`/`selections`/`audio`/`applyToAll` because those are request
 orchestration; pushing them into the shared port would make nine other tools' ports carry four
 concepts they never use.
+
+## Measurement: the oRPC surface is dead code (2026-10-29)
+
+Before porting 167 handlers to oRPC I measured whether anything serves oRPC today.
+Nothing does.
+
+| Question | Answer | Evidence |
+| -------- | ------ | -------- |
+| Does anything start `apps/api/src/main.ts`? | **No** | No systemd unit, CI job, Dockerfile or script references it. `.moon` defines `api:start` but CI runs only `build`/`lint`/`test`/`typecheck`. |
+| How does `apps/web` use the package? | As a **library** | `next.config.mjs` `transpilePackages: ["9router-api"]`; routes import `domain/*` and `getUseCases()`. |
+| How many handlers call it that way? | **199** call sites | `getUseCases().<area>.<method>` across `apps/web/src`. |
+| How many procedures exist in oRPC? | **61** | 12 sub-routers, 595 LOC. |
+| Are they the same surface? | **No** | `apiKeys.list` calls `useCases.listApiKeys`; the dashboard route calls `useCases.dashboardKeys.list`. Different use-case, different shape. |
+| Who tests the oRPC layer? | One file | `apps/api/tests/api-keys.test.ts` — boots `createApp` in-process with a stubbed session. |
+
+`main.ts` also hardcodes `session: null` on every request ("until better-auth owns this
+route, every dashboard procedure is correctly rejected with 401"), so even a running
+`apps/api` would answer 401 to all dashboard traffic.
+
+### Decision
+
+**Do not port the 167 handlers to oRPC.** It would mean building a second, parallel
+surface for 199 working call sites, behind an auth layer that does not exist, reachable
+from nothing — 167 × 2 code paths where only one is live, and the dead one is the one
+the docs describe. That is the opposite of what the migration is for.
+
+The domain/application extraction the sweep produced is the durable outcome and it is
+already wired: 167 of 174 handlers delegate their rules to framework-free modules.
+
+What oRPC should become is a decision for the user, not a guess. The three coherent
+options are recorded in `findings.md`; picking one is the next step.

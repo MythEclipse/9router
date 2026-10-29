@@ -106,3 +106,35 @@ rolled regex — and rewrites only the specifier's byte range, so every other by
 - Kana skill: `/home/code/.hermes/skills/software-development/kana-typescript-stack`
 - Repo docs: `CLAUDE.md`, `docs/ARCHITECTURE.md`, `open-sse/AGENTS.md`
 - Test baseline: `tests/__baseline__/known-fails.txt` + `compare-fails.mjs`
+
+## The oRPC surface has no caller (measured 2026-10-29)
+
+`apps/api` is two things welded together, and only one of them ships:
+
+1. **A library** — `domain/`, `application/`, `infrastructure/`. `apps/web` imports it
+   through `transpilePackages` and calls `getUseCases()` 199 times.
+2. **A server** — `presentation/http/app.ts` + `presentation/orpc/` (61 procedures,
+   595 LOC) served by `main.ts` on port 20127.
+
+Nothing starts (2). No unit file, no CI job, no Dockerfile, no `package.json` script that
+anything invokes. The one process that serves users is `apps/web/custom-server.js`.
+
+Two facts make (2) unsafe to grow:
+
+- `main.ts` passes `session: null` for every request. Its own comment says every dashboard
+  procedure is therefore correctly rejected with 401. There is no auth wiring.
+- Its procedures are not the same surface as the routes: `apiKeys.list` wraps
+  `useCases.listApiKeys` (raw keys, `keyHash` stripped), while `GET /api/keys` wraps
+  `useCases.dashboardKeys.list` (creator visibility, secrets replaced by names). Two
+  different answers to "list the keys", and only the route's is reachable.
+
+### Options, if oRPC is to be kept
+
+| Option | Work | Risk |
+| ------ | ---- | ---- |
+| **Library only** (drop `presentation/orpc/` and `main.ts`) | Delete 595 LOC + 1 test; keep `domain`/`application`. `packages/db` and the use-cases stay the contract. | Loses the OpenAPI docs surface `app.ts` generates. Nothing consumes it today. |
+| **Make oRPC the server** | Build real session resolution (better-auth), mount it as the dashboard's origin, move 199 call sites to an oRPC client, keep routes only for streams. | ~2 surfaces during migration; auth is the hard part, not the procedures. |
+| **Keep both, document the split** | Declare `apps/api` a library and `presentation/` an unshipped prototype; stop treating the 61 procedures as progress. | The dead surface keeps attracting code that nobody can reach or test. |
+
+The measurement above is the input to that decision; it is not a recommendation to skip
+the work. Option 1 is the smallest honest cleanup, option 2 is the original goal.

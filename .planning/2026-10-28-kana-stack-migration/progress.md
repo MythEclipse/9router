@@ -1522,3 +1522,450 @@ route it covers.
 
 Verification: 628 files / 7214 tests passing (13 files / 74 skipped), both packages `tsc` clean,
 `biome check` clean on all nine touched files, `bun run build` exit 0.
+
+## devin-settings: the dashboard now agrees with the executor
+
+`devin-settings` was the last `*-settings` route not on a domain module, and it turned out to be
+the one that matters most for a different reason: it duplicated the executor's binary lookup, and
+the two had **already drifted**. The executor probes `~/.local/share/devin/bin` (the official
+installer's destination); the screen did not. A Devin installed there reported "not installed" in
+the dashboard while the gateway spawned it fine, and neither file mentioned the other.
+
+The list now lives in `domain/devin-binary.ts`. `open-sse/` cannot import from `apps/api` — it is a
+standalone engine — so the executor keeps a copy, but the copy names the domain file, and
+`tests/unit/devin-binary.test.ts` **reads the executor's source** and asserts each location is
+still present. A comment saying "keep in step" decays; a test that parses the other file does not.
+
+`devin-settings` also has no POST and no DELETE, and that is correct: Devin owns its auth
+(`devin auth login`), so there is nothing for this screen to write and no `ToolConfigPort` to give
+it. Forcing it into the shared port would have invented a write path with no file behind it.
+
+Lesson worth carrying: when a route duplicates a list that another package also holds, the
+duplication is the finding. Extract the list, then assert parity against the copy that cannot
+import it — reading the other file in a test is legitimate when the module graph forbids sharing.
+
+Final state for `cli-tools`: 22 of 25 routes on domain modules or use-cases, 3 left by decision
+(`all-statuses` fan-out, `hermes-profiles` host call, `antigravity-mitm` process manager).
+Verification: 629 files / 7223 tests passing (13 files / 74 skipped), both packages `tsc` clean,
+`biome check` clean, `bun run build` exit 0.
+
+## antigravity-mitm: the ordering, not the process
+
+`antigravity-mitm` closes `cli-tools`. It could not go where the other routes went: it spawns a
+privileged proxy, installs a root CA and rewrites the hosts file, so `apps/web/src/mitm/manager.ts`
+stays exactly where it is. But almost everything the route *decided* was not a host concern:
+
+**Password order.** The route resolved `request → session cache → encrypted store`. That order is
+load-bearing and was undocumented. Preferring the cache over the request means a password the
+operator just corrected is rejected forever; reading the encrypted store before the cache hits disk
+on every click for no gain. `resolveMitmPassword` now states it once and the test names both
+failure modes.
+
+**Windows cannot escalate mid-request.** This was a real defect, not tidying. `mitmHasPrivilege`
+returned true as soon as a password was present, on every platform — but on Windows there is no
+sudo, so a typed password bought nothing and the operator got a 403 *after* being prompted. Now
+privilege refuses any password on Windows and `mitmNeedsPasswordPrompt` never asks there; the
+message says to restart elevated, which is the only thing that works.
+
+**403 for a malformed body.** `PATCH` checked the body and the privilege, and the body check could
+be reached second. A caller with no privilege sending `{action: "enable"}` with no `tool` was told
+their body was fine. Validation now precedes privilege, so 400 means 400 whoever is asking.
+
+**`trust-cert` is machine-wide.** It arrives through the same `PATCH` as the per-tool DNS toggles,
+so `isPerToolDnsAction` exists to keep them apart — otherwise a hosts entry appears for a tool
+literally named `trust-cert`.
+
+One TypeScript finding worth keeping: `apps/web` compiles with `strict: false`, and under that
+setting a discriminated union does **not** narrow through `if (!answer.ok)`. Every `.error` access
+on the failure branch became a type error. Rather than sprinkle casts, the domain exports
+`isMitmFailure` as a type predicate — it reads as intent and works under either tsconfig.
+
+Final state: `cli-tools` 25/25 — 22 on domain modules, 3 documented as correctly host-side.
+Verification: 630 files / 7248 tests passing (74 skipped), both packages `tsc` clean,
+`biome check` clean, `bun run build` exit 0, pre-commit hooks passed.
+
+## usage batch (1/3): observability, key report, derived figures
+
+Three commits, and the pattern was the same each time: the handler was doing two jobs — querying
+and deciding — and only the deciding part needed to leave.
+
+**`7d5e9838b` — observability + key report.** `/api/usage/request-details` let `?page=abc` reach
+the store as a `NaN` offset, which renders as "no requests" instead of an error. `/api/usage/api-keys`
+had three separate guesses about its own numbers: which token count is true (the quota column, or
+the pruned log), when a quota window rolls over (it reported idle keys as due in the past), and
+whether orphaned usage belongs in a filtered view (it does not — unseen keys are not "deleted", and
+labelling them so invites deleting them).
+
+**`851f604a2` — one verdict on success.** `errors` and `leaderboard` disagreed about a status
+stored as `"OK"`: case-insensitive string compare in one, case-sensitive SQL `IN (...)` in the
+other. Same row, same page, two different answers. One `isSuccessStatus` and `LOWER(status)` in
+the query fixed it.
+
+A process note worth keeping: I wrote a clamp for `pageSize` above 100 for symmetry with
+`?limit=`, and the existing contract test — which asserted 400 — caught it. The two clamps have
+different callers: `?limit=` is a free-form scrape, `pageSize` comes from the table's own pager,
+so an impossible value there is a bug in the pager and must not be silently moved. I had the
+abstraction half right and the test knew better.
+
+`isPeriodRefused` is now the third such predicate (`isMitmFailure`, `isPageFailure`). The reason
+keeps recurring: `apps/web` compiles with `strict: false`, so discriminated unions do not narrow
+through `if (!x.ok)`. Better one named predicate than a cast per call site — but if `strict` is
+ever turned on for `apps/web`, these can all go back to plain `if`s.
+
+Verification: 633 files / 7312 tests, both packages `tsc` clean, `biome check` clean, build exit 0.
+
+Next: `usage/[connectionId]` (243 lines, credential refresh + quota fetch), then `available-models`,
+`providers`, `stream`, `antigravity-tier`.
+
+## usage batch (2/3): antigravity tier, connection quota
+
+**`69ce8f8b6` — Antigravity tier.** Transport (token read, two upstream probes, five-minute
+cache) stayed; the verdict moved to `domain/antigravity-tier.ts`. The extraction caught a defect
+in my own first draft: rewriting the model-id patterns while lifting them made them *narrower*
+than the original, so `claude-opus-5-5` and `sonnet5.5` stopped matching. Silent in the worst way
+— the models stop being marked, reappear in the picker looking available, and 404 only when
+selected. Patterns are now the original set widened, and the test names all eight spellings.
+
+Also made explicit: the catalogue outranks the tier id (tier ids are undocumented and have changed
+before), and an *empty* catalogue is "no answer" rather than "nothing available" — reporting a
+probing failure as a free-tier verdict is a wrong answer confidently given.
+
+**`9abb48a33` — connection eligibility and token updates.** 243 lines of five nested conditions
+became three named rules: two `authType` spellings, custom-quota eligibility coming through the
+node rather than the connection, and an expired-auth message that arrives as a 200. `authExpiryVerdict`
+retries only with a refresh token in hand and tells an API-key connection to reconnect instead of
+letting it spin.
+
+Two merge rules carry consequences and are now stated where they live: `expiresIn` beats
+`expiresAt`, and `providerSpecificData` merges — replacing it drops GitHub's non-token fields and
+logs the account out. `quotaProxyOptions` pins `strictProxy: false` so a dead proxy cannot report
+a healthy account as broken.
+
+Verification: 635 files / 7371 tests, both packages `tsc` clean, `biome check` clean, build exit 0.
+
+Remaining in `usage`: `providers`, `stream`, `token-savings`, `stats`, `logs`, `request-logs`,
+plus `[connectionId]/claude-reset` and `codex-reset-credits` (which already have their own tests).
+
+**`available-models`: catalog health rules moved to `domain/available-models.ts`.** 360 lines of
+handler code held six nested closures — `isDisabled`, `pluginMarkResolver`, `activeLocks`,
+`providerKeys`/`providerStatus`/`modelLockStatus`, `memberStatus`, `lookupContext`/`comboContext`.
+The handler now assembles rows; the health rules are named domain functions.
+`lib/usage/availableModels.ts` keeps `filterModelsByAllowedModels` and `collapseModelsByAdmittedId`
+because `availableModelsSelfCheck.mjs` imports that file directly — moving it would break a script
+that runs outside bun.
+
+Writing the tests found **a bug that was already in the route**: `modelLock_*` column suffixes are
+snake_cased model ids (`gpt-4o` → `modelLock_gpt_4o`), but the lock check compared the raw id. A
+model genuinely cooling down therefore reported `limited` instead of `cooldown` — a wrong answer
+that looks like a healthy connection. `lockKey` now folds `.`, `-`, `:` to `_` before comparing,
+and the test covers `claude-3.5-sonnet`, `claude-3-5-sonnet`, and a sibling that must stay
+`limited`.
+
+Two answers in the old code were right and are now written down where they live: a provider with
+*no* connection row reports `ready` (credential-free providers serve without one — reporting them
+unavailable hides every free model), and an unrecognised status normalises to `ready` rather than
+hiding the model. `comboStatus` also gained an explicit `isCombo` probe instead of testing the
+members array for truthiness, which could not tell "a combo with no members" from "not a combo".
+
+Verification: 51 new tests, `tsc` clean on both packages, build exit 0.
+
+**`providers`: label priority named.** `providerLabel` states the order the old map callback implied —
+node, then catalog, then the id — and treats a blank name from any source as absent. A node saved
+with an empty name is not a name, and falling back beats a blank row. `providerOptions` collapses
+duplicates and trims padded ids. The row keeps the label under both `name`/`nodeName` and the logo
+under both `logo`/`nodeLogo` because the Usage filter and the request-details filter each read a
+different one of the pair. 12 tests; `4cdda0dc0`.
+
+**`codex-reset-credits`: five verdicts named.** `consumeOutcome` maps a failed consume to a 4xx
+passthrough or a 502 (was 500 for both — this service could not get an answer, it did not break).
+`isAuthExpired` now reads `{error: {code: "401"}}`, the shape the upstream most often uses and the
+one a message-only check missed. `codexEligibility` separates 404 (no such connection) from 400
+(not Codex, or no OAuth/access-token credential) and returns `isOAuth`, so an access-token
+connection is no longer refreshed first. `canRetryAfterExpiry` states the retry rule once: one
+retry, OAuth only, refresh token required. `codexProxyOptions` pins `strictProxy: false`.
+
+The route's own test file (`codex-reset-credits.test.ts`, mocked upstream) passes unchanged; the
+24 new tests in `codex-reset-credits-rules.test.ts` cover the verdicts. `2dc280342`.
+
+**What is actually left in `usage`.** An audit of all 19 route files shows the batch is finished
+apart from two exemptions the plan already records:
+
+| Route | Why it stays |
+| --- | --- |
+| `stream` | SSE — oRPC JSON serialisation destroys a stream |
+| `token-savings` | the handler is 21 lines and delegates to `open-sse/rtk/tokenSaverStats` |
+
+`stats`, `logs` and `request-logs` were already delegating to `application/usage/report-usage.ts`
+before this batch, so "remaining" in earlier notes was wrong. Nothing in `usage` is left to port.
+
+Verification: 638 files / 7458 tests passing, tsc clean on packages/db, apps/api and apps/web,
+biome clean, build exit 0.
+
+**`notifications`: the dedupe and dismissal rules.** `e1cdaefd7`. The feed is idempotent in both
+directions and both directions were loops inside handlers. The rule that could not be read from
+the code: `staleQuotaKeys` is driven by the **key list**, not by the notices found. That is the
+recovery mechanism — a key back under budget produces no `quotaPressure` at all, so a sweep over
+notices would never see it and the stale warning would stand forever. The old nested loop happened
+to be right; nothing said so, and the obvious "simplification" breaks it.
+
+The sweep also runs across the full cross product of kinds and levels, which retires a notice when
+a key switches budget kind. `notificationCommand` separates three shapes that all mean "a notice
+goes away": `read` with no id (mark-all; treating it as a no-op leaves the badge stuck), `clear`
+with an id (dismissed row), `clear` with kind + dedupeKey (a condition the scan found to be over,
+possibly a row never seen). Getting those backwards silences a live condition instead of retiring a
+dead one. 33 tests.
+
+**`headroom`: one copy of the lifecycle rules.** `7dbe05393`. `start` and `restart` were
+byte-identical apart from which process function they called, including a duplicated
+`parsePortFromUrl`. Two decisions are load-bearing: only a loopback URL may be started here (a
+local process for a remote URL is a proxy the dashboard reports healthy while every request
+bypasses it), and NOT_INSTALLED is 400 because a 500 tells the operator to retry something that
+cannot work until they install Headroom. Error-code sets are per-operation and visibly different —
+uninstall does not own NOT_INSTALLED, since there is nothing to remove.
+
+`headroomPortFromUrl` returns null for a URL with no explicit port rather than 80/443: Headroom's
+own reads go through that value. `headroomStopStatus` keeps 409 for nothing-to-stop. Nothing was
+copied into the domain — `isLoopbackHeadroomUrl` and `DEFAULT_HEADROOM_URL` stay in
+`lib/headroom/detect`, which already owns them. 20 tests.
+
+**`media-providers`: the voice picker's grouping, written five times.** `df79f4bf3`. Five TTS voice
+routes answer `{ languages, byLang }` and each wrote its own bucket loop, its own
+`Intl.DisplayNames`-with-fallback, and its own name rule.
+
+The rule that was missing, not just unnamed: **a voice belongs to every language its provider
+verified, not only its primary one.** ElevenLabs states the primary in `labels.language` and the
+rest in `verified_languages`; only the primary was read, so a voice speaking English and Spanish
+could not be reached from the Spanish list — a working voice the picker hid.
+
+Two bugs surfaced only because the rules got names:
+
+1. `Intl.DisplayNames` **recognises `Custom` as a language tag** and answers `custom`, lowercase.
+   The MiniMax bucket would have rendered as `custom`. It is not a language, so the sentinel keeps
+   its spelling.
+2. A voice with no id produced a bucket keyed `undefined`. `voiceId` returns `""` and MiniMax skips
+   it — there is no id to select.
+
+Also named: `?lang=` with an unknown code returns nothing, never everything (a typo must not look
+like a successful filter); a voice whose provider lists no language lands under `en` rather than
+being dropped from every filter; duplicates are dropped *inside* a bucket but the same voice
+legitimately appears in two. 24 tests.
+
+**`translator`: the file allowlist gets one copy.** `f0d1b54`. `load` and `save` each carried their
+own eight-entry list of permitted dump files. Two copies of a security boundary is one copy that
+eventually diverges — and the divergence is silent: a file added to one side saves and then cannot
+be reopened. The comparison is an exact match, because the `../` traversal happens later in
+`path.join`, after any pattern test has passed.
+
+`send` answered 500 when the connection dropped. That tells the operator the dashboard broke, when
+in fact nothing was learned about the provider — 502. Provider statuses still pass through, since a
+429 must stay a 429 or rate limiting reads as a dashboard fault. `translatorTarget` made explicit
+that step 3 cannot infer the provider (the model id in an already-translated body may belong to
+any provider) and `translatorRefreshUsable` named the retry gate that was correct but unreadable:
+a partial refresh would resend the same rejected token. 19 tests.
+
+**`auth`: the rules that make dashboard login safe.** `9e4b8b7`. The login handler was 280 lines with
+four security decisions encoded as control flow, each with a failure mode that does not look like a
+failure from outside:
+
+- **An exhausted quota still signs in.** `validateApiKey` answers `QUOTA_EXCEEDED`; the tempting
+  reading is "reject the credential". But the usage page is where the bar sits at 100%, so refusing
+  the session hides the state the operator needs to see. `apiKeyAdmitsSession` states that this is
+  a pass — and that an *unrecognised* verdict is not.
+- **A fresh install's published default earns no remote session.** `123456` is in every README;
+  issuing a JWT for it lets anyone authenticate and then `PATCH /api/settings` to disable
+  authentication. `mustChangeDefaultPassword` enumerates the four reasons a login is not that case.
+- **SSO only refuses passwords when it is actually configured.** `authMode: "saml"` with no entry
+  point is half-finished, and refusing there locks the operator out of their own dashboard.
+- **A wrong API key burns the same attempt counter as a wrong password**, or the key path is a free
+  guessing oracle while the password path is throttled.
+
+Two bugs found while naming:
+
+1. `isTunnelRequest` called `new URL(settings.tunnelUrl)` unguarded — one malformed settings value
+   threw and took down the login route, so the gate became the outage.
+2. OIDC and SAML `catch` blocks put `error.message` into `?error=`, which lands in the address bar
+   and browser history. Our own failures now get a fixed slug; a *provider's* error is still
+   forwarded, because that is the operator's only diagnosis.
+
+`dashboard-session.ts` names the six cookies that logout, both starters and both callbacks must
+agree on, and states that a handshake missing its nonce or verifier is not degraded — it cannot be
+verified at all, so it is refused before any code is exchanged. `saml-start-prerender.test.ts` was
+asserting a literal cookie spelling; it now asserts the behaviour it exists to protect. 46 tests.
+
+**`mcp`: the plugin allowlist and the dead-bridge status get names.** `6d4f68ddb`. The `[plugin]`
+segment is caller-supplied and indexes a registry that forks a child process, so the preset list is
+the entire defence against an arbitrary spawn — yet it lived inside the bridge library while the
+routes only asked "does this exist?", one call away from looking like a lookup. `resolvePlugin` is
+now the single verdict, 404 rather than 400 because the segment names a resource.
+
+Also named: the `sessionId` on POST decides nothing (the child's stdin is shared, replies broadcast,
+so missing/stale/foreign ids are equivalent — writing that down stops a future reviewer from
+"fixing" it into a client-breaking check that prevents nothing), and a forwarded message answers 202
+while a dead bridge answers 502 rather than 500, because the child exited between subscribe and POST
+and the client should resubscribe rather than resend. 12 tests.
+
+**Session total — resources after `usage`, all landed:** `notifications` (2 routes), `tags` (1,
+static catalogue + CORS, no rules to name), `headroom` (5), `media-providers` (5), `translator` (6),
+`auth` (11), `mcp` (2). Eight new domain modules, 965 lines, 117 new tests.
+
+Four real bugs surfaced, every one invisible before the rules had names:
+
+1. ElevenLabs voices reachable only from their primary language, hiding multilingual voices.
+2. `Intl.DisplayNames` relabelling `Custom` as lowercase `custom`.
+3. `isTunnelRequest` throwing on a malformed `tunnelUrl`, turning a login *gate* into a login outage.
+4. OIDC/SAML `catch` blocks putting `error.message` into the `?error=` redirect, which lands in
+   browser history.
+
+One test was made honest: `saml-start-prerender.test.ts` asserted a literal cookie spelling and now
+asserts the behaviour it exists to protect.
+
+**`auth` SSO probes: an endpoint that could not lie about what it found.** `e9c4b0d`. The two "test
+this configuration" endpoints exist so the operator finds out their IdP settings are wrong *before*
+saving them and locking themselves out. Naming their rules turned up three bugs:
+
+1. **A blanked field resurrected the saved value.** Both routes did `body.x || settings.x`, so
+   `{samlCert: ""}` — the form saying "I cleared this" — fell through to the stored certificate. An
+   absent key and an empty string mean opposite things; only `Object.hasOwn` tells them apart.
+2. **The entry point accepted `javascript:`.** The old check was `new URL(entryPoint)` in a
+   try/catch, and that parses fine — the value is handed to a redirect.
+3. **`saml/metadata` emitted an unescaped error body.** The failure response is XML because the
+   operator pastes it into an IdP; one `&` from a certificate path broke the document and made a
+   configuration error look like a broken URL.
+
+The access gate (`requireLogin === false` opens it, otherwise a session) was copied verbatim into
+both routes. `probeAccess` takes the session verdict as an argument, keeping the module free of
+cookies. The OIDC verdict distinguishes "discovery worked, secret did not" from "discovery broke",
+because those are two different fixes; it answers 200 with `ok: false` in the body. 31 tests.
+
+**Plan corrected.** The `(107 more) pending` row was stale — measured by delegation, 156 of 168
+handlers are ported. The 16 that remain are recorded decisions in `task_plan.md`: stream bodies
+(oRPC destroys them), fan-outs with no rules, static/liveness endpoints, and one route that is a
+single call into an existing normaliser.
+
+Verification: 647 files / 7636 tests passing (74 skipped), tsc clean on `packages/db`, `apps/api`
+and `apps/web`, biome clean, build exit 0.
+
+**`settings`, `mitm-alias`, `oauth/kiro` — the last three routes with rules.** `894eddaef`, `61df595a3`.
+
+`proxy-test`'s whole verdict was inline: pass the probe's status through (a 407 from the proxy is a
+diagnosis; a 500 sends the operator to the wrong machine), fall back to 500 only when the probe
+reported no status, and read `AbortError` as a timeout rather than a crash. `proxyProbeAnswer` owns
+it now.
+
+`kiro/import-cli-proxy` guessed its envelope (`cliProxyAuth ?? auth ?? json ?? body`) inline. Kept,
+with the reason recorded: rejecting unknown shapes there would pre-empt the normaliser, which is the
+component that knows which fields are mandatory and can name one. The summary echoes id/provider/
+email only — an import response is the last place a refresh token should reappear.
+
+**`changelog` was serving the wrong changelog, silently.** `readLocalChangelog` reads
+`process.cwd()/CHANGELOG.md`. I ran `readFileSync` from the assembled tree at
+`apps/web/.next/standalone/apps/web`: `LOCAL FAIL ENOENT` — the directory holds `custom-server.js`,
+`server.js`, `src/`, `open-sse/`, `migrations/` and no changelog. The route's `catch` turned that
+into a fallback, so the standalone dashboard showed upstream's release notes and dropped this
+build's own, with no error anywhere. Fixed in the publisher, not the reader:
+`assemble-standalone.sh` copies the file and lists it in preflight, beside `dashboardGuard.js`,
+which is missing for the same reason — Next's trace cannot prove a runtime-built path is needed.
+`changelogPayload` now keeps the two panes independent and turns a whitespace body into `null`
+rather than an empty pane under a heading.
+
+**`mitm-alias` promised what the proxy could not deliver.** An alias only fires for a tool whose DNS
+routes through the local MITM proxy. With DNS off, `PUT` stored the mapping, answered
+`{success:true}`, and the alias never fired. The 403 existed but as an unnamed `if`, so nothing
+recorded why. `aliasWriteRefusal` owns both verdicts (400 before DNS is consulted, 403 naming the
+toggle), and `sanitizeAliasMappings` drains the editor's always-present blank row — storing `""`
+would create an alias that rewrites the model to nothing. The alias *key* stays verbatim: it must
+match exactly what the tool sends.
+
+**Sweep closed.** 167 of 174 handlers outside `v1/`/`v1beta/` delegate to `apps/api`. The seven left
+are three stream bodies, two fan-outs, and two liveness endpoints — decisions in `task_plan.md`, not
+a backlog. `Next Step` now points at what the sweep deferred: the delegating handlers still return
+`NextResponse`, so the oRPC transport half of Phase 8 has not started.
+
+Verification: 40 new tests across the two commits, 651 files / 7676 tests passing (74 skipped), tsc
+clean on `packages/db`, `apps/api`, `apps/web`, biome clean, build exit 0.
+
+**Audit of the trace-blind path class: MITM could never start from a build.** `4dece3ecf`. The
+CHANGELOG bug generalised, so I enumerated every runtime-built path and checked each one against the
+assembled tree instead of reading code:
+
+| Path | Standalone | Verdict |
+| ---- | ---------- | ------- |
+| `scripts/auth-guard-hooks.mjs` | present | ok |
+| `src/dashboardGuard.ts` | present | ok |
+| `migrations/` | present | ok |
+| `open-sse/lib/deepseek-pow-worker.mjs` | present | ok |
+| `logs/` | absent | fine — `mkdirSync(recursive)` on first write |
+| `CHANGELOG.md` | absent | fixed in `894eddaef` |
+| `src/mitm/server.js` | **absent** (`server.ts` only) | fixed here |
+
+`resolveBundledServerPath` tested `existsSync` on `server.js` at three locations and fell through to
+a path that did not exist; `bootstrapMitm` probed `join(appSrc, "mitm", "server")` with no extension.
+Both answered `false` on the real tree — I ran them there: `existsSync(server)` false,
+`existsSync(server + ".ts")` true.
+
+Resolving `.ts` alone would not have been enough. The child is
+`spawn(process.execPath, [effectiveServerPath])`, and node cannot execute TypeScript, so the fix
+ships JavaScript: esbuild bundles `src/mitm/server.ts` in both the `postbuild` step and
+`assemble-standalone.sh`, matching what `cli/scripts/buildMitm.js` already does for the CLI.
+
+**The first attempt was wrong and the verification said so.** Transpiling only the entry produced a
+file whose first import failed: `Cannot find module .../antigravityIdeVersion.js` — six siblings exist
+only as `.ts`. Bundled instead: zero relative specifiers, only `node:*`, `node --check` passes, and
+the resolver finds it from inside the tree.
+
+The `standalone-assets` fixtures called the staging function without `await`; making it `async` broke
+two of them for real, which is the test working. Both await now, plus two new cases pinning the
+bundle rule.
+
+Verification: 652 files / 7682 tests passing (74 skipped), tsc clean on all three packages, biome
+clean, build exit 0 with the bundle staged.
+
+## oRPC server made real (apps/api/src/main.ts)
+
+`main.ts` passed `session: null` to every request, so all 61 procedures would have
+answered 401. Three separate defects sat between "the process starts" and "the
+server serves", and each one was silent:
+
+| Defect | Symptom | Fix |
+| ------ | ------- | --- |
+| no session resolution | every dashboard call 401 | `resolveSession` verifies the `auth_token` JWT per request |
+| `process.cwd()` as the key directory | a **second** `jwt-secret` minted in `apps/api/`, every valid cookie rejected | `getDataDir()`, the rule the database already uses |
+| migrations resolved from cwd | `Migration journal not found` → every call 500 | `MIGRATIONS_DIR`, set by `main.ts` before the graph is built |
+
+**The catalogues were the trap.** I first wrote `registry-host.ts`,
+`catalogue-host.ts` and two `unavailable-*` stubs, because `useCases` needs
+`registryHost`, `catalogueHost`, `relayDeploy` and `proxyImportJobs` and those live
+in `apps/web`. That was wrong: `apps/web/src/lib/useCases.ts` supplies **all** of
+them already. Rebuilding the list in `apps/api` meant either importing the same
+modules anyway or substituting refusals for working ports — a server answering 200
+with an empty catalogue. Measured instead of guessed: `getUseCases()` loads under
+Bun and builds **64 use-cases** with the real ports. The four stubs were deleted.
+
+One thing genuinely does not resolve outside Next: `server-only`. It is a marker
+Next supplies during its own build, absent from disk, so the import died with
+`Cannot find package 'server-only'` — an error about resolution, not about the
+problem. Installed for real (`server-only@0.0.1`, MIT) and run with
+`--conditions=react-server`, its documented server branch.
+
+### Verified by request, not by port
+
+```
+POST /api/apiKeys/list   no cookie   -> 401 UNAUTHORIZED
+POST /api/apiKeys/list   valid JWT   -> 200 []
+POST /api/usage/stats    valid JWT   -> 200 {"totalRequests":27,...}
+POST /api/settings/loginGate         -> 200 {"requireLogin":true,...}
+POST /api/combos/list                -> 200 {"combos":[{"id":"cb1",...}]}
+```
+
+An early "401 means auth works" reading was wrong — a 401 is also what a broken key
+returns. Only a 200 carrying real rows proves the key is shared and the database is
+reachable. `tests/unit/api-session-key.test.ts` (7 cases) pins the key-directory
+rule so it cannot regress.
+
+`apps/api/tsconfig.json` gained the alias map `apps/web` uses (`@/*`, `open-sse/*`,
+`@9router/*`) plus `types: ["node","bun"]`. The `bun` types exposed one real
+collision: `bun-types` declares `fetch.preconnect`, so assigning the gateway's
+wrapper to `globalThis.fetch` failed. One cast, as Bun's own docs prescribe.
+
+Verification: 653 files / 7698 tests passing (74 skipped), tsc clean on api and web,
+server answers 200 with rows.
