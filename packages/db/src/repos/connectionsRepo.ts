@@ -83,16 +83,25 @@ interface ProviderConnectionRow extends DbRow {
 	updatedAt: string
 }
 
+/**
+ * A column that may be absent reads as null.
+ *
+ * The row type marks these optional and the record wants `T | null`; a missing
+ * column and a null one are the same fact here, so they are reconciled in one
+ * place rather than at each of the eight reads below.
+ */
+const nullish = <T>(value: T | null | undefined): T | null => value ?? null
+
 function rowToConn(row: ProviderConnectionRow): ProviderConnectionRecord {
 	const extra = parseJson<Record<string, unknown>>(row.data, {})
 	return {
 		...extra,
 		id: row.id,
 		provider: row.provider,
-		authType: row.authType,
-		name: row.name,
-		email: row.email,
-		priority: row.priority,
+		authType: nullish(row.authType),
+		name: nullish(row.name),
+		email: nullish(row.email),
+		priority: nullish(row.priority),
 		isActive: row.isActive === 1 || row.isActive === true,
 		createdAt: row.createdAt,
 		updatedAt: row.updatedAt,
@@ -160,7 +169,7 @@ function deriveConnectionName(
 			null
 		)
 	}
-	return fallbackName
+	return nullish(fallbackName)
 }
 
 export async function getProviderConnections(
@@ -228,7 +237,9 @@ export async function createProviderConnection(
 ): Promise<ProviderConnectionRecord | null> {
 	const db = await getAdapter()
 	const now = new Date().toISOString()
-	let result
+	// Annotated because the transaction body assigns it inside a callback: without
+	// this the compiler only sees the `undefined` initialiser at the return.
+	let result: ProviderConnectionRecord | null = null
 
 	db.transaction(() => {
 		// apikey connections are deduped by name and need only the current max
@@ -244,8 +255,10 @@ export async function createProviderConnection(
 						"apikey",
 						data.name,
 					])
-					.map(rowToConn)
-			: db.all(`SELECT * FROM providerConnections WHERE provider = ?`, [data.provider]).map(rowToConn)
+					.map((row) => rowToConn(row as ProviderConnectionRow))
+			: db
+					.all(`SELECT * FROM providerConnections WHERE provider = ?`, [data.provider])
+					.map((row) => rowToConn(row as ProviderConnectionRow))
 		const poolSize = isApikey
 			? (db.get<{ n: number }>(`SELECT COUNT(*) AS n FROM providerConnections WHERE provider = ?`, [
 					data.provider,

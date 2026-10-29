@@ -5,7 +5,7 @@ const SCOPE = "disabledModels"
 
 /** The stored model-id list for one provider; a missing/absent row reads as empty. */
 function readModelIds(raw: string | undefined): string[] {
-	return parseJson<string[]>(raw, null) || []
+	return parseJson<string[]>(raw, []) || []
 }
 
 export async function getDisabledModels(): Promise<Record<string, unknown[]>> {

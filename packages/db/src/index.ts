@@ -453,8 +453,13 @@ export async function exportDb(options: ExportScope = null): Promise<DbExportPay
 			out.modelAliases[r.key] = parseJson(r.value)
 		for (const r of db.all<{ key: string; value: string }>(
 			`SELECT key, value FROM kv WHERE scope = 'customModels'`,
-		))
-			out.customModels.push(parseJson<CustomModelBackup>(r.value))
+		)) {
+			// An unreadable row used to be pushed as null, which then travelled into
+			// the restored backup as a row with no fields. Skipping it keeps the list
+			// homogeneous.
+			const row = parseJson<CustomModelBackup>(r.value)
+			if (row) out.customModels.push(row)
+		}
 		for (const r of db.all<{ key: string; value: string }>(
 			`SELECT key, value FROM kv WHERE scope = 'mitmAlias'`,
 		))

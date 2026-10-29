@@ -851,7 +851,9 @@ export async function saveRequestUsage(
 				}
 				import("./apiKeysRepo.ts")
 					.then(({ recordApiKeyUsageInWindow }) => {
-						recordApiKeyUsageInWindow(entry.apiKey, totalTokens)
+						// The sink ignores an empty key; a request recorded without one has
+						// nothing to attribute the window to.
+						recordApiKeyUsageInWindow(entry.apiKey ?? "", totalTokens)
 					})
 					.catch(() => {})
 			}
@@ -1203,7 +1205,7 @@ function accumulateHistoryRow(
 				provider: providerName,
 				apiKeyMasked,
 				keyName: apiKeyMap[rawApiKey]?.name || rawApiKey.slice(0, 8) + "...",
-				apiKeyKey: apiKeyMasked,
+				apiKeyKey: apiKeyMasked ?? undefined,
 				lastUsed: rawTimestamp,
 			}),
 			add,
@@ -1263,11 +1265,17 @@ export async function getUsageStats(
 		// Without these the report groups every row under an unknown connection.
 		console.error("[usage] failed to load connections for the report:", e)
 	}
-	const connectionMap: ConnectionMap = buildConnectionMap(allConnections)
+	// The builder reads `id`, `name` and `email`; passing the records whole makes
+	// the structural check fail on their index signatures.
+	const connectionMap: ConnectionMap = buildConnectionMap(
+		allConnections.map((c) => ({ id: c.id, name: c.name ?? undefined, email: c.email ?? undefined })),
+	)
 
 	let providerNodeNameMap: ProviderNodeNameMap = {}
 	try {
-		providerNodeNameMap = buildProviderNodeNameMap(await getProviderNodes())
+		providerNodeNameMap = buildProviderNodeNameMap(
+			(await getProviderNodes()).map((n) => ({ id: n.id, name: n.name ?? undefined })),
+		)
 	} catch (e) {
 		// Node names then fall back to the connection name.
 		console.error("[usage] failed to load provider nodes for the report:", e)
@@ -1540,7 +1548,7 @@ export async function getUsageStats(
 			const histConnectionId = e.connectionId ? String(e.connectionId) : null
 			if (!modelAllowed(histModel)) continue
 			const modelKey = histProvider ? `${histModel} (${histProvider})` : histModel
-			if (stats.byModel[modelKey] && new Date(ts) > new Date(stats.byModel[modelKey].lastUsed))
+			if (stats.byModel[modelKey] && new Date(ts) > new Date(stats.byModel[modelKey].lastUsed ?? 0))
 				stats.byModel[modelKey].lastUsed = ts
 
 			if (histConnectionId) {
@@ -1562,7 +1570,7 @@ export async function getUsageStats(
 			const endpointKey = `${endpoint}|${histModel}|${histProvider || "unknown"}`
 			if (
 				stats.byEndpoint[endpointKey] &&
-				new Date(ts) > new Date(stats.byEndpoint[endpointKey].lastUsed)
+				new Date(ts) > new Date(stats.byEndpoint[endpointKey].lastUsed ?? 0)
 			)
 				stats.byEndpoint[endpointKey].lastUsed = ts
 		}
