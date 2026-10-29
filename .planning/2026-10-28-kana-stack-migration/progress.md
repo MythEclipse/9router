@@ -825,3 +825,59 @@ biome clean, `bun run build` exit 0, gateway baseline unchanged
 (`/login` 200, `/api/health` 200, `/v1/models` 401, `/api/providers/*` 401).
 
 Remaining: 151 of 168 handlers (7 of 12 in `providers`).
+
+## providers batch, part 3 (batch test, client listing, suggestions)
+
+Four handlers, three of which were doing two jobs at once.
+
+**Batch testing** (`domain/batch-selection.ts`, `domain/batch-result.ts`). The
+grouping was an `if/else` chain in which each branch asked a different question —
+`oauth`/`free`/`apikey` look at the auth group, `compatible` at the provider id's
+prefix, `all` at nothing — so it read as five filters but was one rule. Two real
+defects fell out of writing it down:
+
+- A stored `authType` of `cookie` (also `aws`, `subscription`) fell through every
+  branch. No mode selects a group called `cookie`, so a cookie connection **never
+  got batch-tested at all** and the panel reported a green run that had skipped
+  it. `asAuthGroup` now folds everything that is not `oauth` into `apikey`, which
+  matches the probe's own split ("OAuth or not").
+- The seven-field result row was written twice, once per branch, and had already
+  drifted: the `catch` reported `diagnosis` as a structured object where the
+  success path passed a string through. One response carried two shapes of one
+  field. `toBatchResult` is now the only place a row is built, and a throw becomes
+  an outcome rather than a second code path.
+
+**The client listing** (`domain/client-listing.ts`). The disclosure whitelist ran
+*after* the filter chain, so the sorting comparator read `priority` off a
+connection that still held its `apiKey`. Sanitising now happens first and
+everything downstream reads the sanitised value. While extracting the paging rule:
+
+- `paginate` clamped only the ceiling, so `page: 0` produced `offset: -pageSize`,
+  and a negative `slice` index means "from the end" — the **last** page was served
+  as if it were the first. Caught by a new test, fixed in the domain.
+
+**Suggested models** (`domain/model-catalogue.ts`). The stale-or-built-in choice
+was spelled out three times, once per failure path, which is exactly how a fourth
+path would have shipped without the `stale` flag. It is one function now, and the
+filter table and its fallback table live in one object so a type cannot exist in
+one and 400 in the other.
+
+**`[id]/test`** (`application/providers/check-connection.ts`). Two lines, but the
+404-vs-failed-probe line is the panel's behaviour: it offers "test again" on a
+failure and refreshes the list on a 404.
+
+Two test-infrastructure notes worth keeping:
+
+- `open-sse/utils/proxyFetch` replaces `globalThis.fetch` as an **import side
+  effect**. A spy installed in `beforeEach` is discarded the moment the route
+  pulls that module in; it has to be installed after the imports have run.
+- Route tests that used to import a handler directly now need the use-case graph,
+  and `createDb` refuses a second SQLite handle under Vitest. The pattern is to
+  assemble the one use-case over its mocked store and the *real* host functions,
+  so the assertion still runs the real decision, then `vi.doMock("@/lib/useCases")`.
+
+Verification: 587 files / 6391 tests passing, both packages typecheck clean, biome
+clean, `bun run build` exit 0, gateway baseline unchanged (`/login` 200,
+`/api/health` 200, `/v1/models` 401, `/api/providers/*` 401).
+
+Remaining: 147 of 168 handlers (3 of 12 in `providers`).
