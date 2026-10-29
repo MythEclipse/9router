@@ -59,14 +59,14 @@ import {
 	readIdeStatus,
 	stopProviderProxy,
 } from "./oauth/dispatch-actions.ts"
-import type { GitlabPatAnswer, GitlabPatDeps } from "./oauth/gitlab-pat.ts"
+import type { GitlabPatAnswer } from "./oauth/gitlab-pat.ts"
 import { importGitlabPat } from "./oauth/gitlab-pat.ts"
-import type { IflowCookieAnswer, IflowCookieDeps } from "./oauth/iflow-cookie.ts"
+import type { IflowCookieAnswer } from "./oauth/iflow-cookie.ts"
 import { importIflowCookie } from "./oauth/iflow-cookie.ts"
 import { type ApiKeyAnswer, importKiroApiKey, importMimoApiKey } from "./oauth/import-api-key.ts"
 import { importCredentialBatch } from "./oauth/import-credentials.ts"
 import { importAnswerOf, importToken, needsRemoteVerification } from "./oauth/import-token.ts"
-import type { KiroAuthorizeDeps, KiroExchangeDeps, KiroSocialAnswer } from "./oauth/kiro-social.ts"
+import type { KiroSocialAnswer } from "./oauth/kiro-social.ts"
 import { authorizeKiroSocial, exchangeKiroSocial } from "./oauth/kiro-social.ts"
 import type { MimoLoginStartDeps, MimoLoginStarted } from "./oauth/mimo-login.ts"
 import { startMimoLogin } from "./oauth/mimo-login.ts"
