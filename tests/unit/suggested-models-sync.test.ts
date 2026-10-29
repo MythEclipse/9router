@@ -77,6 +77,16 @@ function request() {
 async function route() {
 	const graph = await useCases()
 	vi.doMock("@/lib/useCases", () => ({ getUseCases: () => graph }))
+	// The route reaches the procedure through the in-process client, which carries the
+	// dashboard session. There is no Next request scope here, so the session is part of
+	// the wiring this test fakes rather than something the route can look up.
+	vi.doMock("@9router/auth/dashboardPermissions", () => ({
+		getSessionContext: async () => ({
+			session: { userId: "owner-1", email: "owner@local", role: "admin" },
+			permissions: [],
+			apiKeyFilter: null,
+		}),
+	}))
 	return import("../../apps/web/src/app/api/providers/suggested-models/route.js")
 }
 

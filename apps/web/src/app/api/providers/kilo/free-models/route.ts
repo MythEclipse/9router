@@ -1,12 +1,25 @@
+/**
+ * Kilo's free tier, cached for an hour and served stale rather than empty when the
+ * upstream refuses.
+ *
+ * Delegates: the cache lifetime, and the decision that a refusal is served stale rather
+ * than failed, live in `free-models.ts`. The four outcomes stay distinguishable here
+ * because "cached", "stale" and "failed" are three different things to the panel and the
+ * use-case is the only place that knows which one happened.
+ */
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { NextResponse } from "next/server"
+import { createApiClient, sessionClaimsOf } from "@/lib/orpcClient"
 import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-// GET /api/providers/kilo/free-models - Kilo's free tier, cached for an hour and
-// served stale rather than empty when the upstream refuses.
 export async function GET() {
-	const result = await getUseCases().freeModels.list()
+	const client = createApiClient({
+		session: sessionClaimsOf(await getSessionContext()),
+		useCases: getUseCases(),
+	})
+	const result = await client.providers.freeModels()
 
 	switch (result.kind) {
 		case "fresh":

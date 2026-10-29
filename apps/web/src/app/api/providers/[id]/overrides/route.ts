@@ -1,28 +1,44 @@
+/**
+ * This provider's header override, plus the headers its transport already sends so the
+ * panel can pre-fill them.
+ *
+ * Delegates: what an override means, and which headers the transport sends anyway, are
+ * rules and live in `9router-api`.
+ */
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { NextResponse } from "next/server"
+import { createApiClient, sessionClaimsOf } from "@/lib/orpcClient"
 import { failed } from "@/lib/routeErrors"
 import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-// GET /api/providers/[id]/overrides - this provider's header override, plus the
-// headers its transport already sends so the panel can pre-fill them.
-export async function GET(_request, { params }) {
+type IdParams = { params: Promise<{ id: string }> }
+
+async function client() {
+	return createApiClient({
+		session: sessionClaimsOf(await getSessionContext()),
+		useCases: getUseCases(),
+	})
+}
+
+export async function GET(_request: Request, { params }: IdParams) {
 	try {
 		const { id } = await params
-		return NextResponse.json(await getUseCases().overrides.get(id))
+		return NextResponse.json(await (await client()).providers.overrides.get({ id }))
 	} catch (error) {
-		console.log("Error getting provider overrides:", error)
-		return NextResponse.json({ error: "Failed to get overrides" }, { status: 500 })
+		return failed(error, "Failed to get overrides", "Error getting provider overrides")
 	}
 }
 
-// PUT /api/providers/[id]/overrides - body: { headers: {name: value} }.
-// An empty payload clears the override.
-export async function PUT(request, { params }) {
+/** Body: `{ headers: {name: value} }`. An empty payload clears the override. */
+export async function PUT(request: Request, { params }: IdParams) {
 	try {
 		const { id } = await params
 		const body = await request.json().catch(() => ({}))
-		return NextResponse.json(await getUseCases().overrides.set(id, body))
+		return NextResponse.json(
+			await (await client()).providers.overrides.set({ id, headers: body?.headers }),
+		)
 	} catch (error) {
 		return failed(error, "Failed to save overrides", "Error saving provider overrides")
 	}

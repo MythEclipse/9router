@@ -102,6 +102,16 @@ beforeAll(async () => {
 	vi.doMock("@/lib/useCases", () => ({
 		getUseCases: () => ({ listProviderModels: useCase }),
 	}))
+	// The route reaches its procedure through the in-process client, which carries the
+	// dashboard session. There is no Next request scope in a unit test, so the session is
+	// part of the wiring faked here rather than something the route can look up.
+	vi.doMock("@9router/auth/dashboardPermissions", () => ({
+		getSessionContext: async () => ({
+			session: { userId: "owner-1", email: "owner@local", role: "admin" },
+			permissions: [],
+			apiKeyFilter: null,
+		}),
+	}))
 	;({ GET } = await import("@/app/api/providers/[id]/models/route.js"))
 })
 
