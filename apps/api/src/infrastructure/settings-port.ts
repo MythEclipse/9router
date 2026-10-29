@@ -8,13 +8,21 @@ import { getSettings, updateSettings } from "@9router/db/repos/settingsRepo"
 import type { LoginGateSettings, SettingsPort } from "../application/settings/login-gate.ts"
 
 /**
- * The port also carries `customPlugins`, which the login gate never reads. It is
- * declared here rather than in a second adapter because both are fields of the
- * same settings row: two ports over one row would let a concurrent write
- * discard the other's field.
+ * The port also carries the fields the login gate never reads — `customPlugins`
+ * and the pxpipe flags. They are declared here rather than in a second adapter
+ * because they are all fields of the same settings row: two ports over one row
+ * would let a concurrent write discard the other's field.
  */
 export interface SettingsRowPort extends SettingsPort {
-	read(): Promise<LoginGateSettings & { readonly customPlugins?: unknown }>
+	read(): Promise<
+		LoginGateSettings & {
+			readonly customPlugins?: unknown
+			readonly pxpipeEnabled?: boolean
+			readonly pxpipeAutoInstall?: boolean
+			readonly pxpipeMinChars?: number
+			readonly pxpipeTimeoutMs?: number
+		}
+	>
 }
 
 export function createSettingsPort(): SettingsRowPort {
@@ -28,6 +36,10 @@ export function createSettingsPort(): SettingsRowPort {
 				tailscaleUrl: settings.tailscaleUrl,
 				theme: settings.theme,
 				customPlugins: settings.customPlugins,
+				pxpipeEnabled: settings.pxpipeEnabled,
+				pxpipeAutoInstall: settings.pxpipeAutoInstall,
+				pxpipeMinChars: settings.pxpipeMinChars,
+				pxpipeTimeoutMs: settings.pxpipeTimeoutMs,
 			}
 		},
 

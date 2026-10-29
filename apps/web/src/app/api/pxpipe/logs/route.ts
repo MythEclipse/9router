@@ -1,18 +1,14 @@
 import { NextResponse } from "next/server"
-import { readPxpipeEvents } from "@/lib/pxpipe/events"
-import { getInstallLogTail } from "@/lib/pxpipe/install"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-export async function GET(request) {
+export async function GET(request: Request) {
 	try {
-		const { searchParams } = new URL(request.url)
-		const limit = Math.min(Number(searchParams.get("limit")) || 100, 500)
-		return NextResponse.json({
-			installLog: getInstallLogTail(),
-			events: readPxpipeEvents({ limit }).reverse(),
-		})
+		const limit = new URL(request.url).searchParams.get("limit")
+		return NextResponse.json(await getUseCases().pxpipe.logs(limit))
 	} catch (error) {
-		return NextResponse.json({ error: error.message }, { status: 500 })
+		console.error("[API] Failed to read pxpipe logs:", error)
+		return NextResponse.json({ error: "Failed to read pxpipe logs" }, { status: 500 })
 	}
 }

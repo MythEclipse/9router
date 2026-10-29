@@ -1,14 +1,19 @@
 import { NextResponse } from "next/server"
-import { runHealthCheck } from "@/lib/pxpipe/service"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
 export async function POST() {
 	try {
-		const result = await runHealthCheck()
-		return NextResponse.json(result)
+		return NextResponse.json(await getUseCases().pxpipe.checkHealth())
 	} catch (error) {
-		return NextResponse.json({ healthy: false, checks: [], error: error.message }, { status: 500 })
+		// A failed probe is a result the card renders, not a 500: the panel needs
+		// to show "unhealthy" rather than an error page.
+		console.error("[API] pxpipe health check failed:", error)
+		return NextResponse.json(
+			{ healthy: false, checks: [], error: "pxpipe health check failed" },
+			{ status: 500 },
+		)
 	}
 }
 

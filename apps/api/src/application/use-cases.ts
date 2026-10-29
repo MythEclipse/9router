@@ -27,6 +27,7 @@ import type { Dependencies } from "./dependencies.ts"
 import { makeClearErrorLogs, makeListErrorLogs } from "./error-logs/read-error-logs.ts"
 import { makeReadPlugins, makeWritePlugins } from "./plugins/manage-plugins.ts"
 import { makeGetPricing, makeResetPricing, makeUpdatePricing } from "./pricing/manage-pricing.ts"
+import { makePxpipe } from "./pxpipe/manage-pxpipe.ts"
 import { assertSupportedLocale } from "./settings/locale.ts"
 import { readLoginGate } from "./settings/login-gate.ts"
 import { makeGetTheme, makeSetTheme } from "./settings/theme.ts"
@@ -78,6 +79,8 @@ export interface UseCases {
 	/** Two identities, one shutdown sequence. */
 	readonly shutdownFromDashboard: ReturnType<typeof makeShutdownFromDashboard>
 	readonly shutdownFromHook: ReturnType<typeof makeShutdownFromHook>
+	/** The pxpipe controls: status, start, stop, reload, install, health, stats, logs. */
+	readonly pxpipe: ReturnType<typeof makePxpipe>
 }
 
 /** The combo use-cases share one dependency slice, so it is built once. */
@@ -140,5 +143,6 @@ export function buildUseCases(deps: Dependencies): UseCases {
 		dashboardJobs: makeDashboardJobs(deps.dashboardJobRegistry, deps.dashboardJobEnv),
 		shutdownFromDashboard: makeShutdownFromDashboard(deps.shutdown),
 		shutdownFromHook: makeShutdownFromHook(deps.shutdown, deps.shutdownEnv),
+		pxpipe: makePxpipe(deps.pxpipe, deps.pxpipeSettings),
 	}
 }

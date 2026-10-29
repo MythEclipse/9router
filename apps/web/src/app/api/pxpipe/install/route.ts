@@ -1,20 +1,31 @@
 import { NextResponse } from "next/server"
-import { installPxpipe } from "@/lib/pxpipe/install"
-import { unloadPxpipe } from "@/lib/pxpipe/loader"
-import { runHealthCheck } from "@/lib/pxpipe/service"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 // npm install can legitimately take minutes on a cold cache.
 export const maxDuration = 300
 
-// Install (or repair - same operation, reinstalls @latest) then re-run the health check.
+// Install (or repair — same operation, reinstalls @latest) then re-run health.
 export async function POST() {
 	try {
-		const info = await installPxpipe()
-		unloadPxpipe() // drop any previously-loaded version so health loads the fresh one
-		const health = await runHealthCheck()
-		return NextResponse.json({ ...info, health })
+		return NextResponse.json(await getUseCases().pxpipe.install())
 	} catch (error) {
-		return NextResponse.json({ error: error.message, code: error.code || null }, { status: 500 })
+		console.error("[API] Failed to install pxpipe:", error)
+		return NextResponse.json(
+			{
+				error: error instanceof Error ? error.message : "Failed to install pxpipe",
+				code: engineCode(error),
+			},
+			{ status: 500 },
+		)
 	}
+}
+
+/** The engine's own failure code, when it gave one. */
+function engineCode(error: unknown): string {
+	const code =
+		typeof error === "object" && error !== null && "code" in error
+			? (error as { code: unknown }).code
+			: undefined
+	return typeof code === "string" ? code : "INTERNAL"
 }

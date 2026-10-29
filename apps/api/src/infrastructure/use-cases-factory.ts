@@ -38,6 +38,7 @@ import { createComboStrategyRepository } from "./db/repositories/combo-strategy-
 import { createErrorLogRepository } from "./db/repositories/error-log-repository.ts"
 import { createPricingRepository } from "./db/repositories/pricing-repository.ts"
 import { createUsageReportPort } from "./db/repositories/usage-report-repository.ts"
+import { createPxpipePort, createPxpipeSettings } from "./pxpipe-port.ts"
 import {
 	createDashboardJobEnvironment,
 	createDashboardJobRegistry,
@@ -49,6 +50,7 @@ import {
 import { createSettingsPort } from "./settings-port.ts"
 import { createUnavailablePresetPort } from "./unavailable-preset-port.ts"
 
+export { installPxpipeEngine } from "./pxpipe-port.ts"
 export { installSemanticCacheModule } from "./runtime-ports.ts"
 
 export interface UseCaseOptions {
@@ -102,6 +104,10 @@ export function createUseCases(
 	const { db, sqlite } = createDb(dataDir)
 	runMigrations(sqlite, dataDir, { migrationsDir: options.migrationsDir })
 
+	// One port over the settings row, shared by the login gate, the plugin panel
+	// and pxpipe: the same row read three ways would be three chances to disagree.
+	const settingsPort = createSettingsPort()
+
 	const useCases = buildUseCases({
 		apiKeys: createApiKeyRepository(db),
 		dashboardApiKeys: makeApiKeyManagementPort(options.apiKeyStore ?? unavailableApiKeyStore()),
@@ -114,7 +120,7 @@ export function createUseCases(
 		endpointKinds: API_KEY_ENDPOINT_KINDS,
 		activity: createActivityRepository(db, () => randomUUID()),
 		changelog: createChangelogSourceFromDisk(options.webAppDir ?? "apps/web"),
-		settings: createSettingsPort(),
+		settings: settingsPort,
 		combos: createComboRepository(),
 		errorLogs: createErrorLogRepository(),
 		pricing: createPricingRepository(),
@@ -125,7 +131,7 @@ export function createUseCases(
 			gatewayUrl: options.gatewayUrl,
 			onError: options.onRotationError,
 		}),
-		plugins: createSettingsPort(),
+		plugins: settingsPort,
 		pluginCatalogue: { keys: CUSTOM_PLUGIN_KEYS },
 		pluginCache: options.pluginCache ?? noPluginCache(),
 		semanticCache: createSemanticCachePort(),
@@ -141,6 +147,16 @@ export function createUseCases(
 			stopManagedProcesses: async () => options.stopManagedProcesses?.(),
 		}),
 		shutdownEnv: createShutdownEnvironment(),
+		pxpipe: createPxpipePort(),
+		pxpipeSettings: createPxpipeSettings(async () => {
+			const stored = await settingsPort.read()
+			return {
+				enabled: stored.pxpipeEnabled === true,
+				autoInstall: stored.pxpipeAutoInstall === true,
+				minChars: stored.pxpipeMinChars,
+				timeoutMs: stored.pxpipeTimeoutMs,
+			}
+		}),
 		now: () => new Date(),
 		randomId: () => randomUUID(),
 	})

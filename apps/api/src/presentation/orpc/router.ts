@@ -16,6 +16,7 @@ import { combosRouter } from "./routers/combos.ts"
 import { dashboardKeysRouter } from "./routers/dashboard-keys.ts"
 import { errorLogsRouter } from "./routers/error-logs.ts"
 import { pricingRouter } from "./routers/pricing.ts"
+import { pxpipeRouter } from "./routers/pxpipe.ts"
 import { settingsRouter } from "./routers/settings.ts"
 import { systemRouter } from "./routers/system.ts"
 import { cacheStatsRouter, dashboardJobsRouter, pluginsRouter } from "./routers/system-runtime.ts"
@@ -35,6 +36,7 @@ export const appRouter = base.router({
 	plugins: pluginsRouter,
 	cacheStats: cacheStatsRouter,
 	dashboardJobs: dashboardJobsRouter,
+	pxpipe: pxpipeRouter,
 })
 
 export type AppRouter = typeof appRouter

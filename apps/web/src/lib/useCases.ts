@@ -13,6 +13,7 @@ import { closeDb } from "@9router/db/driver"
 import type { UseCases } from "9router-api/application/use-cases"
 import {
 	createUseCases,
+	installPxpipeEngine,
 	installSemanticCacheModule,
 } from "9router-api/infrastructure/use-cases-factory"
 import { getSemanticCacheStats, resetSemanticCacheStats } from "open-sse/rtk/semanticCache"
@@ -20,12 +21,28 @@ import { createApiKeyStore } from "./apiKeyStore"
 import { killAppProcesses } from "./appProcessManager"
 import { createComboPresetPort } from "./comboPresetPort"
 import { clearPluginCache } from "./plugins/customPluginsRuntime"
+import { getPxpipeStats, readPxpipeEvents } from "./pxpipe/events"
+import { getInstallInfo, getInstallLogTail, installPxpipe } from "./pxpipe/install"
+import { loadPxpipe, unloadPxpipe } from "./pxpipe/loader"
+import { getPxpipeStatus, runHealthCheck } from "./pxpipe/service"
 
-// This host is the one that bundles `open-sse`, so it is the one that can answer
-// the cache counters. Without this the port would report zeros forever.
+// This host is the one that bundles `open-sse` and `lib/pxpipe`, so it is the one
+// that can answer those ports. Without this they would report empty results.
 installSemanticCacheModule({
 	getSemanticCacheStats,
 	resetSemanticCacheStats,
+})
+
+installPxpipeEngine({
+	getPxpipeStatus,
+	getInstallInfo,
+	installPxpipe,
+	loadPxpipe,
+	unloadPxpipe,
+	runHealthCheck,
+	getPxpipeStats,
+	readPxpipeEvents,
+	getInstallLogTail,
 })
 
 const CACHE_KEY = Symbol.for("9router.useCases")

@@ -12,6 +12,7 @@ import type { ApiKeyManagementPort } from "./api-keys/manage-api-keys-dashboard.
 import type { SingleKeyAuditPort, SingleKeyPort } from "./api-keys/manage-single-key.ts"
 import type { ChangelogSource } from "./changelog.ts"
 import type { PluginCache, PluginCatalogue, PluginSettingsPort } from "./plugins/manage-plugins.ts"
+import type { PxpipePort, PxpipeSettings } from "./pxpipe/manage-pxpipe.ts"
 import type { SettingsPort } from "./settings/login-gate.ts"
 import type { SemanticCachePort } from "./system/cache-stats.ts"
 import type { DashboardJobEnvironment, DashboardJobRegistry } from "./system/dashboard-jobs.ts"
@@ -174,6 +175,8 @@ export interface Dependencies {
 	readonly dashboardJobEnv: DashboardJobEnvironment
 	readonly shutdown: ShutdownPorts
 	readonly shutdownEnv: ShutdownEnvironment
+	readonly pxpipe: PxpipePort
+	readonly pxpipeSettings: PxpipeSettings
 	readonly now: () => Date
 	/** Injected so tests can pin key material instead of hoping. */
 	readonly randomId: () => string

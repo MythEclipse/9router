@@ -1,21 +1,13 @@
 import { NextResponse } from "next/server"
-import { getSettings } from "@/lib/localDb"
-import { getPxpipeStatus } from "@/lib/pxpipe/service"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
 export async function GET() {
 	try {
-		const settings = await getSettings()
-		const status = getPxpipeStatus()
-		return NextResponse.json({
-			...status,
-			enabled: !!settings.pxpipeEnabled,
-			autoInstall: !!settings.pxpipeAutoInstall,
-			minChars: settings.pxpipeMinChars,
-			timeoutMs: settings.pxpipeTimeoutMs,
-		})
+		return NextResponse.json(await getUseCases().pxpipe.status())
 	} catch (error) {
-		return NextResponse.json({ error: error.message }, { status: 500 })
+		console.error("[API] Failed to read pxpipe status:", error)
+		return NextResponse.json({ error: "Failed to read pxpipe status" }, { status: 500 })
 	}
 }

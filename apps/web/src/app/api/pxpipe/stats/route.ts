@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server"
-import { getPxpipeStats } from "@/lib/pxpipe/events"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-export async function GET(request) {
+export async function GET(request: Request) {
 	try {
-		const { searchParams } = new URL(request.url)
-		const recentLimit = Math.min(Number(searchParams.get("limit")) || 100, 500)
-		return NextResponse.json(getPxpipeStats({ recentLimit }))
+		const limit = new URL(request.url).searchParams.get("limit")
+		return NextResponse.json(await getUseCases().pxpipe.stats(limit))
 	} catch (error) {
-		return NextResponse.json({ error: error.message }, { status: 500 })
+		console.error("[API] Failed to read pxpipe stats:", error)
+		return NextResponse.json({ error: "Failed to read pxpipe stats" }, { status: 500 })
 	}
 }
