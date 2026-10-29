@@ -24,6 +24,15 @@ export interface ToolConfigPort {
 	readonly path: string
 	/** The config as read, or null when there is no file yet. */
 	readonly read: () => Promise<Record<string, unknown> | null>
+	/**
+	 * The config for a read-modify-write, which must *fail* rather than answer null when the
+	 * file exists but cannot be parsed.
+	 *
+	 * The difference is data loss: `read` answering null for a corrupt file means the write
+	 * that follows starts from `{}` and silently drops every setting the operator had. The
+	 * host implements this by rethrowing anything that is not "file not found".
+	 */
+	readonly readForWrite: () => Promise<Record<string, unknown>>
 	readonly write: (text: string) => Promise<void>
 	/** Which spelling of the base URL this tool wants. */
 	readonly baseUrlSuffix: BaseUrlSuffix
@@ -102,7 +111,7 @@ export async function writeToolSettings(
 			return { ok: false, status: 400, body: notInstalled(deps).body }
 		}
 
-		const existing = (await deps.config.read()) ?? {}
+		const existing = await deps.config.readForWrite()
 		const spelled = {
 			...input,
 			baseUrl: normaliseBaseUrl(input.baseUrl, deps.config.baseUrlSuffix),

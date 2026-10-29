@@ -133,6 +133,7 @@ function tool(overrides: Record<string, unknown> = {}) {
 		config: {
 			path: "/home/u/.tool/auth.json",
 			read: vi.fn(async () => config),
+			readForWrite: vi.fn(async () => config ?? {}),
 			write: vi.fn(async (text: string) => {
 				written.push(text)
 				config = JSON.parse(text)
@@ -225,7 +226,7 @@ describe("writeToolSettings", () => {
 
 	it("keeps the tool's other provider entries", async () => {
 		const deps = tool()
-		deps.config.read.mockResolvedValueOnce({ anthropic: { key: "a" } })
+		deps.config.readForWrite.mockResolvedValueOnce({ anthropic: { key: "a" } })
 		await writeToolSettings({ baseUrl: "http://x", apiKey: "k", model: "m" }, deps as never)
 
 		expect(deps.getConfig()).toMatchObject({ anthropic: { key: "a" } })
@@ -247,6 +248,23 @@ describe("writeToolSettings", () => {
 		)
 
 		expect(answer.status).toBe(400)
+		expect(deps.config.write).not.toHaveBeenCalled()
+	})
+
+	it("refuses to overwrite a config it cannot parse, rather than dropping its settings", async () => {
+		// The bug this guards: a `read` that answers null for a corrupt file makes the write
+		// start from {} and silently discard every other setting the operator had.
+		const deps = tool()
+		deps.config.readForWrite.mockRejectedValueOnce(
+			new Error("Existing config could not be read (Unexpected token). Refusing to overwrite it"),
+		)
+		const answer = await writeToolSettings(
+			{ baseUrl: "http://x", apiKey: "k", model: "m" },
+			deps as never,
+		)
+
+		expect(answer).toMatchObject({ ok: false, status: 500 })
+		expect(String(answer.body.error)).toContain("Refusing to overwrite")
 		expect(deps.config.write).not.toHaveBeenCalled()
 	})
 

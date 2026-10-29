@@ -4,6 +4,7 @@ import os from "node:os"
 import path from "node:path"
 import { promisify } from "node:util"
 import type { ToolConfigPort } from "9router-api/application/cli-tools/manage-tool-settings"
+import { readConfigForWrite } from "./cliTools/configWrite"
 
 const execAsync = promisify(exec)
 
@@ -59,6 +60,8 @@ async function isKiloInstalled(): Promise<boolean> {
 export const kiloSettingsConfig: ToolConfigPort = {
 	path: KILO_AUTH_PATH(),
 	read: () => readJson(KILO_AUTH_PATH()),
+	readForWrite: () =>
+		readConfigForWrite(fs, KILO_AUTH_PATH(), (raw) => JSON.parse(raw) as Record<string, unknown>),
 	write: async (text) => {
 		await fs.mkdir(KILO_DATA_DIR(), { recursive: true })
 		await fs.writeFile(KILO_AUTH_PATH(), text)
@@ -140,6 +143,8 @@ async function isClineInstalled(): Promise<boolean> {
 export const clineSettingsConfig: ToolConfigPort = {
 	path: CLINE_STATE_PATH(),
 	read: () => readJson(CLINE_STATE_PATH()),
+	readForWrite: () =>
+		readConfigForWrite(fs, CLINE_STATE_PATH(), (raw) => JSON.parse(raw) as Record<string, unknown>),
 	write: async (text) => {
 		await fs.mkdir(CLINE_DATA_DIR(), { recursive: true })
 		await fs.writeFile(CLINE_STATE_PATH(), text)
@@ -188,3 +193,58 @@ export async function removeClineSettings(): Promise<void> {
 }
 
 export { isClineInstalled }
+
+/**
+ * Smelt's own layout: one flat `config.json` where this screen owns exactly four keys.
+ *
+ * Everything else in the file belongs to the operator, which is why the reset removes those
+ * four keys and deletes the file only when nothing else is left. `_managedBy` is what lets a
+ * later read tell "configured by this screen" from "someone typed a base URL that happens to
+ * be localhost".
+ */
+
+const SMELT_CONFIG_PATH = () => path.join(os.homedir(), ".smelt", "config.json")
+
+const SMELT_KEYS = ["baseUrl", "apiKey", "model", "_managedBy"] as const
+
+async function isSmeltInstalled(): Promise<boolean> {
+	try {
+		const isWindows = os.platform() === "win32"
+		await execAsync(isWindows ? "where smelt" : "which smelt", { windowsHide: true })
+		return true
+	} catch {
+		try {
+			await fs.access(SMELT_CONFIG_PATH())
+			return true
+		} catch {
+			return false
+		}
+	}
+}
+
+export const smeltSettingsConfig: ToolConfigPort = {
+	path: SMELT_CONFIG_PATH(),
+	read: () => readJson(SMELT_CONFIG_PATH()),
+	readForWrite: () =>
+		readConfigForWrite(fs, SMELT_CONFIG_PATH(), (raw) => JSON.parse(raw) as Record<string, unknown>),
+	write: async (text) => {
+		await fs.mkdir(path.dirname(SMELT_CONFIG_PATH()), { recursive: true })
+		await fs.writeFile(SMELT_CONFIG_PATH(), text, "utf-8")
+	},
+	baseUrlSuffix: "with-v1",
+	installKeys: SMELT_KEYS,
+	storedBaseUrl: (config) => {
+		if (config?._managedBy === "9router") return "9router"
+		return typeof config?.baseUrl === "string" ? config.baseUrl : null
+	},
+	apply: (config, input) => ({
+		...config,
+		baseUrl: input.baseUrl,
+		apiKey: input.apiKey,
+		// A model the operator already chose is kept when the form leaves it blank.
+		model: input.model || (config.model as string) || "provider/model-id",
+		_managedBy: "9router",
+	}),
+}
+
+export { isSmeltInstalled }
