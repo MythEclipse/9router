@@ -15,6 +15,7 @@ import type {
 	ConnectionStore,
 	ModelListAdapter,
 	ProviderCatalogue,
+	ProxyPoolRow,
 	ProxyPoolStore,
 	StoredConnection,
 } from "../../../application/providers/ports.ts"
@@ -34,6 +35,24 @@ export interface ConnectionHost {
 	}
 	readonly pools: {
 		exists(id: string): Promise<boolean>
+		list(filter: { isActive?: boolean }): Promise<ProxyPoolRow[]>
+		findById(id: string): Promise<ProxyPoolRow | null>
+		create(input: Record<string, unknown>): Promise<ProxyPoolRow>
+		update(id: string, patch: Record<string, unknown>): Promise<ProxyPoolRow>
+		remove(id: string): Promise<void>
+		removeMany(ids: string[]): Promise<ProxyPoolRow[]>
+		/** Every connection, as its `proxyPoolId` is read: from `providerSpecificData`. */
+		boundConnections(): Promise<
+			readonly { providerSpecificData?: { proxyPoolId?: unknown } | null }[]
+		>
+		supportedScheme(url: string): boolean
+		probe(pool: ProxyPoolRow): Promise<{
+			ok: boolean
+			status?: number | null
+			statusText?: string | null
+			error?: string | null
+			elapsedMs?: number | null
+		}>
 	}
 }
 
@@ -57,6 +76,15 @@ export function createConnectionNodeStore(host: ConnectionHost): ConnectionNodeS
 export function createProxyPoolStore(host: ConnectionHost): ProxyPoolStore {
 	return {
 		exists: (id) => host.pools.exists(id),
+		list: (filter) => host.pools.list(filter ?? {}),
+		findById: (id) => host.pools.findById(id),
+		create: (input) => host.pools.create(input),
+		update: (id, patch) => host.pools.update(id, patch),
+		remove: (id) => host.pools.remove(id),
+		removeMany: (ids) => host.pools.removeMany(ids),
+		boundConnections: () => host.pools.boundConnections(),
+		supportedScheme: (url) => host.pools.supportedScheme(url),
+		probe: (pool) => host.pools.probe(pool),
 	}
 }
 

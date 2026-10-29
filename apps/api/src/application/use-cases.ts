@@ -45,6 +45,15 @@ import { makeSuggestModels } from "./providers/suggest-models.ts"
 import { makeTestConnections } from "./providers/test-connections.ts"
 import { makeValidateCredential } from "./providers/validate-credential.ts"
 import { makeWebLogin } from "./providers/web-login.ts"
+import {
+	bulkDeleteProxyPools,
+	createProxyPool,
+	deleteProxyPool,
+	listProxyPools,
+	readProxyPool,
+	testProxyPool,
+	updateProxyPool,
+} from "./proxy-pools/manage-proxy-pools.ts"
 import { makePxpipe } from "./pxpipe/manage-pxpipe.ts"
 import { assertSupportedLocale } from "./settings/locale.ts"
 import { readLoginGate } from "./settings/login-gate.ts"
@@ -92,6 +101,32 @@ export interface UseCases {
 	readonly clearErrorLogs: ReturnType<typeof makeClearErrorLogs>
 	readonly settings: ReturnType<typeof makeManageSettings>
 	readonly settingsHistory: ReturnType<typeof makeSettingsHistory>
+	/**
+	 * Proxy pools.
+	 *
+	 * `remove` and `bulkRemove` answer a `PoolInUseError` when a connection still points at
+	 * a pool; the boundary maps it to 409 and carries the count.
+	 */
+	readonly proxyPools: {
+		readonly list: (query: URLSearchParams) => Promise<{ proxyPools: unknown[] }>
+		readonly create: (body: Record<string, unknown>) => Promise<{
+			proxyPool: import("./proxy-pools/manage-proxy-pools.ts").StoredPool
+		}>
+		readonly read: (id: string) => Promise<{
+			proxyPool: import("./proxy-pools/manage-proxy-pools.ts").StoredPool
+		}>
+		readonly update: (
+			id: string,
+			body: Record<string, unknown>,
+		) => Promise<{ proxyPool: import("./proxy-pools/manage-proxy-pools.ts").StoredPool }>
+		readonly remove: (id: string) => Promise<{ success: true }>
+		readonly bulkRemove: (body: Record<string, unknown>) => Promise<{
+			deleted: string[]
+			deletedCount: number
+			missing: string[]
+		}>
+		readonly test: (id: string) => Promise<Record<string, unknown>>
+	}
 	/** The scheduled backup, as the settings screen reads and edits it. */
 	readonly autoBackup: {
 		readonly read: () => Promise<import("./settings/manage-auto-backup.ts").BackupView>
@@ -219,6 +254,15 @@ export function buildUseCases(deps: Dependencies): UseCases {
 			...deps.settingsPassword,
 			...deps.settingsWriteBack,
 		}),
+		proxyPools: {
+			list: (query) => listProxyPools(query, deps.proxyPools),
+			create: (body) => createProxyPool(body, deps.proxyPools),
+			read: (id) => readProxyPool(id, deps.proxyPools),
+			update: (id, body) => updateProxyPool(id, body, deps.proxyPools),
+			remove: (id) => deleteProxyPool(id, deps.proxyPools),
+			bulkRemove: (body) => bulkDeleteProxyPools(body, deps.proxyPools),
+			test: (id) => testProxyPool(id, deps.proxyPools),
+		},
 		autoBackup: {
 			read: () => readAutoBackup(deps.autoBackup),
 			write: (body) => writeAutoBackup(body, deps.autoBackup),

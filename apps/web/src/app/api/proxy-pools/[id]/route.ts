@@ -1,145 +1,42 @@
 import { NextResponse } from "next/server"
-import {
-	deleteProxyPool,
-	getProviderConnections,
-	getProxyPoolById,
-	updateProxyPool,
-} from "@/models"
-import type { Connection } from "@/shared/types/domain"
+import { failed } from "@/lib/routeErrors"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-const VALID_PROXY_TYPES = ["http", "vercel", "cloudflare", "deno", "netlify"]
+const idOf = async (context: { params: Promise<{ id: string }> }) => (await context.params).id
 
-/** The subset of a proxy pool a PUT may change; only present keys are written. */
-interface ProxyPoolUpdates {
-	name?: string
-	proxyUrl?: string
-	noProxy?: string
-	isActive?: boolean
-	strictProxy?: boolean
-	type?: string
-	[key: string]: unknown
-}
-
-function normalizeProxyPoolUpdate(
-	body: Record<string, unknown> = {},
-): ProxyPoolUpdates | { error: string } {
-	const updates: ProxyPoolUpdates = {}
-
-	if (Object.hasOwn(body, "name")) {
-		const name = typeof body?.name === "string" ? body.name.trim() : ""
-		if (!name) {
-			return { error: "Name is required" }
-		}
-		updates.name = name
-	}
-
-	if (Object.hasOwn(body, "proxyUrl")) {
-		const proxyUrl = typeof body?.proxyUrl === "string" ? body.proxyUrl.trim() : ""
-		if (!proxyUrl) {
-			return { error: "Proxy URL is required" }
-		}
-		updates.proxyUrl = proxyUrl
-	}
-
-	if (Object.hasOwn(body, "noProxy")) {
-		updates.noProxy = typeof body?.noProxy === "string" ? body.noProxy.trim() : ""
-	}
-
-	if (Object.hasOwn(body, "isActive")) {
-		updates.isActive = body?.isActive === true
-	}
-
-	if (Object.hasOwn(body, "strictProxy")) {
-		updates.strictProxy = body?.strictProxy === true
-	}
-
-	if (Object.hasOwn(body, "type")) {
-		const requestedType = typeof body?.type === "string" ? body.type : ""
-		updates.type = VALID_PROXY_TYPES.includes(requestedType) ? requestedType : "http"
-	}
-
-	return updates
-}
-
-function countBoundConnections(connections: Connection[] = [], proxyPoolId: string) {
-	return connections.filter(
-		(connection) =>
-			(connection?.providerSpecificData as Record<string, unknown> | null | undefined)?.proxyPoolId ===
-			proxyPoolId,
-	).length
-}
-
-// GET /api/proxy-pools/[id] - Get proxy pool
-export async function GET(_request, { params }) {
+/** GET /api/proxy-pools/[id] — read one. */
+export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
 	try {
-		const { id } = await params
-		const proxyPool = await getProxyPoolById(id)
-
-		if (!proxyPool) {
-			return NextResponse.json({ error: "Proxy pool not found" }, { status: 404 })
-		}
-
-		return NextResponse.json({ proxyPool })
+		return NextResponse.json(await getUseCases().proxyPools.read(await idOf(context)))
 	} catch (error) {
 		console.log("Error fetching proxy pool:", error)
-		return NextResponse.json({ error: "Failed to fetch proxy pool" }, { status: 500 })
+		return failed(error, "Failed to fetch proxy pool", "Error fetching proxy pool")
 	}
 }
 
-// PUT /api/proxy-pools/[id] - Update proxy pool
-export async function PUT(request, { params }) {
+/** PUT /api/proxy-pools/[id] — update the fields that were sent. */
+export async function PUT(request: Request, context: { params: Promise<{ id: string }> }) {
 	try {
-		const { id } = await params
-		const existing = await getProxyPoolById(id)
-
-		if (!existing) {
-			return NextResponse.json({ error: "Proxy pool not found" }, { status: 404 })
-		}
-
-		const body = await request.json()
-		const normalized = normalizeProxyPoolUpdate(body)
-
-		if ("error" in normalized) {
-			return NextResponse.json({ error: normalized.error }, { status: 400 })
-		}
-
-		const updated = await updateProxyPool(id, normalized)
-		return NextResponse.json({ proxyPool: updated })
+		const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+		return NextResponse.json(await getUseCases().proxyPools.update(await idOf(context), body))
 	} catch (error) {
 		console.log("Error updating proxy pool:", error)
-		return NextResponse.json({ error: "Failed to update proxy pool" }, { status: 500 })
+		return failed(error, "Failed to update proxy pool", "Error updating proxy pool")
 	}
 }
 
-// DELETE /api/proxy-pools/[id] - Delete proxy pool
-export async function DELETE(_request, { params }) {
+/**
+ * DELETE /api/proxy-pools/[id] — remove one, unless a connection still needs it.
+ *
+ * The 409 carries how many connections are in the way, so the screen can name them.
+ */
+export async function DELETE(_request: Request, context: { params: Promise<{ id: string }> }) {
 	try {
-		const { id } = await params
-		const existing = await getProxyPoolById(id)
-
-		if (!existing) {
-			return NextResponse.json({ error: "Proxy pool not found" }, { status: 404 })
-		}
-
-		const connections = await getProviderConnections()
-		const boundConnectionCount = countBoundConnections(connections, id)
-
-		if (boundConnectionCount > 0) {
-			return NextResponse.json(
-				{
-					error: "Proxy pool is currently in use",
-					boundConnectionCount,
-				},
-				{ status: 409 },
-			)
-		}
-
-		await deleteProxyPool(id)
-		return NextResponse.json({ success: true })
+		return NextResponse.json(await getUseCases().proxyPools.remove(await idOf(context)))
 	} catch (error) {
 		console.log("Error deleting proxy pool:", error)
-		return NextResponse.json({ error: "Failed to delete proxy pool" }, { status: 500 })
+		return failed(error, "Failed to delete proxy pool", "Error deleting proxy pool")
 	}
 }

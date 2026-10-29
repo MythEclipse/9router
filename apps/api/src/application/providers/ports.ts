@@ -81,6 +81,41 @@ export interface ConnectionNodeStore {
 /** Only the fact that a pool exists is needed to accept its id. */
 export interface ProxyPoolStore {
 	exists(id: string): Promise<boolean>
+	/** Every pool, optionally filtered by whether it may carry traffic. */
+	list(filter: { isActive?: boolean }): Promise<ProxyPoolRow[]>
+	findById(id: string): Promise<ProxyPoolRow | null>
+	create(input: Record<string, unknown>): Promise<ProxyPoolRow>
+	update(id: string, patch: Record<string, unknown>): Promise<ProxyPoolRow>
+	remove(id: string): Promise<void>
+	removeMany(ids: string[]): Promise<ProxyPoolRow[]>
+	/** The connections that may be bound to a pool, as their `proxyPoolId` is read. */
+	boundConnections(): Promise<readonly { providerSpecificData?: { proxyPoolId?: unknown } | null }[]>
+	/** Whether the serving runtime can dial this URL at all. */
+	supportedScheme(url: string): boolean
+	/** Test one pool's egress path. */
+	probe(pool: ProxyPoolRow): Promise<{
+		ok: boolean
+		status?: number | null
+		statusText?: string | null
+		error?: string | null
+		elapsedMs?: number | null
+	}>
+}
+
+/**
+ * A proxy pool, as the CRUD use-case reads it.
+ *
+ * Declared here rather than in the use-case because the store that owns the row is also
+ * the thing the provider create-path asks `exists` about: one row type, two readers.
+ */
+export interface ProxyPoolRow {
+	readonly id: string
+	readonly type: string
+	readonly proxyUrl: string
+	readonly name?: string | null
+	readonly noProxy?: string | null
+	readonly isActive?: boolean | null
+	readonly strictProxy?: boolean | null
 }
 
 /**

@@ -52,7 +52,7 @@ registerDashboardJobHandler("health-check", async (job, { report }) => {
 
 			try {
 				const res = await testOne(routeRequest(`/api/proxy-pools/${id}/test`), {
-					params: { id },
+					params: Promise.resolve({ id }),
 				})
 				const data = (await res.json().catch(() => ({}))) as { ok?: boolean }
 				if (res.ok && data.ok) alive += 1

@@ -522,7 +522,18 @@ function unavailableConnectionHost(): ConnectionHost {
 	return {
 		connections: { list: fail, find: fail, create: fail, update: fail, remove: fail },
 		nodes: { find: fail, list: fail },
-		pools: { exists: fail },
+		pools: {
+			exists: fail,
+			list: fail,
+			findById: fail,
+			create: fail,
+			update: fail,
+			remove: fail,
+			removeMany: fail,
+			boundConnections: fail,
+			supportedScheme: () => false,
+			probe: fail,
+		},
 	}
 }
 

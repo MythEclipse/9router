@@ -13,7 +13,8 @@
     "./infrastructure/runtime-ports": "./src/infrastructure/runtime-ports.ts",
     "./application/models/*": "./src/application/models/*.ts",
     "./application/providers/*": "./src/application/providers/*.ts",
-    "./application/settings/*": "./src/application/settings/*.ts"
+    "./application/settings/*": "./src/application/settings/*.ts",
+    "./application/proxy-pools/*": "./src/application/proxy-pools/*.ts"
   },
   "scripts": {
     "dev": "bun --watch src/main.ts",

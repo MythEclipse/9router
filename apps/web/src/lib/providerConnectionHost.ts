@@ -82,6 +82,7 @@ import {
 import { toProviderConnectionResponse, usesAwsCredentialForm } from "./providerConnectionResponse"
 import { modelListAdapter } from "./providerModelsHost"
 import { normalizeProviderId, normalizeProviderSpecificData } from "./providerNormalization"
+import { proxyPoolHost } from "./proxyPoolHost"
 
 /** The three tables the connection use-case reads, as the stores expose them. */
 export const connectionHost: ConnectionHost = {
@@ -96,9 +97,7 @@ export const connectionHost: ConnectionHost = {
 		find: (id) => getProviderNodeById(id),
 		list: () => getProviderNodes(),
 	},
-	pools: {
-		exists: async (id) => !!(await getProxyPoolById(id)),
-	},
+	pools: proxyPoolHost,
 }
 
 /**
