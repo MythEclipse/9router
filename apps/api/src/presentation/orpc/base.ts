@@ -21,24 +21,44 @@ import { toORPCError } from "./error-mapping.ts"
 /**
  * What a procedure may read from the caller's session.
  *
- * `apiKeyFilter` and `allowedModels` are here because a procedure that reports
- * usage must narrow to the caller. Leaving them off this type is what pushed the
- * usage router into a hardcoded `{ apiKeyFilter: null, allowedModels: "*" }` — a
- * constant that widens an API-key session's view from its own usage to every key's.
- * A field missing from the context type is a field every procedure invents a default
- * for, and the safe default is not the convenient one.
+ * A field missing from this type is a field every procedure invents a default for,
+ * and the convenient default is never the safe one. Both routers that carried a
+ * constant instead of a session prove it:
  *
- * They are optional because a password session carries neither: it may see
- * everything, which `usageScopeOf` already expresses as `null` and `"*"`.
+ *  - `usage` hardcoded `{ apiKeyFilter: null, allowedModels: "*" }`, which widens an
+ *    API-key session's view from its own usage to every key's.
+ *  - `dashboard-keys` hardcoded the caller as `{ role: "admin", permissions: null }`,
+ *    which clears the sub-key escalation gate and lets a key session grant itself
+ *    permissions that `domain/sub-key-scope.ts` exists to refuse.
+ *
+ * So the whole identity lives here, not just enough of it to render a page. The
+ * fields are optional because a password session genuinely carries none of them —
+ * a real absence, which the domain rules already read as "unrestricted".
  */
 export interface SessionClaims {
 	readonly userId: string
 	readonly email: string
+	/**
+	 * `apikey` marks a caller authenticated by a key rather than the password. Every
+	 * rule that distinguishes the two branches on this exact string, so a procedure
+	 * that substitutes `"admin"` silences all of them at once.
+	 */
 	readonly role?: string | null
+	/** The caller's own key, present only when `role` is `apikey`. */
+	readonly apiKey?: string | null
+	readonly keyName?: string | null
+	readonly keyId?: string | null
 	/** Set when the caller signed in with an API key; narrows usage to that key. */
 	readonly apiKeyFilter?: unknown
 	/** The models this caller may use; `"*"` or absent means all. */
 	readonly allowedModels?: unknown
+	/** Caps inherited by keys this caller creates. */
+	readonly tokenLimit?: unknown
+	readonly dailyCostLimit?: unknown
+	/** The endpoints this caller may reach; `null` means no restriction. */
+	readonly allowedEndpoints?: unknown
+	/** What the caller itself may do; `null` for a password session. */
+	readonly permissions?: unknown
 }
 
 export interface RequestContext {

@@ -49,11 +49,18 @@ export type ApiClient = ReturnType<typeof createApiClient>
  * and `allowedModels`. Those are exactly the claims that narrow usage to the caller,
  * so a hand-written mapping is how a scoped route silently becomes an unscoped one.
  *
+ * `permissions` is merged in from the *context*, not read off the session: the
+ * dashboard computes the effective set (a password session gets `FULL_PERMISSIONS`,
+ * a key session gets its own normalised list) and puts it beside the session rather
+ * than inside it. Reading `session.permissions` would hand every password session
+ * `undefined` where it currently has full rights.
+ *
  * Returns `null` when there is no `userId`: a session that names nobody is not a
  * session, and passing an object with a blank id would pass the auth gate.
  */
 export function sessionClaimsOf(ctx: unknown): DashboardSession | null {
-	const session = (ctx as { session?: Record<string, unknown> | null } | null)?.session
+	const context = ctx as { session?: Record<string, unknown> | null; permissions?: unknown } | null
+	const session = context?.session
 	if (!session) return null
 	const userId = typeof session.userId === "string" ? session.userId.trim() : ""
 	if (!userId) return null
@@ -61,5 +68,6 @@ export function sessionClaimsOf(ctx: unknown): DashboardSession | null {
 		...session,
 		userId,
 		email: typeof session.email === "string" ? session.email : userId,
+		permissions: ctx === null ? null : (context?.permissions ?? session.permissions ?? null),
 	} as DashboardSession
 }
