@@ -1,9 +1,10 @@
+import type { RegistryCache } from "9router-api/application/cowork-mcp/read-mcp-registry"
 import type { McpProbeHost } from "9router-api/presentation/orpc/base"
 import { isLocalHeaders } from "@/dashboardGuard"
 import { assertPublicUrl, fetchPublic } from "@/shared/utils/ssrfGuard"
 
 /**
- * The MCP probe's network, chosen per request.
+ * The MCP probe's network, chosen per request, plus the registry's process-wide cache.
  *
  * A local caller keeps an unrestricted `fetch`, because its self-hosted MCP server legitimately
  * lives on loopback and the SSRF guard would refuse it — making the screen useless for exactly
@@ -21,4 +22,18 @@ export const mcpProbeHost: McpProbeHost = {
 	fetchForCaller: (headers) => (isLocalHeaders(headers) ? globalThis.fetch : fetchPublic),
 	isLocal: (headers) => isLocalHeaders(headers),
 	assertPublicUrl: (url) => assertPublicUrl(url),
+	registryCache,
+}
+
+/**
+ * The registry cache, one per process.
+ *
+ * `globalThis` rather than a module-level binding for the same reason `tunnelStatusCache` uses
+ * it: a hot reload re-evaluates this module, and a fresh cache would mean every save refetches a
+ * paginated third-party endpoint.
+ */
+export function registryCache(): RegistryCache {
+	const scope = globalThis as { __9routerCoworkMcpRegistryCache?: RegistryCache }
+	scope.__9routerCoworkMcpRegistryCache ??= { ts: 0, data: null }
+	return scope.__9routerCoworkMcpRegistryCache
 }

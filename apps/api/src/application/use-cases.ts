@@ -54,6 +54,8 @@ import {
 } from "./combos/manage-combos.ts"
 import type { McpProbeAnswer, ProbeFetch } from "./cowork-mcp/probe-mcp-tools.ts"
 import { probeCoworkMcpTools } from "./cowork-mcp/probe-mcp-tools.ts"
+import type { RegistryAnswer, RegistryCache } from "./cowork-mcp/read-mcp-registry.ts"
+import { readMcpRegistry } from "./cowork-mcp/read-mcp-registry.ts"
 import type { Dependencies } from "./dependencies.ts"
 import { makeClearErrorLogs, makeListErrorLogs } from "./error-logs/read-error-logs.ts"
 import { makeHeadroom } from "./headroom/manage-headroom.ts"
@@ -381,6 +383,14 @@ export interface UseCases {
 				readonly assertPublicUrl: (url: string) => void
 			},
 		) => Promise<McpProbeAnswer>
+		readonly readRegistry: (
+			options: {
+				readonly cache: RegistryCache
+				readonly fetchServers: typeof fetch
+				readonly now?: () => number
+			},
+			refresh: boolean,
+		) => Promise<RegistryAnswer>
 	}
 	/** Cloudflare tunnels and Tailscale funnels, as the network screen drives them. */
 	readonly tunnel: {
@@ -748,6 +758,7 @@ export function buildUseCases(deps: Dependencies): UseCases {
 		},
 		coworkMcp: {
 			probeTools: (body, options) => probeCoworkMcpTools(body, options),
+			readRegistry: (options, refresh) => readMcpRegistry(options, refresh),
 		},
 		// The probe cache is process-wide and survives a hot reload, exactly like the module
 		// scope it replaced: one cache per process, not one per request.

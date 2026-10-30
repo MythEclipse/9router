@@ -118,6 +118,8 @@ export type CodexProfilesHosts =
  * arrives on the context and reads `context.headers` — never a claim in the body, which a remote
  * caller could set.
  */
+type RegistryCache = import("../../application/cowork-mcp/read-mcp-registry.ts").RegistryCache
+
 export interface McpProbeHost {
 	readonly fetchForCaller: (
 		headers: Headers,
@@ -125,6 +127,10 @@ export interface McpProbeHost {
 	readonly isLocal: (headers: Headers) => boolean
 	/** Throws when the URL is not public. */
 	readonly assertPublicUrl: (url: string) => void
+	/** The registry cache, one per process; a function so a hot reload cannot fork it. */
+	readonly registryCache: () => RegistryCache
+	/** The registry's fetch; absent means the global one. */
+	readonly fetchServers?: typeof fetch
 }
 
 export interface AppContext extends RequestContext {
