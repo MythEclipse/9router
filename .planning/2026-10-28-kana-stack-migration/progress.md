@@ -2832,3 +2832,48 @@ Of the 22 left, most are covered through a sibling: `findChainTo` runs inside `f
 `validateMicrosoftTokenEndpoint` is reached by `kiro-external-idp.test.ts`, `validateEndpointKinds`
 through `key-ownership-and-update.test.ts`. The rest are catalogue and formatting helpers where a test
 would assert the table against itself.
+
+## Sabotage as the coverage measurement, and the defect it found
+
+Coverage tooling could not answer the question. `@vitest/coverage-v8` was installed and run three
+ways, and every time `coverage-final.json` held only files under `tests/` — v8 instruments what is
+under the project root, and this suite runs with `root: tests`. A temporary config with a wider root
+broke `setupFiles` resolution; `mergeConfig` concatenates the array rather than replacing it. Two
+config attempts were abandoned rather than fought, because there is a cheaper measurement.
+
+**Inject a labelled `throw` into every function no test names, run the suite once, read the labels.**
+
+    functions targeted          22 of 495 (none referenced by name in 697 test files)
+    reached through a sibling   12  — findChainTo 18×, decodeJwtPayload 18×, languageBucket 15×,
+                                     memberStatus 12×, callPathKey 9×, isMitmToolAction 6×,
+                                     validateEndpointKinds 3×, isPeriodRefused 3×,
+                                     validateMicrosoftTokenEndpoint 2×, tooLarge 2×,
+                                     hermesRoot 1×, auxRoleRe 1×
+    never executed               9
+
+That split is the answer the plan asked for: a name missing from the test tree is not the same as a
+function no test executes. Twelve were covered all along.
+
+**Of the nine, one was genuinely orphaned and the defect was two-layered.** `timedOutAnswer` in
+`domain/model-catalogue.ts` existed for the ceiling branch, documented as the answer when the request
+has already proved I/O can stall — and nothing called it. `withTimeout` built the answer inline, and
+the inline copy omitted `message`. The route forwards `answer.message` as the client's `error`, so a
+timed-out catalogue reached the panel with no reason attached: indistinguishable from "this provider
+has no models".
+
+The same three lines held a second defect. `Promise.race` does not cancel the loser, so a fetch that
+landed after the ceiling answered still ran its continuation and still reached `refreshSynced` —
+a database write on behalf of a request nobody was waiting on.
+
+The existing test asserted `data` and `source` on the timeout path and stopped there, which is exactly
+why both defects survived it. Four cases added; three mutations caught, including restoring the bug.
+
+The other eight are alive: `isReportingPeriod` and `isMitmToolAction` are called internally by their
+own file's entry points, `isMitmFailure`/`isPeriodRefused`/`removeDelegationBlock`/`profilesRoot`/
+`hermesRoot`/`auxRoleRe` have real callers in application or web. `buildExternalIdpRefreshParams` is
+called from `apps/web/open-sse/services/tokenRefresh/providers.ts` — outside `apps/web/src`, which is
+why the first consumer grep missed it.
+
+    typecheck   0
+    test        8119 passed, 0 failed   (from 8108)
+    commits     7

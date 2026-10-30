@@ -22,31 +22,26 @@ gateway serving traffic at every phase boundary.
 
 ## Next Step
 
-Measuring coverage beat reading code for the third time this session, and turned up a live defect
-rather than only missing tests.
+The coverage question is answered, and it was measurable without coverage tooling.
 
-### `readLimit` wrote a one-token context window
+**The method.** `@vitest/coverage-v8` reported only files under `tests/` because the suite runs with
+`root: tests`, and a wider root broke `setupFiles`; two config attempts were dropped rather than
+fought. Instead: inject a labelled `throw` into every domain function no test names, run the suite
+once, count the labels. 21 of 22 injected, and the result splits cleanly — 12 are reached through a
+sibling even though their names appear nowhere in the test tree, 9 are never executed.
 
-`Number()` alone accepts `true` as 1 and `[5]` as 5, so a settings write carrying
-`contextWindow: true` stored a model whose window is one token. Fixed and committed with eleven
-mutations caught.
+**The defect.** `timedOutAnswer` was the one of those nine with no consumer at all. It was written for
+the ceiling branch in `suggest-models`, and `withTimeout` had inlined its own copy that omitted
+`message` — which the route forwards as the client's `error`, so a stalled catalogue reached the panel
+looking like an empty provider. The same lines also let a late fetch call `refreshSynced` after the
+request had been answered, because `Promise.race` cannot cancel the loser. Both fixed, four cases
+added, three mutations caught.
 
-### `asKeyPermissions` was the untested entrance to the permission chain
+**Where this leaves the sweep.** 22 of 495 domain functions are unnamed in the test tree; 13 of those
+are executed by tests anyway; 9 are executed by no test, of which 8 have real callers whose own tests
+do not reach them. Those eight are the honest remaining gap — `isReportingPeriod`, `isMitmToolAction`,
+`tooLarge`, `hermesRoot`, `auxRoleArE`, `profilesRoot`, `removeDelegationBlock`, `isPeriodRefused` —
+each a one-line predicate or path helper whose failure mode is a wrong branch, not a crash.
 
-29 tests covered every other export of `sub-key-scope.ts`. The one that feeds them — reached from
-`callerFromSession`, read by `mayCreateSubKey` — was unasserted, including its only defence: `=== true`,
-which is what refuses a session carrying `manageApiKeys: "true"`. Eight cases added, five mutations
-caught.
-
-### Where the sweep stands
-
-22 of 495 domain functions are still unreferenced by any of the 697 test files, down from 35. Most are
-covered through a sibling that is tested (`findChainTo` inside `findComboCycle`,
-`validateMicrosoftTokenEndpoint` in `kiro-external-idp.test.ts`, `validateEndpointKinds` in
-`key-ownership-and-update.test.ts`). The remainder are catalogue and formatting helpers —
-`languageBucket`, `timedOutAnswer`, `anthropicCompatibleVerdict` — where a test would compare a table
-to itself.
-
-The next honest step is not more of the same: it is to decide whether the 22 are genuinely
-covered-through-a-sibling by checking that the sibling's assertions reach the behaviour, which is a
-different question from whether the name appears in a test file.
+Next: write those eight directly. Not because coverage matters as a number, but because a one-line
+predicate that no test executes is a branch nothing has ever gone down.
