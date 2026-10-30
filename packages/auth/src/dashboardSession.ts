@@ -75,6 +75,15 @@ export async function getDashboardAuthSession(token) {
 	if (!token) return null
 	try {
 		const { payload } = await jwtVerify(token, SECRET)
+		// Tokens issued before sessions carried an explicit identity are still
+		// signed by this installation. Preserve those active sessions while the
+		// browser refreshes; a forged or unsigned token still fails verification.
+		if (
+			payload.authenticated === true &&
+			(typeof payload.userId !== "string" || !payload.userId.trim())
+		) {
+			return { ...payload, userId: DASHBOARD_USER_ID }
+		}
 		return payload
 	} catch {
 		return null

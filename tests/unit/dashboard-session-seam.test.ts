@@ -18,6 +18,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 
 let temp = ""
 let createDashboardAuthToken: (claims?: Record<string, unknown>) => Promise<string>
+let getDashboardAuthSession: (token: string) => Promise<Record<string, unknown> | null>
 let sessionFromClaims: (payload: Record<string, unknown>) => { userId?: string } | null
 let sessionClaimsOf: (ctx: unknown) => { userId?: string } | null
 let secret = ""
@@ -30,7 +31,9 @@ beforeAll(async () => {
 	process.env.DATA_DIR = temp
 	vi.resetModules()
 
-	;({ createDashboardAuthToken } = await import("../../packages/auth/src/dashboardSession.ts"))
+	;({ createDashboardAuthToken, getDashboardAuthSession } = await import(
+		"../../packages/auth/src/dashboardSession.ts"
+	))
 	;({ sessionFromClaims } = await import("../../apps/api/src/infrastructure/session-from-cookie.ts"))
 	;({ sessionClaimsOf } = await import("../../apps/web/src/lib/orpcClient.ts"))
 	secret = fs.readFileSync(path.join(temp, "jwt-secret"), "utf8").trim()
@@ -72,17 +75,27 @@ describe("the dashboard cookie is a session the API accepts", () => {
 		}
 	})
 
-	it("still refuses a signed token that names nobody", async () => {
-		// The reader's rule is what makes the identity necessary, so it has to survive this
-		// fix. A token from `SignJWT` directly stands in for a cookie issued by an older build.
+	it("migrates a signed token from before sessions carried an identity", async () => {
+		// A token from `SignJWT` directly stands in for a cookie issued by an older build.
+		// It is accepted only because it has the installation's signature and the old
+		// authenticated claim; an otherwise unnamed token is still not a session.
 		const { SignJWT } = await import("jose")
-		const unsigned = await new SignJWT({ authenticated: true, role: "admin" })
+		const legacy = await new SignJWT({ authenticated: true, role: "admin" })
 			.setProtectedHeader({ alg: "HS256" })
 			.setIssuedAt()
 			.setExpirationTime("1h")
 			.sign(new TextEncoder().encode(secret))
 
-		expect(sessionFromClaims(await payloadOf(unsigned))).toBeNull()
+		const session = sessionFromClaims(await payloadOf(legacy))
+		expect(session).toMatchObject({ userId: "dashboard" })
+		expect(sessionClaimsOf({ session, permissions: null })).toMatchObject({
+			userId: "dashboard",
+		})
+		await expect(getDashboardAuthSession(legacy)).resolves.toMatchObject({
+			userId: "dashboard",
+		})
+
+		expect(sessionFromClaims({ authenticated: false, role: "admin" })).toBeNull()
 	})
 
 	it("lets a caller-supplied id win over the default, so a real user is not overwritten", async () => {

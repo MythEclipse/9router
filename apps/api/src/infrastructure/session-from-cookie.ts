@@ -60,12 +60,19 @@ export function readCookie(header: string | null | undefined, name: string): str
 /**
  * Turn a verified JWT payload into the session this API authorises against.
  *
- * A token that verifies but carries no `userId` is not a session: signature
- * validity says the token came from us, not that it names anyone. `email` falls
- * back to the user id so a caller's display path never renders `undefined`.
+ * A legacy token that verifies with the old `authenticated` claim is migrated to
+ * the single dashboard owner. Other tokens that carry no `userId` are not
+ * sessions: signature validity alone does not establish an identity.
+ * `email` falls back to the user id so a caller's display path never renders
+ * `undefined`.
  */
 export function sessionFromClaims(payload: Record<string, unknown>): DashboardSession | null {
-	const userId = typeof payload.userId === "string" ? payload.userId.trim() : ""
+	const userId =
+		typeof payload.userId === "string" && payload.userId.trim()
+			? payload.userId.trim()
+			: payload.authenticated === true
+				? "dashboard"
+				: ""
 	if (!userId) return null
 	const email = typeof payload.email === "string" ? payload.email.trim() : ""
 	return {
