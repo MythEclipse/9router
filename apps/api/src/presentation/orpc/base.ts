@@ -15,6 +15,10 @@
  *    boundary maps AppError and would otherwise have nothing to map.
  */
 import { ORPCError, os } from "@orpc/server"
+import type {
+	CoworkDependencies,
+	CoworkFilesPort,
+} from "../../application/cowork-settings/manage-cowork-settings.ts"
 import type { UseCases } from "../../application/use-cases.ts"
 import { toORPCError } from "./error-mapping.ts"
 
@@ -152,6 +156,20 @@ export interface DevinHosts {
 export type HermesHosts =
 	import("../../application/hermes/manage-hermes-settings.ts").HermesFilesPort
 
+/**
+ * Claude Desktop's config library, injected because the paths are platform questions and the
+ * plugin presets describe what this dashboard can bridge.
+ */
+export interface CoworkSettingsHosts {
+	readonly files: CoworkFilesPort
+	readonly pluginPresets: CoworkDependencies["pluginPresets"]
+	readonly localPlugins: CoworkDependencies["localPlugins"]
+	readonly buildPresetEntries: CoworkDependencies["buildPresetEntries"]
+	readonly localBridgePrefix: string
+	readonly cliTokenHeader: string
+	readonly cliToken: () => Promise<string | null>
+}
+
 export interface AppContext extends RequestContext {
 	readonly useCases: UseCases
 	/** Present on the in-process dashboard client; absent on a context with no host access. */
@@ -166,6 +184,8 @@ export interface AppContext extends RequestContext {
 	readonly devinHosts?: DevinHosts
 	/** Hermes's profile directories; absent on a context with no host access. */
 	readonly hermesHosts?: HermesHosts
+	/** Claude Desktop's config library; absent on a context with no host access. */
+	readonly coworkSettingsHosts?: CoworkSettingsHosts
 }
 
 /** Anything thrown below presentation becomes a typed ORPCError exactly once. */

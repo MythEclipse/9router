@@ -14,6 +14,7 @@ import type {
 	ClaudeSettingsHosts,
 	CliToolHosts,
 	CodexProfilesHosts,
+	CoworkSettingsHosts,
 	DevinHosts,
 	HermesHosts,
 	McpProbeHost,
@@ -24,6 +25,7 @@ import { claudeSettingsPort, isClaudeInstalled } from "./claudeToolHost"
 import { devinInstallPort, devinVersionPort } from "./cliToolHosts"
 import { cliToolHost } from "./cliToolRegistry"
 import { codexProfilesPort } from "./codexProfilesHost"
+import { cliToken, coworkFilesPort, localBridgePrefix } from "./coworkSettingsHost"
 import { hermesFilesPort } from "./hermesSettingsHost"
 import { mcpProbeHost } from "./mcpProbeHost"
 
@@ -67,6 +69,8 @@ export interface RouterContext {
 	readonly devinHosts?: DevinHosts
 	/** Hermes's profile directories; defaulted in `createApiClient` like the rest. */
 	readonly hermesHosts?: HermesHosts
+	/** Claude Desktop's config library; defaulted in `createApiClient` like the rest. */
+	readonly coworkSettingsHosts?: CoworkSettingsHosts
 }
 
 /**
@@ -76,6 +80,24 @@ export interface RouterContext {
  * caller's session, and a cached client would serve the first caller's session to
  * every later one — the exact class of bug the cookie-based design avoids.
  */
+/**
+ * The Cowork host bundle. The presets are read lazily so this module stays importable from
+ * anywhere without dragging the plugin catalogue in.
+ */
+const defaultCoworkHosts = (): CoworkSettingsHosts => {
+	const { DEFAULT_PLUGINS, LOCAL_STDIO_PLUGINS, buildManagedMcpServers } =
+		require("@/shared/constants/coworkPlugins") as typeof import("@/shared/constants/coworkPlugins")
+	return {
+		files: coworkFilesPort,
+		pluginPresets: DEFAULT_PLUGINS,
+		localPlugins: LOCAL_STDIO_PLUGINS,
+		buildPresetEntries: buildManagedMcpServers,
+		localBridgePrefix,
+		cliTokenHeader: "x-9r-cli-token",
+		cliToken,
+	}
+}
+
 export function createApiClient(context: RouterContext) {
 	// Defaulted here rather than required from every caller: 131 routes build this context and
 	// none of them has an opinion about CLI tools. The registry is a module-level table, so one
@@ -88,6 +110,7 @@ export function createApiClient(context: RouterContext) {
 			mcpProbeHost: context.mcpProbeHost ?? mcpProbeHost,
 			devinHosts: context.devinHosts ?? { install: devinInstallPort, version: devinVersionPort },
 			hermesHosts: context.hermesHosts ?? hermesFilesPort,
+			coworkSettingsHosts: context.coworkSettingsHosts ?? defaultCoworkHosts(),
 			claudeSettingsHosts: context.claudeSettingsHosts ?? {
 				port: claudeSettingsPort,
 				isInstalled: isClaudeInstalled,

@@ -64,6 +64,12 @@ import type { McpProbeAnswer, ProbeFetch } from "./cowork-mcp/probe-mcp-tools.ts
 import { probeCoworkMcpTools } from "./cowork-mcp/probe-mcp-tools.ts"
 import type { RegistryAnswer, RegistryCache } from "./cowork-mcp/read-mcp-registry.ts"
 import { readMcpRegistry } from "./cowork-mcp/read-mcp-registry.ts"
+import type { CoworkAnswer, CoworkDependencies } from "./cowork-settings/manage-cowork-settings.ts"
+import {
+	readCoworkSettings,
+	resetCoworkSettings,
+	writeCoworkSettings,
+} from "./cowork-settings/manage-cowork-settings.ts"
 import type { Dependencies } from "./dependencies.ts"
 import { makeClearErrorLogs, makeListErrorLogs } from "./error-logs/read-error-logs.ts"
 import { makeHeadroom } from "./headroom/manage-headroom.ts"
@@ -399,6 +405,12 @@ export interface UseCases {
 		readonly list: (port: CodexProfilesPort) => Promise<CodexProfilesAnswer>
 		readonly write: (body: unknown, port: CodexProfilesPort) => Promise<CodexProfilesAnswer>
 		readonly remove: (body: unknown, port: CodexProfilesPort) => Promise<CodexProfilesAnswer>
+	}
+	/** Claude Desktop's Cowork config library. */
+	readonly coworkSettings: {
+		readonly read: (deps: CoworkDependencies) => Promise<CoworkAnswer>
+		readonly write: (body: unknown, deps: CoworkDependencies) => Promise<CoworkAnswer>
+		readonly reset: (deps: CoworkDependencies) => Promise<CoworkAnswer>
 	}
 	/** Hermes Agent's per-profile YAML, and the bulk endpoint refresh. */
 	readonly hermes: {
@@ -791,6 +803,11 @@ export function buildUseCases(deps: Dependencies): UseCases {
 			list: (port) => listCodexProfiles(port),
 			write: (body, port) => writeCodexProfile(body, port),
 			remove: (body, port) => deleteCodexProfile(body, port),
+		},
+		coworkSettings: {
+			read: (deps) => readCoworkSettings(deps),
+			write: (body, deps) => writeCoworkSettings(body, deps),
+			reset: (deps) => resetCoworkSettings(deps),
 		},
 		hermes: {
 			readSettings: (profile, port) => readHermesSettings(profile, port),
