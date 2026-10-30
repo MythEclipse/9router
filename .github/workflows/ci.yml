@@ -121,25 +121,36 @@ jobs:
       # declares workspaces (apps/*, packages/*, cli) that carry the real
       # deps — next among them. Shipping only the root manifest installs the
       # six root devDependencies and nothing else, so next never resolves and
-      # the release guard refuses to activate. Ship every workspace manifest.
-      cp -r apps/api packages cli "$R"/
+      # the release guard refuses to activate.
+      #
+      # Copy source, never the installs: `cp -r apps/api` also lands at the
+      # payload ROOT (cp keeps the basename), and copying node_modules shipped
+      # ~600MB of binaries built for the CI runner. rsync excludes both.
+      mkdir -p "$R/apps"
+      rsync -a --exclude='node_modules' --exclude='.next' apps/api "$R/apps/"
+      rsync -a --exclude='node_modules' --exclude='.next' --exclude='.next-cli-build' packages cli "$R"/
       for pkg in apps/web apps/api packages/* cli; do
         [ -f "$pkg/package.json" ] && mkdir -p "$R/$pkg" && cp "$pkg/package.json" "$R/$pkg/"
       done
       cp apps/web/.next/standalone/apps/web/server.js "$R/server.js"
-      # server.js sits at the payload root and requires 'next' from there, but
-      # next is declared by apps/web, so bun links it under that workspace and
-      # the root require fails ("Cannot find package 'next' from server.js").
-      # Pin next in the payload's own manifest so bun links it at the root too.
-      # The repo manifest is untouched: this is a deploy-layout concern only.
-      next_range="$(node -p "require('./apps/web/package.json').dependencies.next")"
+      # The payload flattens apps/web/src to the root, and both server.js and
+      # the runtime auth guard load those files from there. They import two
+      # kinds of module: workspace packages (@9router/db, @9router/auth — the
+      # workspaces declared above supply those) and ordinary npm deps that
+      # only apps/web declares (uuid, bcryptjs, ...). A root require resolves
+      # neither unless the root manifest declares them, which surfaced as
+      # "Cannot find package 'uuid'" and a guard that answered 503 on every
+      # route. Copy apps/web's dependency set onto the payload root so bun
+      # links it there. The repo manifest stays untouched: this is a
+      # deploy-layout concern, not a change to how the monorepo resolves.
       node -e '
         const fs = require("fs");
-        const p = process.argv[1];
-        const pkg = JSON.parse(fs.readFileSync(p, "utf8"));
-        pkg.dependencies = { ...(pkg.dependencies || {}), next: process.argv[2] };
-        fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + "\n");
-      ' "$R/package.json" "$next_range"
+        const [root, web] = process.argv.slice(1);
+        const pkg = JSON.parse(fs.readFileSync(root, "utf8"));
+        const webDeps = JSON.parse(fs.readFileSync(web, "utf8")).dependencies || {};
+        pkg.dependencies = { ...webDeps, ...(pkg.dependencies || {}) };
+        fs.writeFileSync(root, JSON.stringify(pkg, null, 2) + "\n");
+      ' "$R/package.json" apps/web/package.json
       # Anchor both excludes at the transfer root: .next/standalone is a
       # partial copy and .next/cache is build cache — neither belongs on
       # the host (its current tree has neither).
@@ -262,14 +273,39 @@ jobs:
      if: failure()
      run: |
       echo "::warning::Deploy failed — restoring previous install"
-      ssh "$VPS_USER@$VPS_HOST" \
-        "if [ -f $ROLLBACK_TAR ]; then \
-           sudo rm -rf /tmp/9router-rollback && sudo mkdir -p /tmp/9router-rollback && \
-           sudo tar xzf $ROLLBACK_TAR -C /tmp/9router-rollback && \
-           sudo rsync -a --delete --exclude=node_modules /tmp/9router-rollback/ $APP_DIR/ && \
-           sudo rm -rf /tmp/9router-rollback && \
-           sudo systemctl restart 9router && echo rolled-back; \
-         else echo no-backup-present; fi"
+      ssh -T "$VPS_USER@$VPS_HOST" bash -s <<'REMOTE'
+      set -uo pipefail
+      APP_DIR=/opt/9router/current
+      ROLLBACK_TAR=/opt/9router/rollback-prev.tgz
+
+      if [ ! -f "$ROLLBACK_TAR" ]; then
+        echo no-backup-present
+        exit 0
+      fi
+
+      sudo rm -rf /tmp/9router-rollback
+      sudo mkdir -p /tmp/9router-rollback
+      sudo tar xzf "$ROLLBACK_TAR" -C /tmp/9router-rollback
+      # node_modules is excluded from the backup, so the restore leaves
+      # whatever the failed deploy installed in place. That is how a rolled
+      # back tree ends up running the old code against the new dependency
+      # set: the auth guard then fails to import uuid/bcryptjs and answers
+      # 503 on every route, which is worse than the failed deploy. Reinstall
+      # against the RESTORED manifest so code and deps match again.
+      sudo rsync -a --delete --exclude=node_modules /tmp/9router-rollback/ "$APP_DIR"/
+      sudo rm -rf /tmp/9router-rollback
+
+      echo "=== reinstalling deps for the restored manifest"
+      sudo HOME=/root bash -c "
+        set -e
+        command -v bun >/dev/null 2>&1 || curl -fsSL https://bun.sh/install | bash >/dev/null
+        export PATH=/root/.bun/bin:\$PATH
+        cd $APP_DIR && bun install --frozen-lockfile
+      " || echo "::warning::rollback dependency install failed — restarting anyway"
+
+      sudo systemctl restart 9router
+      echo rolled-back
+      REMOTE
  # Deploy 9router to the imrnes VPS as a native systemd unit at
  # /opt/9router/current, port 2028, behind https://omniroute.imrnes.team/
  # (Caddy proxies 127.0.0.1:2028; the Traefik router and the docker-compose
@@ -337,25 +373,36 @@ jobs:
       # declares workspaces (apps/*, packages/*, cli) that carry the real
       # deps — next among them. Shipping only the root manifest installs the
       # six root devDependencies and nothing else, so next never resolves and
-      # the release guard refuses to activate. Ship every workspace manifest.
-      cp -r apps/api packages cli "$R"/
+      # the release guard refuses to activate.
+      #
+      # Copy source, never the installs: `cp -r apps/api` also lands at the
+      # payload ROOT (cp keeps the basename), and copying node_modules shipped
+      # ~600MB of binaries built for the CI runner. rsync excludes both.
+      mkdir -p "$R/apps"
+      rsync -a --exclude='node_modules' --exclude='.next' apps/api "$R/apps/"
+      rsync -a --exclude='node_modules' --exclude='.next' --exclude='.next-cli-build' packages cli "$R"/
       for pkg in apps/web apps/api packages/* cli; do
         [ -f "$pkg/package.json" ] && mkdir -p "$R/$pkg" && cp "$pkg/package.json" "$R/$pkg/"
       done
       cp apps/web/.next/standalone/apps/web/server.js "$R/server.js"
-      # server.js sits at the payload root and requires 'next' from there, but
-      # next is declared by apps/web, so bun links it under that workspace and
-      # the root require fails ("Cannot find package 'next' from server.js").
-      # Pin next in the payload's own manifest so bun links it at the root too.
-      # The repo manifest is untouched: this is a deploy-layout concern only.
-      next_range="$(node -p "require('./apps/web/package.json').dependencies.next")"
+      # The payload flattens apps/web/src to the root, and both server.js and
+      # the runtime auth guard load those files from there. They import two
+      # kinds of module: workspace packages (@9router/db, @9router/auth — the
+      # workspaces declared above supply those) and ordinary npm deps that
+      # only apps/web declares (uuid, bcryptjs, ...). A root require resolves
+      # neither unless the root manifest declares them, which surfaced as
+      # "Cannot find package 'uuid'" and a guard that answered 503 on every
+      # route. Copy apps/web's dependency set onto the payload root so bun
+      # links it there. The repo manifest stays untouched: this is a
+      # deploy-layout concern, not a change to how the monorepo resolves.
       node -e '
         const fs = require("fs");
-        const p = process.argv[1];
-        const pkg = JSON.parse(fs.readFileSync(p, "utf8"));
-        pkg.dependencies = { ...(pkg.dependencies || {}), next: process.argv[2] };
-        fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + "\n");
-      ' "$R/package.json" "$next_range"
+        const [root, web] = process.argv.slice(1);
+        const pkg = JSON.parse(fs.readFileSync(root, "utf8"));
+        const webDeps = JSON.parse(fs.readFileSync(web, "utf8")).dependencies || {};
+        pkg.dependencies = { ...webDeps, ...(pkg.dependencies || {}) };
+        fs.writeFileSync(root, JSON.stringify(pkg, null, 2) + "\n");
+      ' "$R/package.json" apps/web/package.json
       # Anchor both excludes at the transfer root: .next/standalone is a
       # partial copy and .next/cache is build cache — neither belongs on
       # the host.
