@@ -1,6 +1,6 @@
 {
   "name": "9router",
-  "version": "5.1.0",
+  "version": "5.1.1",
   "description": "9Router — local AI routing gateway + dashboard (Kana stack)",
   "private": true,
   "type": "module",
