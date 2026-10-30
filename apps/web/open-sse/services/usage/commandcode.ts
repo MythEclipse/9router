@@ -3,6 +3,7 @@
  * Mirrors ~/cc-usage.mjs: whoami → credits + subscriptions.
  */
 
+import { buildCommandCodeHeaders } from "../../shared/commandCodeHeaders.ts"
 import { proxyAwareFetch } from "../../utils/proxyFetch.ts"
 import type { UsageQuotaMap } from "./shared.ts"
 import { parseResetTime, toFiniteNumber } from "./shared.ts"
@@ -86,10 +87,7 @@ export async function getCommandCodeUsage(apiKey, proxyOptions = null) {
 		return { message: "Command Code API key not available. Add a key to view usage." }
 	}
 
-	const headers = {
-		Authorization: `Bearer ${apiKey.trim()}`,
-		Accept: "application/json",
-	}
+	const headers = buildCommandCodeHeaders({ apiKey: apiKey.trim(), accept: "application/json" })
 
 	const get = async (route) => {
 		const response = await proxyAwareFetch(BASE + route, { method: "GET", headers }, proxyOptions)

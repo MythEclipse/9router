@@ -89,6 +89,11 @@ export interface ValidateCredentialDependencies {
 	readonly tokenplanBaseUrl: (input: { providerSpecificData?: Record<string, unknown> }) => string
 	/** Builds a CommandCode request body, which is not OpenAI-shaped. */
 	readonly commandCodeBody: (model: string) => unknown
+	/** The header set a CommandCode probe must send to pass for the CLI. */
+	readonly commandCodeHeaders: (input: {
+		readonly apiKey: string
+		readonly sessionId?: string
+	}) => Record<string, string>
 	readonly randomId: () => string
 }
 
@@ -166,6 +171,7 @@ export function makeValidateCredential(dependencies: ValidateCredentialDependenc
 		ollamaLocalHost,
 		tokenplanBaseUrl,
 		commandCodeBody,
+		commandCodeHeaders,
 		randomId,
 	} = dependencies
 
@@ -380,21 +386,23 @@ export function makeValidateCredential(dependencies: ValidateCredentialDependenc
 					},
 					verdict: byStatus(notRefused),
 				}
-			case "commandcode":
+			case "commandcode": {
+				const payload = commandCodeBody(defaultModel("commandcode")) as {
+					threadId?: string
+				} | null
 				return {
 					request: {
 						url: String(cfg?.baseUrl ?? ""),
 						method: "POST",
-						headers: {
-							...json,
-							...(cfg?.headers ?? {}),
-							"x-session-id": randomId(),
-							...bearer(apiKey),
-						},
-						body: JSON.stringify(commandCodeBody(defaultModel("commandcode"))),
+						headers: commandCodeHeaders({
+							apiKey,
+							sessionId: payload?.threadId,
+						}),
+						body: JSON.stringify(payload),
 					},
 					verdict: byStatus(notRefused),
 				}
+			}
 			case "vertex":
 			case "vertex-partner": {
 				const serviceAccount = readServiceAccount(apiKey)

@@ -741,6 +741,7 @@ export function buildUseCases(deps: Dependencies): UseCases {
 			ollamaLocalHost: deps.ollamaLocalHost,
 			tokenplanBaseUrl: deps.tokenplanBaseUrl,
 			commandCodeBody: deps.commandCodeBody,
+			commandCodeHeaders: deps.commandCodeHeaders,
 			randomId: () => deps.randomId(),
 		}),
 		webLogin: makeWebLogin({

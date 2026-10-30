@@ -30,9 +30,14 @@ const Commandcode = {
 		reasoningInject: {
 			scope: "all",
 		},
+		// Static identity headers of command-code@1.88.0 buildCommandAuthHeaders().
+		// x-project-slug and x-session-id are dynamic — see shared/commandCodeHeaders.ts.
 		headers: {
-			"x-command-code-version": "0.25.7",
-			"x-cli-environment": "cli",
+			"User-Agent": "cli",
+			"x-command-code-version": "1.88.0",
+			"x-cli-environment": "production",
+			"x-cli-surface": "cli",
+			"x-taste-learning": "false",
 		},
 	},
 	models: [

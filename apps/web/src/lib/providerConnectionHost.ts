@@ -41,6 +41,7 @@ import {
 	startWebLogin,
 } from "open-sse/services/webLogin"
 import { getWebLoginConfig, listWebLoginProviders } from "open-sse/services/webLoginConfig"
+import { buildCommandCodeHeaders } from "open-sse/shared/commandCodeHeaders"
 import { openaiToCommandCodeRequest } from "open-sse/translator/request/openai-to-commandcode"
 import { fetch as undiciFetch } from "undici"
 import { pingModelByKind, WEB_COOKIE_PROVIDERS } from "@/app/api/models/test/ping"
@@ -403,6 +404,16 @@ export const commandCodeBody = (model: string) =>
 		{ messages: [{ role: "user", content: "ping" }], max_tokens: 1, stream: false },
 		false,
 	)
+
+/**
+ * The headers CommandCode's own CLI sends.
+ *
+ * Validation has to look like the client it claims to be: the CLI's version
+ * header and project slug are what the upstream gate checks, so a probe built
+ * from hand-written headers starts failing the moment that version moves.
+ */
+export const commandCodeHeaders = (input: { apiKey: string; sessionId?: string }) =>
+	buildCommandCodeHeaders(input)
 
 /**
  * The interactive web-login flow.

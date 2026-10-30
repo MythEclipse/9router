@@ -1,4 +1,5 @@
 import { PROVIDERS } from "../config/providers.ts"
+import { buildCommandCodeHeaders } from "../shared/commandCodeHeaders.ts"
 import { commandCodeToOpenAIResponse } from "../translator/response/commandcode-to-openai.ts"
 import { commandCodeThreadId, isCommandCodeThreadId } from "../utils/commandCodeSession.ts"
 import {
@@ -74,17 +75,11 @@ export class CommandCodeExecutor extends BaseExecutor {
 		const sessionId =
 			body && isCommandCodeThreadId(body.threadId) ? body.threadId : commandCodeThreadId(body)
 
-		const headers = {
-			"Content-Type": "application/json",
-			...(this.config.headers || {}),
-			"x-session-id": sessionId,
-		}
-
-		const token = credentials?.apiKey || credentials?.accessToken
-		if (token) headers["Authorization"] = `Bearer ${token}`
-
-		if (stream) headers["Accept"] = "text/event-stream"
-		return headers
+		return buildCommandCodeHeaders({
+			apiKey: credentials?.apiKey || credentials?.accessToken,
+			sessionId,
+			accept: stream ? "text/event-stream" : null,
+		})
 	}
 
 	async execute(opts) {

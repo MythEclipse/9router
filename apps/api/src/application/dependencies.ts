@@ -408,6 +408,11 @@ export interface Dependencies {
 	readonly tokenplanBaseUrl: (input: { providerSpecificData?: Record<string, unknown> }) => string
 	/** Builds a CommandCode request body, which is not OpenAI-shaped. */
 	readonly commandCodeBody: (model: string) => unknown
+	/** The header set a CommandCode probe must send to pass for the CLI. */
+	readonly commandCodeHeaders: (input: {
+		readonly apiKey: string
+		readonly sessionId?: string
+	}) => Record<string, string>
 	/** The interactive web-login flow, backed by the browser driver. */
 	readonly webLogin: Omit<
 		import("./providers/web-login.ts").WebLoginDependencies,

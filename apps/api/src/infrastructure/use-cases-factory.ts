@@ -246,6 +246,7 @@ export interface UseCaseOptions {
 	readonly ollamaLocalHost?: ValidateDependencies["ollamaLocalHost"]
 	readonly tokenplanBaseUrl?: ValidateDependencies["tokenplanBaseUrl"]
 	readonly commandCodeBody?: ValidateDependencies["commandCodeBody"]
+	readonly commandCodeHeaders?: ValidateDependencies["commandCodeHeaders"]
 	/** The interactive web-login flow, backed by the browser driver. */
 	readonly webLogin?: Omit<WebLoginDependencies, "connections" | "providerLabel">
 	/** The free/oauth/apikey/compatible questions a batch test groups by. */
@@ -525,6 +526,7 @@ export function createUseCases(
 		ollamaLocalHost: options.ollamaLocalHost ?? (() => "http://localhost:11434"),
 		tokenplanBaseUrl: options.tokenplanBaseUrl ?? (() => ""),
 		commandCodeBody: options.commandCodeBody ?? (() => ({})),
+		commandCodeHeaders: options.commandCodeHeaders ?? (() => ({})),
 		webLogin: options.webLogin ?? unavailableWebLogin(),
 		batchClassifiers: options.batchClassifiers ?? ungroupableProviders(),
 		clientListingRegistry: options.clientListingRegistry ?? unlistableProviders(),

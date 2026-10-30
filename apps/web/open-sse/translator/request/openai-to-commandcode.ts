@@ -12,6 +12,7 @@
  */
 
 import { DEFAULT_MAX_TOKENS } from "../../config/runtimeConfig.ts"
+import { COMMAND_CODE_WORKING_DIR } from "../../shared/commandCodeHeaders.ts"
 import { commandCodeThreadId } from "../../utils/commandCodeSession.ts"
 import { encodeDataUri, parseDataUri } from "../concerns/image.ts"
 import { FORMATS } from "../formats.ts"
@@ -238,7 +239,7 @@ export function openaiToCommandCodeRequest(model, body, stream /* , credentials 
 		threadId: commandCodeThreadId(body),
 		memory: "",
 		config: {
-			workingDir: process.cwd(),
+			workingDir: COMMAND_CODE_WORKING_DIR,
 			date: today,
 			environment: process.platform,
 			structure: [],
