@@ -30,6 +30,14 @@ COPY packages/auth/package.json ./packages/auth/package.json
 COPY packages/db/package.json ./packages/db/package.json
 COPY packages/pricing/package.json ./packages/pricing/package.json
 COPY cli/package.json ./cli/package.json
+# The cli workspace's postinstall warms its own runtime by shelling out to
+# `npm install` and downloading tray binaries. This image never runs the CLI,
+# and the hook sources it imports are not in the build context, so the install
+# dies on "Module not found '/app/cli/hooks/postinstall-runner.mjs'". Strip the
+# script rather than shipping the hooks: a network warm-up has no business in an
+# image build, and it would make the build depend on a registry and a GitHub
+# release asset.
+RUN bun -e "import fs from 'node:fs'; const p = JSON.parse(fs.readFileSync('cli/package.json', 'utf8')); delete p.scripts.postinstall; fs.writeFileSync('cli/package.json', JSON.stringify(p, null, 2) + '\n')"
 # Install opencode-ai CLI globally so the runner image has the opencode binary.
 # The bun image ships no npm, so this rides on bun's global installer; the
 # package layout it produces differs from npm's, hence the fallback probe below
