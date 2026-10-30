@@ -1,31 +1,30 @@
-import fs from "node:fs"
-import path from "node:path"
-import { translatorDumpFile } from "9router-api/domain/translator"
+/**
+ * GET /api/translator/load - one captured pipeline dump.
+ *
+ * The name is caller-supplied and used to form a path, so the closed rule in
+ * `domain/translator.ts` runs before the filesystem is touched. 400 for a refused name and 404 for
+ * a missing file are kept apart on purpose: a traversal attempt must not look like a typo.
+ */
+import { getDashboardAuthSession } from "@9router/auth/dashboardSession"
+import { sessionFromClaims } from "9router-api/infrastructure/session-from-cookie"
+import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
+import { createApiClient } from "@/lib/orpcClient"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-/** Where the inspector writes its pipeline dumps. */
-function translatorLogsDir(): string {
-	return path.join(process.cwd(), "logs", "translator")
-}
+export async function GET(request: Request) {
+	const cookieStore = await cookies()
+	const payload = await getDashboardAuthSession(cookieStore.get("auth_token")?.value)
+	const session = sessionFromClaims((payload ?? {}) as Record<string, unknown>)
 
-export async function GET(request) {
-	try {
-		const { searchParams } = new URL(request.url)
-		const file = translatorDumpFile(searchParams.get("file"))
-		if (file === null) {
-			return NextResponse.json({ success: false, error: "Invalid file name" }, { status: 400 })
-		}
+	const { searchParams } = new URL(request.url)
+	const answer = await createApiClient({
+		session,
+		useCases: getUseCases(),
+		headers: request.headers,
+	}).translator.load({ file: searchParams.get("file") })
 
-		const filePath = path.join(translatorLogsDir(), file)
-		if (!fs.existsSync(filePath)) {
-			return NextResponse.json({ success: false, error: "File not found" }, { status: 404 })
-		}
-
-		return NextResponse.json({ success: true, content: fs.readFileSync(filePath, "utf-8") })
-	} catch (error) {
-		console.error("Error loading file:", error)
-		return NextResponse.json({ success: false, error: error.message }, { status: 500 })
-	}
+	return NextResponse.json(answer.body, { status: answer.status })
 }
