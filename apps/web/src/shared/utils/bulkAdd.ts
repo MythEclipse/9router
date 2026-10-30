@@ -43,6 +43,11 @@ export interface PlannedBulkEntry {
  */
 function parseLine(line: string, opts: BulkAddOptions = {}): ParsedLine {
 	const { isCloudflareAi = false } = opts
+	if (!isCloudflareAi && /^LLM\|/i.test(line.trim())) {
+		// `LLM|id|secret` is one opaque token for this provider, not a
+		// `name|apiKey` pair — the whole line is the credential.
+		return { baseName: "LLM", apiKey: line.trim() }
+	}
 	const parts = line.split("|")
 
 	if (isCloudflareAi && parts.length >= 3) {
