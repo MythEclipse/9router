@@ -22,30 +22,35 @@ gateway serving traffic at every phase boundary.
 
 ## Next Step
 
-**Seventeen of `cli-tools`' twenty-one routes are on oRPC — eighty-four across the migration.**
-The sixteen generic `*-settings` routes share one name-keyed registry and four procedures;
-`claude` got its own three because it speaks an `env` block rather than a provider entry. Its
-port arrives on `context.claudeSettingsHosts`, defaulted in `createApiClient` beside
-`cliToolHosts` — the same seam, applied twice, which is now the established shape for host code.
+**Twenty-two of `cli-tools`' twenty-six routes are on oRPC.** The area is nearly done; what is
+left is three large handlers and one that should not move.
 
-**Next: `codex-profiles` (117) and `cowork-mcp-tools` (111)**, the two largest remaining
-handlers in the area that are not blocked. Then `cowork-mcp-registry` (74), `all-statuses` (63),
-`hermes-profiles` (17).
+Taken this round, in the order they fell:
 
-Three remain blocked on extraction, in ascending order of work: `devin` (70) does inline
-`exec`/`fs` probing with `devinBinCandidates` from the domain; `hermes` (369) has its own
-profile helpers in a sibling module; `cowork` (449) is the largest single handler in the area.
-Each needs a use-case before a procedure can name it.
+- `codex-profiles` (117) — three verbs over `~/.codex/*.config.toml`, behind a four-method port.
+- `cowork-mcp-tools` (111) — the probe sequence, with the fetch passed in because the SSRF
+  choice needs the request headers.
+- `cowork-mcp-registry` (74) — the cursor walk in the use-case, the process-wide cache on the
+  host beside `tunnelStatusCache`.
+- `all-statuses` (63) — was importing nineteen sibling `GET` handlers as functions; now one
+  procedure reusing the same context bundles.
+- `devin` (70) — never needed a config port. It has no settings at all, only detection.
 
-`antigravity-mitm` (193 + 42 for `alias`) stays put: it spawns a privileged proxy, installs a
-root CA and rewrites the hosts file. Its *decisions* already live in `resolveMitmPassword` and
-friends — what remains is process control, which is host work by nature. That is a decision to
-record, not a gap to close.
+**What is left is `hermes` (369) and `cowork` (449)** — the two biggest single handlers in the
+area — plus `antigravity-mitm` (193 + 42), which stays by decision: it spawns a privileged proxy,
+installs a root CA and rewrites the hosts file. Its *decisions* already live in
+`resolveMitmPassword` and friends; what remains is process control, which is host work by nature.
 
-Rule this round added:
+Rules this round added:
 
-- **The same seam, applied twice, is the confirmation that it was the right one.** `claude`'s
-  port went onto `RouterContext` with no new thinking required, because `cliToolHosts` had
-  already established it. When the second case needs no design, the first design was sound.
+- **A test that asserts a status the code cannot return is a test of the test.** Wrapping
+  `probeMcpServer` in `try`/`catch` looked right and was dead: the function already catches
+  everything and answers 200. The failing assertion was the only thing that ever noticed.
+- **When a fixture fails, suspect the fixture before the rule.** Five registry tests failed
+  because I invented a flat entry; the real shape is `{ server: { remotes: [{ url }] }, _meta }`.
+  The domain validator was right.
+- **"Blocked on extraction" is worth re-reading before believing it.** `devin` was on that list
+  for three rounds. It was not missing a port — it was missing the recognition that it has
+  nothing to write.
 
 **Compare the set of failing test names, never the count.**

@@ -2477,3 +2477,39 @@ non-empty messages, and the diff is the reason to write that check rather than t
 Four tools stay out on purpose: `claude` (env block, own use-case), `devin`, `hermes` and
 `cowork` (no `ToolConfigPort`, inline filesystem work). Listing them in the registry would
 promise a shape they do not have, so they need use-case extraction first.
+
+## 2026-10-30 — five handlers, and one lesson I had to learn twice
+
+`codex-profiles`, `cowork-mcp-tools`, `cowork-mcp-registry`, `all-statuses` and `devin` are on
+oRPC. Twenty-two of twenty-six routes in the area now are.
+
+**The batch endpoint was the interesting one.** `all-statuses` imported nineteen sibling `GET`
+handlers and called them as functions to save the browser eighteen round-trips. That works
+exactly until one of the nineteen is migrated — then the batch and the per-tool route are two
+implementations of the same answer, and they drift. It now builds its readers from the same
+context bundles the procedures use. The rule the batch owns is that one broken tool must not
+blank the screen: a reader that throws is `null` for its own tool, never absent.
+
+**A test caught dead code, which is the case worth recording.** I wrapped `probeMcpServer` in a
+`try`/`catch` that returned 500. It could never run — the function already catches every thrown
+fetch and answers `{ error }` with 200. The test I wrote asserted the 500, failed, and that
+failure was the *only* signal that the branch was unreachable. The catch is gone and the test now
+asserts 200 with the reason, which is what the route always did. A 500 there would tell the
+operator this side is broken when the other side refused the connection.
+
+**And one lesson I had to learn twice.** Five registry tests failed because my fixture used a
+flat `{ name, url }` entry. The real shape is `{ server: { name, remotes: [{ url }] }, _meta }`.
+The domain validator was right, the fixture was invented, and the fix was to the fixture. I had
+already written "the message I retyped from memory was wrong; diff it" in the cli-tools registry
+round. Inventing *shapes* is the same mistake wearing different clothes: when a test fails
+against a rule I did not write, read the rule first.
+
+**`devin` had been sitting on the blocked list for three rounds.** It does not need a
+`ToolConfigPort`. It needs nothing — the binary keeps its own credentials, so the whole flow is
+detection. Re-reading the block reason took a minute; believing it cost three rounds of skipping
+the smallest handler in the area.
+
+**One structural slip, caught immediately.** Adding `readRegistry` to the router with a patch
+spliced it *inside* the `probeTools` handler body. `tsc` failed on the syntax error at once, and
+the fix was to rewrite the file rather than patch around the damage. Anchoring a patch on a
+closing `}),` is not a safe anchor when several handlers end the same way.
