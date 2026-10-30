@@ -22,26 +22,23 @@ gateway serving traffic at every phase boundary.
 
 ## Next Step
 
-The coverage question is answered, and it was measurable without coverage tooling.
+The domain-coverage sweep is finished for everything that matters, and the measurement itself had to
+be corrected twice before its output could be trusted.
 
-**The method.** `@vitest/coverage-v8` reported only files under `tests/` because the suite runs with
-`root: tests`, and a wider root broke `setupFiles`; two config attempts were dropped rather than
-fought. Instead: inject a labelled `throw` into every domain function no test names, run the suite
-once, count the labels. 21 of 22 injected, and the result splits cleanly — 12 are reached through a
-sibling even though their names appear nowhere in the test tree, 9 are never executed.
+**What is covered now.** 495 exported domain functions; the three that no test executed *and* that
+select a branch — `isReportingPeriod`, `isMitmToolAction`, `tooLarge` — have ten cases. `timedOutAnswer`
+was adopted by its only intended caller and two defects fell out of that. Along the way `readLimit`
+turned out to coerce a boolean into a one-token context window, and `jwtPayloadOf` was carrying two
+no-op steps behind a comment.
 
-**The defect.** `timedOutAnswer` was the one of those nine with no consumer at all. It was written for
-the ceiling branch in `suggest-models`, and `withTimeout` had inlined its own copy that omitted
-`message` — which the route forwards as the client's `error`, so a stalled catalogue reached the panel
-looking like an empty provider. The same lines also let a late fetch call `refreshSynced` after the
-request had been answered, because `Promise.race` cannot cancel the loser. Both fixed, four cases
-added, three mutations caught.
+**What the remaining 19 are.** Twelve are executed through a sibling (measured, not assumed), and the
+rest are path helpers and formatting functions reached by tests that do not name them.
 
-**Where this leaves the sweep.** 22 of 495 domain functions are unnamed in the test tree; 13 of those
-are executed by tests anyway; 9 are executed by no test, of which 8 have real callers whose own tests
-do not reach them. Those eight are the honest remaining gap — `isReportingPeriod`, `isMitmToolAction`,
-`tooLarge`, `hermesRoot`, `auxRoleArE`, `profilesRoot`, `removeDelegationBlock`, `isPeriodRefused` —
-each a one-line predicate or path helper whose failure mode is a wrong branch, not a crash.
+**The lesson worth keeping.** Sabotage is a better instrument than a coverage report here, because the
+report cannot see outside `root: tests` and the injection answers the actual question — is this code
+ever run. But sabotage is only trustworthy when each injection is verified to load: a one-line edit to
+a two-line arrow declaration broke `errors.ts` and made 30+ files fail collection, which I briefly read
+as "not executed". One function per run; a run with `Failed Suites > 0` is discarded.
 
-Next: write those eight directly. Not because coverage matters as a number, but because a one-line
-predicate that no test executes is a branch nothing has ever gone down.
+Next: leave the domain alone and go where the tests cannot reach by construction — the route handlers
+that were declined during migration (52, of which 25 are gateway `v1`/`v1beta`), and the build itself.

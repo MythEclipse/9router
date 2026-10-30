@@ -2877,3 +2877,35 @@ why the first consumer grep missed it.
     typecheck   0
     test        8119 passed, 0 failed   (from 8108)
     commits     7
+
+## The sabotage method needs care, and it corrected my own ledger
+
+Two things went wrong while measuring, both worth recording because both produced *wrong* answers
+that looked like data.
+
+**An arrow-const injected on one line corrupts the file.** `tooLarge` is written across two lines
+(`export const tooLarge = (message = ...) =>` then the body on the next). Injecting after the first
+line left the second as a free-standing statement, `errors.ts` threw at import, and **30+ test files
+failed to collect** — which reads as "the function is never executed" when in fact nothing ran at all.
+A `throw` that replaces the return-type annotation is the same class of mistake: it edited the
+signature instead of the body, and only a `git diff` caught it.
+
+**The rule that follows:** one function per run, and a run is only valid when `Failed Suites` is zero.
+An injection that breaks a module is not evidence of anything.
+
+**It corrected a claim I had already written down.** The ledger said nine functions are "never
+executed". `isMitmToolAction` was in that list, but its throw appeared 6 times in the first run — the
+number came from a broken injection, not from the code. The honest count after re-measuring is: 12
+reached through a sibling, and among the rest only `timedOutAnswer` had no consumer at all.
+
+    isReportingPeriod   no test file named after its module, and never executed
+    isMitmToolAction    test file exists, contains zero references to it
+    tooLarge            no test file named after its module, and never executed
+
+Ten cases for those three; five mutations caught, and one that survived only because it was
+semantically equivalent (casting the list to `unknown[]` cannot accept a non-string either). Checking
+that before claiming coverage mattered more than the count.
+
+    typecheck   0
+    test        8129 passed, 0 failed   (from 8119)
+    commits     8
