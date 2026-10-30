@@ -13,7 +13,13 @@ export const dynamic = "force-dynamic"
 // This repo's own CHANGELOG.md is served locally; the official upstream changelog comes from GitHub.
 function readLocalChangelog() {
 	try {
-		return fs.readFileSync(path.join(process.cwd(), LOCAL_CHANGELOG_FILENAME), "utf8")
+		// The file is staged beside the standalone server by the deployment scripts.
+		// It is intentionally runtime-only; tracing the workspace here would ship the
+		// whole repository just to support an optional offline changelog.
+		return fs.readFileSync(
+			path.join(/* turbopackIgnore: true */ process.cwd(), LOCAL_CHANGELOG_FILENAME),
+			"utf8",
+		)
 	} catch {
 		// Missing in bundled/standalone runtimes - not an error, the caller falls back.
 		return null
