@@ -488,6 +488,20 @@ export async function resetHermesSettings(
 	}
 }
 
+/**
+ * Every profile on this machine.
+ *
+ * The list is whatever the host's directory walk found — the rule about which directory counts as
+ * a profile lives in `domain/hermes-profiles` (`isProfileHome`), and the walk itself is host code
+ * because it is filesystem access. Answering with an empty list rather than an error keeps the
+ * picker usable on a machine where Hermes was never installed.
+ */
+export async function listHermesProfiles(
+	port: HermesFilesPort,
+): Promise<{ profiles: HermesProfileSummary[] }> {
+	return { profiles: await port.listProfiles() }
+}
+
 /** The env key this flow is allowed to touch. */
 export const HERMES_API_KEY_ENV = API_KEY_ENV
 

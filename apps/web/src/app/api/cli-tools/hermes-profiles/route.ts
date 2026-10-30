@@ -1,17 +1,22 @@
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { NextResponse } from "next/server"
-import { listProfiles } from "../hermes-settings/hermesProfiles.ts"
+import { createApiClient, sessionClaimsOf } from "@/lib/orpcClient"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-// GET - List every Hermes profile on this machine (default home + ~/.hermes/profiles/*).
-// Discovery is filesystem-based: a directory only counts as a profile when it carries one of
-// Hermes' identity files, mirroring what `hermes profile list` accepts.
-export async function GET() {
-	try {
-		const profiles = await listProfiles(undefined)
-		return NextResponse.json({ profiles })
-	} catch (error) {
-		console.error("Error listing hermes profiles:", error)
-		return NextResponse.json({ error: "Failed to list hermes profiles" }, { status: 500 })
-	}
+/**
+ * GET — list every Hermes profile on this machine (the default home plus `~/.hermes/profiles/*`).
+ *
+ * Discovery is filesystem-based: a directory only counts as a profile when it carries one of
+ * Hermes' identity files, mirroring what `hermes profile list` accepts.
+ */
+export async function GET(request: Request) {
+	const client = createApiClient({
+		session: sessionClaimsOf(await getSessionContext()),
+		useCases: getUseCases(),
+		headers: request.headers,
+	})
+	const answer = await client.hermes.listProfiles()
+	return NextResponse.json(answer, { status: 200 })
 }

@@ -67,8 +67,13 @@ import { readMcpRegistry } from "./cowork-mcp/read-mcp-registry.ts"
 import type { Dependencies } from "./dependencies.ts"
 import { makeClearErrorLogs, makeListErrorLogs } from "./error-logs/read-error-logs.ts"
 import { makeHeadroom } from "./headroom/manage-headroom.ts"
-import type { HermesAnswer, HermesFilesPort } from "./hermes/manage-hermes-settings.ts"
+import type {
+	HermesAnswer,
+	HermesFilesPort,
+	HermesProfileSummary,
+} from "./hermes/manage-hermes-settings.ts"
 import {
+	listHermesProfiles,
 	readHermesSettings,
 	resetHermesSettings as resetHermesSettingsUseCase,
 	writeHermesSettings,
@@ -400,6 +405,7 @@ export interface UseCases {
 		readonly readSettings: (profile: unknown, port: HermesFilesPort) => Promise<HermesAnswer>
 		readonly writeSettings: (body: unknown, port: HermesFilesPort) => Promise<HermesAnswer>
 		readonly resetSettings: (body: unknown, port: HermesFilesPort) => Promise<HermesAnswer>
+		readonly listProfiles: (port: HermesFilesPort) => Promise<{ profiles: HermesProfileSummary[] }>
 	}
 	/** Probing a Cowork MCP server for the tools it exposes. */
 	readonly coworkMcp: {
@@ -790,6 +796,7 @@ export function buildUseCases(deps: Dependencies): UseCases {
 			readSettings: (profile, port) => readHermesSettings(profile, port),
 			writeSettings: (body, port) => writeHermesSettings(body, port),
 			resetSettings: (body, port) => resetHermesSettingsUseCase(body, port),
+			listProfiles: (port) => listHermesProfiles(port),
 		},
 		coworkMcp: {
 			probeTools: (body, options) => probeCoworkMcpTools(body, options),

@@ -31,6 +31,17 @@ const profileOf = (fromBody: unknown, fromQuery: string | null | undefined): unk
 
 export const hermesRouter = {
 	/**
+	 * Every profile on this machine: the default home plus `~/.hermes/profiles[/builtin]/*`.
+	 *
+	 * Discovery is directory-based and a directory only counts when it carries an identity file,
+	 * which is the same rule `hermes profile list` uses — so the screen never shows a profile the
+	 * CLI would refuse.
+	 */
+	listProfiles: authed.handler(async ({ context }) =>
+		context.useCases.hermes.listProfiles(hostOf(context.hermesHosts)),
+	),
+
+	/**
 	 * One profile's settings.
 	 *
 	 * An uninstalled Hermes answers 200 with `installed: false`; an unknown profile is a 404 and
