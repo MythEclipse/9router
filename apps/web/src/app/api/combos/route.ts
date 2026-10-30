@@ -28,9 +28,10 @@ async function client() {
 export async function GET() {
 	try {
 		const result = await (await client()).combos.list({})
-		// The procedure answers `{ combos: [...] }`; the REST contract has always
-		// been the bare array, and the dashboard reads it that way.
-		return NextResponse.json(result.combos)
+		// `{ combos }`, not the bare array. Every dashboard caller reads
+		// `(await res.json()).combos` — five of them — and each falls back to
+		// `|| []`, so unwrapping here does not fail loudly, it empties the page.
+		return NextResponse.json(result)
 	} catch (error) {
 		return toResponse(error)
 	}
