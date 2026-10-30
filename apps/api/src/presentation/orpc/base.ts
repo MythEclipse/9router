@@ -89,10 +89,24 @@ export type CliToolHosts = (
 	name: string,
 ) => import("../../application/cli-tools/manage-tool-settings.ts").ToolSettingsDeps | undefined
 
+/**
+ * Claude Code's settings port, injected for the same reason as `CliToolHosts`.
+ *
+ * `claudeSettingsPort` reads and writes `~/.claude/settings.json`, so it lives in `apps/web`
+ * with the rest of the host code. Keeping it off this package is what lets the use-case stay
+ * testable without a filesystem.
+ */
+export interface ClaudeSettingsHosts {
+	readonly port: import("../../application/claude-tools/manage-claude-settings.ts").ClaudeSettingsPort
+	readonly isInstalled: () => Promise<boolean>
+}
+
 export interface AppContext extends RequestContext {
 	readonly useCases: UseCases
 	/** Present on the in-process dashboard client; absent on a context with no host access. */
 	readonly cliToolHosts?: CliToolHosts
+	/** Claude Code's port and install probe; absent on a context with no host access. */
+	readonly claudeSettingsHosts?: ClaudeSettingsHosts
 }
 
 /** Anything thrown below presentation becomes a typed ORPCError exactly once. */

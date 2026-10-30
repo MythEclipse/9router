@@ -10,8 +10,13 @@
  */
 import { createRouterClient } from "@orpc/server"
 import type { UseCases } from "9router-api/application/use-cases"
-import type { CliToolHosts, SessionClaims } from "9router-api/presentation/orpc/base"
+import type {
+	ClaudeSettingsHosts,
+	CliToolHosts,
+	SessionClaims,
+} from "9router-api/presentation/orpc/base"
 import { appRouter } from "9router-api/presentation/orpc/router"
+import { claudeSettingsPort, isClaudeInstalled } from "./claudeToolHost"
 import { cliToolHost } from "./cliToolRegistry"
 
 /**
@@ -44,6 +49,8 @@ export interface RouterContext {
 	 * moment an operator clicks Save.
 	 */
 	readonly cliToolHosts?: CliToolHosts
+	/** Claude Code's settings port; defaulted in `createApiClient` like `cliToolHosts`. */
+	readonly claudeSettingsHosts?: ClaudeSettingsHosts
 }
 
 /**
@@ -58,7 +65,14 @@ export function createApiClient(context: RouterContext) {
 	// none of them has an opinion about CLI tools. The registry is a module-level table, so one
 	// import covers all of them, and a route that needs a different resolver can still pass one.
 	return createRouterClient(appRouter, {
-		context: { ...context, cliToolHosts: context.cliToolHosts ?? cliToolHost },
+		context: {
+			...context,
+			cliToolHosts: context.cliToolHosts ?? cliToolHost,
+			claudeSettingsHosts: context.claudeSettingsHosts ?? {
+				port: claudeSettingsPort,
+				isInstalled: isClaudeInstalled,
+			},
+		},
 	})
 }
 
