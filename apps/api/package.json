@@ -20,6 +20,7 @@
     "./application/oauth/*": "./src/application/oauth/*.ts",
     "./application/cli-tools/*": "./src/application/cli-tools/*.ts",
     "./application/claude-tools/*": "./src/application/claude-tools/*.ts",
+    "./application/codex-profiles/*": "./src/application/codex-profiles/*.ts",
     "./presentation/orpc/router": "./src/presentation/orpc/router.ts",
     "./presentation/orpc/base": "./src/presentation/orpc/base.ts",
     "./presentation/caller-from-session": "./src/presentation/caller-from-session.ts"

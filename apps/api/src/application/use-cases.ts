@@ -32,6 +32,15 @@ import {
 	resetToolSettings,
 	writeToolSettings,
 } from "./cli-tools/manage-tool-settings.ts"
+import type {
+	CodexProfilesAnswer,
+	CodexProfilesPort,
+} from "./codex-profiles/manage-codex-profiles.ts"
+import {
+	deleteCodexProfile,
+	listCodexProfiles,
+	writeCodexProfile,
+} from "./codex-profiles/manage-codex-profiles.ts"
 import {
 	makeCheckComboCycle,
 	makeCreateCombo,
@@ -353,6 +362,12 @@ export interface UseCases {
 			options?: { exaMcpEnabled?: boolean },
 		) => Promise<ClaudeSettingsAnswer>
 		readonly resetSettings: (port: ClaudeSettingsPort) => Promise<ClaudeSettingsAnswer>
+	}
+	/** The operator's `~/.codex/*.config.toml` profiles. */
+	readonly codexProfiles: {
+		readonly list: (port: CodexProfilesPort) => Promise<CodexProfilesAnswer>
+		readonly write: (body: unknown, port: CodexProfilesPort) => Promise<CodexProfilesAnswer>
+		readonly remove: (body: unknown, port: CodexProfilesPort) => Promise<CodexProfilesAnswer>
 	}
 	/** Cloudflare tunnels and Tailscale funnels, as the network screen drives them. */
 	readonly tunnel: {
@@ -712,6 +727,11 @@ export function buildUseCases(deps: Dependencies): UseCases {
 			readSettingsStatus: (port, isInstalled) => readClaudeSettingsStatus(port, isInstalled),
 			writeSettings: (body, port, options) => writeClaudeSettings(body, port, options),
 			resetSettings: (port) => resetClaudeSettings(port),
+		},
+		codexProfiles: {
+			list: (port) => listCodexProfiles(port),
+			write: (body, port) => writeCodexProfile(body, port),
+			remove: (body, port) => deleteCodexProfile(body, port),
 		},
 		// The probe cache is process-wide and survives a hot reload, exactly like the module
 		// scope it replaced: one cache per process, not one per request.

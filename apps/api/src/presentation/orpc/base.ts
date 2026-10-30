@@ -101,12 +101,23 @@ export interface ClaudeSettingsHosts {
 	readonly isInstalled: () => Promise<boolean>
 }
 
+/**
+ * The Codex profiles directory, injected for the same reason as the two above.
+ *
+ * `codexProfilesPort` reads and writes `~/.codex`, so it is host code. The use-case decides
+ * what a missing directory means and what a refused write returns; the port only reports.
+ */
+export type CodexProfilesHosts =
+	import("../../application/codex-profiles/manage-codex-profiles.ts").CodexProfilesPort
+
 export interface AppContext extends RequestContext {
 	readonly useCases: UseCases
 	/** Present on the in-process dashboard client; absent on a context with no host access. */
 	readonly cliToolHosts?: CliToolHosts
 	/** Claude Code's port and install probe; absent on a context with no host access. */
 	readonly claudeSettingsHosts?: ClaudeSettingsHosts
+	/** `~/.codex` as a port; absent on a context with no host access. */
+	readonly codexProfilesHosts?: CodexProfilesHosts
 }
 
 /** Anything thrown below presentation becomes a typed ORPCError exactly once. */

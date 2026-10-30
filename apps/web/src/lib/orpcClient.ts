@@ -13,11 +13,13 @@ import type { UseCases } from "9router-api/application/use-cases"
 import type {
 	ClaudeSettingsHosts,
 	CliToolHosts,
+	CodexProfilesHosts,
 	SessionClaims,
 } from "9router-api/presentation/orpc/base"
 import { appRouter } from "9router-api/presentation/orpc/router"
 import { claudeSettingsPort, isClaudeInstalled } from "./claudeToolHost"
 import { cliToolHost } from "./cliToolRegistry"
+import { codexProfilesPort } from "./codexProfilesHost"
 
 /**
  * What a procedure sees as `context.session`; `null` means not logged in.
@@ -51,6 +53,8 @@ export interface RouterContext {
 	readonly cliToolHosts?: CliToolHosts
 	/** Claude Code's settings port; defaulted in `createApiClient` like `cliToolHosts`. */
 	readonly claudeSettingsHosts?: ClaudeSettingsHosts
+	/** `~/.codex` as a port; defaulted in `createApiClient` like the two above. */
+	readonly codexProfilesHosts?: CodexProfilesHosts
 }
 
 /**
@@ -68,6 +72,7 @@ export function createApiClient(context: RouterContext) {
 		context: {
 			...context,
 			cliToolHosts: context.cliToolHosts ?? cliToolHost,
+			codexProfilesHosts: context.codexProfilesHosts ?? codexProfilesPort,
 			claudeSettingsHosts: context.claudeSettingsHosts ?? {
 				port: claudeSettingsPort,
 				isInstalled: isClaudeInstalled,
