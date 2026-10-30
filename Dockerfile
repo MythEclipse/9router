@@ -19,9 +19,16 @@ ARG NPM_REGISTRY
 RUN apk add --no-cache python3 make g++ linux-headers
 
 # Every workspace manifest must land BEFORE install, or bun sees a lockfile that
-# does not match the manifest set and --frozen-lockfile aborts.
+# does not match the manifest set and --frozen-lockfile aborts. The workspaces
+# are apps/*, packages/* and cli, so all six member manifests belong here —
+# shipping only apps/web and cli left apps/api and packages/* unresolvable and
+# every build died at the install step below.
 COPY package.json bunfig.toml ./
+COPY apps/api/package.json ./apps/api/package.json
 COPY apps/web/package.json ./apps/web/package.json
+COPY packages/auth/package.json ./packages/auth/package.json
+COPY packages/db/package.json ./packages/db/package.json
+COPY packages/pricing/package.json ./packages/pricing/package.json
 COPY cli/package.json ./cli/package.json
 # Install opencode-ai CLI globally so the runner image has the opencode binary.
 # The bun image ships no npm, so this rides on bun's global installer; the
