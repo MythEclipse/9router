@@ -8,9 +8,15 @@
  * server stays available for anything outside this process; this is the path the
  * dashboard itself uses.
  */
+
+import * as apiKeysRepo from "@9router/db/repos/apiKeysRepo"
+import * as notificationsRepo from "@9router/db/repos/notificationsRepo"
 import { createRouterClient } from "@orpc/server"
+import type { ScanKey } from "9router-api/application/notifications/scan-notifications"
 import type { UseCases } from "9router-api/application/use-cases"
+import { translatorDumpFile } from "9router-api/domain/translator"
 import type {
+	AppContext,
 	ClaudeSettingsHosts,
 	CliToolHosts,
 	CodexProfilesHosts,
@@ -21,6 +27,9 @@ import type {
 	SessionClaims,
 } from "9router-api/presentation/orpc/base"
 import { appRouter } from "9router-api/presentation/orpc/router"
+import { codexResetPort } from "@/lib/codexResetPort"
+import { quotaBody, quotaPressure, quotaTitle } from "@/lib/notifications/quotaPressure"
+import { translatorDumpStore } from "@/lib/translatorDumpHost"
 import {
 	buildManagedMcpServers,
 	DEFAULT_PLUGINS,
@@ -76,6 +85,18 @@ export interface RouterContext {
 	readonly hermesHosts?: HermesHosts
 	/** Claude Desktop's config library; defaulted in `createApiClient` like the rest. */
 	readonly coworkSettingsHosts?: CoworkSettingsHosts
+	/** The notification table. Defaults to the shared repo, which is lazy: it opens on first use. */
+	readonly notificationStore?: AppContext["notificationStore"]
+	/** The key table and the notification writes the scan makes. */
+	readonly notificationScanStore?: AppContext["notificationScanStore"]
+	/** The quota notice copy. */
+	readonly noticeWording?: AppContext["noticeWording"]
+	/** The translator inspector's dump folder. */
+	readonly translatorDumpStore?: AppContext["translatorDumpStore"]
+	/** The closed filename rule. Defaults to the domain's own. */
+	readonly translatorDumpName?: AppContext["translatorDumpName"]
+	/** The Codex reset-credit port. */
+	readonly codexResetPort?: AppContext["codexResetPort"]
 }
 
 /**
@@ -101,6 +122,37 @@ const defaultCoworkHosts = (): CoworkSettingsHosts => {
 	}
 }
 
+/**
+ * The notification table, behind the port the use-case declares.
+ *
+ * Written as a lazy object rather than bound methods because importing the repo opens the
+ * database; a client built at module load must not do that.
+ */
+const defaultNotificationStore: NonNullable<AppContext["notificationStore"]> = {
+	list: (input) => notificationsRepo.listNotifications(input),
+	unreadCount: () => notificationsRepo.getUnreadCount(),
+	markRead: (id) => notificationsRepo.markRead(id),
+	clearById: (id) => notificationsRepo.clearNotificationById(id),
+	clearByKind: (kind, dedupeKey) => notificationsRepo.clearNotificationByKind(kind, dedupeKey),
+}
+
+/** The scan's two tables, behind the port the use-case declares. */
+const defaultNotificationScanStore: NonNullable<AppContext["notificationScanStore"]> = {
+	// The record type is closed; the scan only reads `id`, and the domain takes an open shape
+	// because a stored key is a row, not a domain entity.
+	keys: async () => (await apiKeysRepo.getApiKeys()) as unknown as readonly ScanKey[],
+	notify: (input) => notificationsRepo.notify(input),
+	clearByKind: (kind, dedupeKey) => notificationsRepo.clearNotificationByKind(kind, dedupeKey),
+	clearAllOfKind: (kind) => notificationsRepo.clearNotificationsByKind(kind),
+}
+
+/** The notice copy. It lives in the dashboard because it is dashboard wording. */
+const quotaNoticeWording: NonNullable<AppContext["noticeWording"]> = {
+	pressure: (key) => quotaPressure(key),
+	title: (key, pressure) => quotaTitle(key, pressure),
+	body: (pressure) => quotaBody(pressure),
+}
+
 export function createApiClient(context: RouterContext) {
 	// Defaulted here rather than required from every caller: 131 routes build this context and
 	// none of them has an opinion about CLI tools. The registry is a module-level table, so one
@@ -114,6 +166,12 @@ export function createApiClient(context: RouterContext) {
 			devinHosts: context.devinHosts ?? { install: devinInstallPort, version: devinVersionPort },
 			hermesHosts: context.hermesHosts ?? hermesFilesPort,
 			coworkSettingsHosts: context.coworkSettingsHosts ?? defaultCoworkHosts(),
+			notificationStore: context.notificationStore ?? defaultNotificationStore,
+			notificationScanStore: context.notificationScanStore ?? defaultNotificationScanStore,
+			noticeWording: context.noticeWording ?? quotaNoticeWording,
+			translatorDumpStore: context.translatorDumpStore ?? translatorDumpStore,
+			translatorDumpName: context.translatorDumpName ?? translatorDumpFile,
+			codexResetPort: context.codexResetPort ?? codexResetPort,
 			claudeSettingsHosts: context.claudeSettingsHosts ?? {
 				port: claudeSettingsPort,
 				isInstalled: isClaudeInstalled,

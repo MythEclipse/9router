@@ -24,6 +24,9 @@
     "./application/cowork-mcp/*": "./src/application/cowork-mcp/*.ts",
     "./application/cowork-settings/*": "./src/application/cowork-settings/*.ts",
     "./application/hermes/*": "./src/application/hermes/*.ts",
+    "./application/notifications/*": "./src/application/notifications/*.ts",
+    "./application/translator/*": "./src/application/translator/*.ts",
+    "./application/codex-reset-credits/*": "./src/application/codex-reset-credits/*.ts",
     "./presentation/orpc/router": "./src/presentation/orpc/router.ts",
     "./presentation/orpc/base": "./src/presentation/orpc/base.ts",
     "./presentation/caller-from-session": "./src/presentation/caller-from-session.ts"

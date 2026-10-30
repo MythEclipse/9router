@@ -49,6 +49,8 @@ import {
 	listCodexProfiles,
 	writeCodexProfile,
 } from "./codex-profiles/manage-codex-profiles.ts"
+import type { CodexAnswer, CodexResetPort } from "./codex-reset-credits/reset-credits.ts"
+import { readResetCredits, redeemResetCredit } from "./codex-reset-credits/reset-credits.ts"
 import {
 	makeCheckComboCycle,
 	makeCreateCombo,
@@ -91,6 +93,14 @@ import { makeCatalogueSync, makeModelProbe } from "./models/manage-catalogue-syn
 import { makeBaseUrlValidation, makeDisabledModels } from "./models/manage-disabled-models.ts"
 import { makeProviderNodes } from "./models/manage-provider-nodes.ts"
 import { makeStudioModels } from "./models/manage-studio-models.ts"
+import type { NotificationAnswer, NotificationStore } from "./notifications/read-notifications.ts"
+import { readNotifications, updateNotification } from "./notifications/read-notifications.ts"
+import type {
+	NoticeWording,
+	NotificationScanStore,
+	ScanAnswer,
+} from "./notifications/scan-notifications.ts"
+import { scanNotifications } from "./notifications/scan-notifications.ts"
 import { autoImportCursor, autoImportLocalCredential } from "./oauth/auto-import.ts"
 import {
 	type DispatchAnswer,
@@ -158,6 +168,12 @@ import { makeGetTheme, makeSetTheme } from "./settings/theme.ts"
 import { makeCacheStats } from "./system/cache-stats.ts"
 import { makeDashboardJobs } from "./system/dashboard-jobs.ts"
 import { makeShutdownFromDashboard, makeShutdownFromHook } from "./system/shutdown.ts"
+import type {
+	DumpAnswer,
+	DumpNameRule,
+	TranslatorDumpStore,
+} from "./translator/read-translator-dumps.ts"
+import { loadDump, saveDump } from "./translator/read-translator-dumps.ts"
 import { makeTtsVoices, type TtsVoices } from "./tts/tts-voices.ts"
 import {
 	checkTailscale,
@@ -409,6 +425,42 @@ export interface UseCases {
 		readonly list: (port: CodexProfilesPort) => Promise<CodexProfilesAnswer>
 		readonly write: (body: unknown, port: CodexProfilesPort) => Promise<CodexProfilesAnswer>
 		readonly remove: (body: unknown, port: CodexProfilesPort) => Promise<CodexProfilesAnswer>
+	}
+	/** The notification bell. */
+	readonly notifications: {
+		readonly read: (
+			session: unknown,
+			limit: unknown,
+			store: NotificationStore,
+		) => Promise<NotificationAnswer>
+		readonly update: (
+			session: unknown,
+			body: unknown,
+			store: NotificationStore,
+		) => Promise<NotificationAnswer>
+		readonly scan: (
+			session: unknown,
+			store: NotificationScanStore,
+			wording: NoticeWording,
+		) => Promise<ScanAnswer>
+	}
+	/** Codex's rate-limit reset credits. */
+	readonly codexResetCredits: {
+		readonly read: (connectionId: unknown, port: CodexResetPort) => Promise<CodexAnswer>
+		readonly redeem: (connectionId: unknown, port: CodexResetPort) => Promise<CodexAnswer>
+	}
+	/** The translator inspector's dump files. */
+	readonly translator: {
+		readonly load: (
+			rawFile: unknown,
+			safeName: DumpNameRule,
+			store: TranslatorDumpStore,
+		) => Promise<DumpAnswer>
+		readonly save: (
+			body: unknown,
+			safeName: DumpNameRule,
+			store: TranslatorDumpStore,
+		) => Promise<DumpAnswer>
 	}
 	/** Claude Desktop's Cowork config library. */
 	readonly coworkSettings: {
@@ -812,6 +864,19 @@ export function buildUseCases(deps: Dependencies): UseCases {
 			list: (port) => listCodexProfiles(port),
 			write: (body, port) => writeCodexProfile(body, port),
 			remove: (body, port) => deleteCodexProfile(body, port),
+		},
+		notifications: {
+			read: (session, limit, store) => readNotifications(session, limit, store),
+			update: (session, body, store) => updateNotification(session, body, store),
+			scan: (session, store, wording) => scanNotifications(session, store, wording),
+		},
+		codexResetCredits: {
+			read: (connectionId, port) => readResetCredits(connectionId, port),
+			redeem: (connectionId, port) => redeemResetCredit(connectionId, port),
+		},
+		translator: {
+			load: (rawFile, safeName, store) => loadDump(rawFile, safeName, store),
+			save: (body, safeName, store) => saveDump(body, safeName, store),
 		},
 		coworkSettings: {
 			read: (deps) => readCoworkSettings(deps),

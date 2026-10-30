@@ -15,10 +15,20 @@
  *    boundary maps AppError and would otherwise have nothing to map.
  */
 import { ORPCError, os } from "@orpc/server"
+import type { CodexResetPort } from "../../application/codex-reset-credits/reset-credits.ts"
 import type {
 	CoworkDependencies,
 	CoworkFilesPort,
 } from "../../application/cowork-settings/manage-cowork-settings.ts"
+import type { NotificationStore } from "../../application/notifications/read-notifications.ts"
+import type {
+	NoticeWording,
+	NotificationScanStore,
+} from "../../application/notifications/scan-notifications.ts"
+import type {
+	DumpNameRule,
+	TranslatorDumpStore,
+} from "../../application/translator/read-translator-dumps.ts"
 import type { UseCases } from "../../application/use-cases.ts"
 import { toORPCError } from "./error-mapping.ts"
 
@@ -186,6 +196,18 @@ export interface AppContext extends RequestContext {
 	readonly hermesHosts?: HermesHosts
 	/** Claude Desktop's config library; absent on a context with no host access. */
 	readonly coworkSettingsHosts?: CoworkSettingsHosts
+	/** The notification table; absent on a context with no database. */
+	readonly notificationStore?: NotificationStore
+	/** The key table plus the notification writes the scan makes. */
+	readonly notificationScanStore?: NotificationScanStore
+	/** The quota notice copy — dashboard text, so the host supplies it. */
+	readonly noticeWording?: NoticeWording
+	/** The translator inspector's `logs/translator` folder. */
+	readonly translatorDumpStore?: TranslatorDumpStore
+	/** The closed filename rule; the domain's `translatorDumpFile`. */
+	readonly translatorDumpName?: DumpNameRule
+	/** The connection row, the OAuth refresh and the two Codex upstream calls. */
+	readonly codexResetPort?: CodexResetPort
 }
 
 /** Anything thrown below presentation becomes a typed ORPCError exactly once. */

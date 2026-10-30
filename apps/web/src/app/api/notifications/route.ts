@@ -1,21 +1,3 @@
-import { getDashboardAuthSession } from "@9router/auth/dashboardSession"
-import {
-	clearNotificationById,
-	clearNotificationByKind,
-	getUnreadCount,
-	listNotifications,
-	markRead,
-} from "@9router/db/repos/notificationsRepo"
-import {
-	canReadNotifications,
-	notificationCommand,
-	notificationLimit,
-} from "9router-api/domain/notification-feed"
-import { cookies } from "next/headers"
-import { NextResponse } from "next/server"
-
-export const dynamic = "force-dynamic"
-
 /**
  * GET /api/notifications - the bell feed.
  * POST /api/notifications - { action: "read", id }, or { action: "clear", id } for one dismissed
@@ -23,55 +5,39 @@ export const dynamic = "force-dynamic"
  *
  * Closed to key sessions: these messages name quota pressure and failed attempts against this
  * install, which is administrator information. The shape rules live in
- * `domain/notification-feed.ts`.
+ * `domain/notification-feed.ts`; the use-case applies them and every mutating answer carries the
+ * new unread count, so the badge and the list cannot disagree.
+ *
+ * The session is read from the cookie rather than through `getSessionContext()` because
+ * `canReadNotifications` branches on `role` — a key session must arrive as `apikey`, not as the
+ * `"admin"` a normalised context would assume.
  */
-async function hasFeedAccess() {
+import { getDashboardAuthSession } from "@9router/auth/dashboardSession"
+import { sessionFromClaims } from "9router-api/infrastructure/session-from-cookie"
+import { cookies } from "next/headers"
+import { NextResponse } from "next/server"
+import { createApiClient } from "@/lib/orpcClient"
+import { getUseCases } from "@/lib/useCases"
+
+export const dynamic = "force-dynamic"
+
+async function client(request: Request) {
 	const cookieStore = await cookies()
-	const session = await getDashboardAuthSession(cookieStore.get("auth_token")?.value)
-	return canReadNotifications(session)
+	const payload = await getDashboardAuthSession(cookieStore.get("auth_token")?.value)
+	const session = sessionFromClaims((payload ?? {}) as Record<string, unknown>)
+	return createApiClient({ session, useCases: getUseCases(), headers: request.headers })
 }
 
-export async function GET(request) {
-	try {
-		if (!(await hasFeedAccess())) {
-			return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-		}
-
-		const { searchParams } = new URL(request.url)
-		const data = await listNotifications({ limit: notificationLimit(searchParams.get("limit")) })
-		return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } })
-	} catch (error) {
-		console.log("Error listing notifications:", error)
-		return NextResponse.json({ error: "Failed to load notifications" }, { status: 500 })
-	}
+export async function GET(request: Request) {
+	const { searchParams } = new URL(request.url)
+	const answer = await (await client(request)).notifications.list({
+		limit: searchParams.get("limit"),
+	})
+	return NextResponse.json(answer.body, { status: answer.status, headers: answer.headers })
 }
 
-export async function POST(request) {
-	try {
-		if (!(await hasFeedAccess())) {
-			return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-		}
-
-		const command = notificationCommand(await request.json().catch(() => ({})))
-
-		if (command.action === "read") {
-			await markRead(command.id ?? "all")
-			return NextResponse.json({ ok: true, unread: await getUnreadCount() })
-		}
-
-		if (command.action === "clear-row") {
-			await clearNotificationById(command.id)
-			return NextResponse.json({ ok: true, unread: await getUnreadCount() })
-		}
-
-		if (command.action === "clear-condition") {
-			await clearNotificationByKind(command.kind, command.dedupeKey)
-			return NextResponse.json({ ok: true, unread: await getUnreadCount() })
-		}
-
-		return NextResponse.json({ error: "Unknown action" }, { status: 400 })
-	} catch (error) {
-		console.log("Error updating notifications:", error)
-		return NextResponse.json({ error: "Failed to update notifications" }, { status: 500 })
-	}
+export async function POST(request: Request) {
+	const body: unknown = await request.json().catch(() => ({}))
+	const answer = await (await client(request)).notifications.update({ body })
+	return NextResponse.json(answer.body, { status: answer.status })
 }
