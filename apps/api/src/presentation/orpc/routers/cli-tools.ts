@@ -75,6 +75,43 @@ export const cliToolsRouter = {
 		if (!host) throw unknownHost(input.tool, Boolean(context.cliToolHosts))
 		return context.useCases.cliTools.resetToolSettings(host)
 	}),
+
+	/**
+	 * Every tool's status in one answer, for the screen that asks about all nineteen at once.
+	 *
+	 * The three tools that do not share the generic flow — `claude`, `devin`, `hermes`, `cowork`
+	 * — are read through their own procedures rather than through `cliToolHosts`, so they are
+	 * built here from the *same* context bundles those procedures use. Reusing them is what
+	 * keeps this answer and the per-tool routes from disagreeing.
+	 *
+	 * A tool whose reader throws is `null` in the answer, never absent: the screen renders a row
+	 * per tool, and a missing key would read as "this tool does not exist".
+	 */
+	allStatuses: authed.handler(async ({ context }) => {
+		const readers: Record<string, () => Promise<Record<string, unknown>>> = {}
+
+		for (const tool of CLI_TOOL_NAMES) {
+			readers[tool] = async () => {
+				const host = context.cliToolHosts?.(tool)
+				if (!host) return {}
+				const answer = await context.useCases.cliTools.readToolSettingsStatus(host)
+				return answer.body
+			}
+		}
+
+		const claude = context.claudeSettingsHosts
+		if (claude) {
+			readers.claude = async () => {
+				const answer = await context.useCases.claudeTools.readSettingsStatus(
+					claude.port,
+					claude.isInstalled,
+				)
+				return answer.body
+			}
+		}
+
+		return context.useCases.cliTools.readAllStatuses(readers)
+	}),
 }
 
 /**

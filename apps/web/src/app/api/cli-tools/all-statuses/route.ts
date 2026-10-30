@@ -1,63 +1,23 @@
-import type { NextRequest } from "next/server"
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { NextResponse } from "next/server"
-import { GET as claudeGet } from "../claude-settings/route.ts"
-import { GET as clineGet } from "../cline-settings/route.ts"
-import { GET as codewhaleGet } from "../codewhale-settings/route.ts"
-import { GET as codexGet } from "../codex-settings/route.ts"
-import { GET as coworkGet } from "../cowork-settings/route.ts"
-import { GET as crushGet } from "../crush-settings/route.ts"
-import { GET as deepseekTuiGet } from "../deepseek-tui-settings/route.ts"
-import { GET as devinGet } from "../devin-settings/route.ts"
-import { GET as droidGet } from "../droid-settings/route.ts"
-import { GET as forgeGet } from "../forge-settings/route.ts"
-import { GET as grokBuildGet } from "../grok-build-settings/route.ts"
-import { GET as hermesGet } from "../hermes-settings/route.ts"
-import { GET as jcodeGet } from "../jcode-settings/route.ts"
-import { GET as kiloGet } from "../kilo-settings/route.ts"
-import { GET as ompGet } from "../omp-settings/route.ts"
-import { GET as openclawGet } from "../openclaw-settings/route.ts"
-import { GET as opencodeGet } from "../opencode-settings/route.ts"
-import { GET as piGet } from "../pi-settings/route.ts"
-import { GET as smeltGet } from "../smelt-settings/route.ts"
+import { createApiClient, sessionClaimsOf } from "@/lib/orpcClient"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-const STATUS_GETTERS = {
-	claude: claudeGet,
-	codex: codexGet,
-	opencode: opencodeGet,
-	droid: droidGet,
-	openclaw: openclawGet,
-	hermes: hermesGet,
-	cowork: coworkGet,
-	cline: clineGet,
-	kilo: kiloGet,
-	"deepseek-tui": deepseekTuiGet,
-	jcode: jcodeGet,
-	"grok-build": grokBuildGet,
-	devin: devinGet,
-	pi: piGet,
-	omp: ompGet,
-	crush: crushGet,
-	forge: forgeGet,
-	smelt: smeltGet,
-	codewhale: codewhaleGet,
-}
-
-// Batch endpoint: gather all CLI tool statuses in one round-trip
-export async function GET() {
-	const entries = await Promise.all(
-		Object.entries(STATUS_GETTERS).map(
-			async ([toolId, getter]: [string, (request?: NextRequest) => Promise<NextResponse>]) => {
-				try {
-					const res = await getter()
-					const data = await res.json()
-					return [toolId, data]
-				} catch {
-					return [toolId, null]
-				}
-			},
-		),
-	)
-	return NextResponse.json(Object.fromEntries(entries))
+/**
+ * Every CLI tool's status in one round-trip.
+ *
+ * The alternative was nineteen fetches from the browser, which is what this endpoint exists to
+ * avoid. A tool whose status cannot be read is `null` here rather than missing, so the screen
+ * can still render its row and say that one row failed to load.
+ */
+export async function GET(request: Request) {
+	const client = createApiClient({
+		session: sessionClaimsOf(await getSessionContext()),
+		useCases: getUseCases(),
+		headers: request.headers,
+	})
+	const answer = await client.cliTools.allStatuses()
+	return NextResponse.json(answer.body, { status: answer.status })
 }

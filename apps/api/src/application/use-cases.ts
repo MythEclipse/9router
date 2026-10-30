@@ -32,6 +32,8 @@ import {
 	resetToolSettings,
 	writeToolSettings,
 } from "./cli-tools/manage-tool-settings.ts"
+import type { AllStatusesAnswer } from "./cli-tools/read-all-statuses.ts"
+import { readAllToolStatuses } from "./cli-tools/read-all-statuses.ts"
 import type {
 	CodexProfilesAnswer,
 	CodexProfilesPort,
@@ -350,6 +352,9 @@ export interface UseCases {
 		readonly resetToolSettings: (host: ToolSettingsDeps) => Promise<ToolSettingsAnswer>
 		readonly clearActiveModel: (config: ToolSettingsDeps["config"]) => Promise<ToolSettingsAnswer>
 		readonly removeToolModel: (modelId: string, host: ToolSettingsDeps) => Promise<ToolSettingsAnswer>
+		readonly readAllStatuses: (
+			readers: Readonly<Record<string, () => Promise<Record<string, unknown>>>>,
+		) => Promise<AllStatusesAnswer>
 	}
 	/**
 	 * Claude Code's settings screen, which speaks an `env` block rather than a provider entry
@@ -745,6 +750,7 @@ export function buildUseCases(deps: Dependencies): UseCases {
 			resetToolSettings: (host) => resetToolSettings(host),
 			clearActiveModel: (config) => clearActiveModel(config),
 			removeToolModel: (modelId, host) => removeToolModel(modelId, host),
+			readAllStatuses: (readers) => readAllToolStatuses(readers),
 		},
 		claudeTools: {
 			readSettingsStatus: (port, isInstalled) => readClaudeSettingsStatus(port, isInstalled),
