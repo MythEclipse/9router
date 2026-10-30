@@ -17,6 +17,11 @@ EnvironmentFile=-/opt/9router/.env
 # answers 429 FreeUsageLimitError to Node's, while an identical request under
 # Bun returns 200. Keep this path in sync with deploy-native.sh's resolve_bun.
 Environment=PATH=/opt/9router/.bun/bin:/usr/local/bin:/usr/bin:/bin
+# The migrator cannot infer this: Turbopack rewrites import.meta.url to a
+# repo-relative path, so the bundled ascent looks in the wrong tree and the
+# process refuses to boot on an empty schema. The release ships migrations/
+# at its root, which is WorkingDirectory.
+Environment=MIGRATIONS_DIR=/opt/9router/current/migrations
 ExecStart=/opt/9router/.bun/bin/bun custom-server.js
 Restart=always
 RestartSec=5

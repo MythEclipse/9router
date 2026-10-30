@@ -122,6 +122,10 @@ jobs:
       # partial copy and .next/cache is build cache — neither belongs on
       # the host (its current tree has neither).
       rsync -a --exclude='/standalone' --exclude='/cache' apps/web/.next/ "$R/.next/"
+      # Turbopack rewrites import.meta.url to a repo-relative path, so the
+      # migrator cannot infer where migrations/ sits at runtime and refuses
+      # to boot on an empty schema. Ship the journal and point at it.
+      cp -r apps/api/migrations "$R/migrations"
       tar -czf /tmp/9router-release.tgz -C "$R" .
       echo "release: $(du -h /tmp/9router-release.tgz | cut -f1), $(find "$R" -type f | wc -l) files"
 
@@ -184,6 +188,16 @@ jobs:
       # node_modules exclude keeps the host's install in place.
       ssh "$VPS_USER@$VPS_HOST" \
         "sudo rsync -a --delete --exclude=node_modules --exclude=.env /tmp/9router-stage/ $APP_DIR/ && sudo rm -rf /tmp/9router-stage"
+
+      # The migrator cannot infer where migrations/ sits: Turbopack rewrites
+      # import.meta.url to a repo-relative path, so without this the process
+      # refuses to boot on an empty schema. The payload ships migrations/ at
+      # the app-dir root, which is what this points at. Written into .env
+      # because that file survives the rsync (--exclude=.env) and the unit
+      # reads it; grep -q keeps it idempotent.
+      ssh "$VPS_USER@$VPS_HOST" \
+        "grep -q '^MIGRATIONS_DIR=' $APP_DIR/.env 2>/dev/null \
+          || echo 'MIGRATIONS_DIR=$APP_DIR/migrations' | sudo tee -a $APP_DIR/.env >/dev/null"
 
       # node_modules is root-owned, so the install runs as root with bun's
       # absolute path (sudo's secure_path must not be trusted to find it).
@@ -297,11 +311,15 @@ jobs:
       cp apps/web/custom-server.js package.json bun.lock "$R"/
       cp apps/web/tsconfig.json apps/web/next.config.mjs "$R"/
       cp -r apps/web/src apps/web/open-sse apps/web/public deploy apps/web/scripts "$R"/
-      cp .next/standalone/server.js "$R/server.js"
+      cp apps/web/.next/standalone/apps/web/server.js "$R/server.js"
       # Anchor both excludes at the transfer root: .next/standalone is a
       # partial copy and .next/cache is build cache — neither belongs on
       # the host.
-      rsync -a --exclude='/standalone' --exclude='/cache' .next/ "$R/.next/"
+      rsync -a --exclude='/standalone' --exclude='/cache' apps/web/.next/ "$R/.next/"
+      # Turbopack rewrites import.meta.url to a repo-relative path, so the
+      # migrator cannot infer where migrations/ sits at runtime and refuses
+      # to boot on an empty schema. Ship the journal and point at it.
+      cp -r apps/api/migrations "$R/migrations"
       # marker, so a re-uploaded payload always lands in a fresh directory.
       printf '%s' "${GITHUB_SHA:0:7}" > "$R/.deploy-sha"
       tar -czf /tmp/9router-imrnes.tgz -C "$R" .
