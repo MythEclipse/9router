@@ -54,7 +54,19 @@ export function decodeJwtPayload(jwt) {
 	}
 }
 
-function resolveExpiresAt(input) {
+/**
+ * When the refreshed credential stops working.
+ *
+ * Three sources, in decreasing order of authority: an explicit expiry the provider sent, an
+ * `expires_in` duration measured from now, or the JWT's own `exp` claim. When none is present the
+ * default is assumed — a credential with no stated expiry is still usable, and refusing it would
+ * reject a working token.
+ *
+ * `at` is injected rather than read from the clock. Computed expiry is the one output here that
+ * cannot be asserted against a fixed expectation otherwise, and a wrong value is invisible until a
+ * token either dies early or lives past its welcome.
+ */
+export function resolveExpiresAt(input, at: number = Date.now()) {
 	const explicit = input.expired || input.expires_at || input.expiresAt
 	if (explicit) {
 		const ms = new Date(explicit).getTime()
@@ -63,7 +75,7 @@ function resolveExpiresAt(input) {
 
 	const expiresIn = Number(input.expires_in || input.expiresIn || 0)
 	if (Number.isFinite(expiresIn) && expiresIn > 0) {
-		return new Date(Date.now() + expiresIn * 1000).toISOString()
+		return new Date(at + expiresIn * 1000).toISOString()
 	}
 
 	const payload = decodeJwtPayload(input.access_token || input.accessToken)
@@ -71,7 +83,7 @@ function resolveExpiresAt(input) {
 		return new Date(payload.exp * 1000).toISOString()
 	}
 
-	return new Date(Date.now() + DEFAULT_EXPIRES_IN * 1000).toISOString()
+	return new Date(at + DEFAULT_EXPIRES_IN * 1000).toISOString()
 }
 
 /** The blob as the Kiro CLI writes it, in either casing. */
