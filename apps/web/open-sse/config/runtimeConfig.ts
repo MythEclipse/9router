@@ -81,6 +81,11 @@ export const RETRY_CONFIG = {
 	delayMs: 2000,
 }
 
+// A successful upstream can still return an empty or malformed document. Retry
+// once before exposing a parser error, but never retry after a valid stream has
+// started reaching the caller.
+export const RESPONSE_PARSE_RETRY_ATTEMPTS = 1
+
 /** One retry slot: attempts plus the wait between them. */
 export interface RetryEntry {
 	attempts: number

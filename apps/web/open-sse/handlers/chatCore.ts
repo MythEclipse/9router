@@ -12,7 +12,11 @@ import {
 	PROVIDER_ID_TO_ALIAS,
 } from "../config/providerModels.ts"
 import { PROVIDERS } from "../config/providers.ts"
-import { HTTP_STATUS, TOKEN_SAVER_HEADER } from "../config/runtimeConfig.ts"
+import {
+	HTTP_STATUS,
+	RESPONSE_PARSE_RETRY_ATTEMPTS,
+	TOKEN_SAVER_HEADER,
+} from "../config/runtimeConfig.ts"
 import { getExecutor } from "../executors/index.ts"
 import { getCapabilitiesForModel } from "../providers/capabilities.ts"
 import { injectCaveman } from "../rtk/caveman.ts"
@@ -42,6 +46,7 @@ import {
 import { detectFormat, getTargetFormat, resolveTransport } from "../services/provider.ts"
 import { refreshWithRetry } from "../services/tokenRefresh.ts"
 import {
+	collectJsonFrames,
 	isChatCompletionBody,
 	isEventStreamResponse,
 	jsonResponseFromBody,
@@ -139,6 +144,40 @@ async function logInvalidCodexUpstream({
 		"✗",
 		`UPSTREAM BAD_GATEWAY · ${provider}/${model} · invalid JSON response\n    status=${statusCode}\n    content-type=${contentType}\n    snippet=${snippet}`,
 	)
+}
+
+/**
+ * Check a successful buffered upstream response before handing it to a parser.
+ * Streaming responses are deliberately checked only when the client has not
+ * received a stream yet; once bytes are sent, replaying the request would
+ * duplicate a partial answer.
+ */
+async function responseBodyNeedsParseRetry(response) {
+	// HTTP failures (including rate limits and upstream 5xx responses) must
+	// follow the normal error/fallback path, never the malformed-body replay.
+	if (!response?.ok || response.status >= 400) return false
+	if (!response || typeof response.clone !== "function") return true
+	let text = ""
+	try {
+		text = await response.clone().text()
+	} catch {
+		return true
+	}
+	if (!text.trim()) return true
+	if (isEventStreamResponse(response) || looksLikeSseText(text)) {
+		const frames = collectJsonFrames(text)
+		if (frames.some((frame) => frame?.error || frame?.type === "error")) return false
+		return frames.length === 0
+	}
+	try {
+		const body = JSON.parse(text)
+		// Some gateways incorrectly return an error envelope with HTTP 200.
+		// Preserve it for the regular parser instead of replaying the request.
+		if (body?.error || body?.type === "error" || body?.status === "error") return false
+		return false
+	} catch {
+		return true
+	}
 }
 
 /**
@@ -1000,6 +1039,67 @@ export async function handleChatCore({
 			}
 		} catch (e) {
 			log?.warn?.("TOKEN", `${provider.toUpperCase()} | refresh threw: ${e.message}`)
+		}
+	}
+
+	let parseRetryCount = 0
+	const retryMalformedResponse = async () => {
+		while (
+			providerResponse?.ok &&
+			parseRetryCount < RESPONSE_PARSE_RETRY_ATTEMPTS &&
+			(await responseBodyNeedsParseRetry(providerResponse))
+		) {
+			parseRetryCount += 1
+			try {
+				const retryResult = await executor.execute({
+					model,
+					body: translatedBody,
+					stream,
+					credentials,
+					providerSessionId: sessionSeed,
+					clientTool,
+					signal: streamController.signal,
+					log,
+					reqTag,
+					proxyOptions,
+					providerOverrides,
+				})
+				providerResponse = retryResult.response
+				providerUrl = retryResult.url
+				providerHeaders = retryResult.headers
+				finalBody = retryResult.transformedBody
+				providerResponseFormat = retryResult.responseFormat || targetFormat
+				reqLogger.logTargetRequest(providerUrl, providerHeaders, finalBody)
+				log?.warn?.(
+					"RETRY",
+					`${provider.toUpperCase()} | ${model} | retried malformed response (${parseRetryCount}/${RESPONSE_PARSE_RETRY_ATTEMPTS})`,
+				)
+			} catch (error) {
+				log?.warn?.(
+					"RETRY",
+					`${provider.toUpperCase()} | ${model} | parse retry failed: ${error?.message || error}`,
+				)
+				return false
+			}
+		}
+		return parseRetryCount > 0
+	}
+
+	// Non-streaming responses are fully buffered before reaching the caller, so
+	// an invalid document can be retried safely. For a streaming client, only
+	// retry a non-SSE response before its first byte is forwarded.
+	if (providerResponse?.ok && !clientRequestedStreaming) {
+		await retryMalformedResponse()
+	} else if (providerResponse?.ok && stream) {
+		const initialText =
+			typeof providerResponse.clone === "function"
+				? await providerResponse
+						.clone()
+						.text()
+						.catch(() => "")
+				: ""
+		if (!isEventStreamResponse(providerResponse) && !looksLikeSseText(initialText)) {
+			await retryMalformedResponse()
 		}
 	}
 
