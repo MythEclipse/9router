@@ -4,7 +4,11 @@ import pkg from "../../../package.json" with { type: "json" }
 export const APP_CONFIG = {
 	name: "9Router Proxy",
 	description: "AI Infrastructure Management",
-	version: pkg.version,
+	// The release version lives in the workspace root manifest; next.config.mjs
+	// injects it as NEXT_PUBLIC_APP_VERSION. apps/web is private and its own
+	// version is not bumped with releases, so reading it here reported 4.2.0
+	// on every 5.x build.
+	version: process.env.NEXT_PUBLIC_APP_VERSION || pkg.version,
 	// Build identity = git short SHA, injected at build time by the Nix flake
 	// (NEXT_PUBLIC_GIT_SHA). Falls back to null in dev where the env var is
 	// absent, so the dashboard shows just the semver.

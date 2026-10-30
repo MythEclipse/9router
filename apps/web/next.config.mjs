@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -14,12 +15,18 @@ const workspaceRoot = join(projectRoot, "..", "..")
 // through a symlink that escapes the build root — "Could not find the Next.js
 // package". NEXT_TRACING_ROOT_MODE=workspace only narrows the Docker payload.
 const tracingRoot = workspaceRoot
+// The dashboard reports the release version, which is the workspace root's:
+// apps/web is private and its own version is not bumped with releases.
+const releaseVersion = JSON.parse(readFileSync(join(workspaceRoot, "package.json"), "utf8")).version
 const proxyClientMaxBodySize = process.env.NINEROUTER_PROXY_CLIENT_MAX_BODY_SIZE || "128mb"
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
 	distDir: process.env.NEXT_DIST_DIR || ".next",
 	output: "standalone",
+	env: {
+		NEXT_PUBLIC_APP_VERSION: releaseVersion,
+	},
 	// `open` must stay external. It derives its own directory from `import.meta.url`, and
 	// webpack replaces that with the absolute path of the BUILD machine as a string literal.
 	// A release built on macOS therefore ships `file:///Users/.../open/index.js`, which
