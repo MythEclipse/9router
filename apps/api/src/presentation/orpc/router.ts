@@ -16,6 +16,7 @@ import { claudeToolsRouter } from "./routers/claude-tools.ts"
 import { cliToolsRouter } from "./routers/cli-tools.ts"
 import { codexProfilesRouter } from "./routers/codex-profiles.ts"
 import { combosRouter } from "./routers/combos.ts"
+import { coworkMcpRouter } from "./routers/cowork-mcp.ts"
 import { dashboardKeysRouter } from "./routers/dashboard-keys.ts"
 import { errorLogsRouter } from "./routers/error-logs.ts"
 import { headroomRouter } from "./routers/headroom.ts"
@@ -41,6 +42,7 @@ export const appRouter = base.router({
 	cliTools: cliToolsRouter,
 	claudeTools: claudeToolsRouter,
 	codexProfiles: codexProfilesRouter,
+	coworkMcp: coworkMcpRouter,
 	combos: combosRouter,
 	errorLogs: errorLogsRouter,
 	theme: themeRouter,

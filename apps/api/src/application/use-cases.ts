@@ -52,6 +52,8 @@ import {
 	makePreviewComboPresets,
 	makeUpdateCombo,
 } from "./combos/manage-combos.ts"
+import type { McpProbeAnswer, ProbeFetch } from "./cowork-mcp/probe-mcp-tools.ts"
+import { probeCoworkMcpTools } from "./cowork-mcp/probe-mcp-tools.ts"
 import type { Dependencies } from "./dependencies.ts"
 import { makeClearErrorLogs, makeListErrorLogs } from "./error-logs/read-error-logs.ts"
 import { makeHeadroom } from "./headroom/manage-headroom.ts"
@@ -368,6 +370,17 @@ export interface UseCases {
 		readonly list: (port: CodexProfilesPort) => Promise<CodexProfilesAnswer>
 		readonly write: (body: unknown, port: CodexProfilesPort) => Promise<CodexProfilesAnswer>
 		readonly remove: (body: unknown, port: CodexProfilesPort) => Promise<CodexProfilesAnswer>
+	}
+	/** Probing a Cowork MCP server for the tools it exposes. */
+	readonly coworkMcp: {
+		readonly probeTools: (
+			body: unknown,
+			options: {
+				readonly fetchFor: ProbeFetch
+				readonly allowPrivateUrl: boolean
+				readonly assertPublicUrl: (url: string) => void
+			},
+		) => Promise<McpProbeAnswer>
 	}
 	/** Cloudflare tunnels and Tailscale funnels, as the network screen drives them. */
 	readonly tunnel: {
@@ -732,6 +745,9 @@ export function buildUseCases(deps: Dependencies): UseCases {
 			list: (port) => listCodexProfiles(port),
 			write: (body, port) => writeCodexProfile(body, port),
 			remove: (body, port) => deleteCodexProfile(body, port),
+		},
+		coworkMcp: {
+			probeTools: (body, options) => probeCoworkMcpTools(body, options),
 		},
 		// The probe cache is process-wide and survives a hot reload, exactly like the module
 		// scope it replaced: one cache per process, not one per request.

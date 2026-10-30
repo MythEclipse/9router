@@ -14,12 +14,14 @@ import type {
 	ClaudeSettingsHosts,
 	CliToolHosts,
 	CodexProfilesHosts,
+	McpProbeHost,
 	SessionClaims,
 } from "9router-api/presentation/orpc/base"
 import { appRouter } from "9router-api/presentation/orpc/router"
 import { claudeSettingsPort, isClaudeInstalled } from "./claudeToolHost"
 import { cliToolHost } from "./cliToolRegistry"
 import { codexProfilesPort } from "./codexProfilesHost"
+import { mcpProbeHost } from "./mcpProbeHost"
 
 /**
  * What a procedure sees as `context.session`; `null` means not logged in.
@@ -55,6 +57,8 @@ export interface RouterContext {
 	readonly claudeSettingsHosts?: ClaudeSettingsHosts
 	/** `~/.codex` as a port; defaulted in `createApiClient` like the two above. */
 	readonly codexProfilesHosts?: CodexProfilesHosts
+	/** The MCP probe's network; defaulted in `createApiClient` like the three above. */
+	readonly mcpProbeHost?: McpProbeHost
 }
 
 /**
@@ -73,6 +77,7 @@ export function createApiClient(context: RouterContext) {
 			...context,
 			cliToolHosts: context.cliToolHosts ?? cliToolHost,
 			codexProfilesHosts: context.codexProfilesHosts ?? codexProfilesPort,
+			mcpProbeHost: context.mcpProbeHost ?? mcpProbeHost,
 			claudeSettingsHosts: context.claudeSettingsHosts ?? {
 				port: claudeSettingsPort,
 				isInstalled: isClaudeInstalled,

@@ -110,6 +110,23 @@ export interface ClaudeSettingsHosts {
 export type CodexProfilesHosts =
 	import("../../application/codex-profiles/manage-codex-profiles.ts").CodexProfilesPort
 
+/**
+ * The MCP probe's network, injected because the choice depends on the request.
+ *
+ * A remote caller must fetch through the SSRF guard; a local one must keep its self-hosted MCP
+ * server on loopback. Both `fetchPublic` and `isLocalHeaders` live in `apps/web`, so the bundle
+ * arrives on the context and reads `context.headers` — never a claim in the body, which a remote
+ * caller could set.
+ */
+export interface McpProbeHost {
+	readonly fetchForCaller: (
+		headers: Headers,
+	) => (url: string, init: RequestInit) => Promise<Response>
+	readonly isLocal: (headers: Headers) => boolean
+	/** Throws when the URL is not public. */
+	readonly assertPublicUrl: (url: string) => void
+}
+
 export interface AppContext extends RequestContext {
 	readonly useCases: UseCases
 	/** Present on the in-process dashboard client; absent on a context with no host access. */
@@ -118,6 +135,8 @@ export interface AppContext extends RequestContext {
 	readonly claudeSettingsHosts?: ClaudeSettingsHosts
 	/** `~/.codex` as a port; absent on a context with no host access. */
 	readonly codexProfilesHosts?: CodexProfilesHosts
+	/** Network for the MCP probe; absent on a context with no host access. */
+	readonly mcpProbeHost?: McpProbeHost
 }
 
 /** Anything thrown below presentation becomes a typed ORPCError exactly once. */
