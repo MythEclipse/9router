@@ -22,29 +22,28 @@ gateway serving traffic at every phase boundary.
 
 ## Next Step
 
-Three loose ends, all being closed now.
+Merged to `master` at `390cafb3a` (v5.0.0), branch `migrate/kana-stack` deleted locally and on the
+remote. `master` was 0 commits ahead, so the merge was a fast-forward with no conflicts. Tree is
+`master`, 0/0 against `origin/master`, typecheck 0 errors, 8152 tests passing, `bun run build` green.
 
-**1. The packaged tree was never compared with the tree that was built.** `copy-standalone-assets.mjs`
-and `build-cli.ts` both copy `src/`, `scripts/`, `open-sse/` and `migrations/` **as source**. A green
-`bun run build` therefore proves the compiler ran, not that the bytes on disk are those bytes. It has
-already shipped stale code once — `cli/moon.yml` records `auth-guard-hooks.mjs` "silently never shipped".
-`tests/unit/standalone-package-matches-source.test.ts` now hashes every copied file against its source
-and asserts the runtime assets (migrations, the bundled `mitm/server.js`, the guard beside its aliases).
-Skipped, not failed, when a tree has not been built.
+The three loose ends are closed:
 
-**2. `cli/app` on disk was from another commit** — dated 28 October against `apps/web` at 30 October,
-51 files absent (32 under `lib/`, 17 under `mitm/`) and 193 whose length a path rewrite cannot explain.
-`apiKeyStore.ts`, `cliToolHosts.ts` and `response.ts` were all created on 29–30 October, after the copy.
-The test caught this; the fix is to rebuild the tree, not to soften the assertion.
+**Packaged tree vs built tree.** `tests/unit/standalone-package-matches-source.test.ts` hashes every
+copied file in `.next/standalone` against its source and asserts the runtime assets a build can drop
+(migrations, the bundled `mitm/server.js`, the guard beside its `open-sse/` aliases). Five mutations,
+all killed. The `cli/app` half asserts what its launcher touches instead — writing it took four wrong
+assumptions, all recorded in the file, because the tree is compiled rather than read.
 
-A correction worth keeping: the first version of that test compared `cli/app` byte-for-byte and reported
-211 stale files. It was wrong. `cli/app` is a Next standalone tree whose `jsconfig.json` maps only `@/*`
-and `open-sse/*`; there is no `@9router/*` beside it, so the packager rewrites `@9router/db/repos/x` to
-`@/lib/db/repos/x`. A difference in an import specifier is expected. **"Different" is not "stale"** — the
-honest question is whether the difference is one the build is supposed to introduce.
+**Ledger corrected.** The claim that `apps/web` had no oRPC client was stale; `orpcClient.ts` exists and
+125 of 199 routes use it. The remaining 74 are mapped by reason, including the two that must never
+migrate (`pxpipe/install`, `pxpipe/start` — an API key that can install is a key that can change what
+runs on the host).
 
-**3. The ledger claimed `apps/web` had no oRPC client.** It does: `orpcClient.ts` via
-`createRouterClient`, 125 of 199 routes. Corrected, along with a map of the remaining 74 and the two
-that must never migrate (`pxpipe/install` and `pxpipe/start` would let an API key install software).
+**Push done.** 120 commits plus the bump.
 
-Then push: 118 commits are ahead of `origin/migrate/kana-stack`.
+What is left is not migration work. The transport question is settled and documented; the domain rules
+live where tests can reach them, which was the point of the whole sweep. The honest remaining items are
+things nobody has asked for yet: the 21 routes still calling `getUseCases()` directly (each needs the
+"is the router a place this route may be reachable from" check before moving), and the `open-sse`
+translation layer's known bugs, which `tests/translator/AGENTS.md` already tracks as `it.fails` cases
+with file:line references.
