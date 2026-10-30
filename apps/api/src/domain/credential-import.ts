@@ -115,16 +115,17 @@ export interface CodexTokenClaims {
 	readonly expiresAtEpoch: number | null
 }
 
-/** The payload of a JWT, or null when the string is not one. */
+/**
+ * The payload of a JWT, or null when the string is not one.
+ *
+ * `Buffer`'s base64 decoder accepts the URL-safe alphabet and input with the padding stripped, so the
+ * segment is decoded as the issuer wrote it. `atob` would reject both, which is why it is not used.
+ */
 export function jwtPayloadOf(token: string): Record<string, unknown> | null {
 	const parts = token.split(".")
 	if (parts.length !== 3) return null
 	try {
-		const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/")
-		const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4)
-		// `Buffer` rather than `atob`: the domain runs in Bun and in Node, and only one of
-		// them guarantees a global `atob` with padding-tolerant base64.
-		const parsed = JSON.parse(Buffer.from(padded, "base64").toString("utf8")) as unknown
+		const parsed = JSON.parse(Buffer.from(parts[1], "base64").toString("utf8")) as unknown
 		return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null
 	} catch {
 		return null
