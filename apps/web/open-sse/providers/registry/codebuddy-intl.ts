@@ -53,6 +53,8 @@ const CodebuddyIntl = {
 			combined: true,
 			header: "Authorization",
 			scheme: "bearer",
+			// No `codebuddyHeaders` hook here: executors/codebuddy-intl.ts builds
+			// these ids itself, with casing rules the generic hook cannot honour.
 		},
 		// Intl billing endpoint mirrors CN shape (data.Response.Data.Accounts[]).
 		usage: {

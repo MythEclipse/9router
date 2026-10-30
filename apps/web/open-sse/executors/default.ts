@@ -49,6 +49,26 @@ function applyAuth(headers, desc, credentials) {
 
 // Provider-specific header quirks kept as small hooks (not pure auth).
 const HEADER_HOOKS = {
+	// CodeBuddy (CN + intl): the gateway runs a channel check per request and
+	// rejects anything that does not carry the conversation/request identifiers
+	// the official plugin sends. Without them upstream answers
+	// 400 {"code":11128,"msg":"request illegal"} with
+	// "This call failed channel verification, possibly because it was not sent
+	// from an official client" — the request never reaches the model.
+	// The same request WITH these headers passes channel verification and gets
+	// as far as the real rate limiter (429 / 6004).
+	codebuddyHeaders: (h) => {
+		// Fill in only what is missing. A caller (or the intl executor, which
+		// owns the same ids with its own casing rules) may already have set
+		// them; writing a second key that differs only in case would leave the
+		// gateway reading one and the test seeing the other.
+		const has = (name) => Object.keys(h).some((key) => key.toLowerCase() === name.toLowerCase())
+		const requestId = randomUUID()
+		if (!has("X-Request-ID")) h["X-Request-ID"] = requestId
+		if (!has("X-Conversation-ID")) h["X-Conversation-ID"] = randomUUID()
+		if (!has("X-Conversation-Request-ID")) h["X-Conversation-Request-ID"] = requestId
+		if (!has("X-Conversation-Message-ID")) h["X-Conversation-Message-ID"] = requestId
+	},
 	// Stable device_id from OAuth connection (CLIProxyAPI KimiTokenStorage.DeviceID)
 	kimiHeaders: (h, c) => Object.assign(h, buildKimiHeaders(c?.providerSpecificData?.deviceId)),
 	// Muse: x-api-version only on subscription (minted key) requests - plain
