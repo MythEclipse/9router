@@ -1,6 +1,6 @@
 {
   "name": "@9router/auth",
-  "version": "5.1.5",
+  "version": "5.1.6",
   "private": true,
   "type": "module",
   "description": "Dashboard session, permissions and OIDC/SAML flows shared by the gateway and the API",
