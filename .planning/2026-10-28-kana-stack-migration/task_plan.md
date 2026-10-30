@@ -22,36 +22,30 @@ gateway serving traffic at every phase boundary.
 
 ## Next Step
 
-**`cli-tools` is partly on oRPC — 16 of 20 settings routes, eighty across the migration.** The
-fourteen near-identical `*-settings` handlers collapsed into one name-keyed registry
-(`apps/web/src/lib/cliToolRegistry.ts`) plus four procedures. Three commit boundaries, because
-each is reviewable on its own: the registry, the router, the route delegation.
+**Seventeen of `cli-tools`' twenty-one routes are on oRPC — eighty-four across the migration.**
+The sixteen generic `*-settings` routes share one name-keyed registry and four procedures;
+`claude` got its own three because it speaks an `env` block rather than a provider entry. Its
+port arrives on `context.claudeSettingsHosts`, defaulted in `createApiClient` beside
+`cliToolHosts` — the same seam, applied twice, which is now the established shape for host code.
 
-The finding worth keeping is a layering one. My first router imported the registry from
-`apps/web` and it broke the build: **`apps/api` never depends on `apps/web`** — the arrow runs
-the other way, and a bundle of `isInstalled`/config-port/side-write functions is exactly the
-kind of host code that must not move inward. The resolver therefore arrives on
-`RouterContext.cliToolHosts`, defaulted inside `createApiClient`, which is the same seam
-`useCases` and `headers` already use. Reach for the context before reaching for an import
-across packages.
+**Next: `codex-profiles` (117) and `cowork-mcp-tools` (111)**, the two largest remaining
+handlers in the area that are not blocked. Then `cowork-mcp-registry` (74), `all-statuses` (63),
+`hermes-profiles` (17).
 
-Also: **verify transcriptions against the source, not against memory.** The `smelt` reset
-message came out as "9Router removed from Smelt" where the route said "Smelt 9Router settings
-removed". No type checks it and no existing test asserts it — it was caught by diffing all 48
-messages back against `git show HEAD:<route>`, and that diff is now why the registry test checks
-the shape of every entry.
+Three remain blocked on extraction, in ascending order of work: `devin` (70) does inline
+`exec`/`fs` probing with `devinBinCandidates` from the domain; `hermes` (369) has its own
+profile helpers in a sibling module; `cowork` (449) is the largest single handler in the area.
+Each needs a use-case before a procedure can name it.
 
-**Still in `cli-tools`:** `devin` (70), `hermes` (369) and `cowork` (449) have no
-`ToolConfigPort` and do their own filesystem work, so they need use-case extraction before a
-procedure can name them. `claude` (33) has its own use-case and is a small addition. Then
-`antigravity-mitm` (193+42) stays put and that should be written down as a decision, not a gap.
-Also outstanding in the area: `all-statuses` (63), `codex-profiles` (117),
-`cowork-mcp-registry` (74), `cowork-mcp-tools` (111), `hermes-profiles` (17).
+`antigravity-mitm` (193 + 42 for `alias`) stays put: it spawns a privileged proxy, installs a
+root CA and rewrites the hosts file. Its *decisions* already live in `resolveMitmPassword` and
+friends — what remains is process control, which is host work by nature. That is a decision to
+record, not a gap to close.
 
 Rule this round added:
 
-- **A cross-package import is usually a missing injection point.** When the only way to reach
-  something is `../../../../other-package/...`, the dependency graph is telling you the value
-  belongs on the context.
+- **The same seam, applied twice, is the confirmation that it was the right one.** `claude`'s
+  port went onto `RouterContext` with no new thinking required, because `cliToolHosts` had
+  already established it. When the second case needs no design, the first design was sound.
 
 **Compare the set of failing test names, never the count.**
