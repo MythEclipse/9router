@@ -98,29 +98,31 @@ COPY --from=builder /app/apps/web/src/mitm ./src/mitm
 # opened straight onto the dashboard with no login form.
 COPY --from=builder /app/apps/web/scripts ./scripts
 COPY --from=builder /app/apps/web/src ./src
-# The guard imports that src/ tree directly, so Node resolves those bare
-# specifiers against ./node_modules instead of through webpack. jose (JWT
-# sign/verify), uuid and bcryptjs are reached by dashboardSession and the repos
-# but were never bundled, so their absence made the guard import throw - which
-# fail-closed then turned into a 503 on every page.
-COPY --from=builder /app/node_modules/jose ./node_modules/jose
-COPY --from=builder /app/node_modules/uuid ./node_modules/uuid
-COPY --from=builder /app/node_modules/bcryptjs ./node_modules/bcryptjs
-# Standalone node_modules may omit deps only required by the MITM child process.
-COPY --from=builder /app/node_modules/node-forge ./node_modules/node-forge
-# Ensure `next` is available at runtime in case tracing did not include it.
-COPY --from=builder /app/node_modules/next ./node_modules/next
-# sql.js loads dist/sql-wasm.wasm by path at runtime; tracing only follows JS imports,
-# so the last-resort DB driver would abort with ENOENT on the missing binary.
-COPY --from=builder /app/node_modules/sql.js ./node_modules/sql.js
-# node-machine-id is createRequire-loaded at runtime; tracing omits it.
-COPY --from=builder /app/node_modules/node-machine-id ./node_modules/node-machine-id
-# Sharp and its native image helpers are required by the runtime OCR/image-text
-# extractor. They are not always left in the standalone bundle unless copied
-# explicitly, which produces the hashed `sharp-<hash>` external-module crash.
-COPY --from=builder /app/node_modules/sharp ./node_modules/sharp
-COPY --from=builder /app/node_modules/@img ./node_modules/@img
-COPY --from=builder /app/node_modules/detect-libc ./node_modules/detect-libc
+# bun resolves "@/..." and "open-sse/*" through tsconfig paths, NOT through the
+# loader hooks in scripts/auth-guard-hooks.mjs: bun ignores module.register()
+# entirely (verified on 1.3.14 and 1.4.2 — the hook's own resolve() works when
+# called by hand, and is never invoked by the loader). Production on the VPS has
+# this file and serves; an image without it makes the guard import throw, and
+# fail-closed then answers 503 to every single request.
+COPY --from=builder /app/apps/web/tsconfig.json ./tsconfig.json
+# The guard imports the workspace packages by name. bun resolves those through
+# node_modules/@9router/* and node_modules/9router-api, which are symlinks to
+# ../../packages/* and ../../apps/api — so the link targets have to exist here
+# too, or @9router/auth/dashboardSession dies and every page 503s.
+COPY --from=builder /app/packages ./packages
+COPY --from=builder /app/apps/api ./apps/api
+# The migrator reads the SQL journal from ./migrations beside custom-server.js
+# (custom-server.js points MIGRATIONS_DIR at it when present). Without it the
+# database never initialises and /api/auth/status answers 500 while /api/health
+# still returns 200 — a broken image that looks healthy to a shallow probe.
+COPY --from=builder /app/apps/api/migrations ./migrations
+# Ship the resolved dependency tree whole. Every previous attempt to name the
+# packages the guard needs by hand lost a different one: @swc/helpers (next's
+# own closure) and @9router/auth (the session repo) were both absent, and each
+# gap is a 503 at runtime that the build cannot see. The tree also carries the
+# .bun store that the standalone symlinks point into, so copying it keeps those
+# links resolvable instead of dangling.
+COPY --from=builder /app/node_modules ./node_modules
 # Recreate any Turbopack-hashed Sharp aliases from the real package so future
 # deploys survive a poisoned or mismatched dependency tree.
 RUN node /app/scripts/ensure-sharp-runtime-alias.mjs || true

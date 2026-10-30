@@ -184,7 +184,12 @@ jobs:
       username: ${{ github.actor }}
       password: ${{ secrets.GITHUB_TOKEN }}
 
-   - name: Run amd64 image and wait for health
+   # /api/health alone proves almost nothing. It answered 200 on an image whose
+   # auth guard could not import its own source tree — every other route 503 —
+   # and on one whose database had no migration journal, where /api/auth/status
+   # answered 500. Probe the routes that can only pass when the guard, the
+   # tsconfig alias map, the workspace packages and the journal all landed.
+   - name: Run amd64 image and prove it serves
      env:
       TAG: ${{ needs.image.outputs.tag }}
      run: |
@@ -197,17 +202,28 @@ jobs:
         -e PORT=2028 -e HOSTNAME=0.0.0.0 -e DATA_DIR=/app/data \
         "${IMAGE}:${TAG}"
 
-      for attempt in {1..45}; do
-        if body="$(curl --fail --silent --show-error http://127.0.0.1:2028/api/health)"; then
-          echo "health OK: ${body}"
-          exit 0
-        fi
-        (( attempt % 5 == 0 )) && echo "waiting for health (${attempt}/45)" >&2
+      probe() { curl --silent --output /dev/null --write-out '%{http_code}' "http://127.0.0.1:2028$1"; }
+
+      for attempt in $(seq 1 60); do
+        if [ "$(probe /api/health)" = "200" ]; then break; fi
+        if [ $(( attempt % 5 )) -eq 0 ]; then echo "waiting for health (${attempt}/60)" >&2; fi
         sleep 2
       done
 
-      echo "health check never returned 200" >&2
-      exit 1
+      expect() {
+        local got
+        got="$(probe "$1")"
+        if [ "$got" != "$2" ]; then
+          echo "FAIL $3: $1 answered $got, expected $2" >&2
+          exit 1
+        fi
+        echo "ok   $1 -> $got ($3)"
+      }
+
+      expect /api/health 200 "server is up"
+      expect /login 200 "guard imported its source tree (tsconfig aliases + workspace packages)"
+      expect /api/auth/status 200 "database initialised (migration journal present)"
+      expect /v1/models 401 "gateway still rejects anonymous callers"
 
    # A manifest list that names arm64 proves a digest was published, not that
    # the arm64 image can execute: sharp and better-sqlite3 are compiled per
