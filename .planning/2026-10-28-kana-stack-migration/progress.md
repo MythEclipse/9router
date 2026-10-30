@@ -2581,3 +2581,56 @@ called outside a request scope — which is the correct behaviour, and the reaso
 recorded earlier: a test should drive the use-case, and a mock session must not be invented to keep
 a route callable with no session. The assertions moved down to `importKiroCliAuth` and the
 connection shape it writes is still checked field by field.
+
+## The gate was green because it was not looking
+
+The full suite reported 49 failures after the `oauth` round. Twelve of them were tests I had
+written in this and the two preceding rounds. They passed under `bun test` and failed under
+`bun run test` — because this project runs **vitest**, and I had been writing `from "bun:test"`.
+
+That is the same class of failure I fixed once already in this campaign, from the other side: a
+test file that fails at collection is reported as "0 tests", which reads as a missing file rather
+than a broken gate. Here it was worse — I had a green light from a runner the project does not use,
+and every one of those files was invisible to the gate that matters. **The gate is `bun run test`,
+never `bun test`.** A `bun:test` import in this repo is a bug in the test, not a preference.
+
+## What the remaining 37 were, and what they taught
+
+None were about the code under test. All of them were tests that called a *route* which now
+resolves a session and builds a use-case graph:
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| `cookies` outside a request scope | route calls `getSessionContext()` | mock `@9router/auth/dashboardPermissions` |
+| `createDb` inside a Vitest run | `getUseCases()` opens a database while *building* the graph | mock `@/lib/useCases` with the real use-case |
+| `Cannot find package 'bun:test'` | see above | import from `vitest` |
+
+The `createDb` one is the useful lesson. `tests/stubs/api-db-client.ts` throws on purpose: a test
+that reaches it forgot to inject a repository port. That design is right, and it means **a route
+test cannot use the real `getUseCases()`** — the graph opens a database before any rule runs. So
+each of those tests had to mock `getUseCases` with the real use-case inside, not a stand-in.
+Where a test only ever asserted a pure rule — pagination bounds, payload redaction — the honest
+move was to assert the domain function directly and delete the route call entirely.
+
+## Two behaviour changes I made without noticing
+
+1. `probe-mcp-tools` widened a 400 body from `{ error }` to `{ error, tools: [] }`. A test caught
+   it; the old route was the authority. The type now says refusal and result are different shapes,
+   which is what stopped it from happening twice.
+2. `routers/usage.ts` used `z.string().optional()` for query parameters, but
+   `searchParams.get()` answers `null` for an absent parameter — so the ordinary request, with no
+   filter set, failed validation. `nullish()` is the correct schema for a forwarded query string.
+
+## Where the campaign stands
+
+`typecheck` 0, `bun run test` 7928 passed / 0 failed across 673 files, working tree clean.
+
+- `cli-tools`: 24 of 26, the two left are `antigravity-mitm` by decision.
+- `oauth`: the four import routes are procedures; `[provider]/[action]` is untouched on purpose —
+  it owns callback proxies, ports and an ECDH/RSA keypair registry.
+- `auth`: all eleven routes stay where they are, because they are on `PUBLIC_API_PATHS` and are
+  the thing that *issues* the session every other route now requires.
+- `v1` / `v1beta`: the gateway itself; not a dashboard area.
+
+The remaining dashboard areas are `usage/[connectionId]/codex-reset-credits`, `translator`,
+`notifications`, `dashboard-jobs` and `v1/models`. Nothing large and nothing risky.
