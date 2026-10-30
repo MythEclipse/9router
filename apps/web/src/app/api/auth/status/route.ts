@@ -1,117 +1,30 @@
-import { getDashboardAuthSession } from "@9router/auth/dashboardSession"
-import { isOidcConfigured } from "@9router/auth/oidc"
-import { isSamlConfigured } from "@9router/auth/saml"
-import {
-	DEFAULT_PERMISSIONS,
-	FULL_PERMISSIONS,
-	firstAllowedPage,
-	normalizePermissions,
-} from "@9router/db/shared/permissionPaths"
-import { sessionHomePath } from "9router-api/domain/dashboard-login"
-import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
-import { getSettings } from "@/lib/localDb"
+import { createApiClient } from "@/lib/orpcClient"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
+/**
+ * What this session is, for the dashboard and the login page.
+ *
+ * Everything the answer contains — the shape, which fields are present, what a failure looks like
+ * — lives in `domain/auth-status.ts` and `application/auth-status/read-status.ts`. This handler
+ * builds a client, asks, and serialises. It has no `try`: the use-case answers signed-out instead
+ * of throwing, because a page that never receives an answer stays on a spinner forever.
+ *
+ * `session: null` is deliberate. The procedure is not `authed`, and the auth-status port reads the
+ * cookie itself. Resolving the caller here and then 401-ing on a bad cookie would break the one
+ * endpoint whose job is to report that the cookie is bad.
+ *
+ * The `catch` this replaced was not equivalent to the signed-out answer. It returned 17 fields
+ * where the success path returned 17 *different* ones, so `role`, `permissions`, `homePath` and
+ * `keyId` were absent exactly when a client most needed to tell "signed out" from "server broken".
+ */
 export async function GET() {
-	try {
-		const settings = await getSettings()
-		const cookieStore = await cookies()
-		const session = await getDashboardAuthSession(cookieStore.get("auth_token")?.value)
-		const requireLogin = settings.requireLogin !== false
-		const authMode = settings.authMode || "password"
-		const ssoType = settings.ssoType || "oidc"
-		const oidcName = String(session?.oidcName || "").trim()
-		const oidcEmail = String(session?.oidcEmail || "").trim()
-		const samlName = String(session?.samlName || "").trim()
-		const samlEmail = String(session?.samlEmail || "").trim()
-
-		const role = session?.role || "admin"
-		// A password session is a full admin. Anything else carries exactly what its
-		// key holds, normalized so a key stored before a permission existed simply
-		// lacks it rather than inheriting one.
-		const permissions = session?.permissions
-			? normalizePermissions(session.permissions)
-			: role === "admin"
-				? FULL_PERMISSIONS
-				: DEFAULT_PERMISSIONS
-		const isApiKeyLogin = role === "apikey"
-
-		const displayName =
-			samlName ||
-			samlEmail ||
-			oidcName ||
-			oidcEmail ||
-			(isApiKeyLogin
-				? session?.keyName || "API Key user"
-				: session?.saml
-					? "SAML user"
-					: session?.oidc
-						? "OIDC user"
-						: "Password user")
-
-		const loginMethod = isApiKeyLogin
-			? "API Key"
-			: session?.saml
-				? "SAML"
-				: session?.oidc
-					? "OIDC"
-					: "Password"
-		// Where this session belongs after signing in. A key without any usable
-		// permission gets null so the login page can stop instead of redirecting in a loop.
-		const homePath = sessionHomePath(
-			role,
-			isApiKeyLogin && session ? firstAllowedPage(permissions) : null,
-		)
-
-		return NextResponse.json({
-			requireLogin,
-			authMode,
-			ssoType,
-			oidcConfigured: isOidcConfigured(settings),
-			oidcLoginLabel: (settings.oidcLoginLabel || "Sign in with OIDC").trim() || "Sign in with OIDC",
-			samlConfigured: isSamlConfigured(settings),
-			samlLoginLabel:
-				(settings.samlLoginLabel || "Sign in with SAML SSO").trim() || "Sign in with SAML SSO",
-			hasPassword: !!settings.password,
-			displayName,
-			loginMethod,
-			authenticated: !!session,
-			role,
-			permissions,
-			homePath,
-			apiKey: session?.apiKey || null,
-			keyId: session?.keyId || null,
-			allowedModels: session?.allowedModels || "*",
-			allowedEndpoints: session?.allowedEndpoints || [],
-			tokenLimit: session?.tokenLimit || 0,
-			oidcName: oidcName || null,
-			oidcEmail: oidcEmail || null,
-			oidcLogin: !!session?.oidc,
-			samlName: samlName || null,
-			samlEmail: samlEmail || null,
-			samlLogin: !!session?.saml,
-		})
-	} catch {
-		return NextResponse.json({
-			requireLogin: true,
-			authMode: "password",
-			ssoType: "oidc",
-			oidcConfigured: false,
-			oidcLoginLabel: "Sign in with OIDC",
-			samlConfigured: false,
-			samlLoginLabel: "Sign in with SAML SSO",
-			hasPassword: false,
-			displayName: "Password user",
-			loginMethod: "Password",
-			authenticated: false,
-			oidcName: null,
-			oidcEmail: null,
-			oidcLogin: false,
-			samlName: null,
-			samlEmail: null,
-			samlLogin: false,
-		})
-	}
+	const client = createApiClient({
+		session: null,
+		useCases: getUseCases(),
+		headers: new Headers(),
+	})
+	return NextResponse.json(await client.authStatus.read())
 }

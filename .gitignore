@@ -47,7 +47,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+# Generated from custom-server.ts by apps/web/scripts/copy-standalone-assets.mjs on every build.
+# The pattern is listed per directory because the file moved into apps/web/ during the monorepo
+# split; the bare `/custom-server.js` stopped matching then, which is how a build artefact came to
+# be committed and drift from the source it is generated from.
 /custom-server.js
+apps/web/custom-server.js
 
 # CLI ESM runtime/build output generated from TypeScript sources
 /cli/cli.js

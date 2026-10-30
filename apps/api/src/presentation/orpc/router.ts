@@ -12,6 +12,7 @@
  */
 import { base } from "./base.ts"
 import { apiKeysRouter } from "./routers/api-keys.ts"
+import { authStatusRouter } from "./routers/auth-status.ts"
 import { claudeResetRouter } from "./routers/claude-reset.ts"
 import { claudeToolsRouter } from "./routers/claude-tools.ts"
 import { cliToolsRouter } from "./routers/cli-tools.ts"
@@ -60,6 +61,7 @@ export const appRouter = base.router({
 	theme: themeRouter,
 	pricing: pricingRouter,
 	usage: usageRouter,
+	authStatus: authStatusRouter,
 	plugins: pluginsRouter,
 	cacheStats: cacheStatsRouter,
 	dashboardJobs: dashboardJobsRouter,

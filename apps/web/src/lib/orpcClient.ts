@@ -27,6 +27,7 @@ import type {
 	SessionClaims,
 } from "9router-api/presentation/orpc/base"
 import { appRouter } from "9router-api/presentation/orpc/router"
+import { authStatusRequest } from "@/lib/authStatusPort"
 import { claudeResetPort } from "@/lib/claudeResetPort"
 import { codexResetPort } from "@/lib/codexResetPort"
 import { quotaBody, quotaPressure, quotaTitle } from "@/lib/notifications/quotaPressure"
@@ -100,6 +101,8 @@ export interface RouterContext {
 	readonly codexResetPort?: AppContext["codexResetPort"]
 	/** The Claude limit-reset port. */
 	readonly claudeResetPort?: AppContext["claudeResetPort"]
+	/** Settings, the auth cookie and the permission catalog. */
+	readonly authStatusPort?: AppContext["authStatusPort"]
 }
 
 /**
@@ -176,6 +179,7 @@ export function createApiClient(context: RouterContext) {
 			translatorDumpName: context.translatorDumpName ?? translatorDumpFile,
 			codexResetPort: context.codexResetPort ?? codexResetPort,
 			claudeResetPort: context.claudeResetPort ?? claudeResetPort,
+			authStatusPort: context.authStatusPort ?? authStatusRequest(),
 			claudeSettingsHosts: context.claudeSettingsHosts ?? {
 				port: claudeSettingsPort,
 				isInstalled: isClaudeInstalled,

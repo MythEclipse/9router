@@ -1,7 +1,7 @@
 {
   "name": "9router",
   "version": "4.2.0",
-  "description": "9Router — local AI routing gateway + dashboard (Kana stack)",
+  "description": "9Router \u2014 local AI routing gateway + dashboard (Kana stack)",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -13,7 +13,7 @@
     "dev": "bun --filter 9router-web dev",
     "build": "bun --filter 9router-web build",
     "start": "bun --filter 9router-web start",
-    "typecheck": "cd apps/web && node ../../node_modules/typescript/bin/tsc --noEmit",
+    "typecheck": "bun run typecheck:web && bun run typecheck:api",
     "lint": "node scripts/biome-baseline.mjs",
     "lint:fix": "biome check --write",
     "lint:baseline": "node scripts/biome-baseline.mjs --update",
@@ -24,7 +24,9 @@
     "cli:publish": "bun --filter 9router publish:cli",
     "bump": "node scripts/bump-version.mjs",
     "sync:opencode-harness": "node scripts/sync-opencode-harness.mjs",
-    "prepare": "if command -v git >/dev/null 2>&1 && git rev-parse --git-dir >/dev/null 2>&1; then lefthook install; fi"
+    "prepare": "if command -v git >/dev/null 2>&1 && git rev-parse --git-dir >/dev/null 2>&1; then lefthook install; fi",
+    "typecheck:web": "cd apps/web && node ../../node_modules/typescript/bin/tsc --noEmit",
+    "typecheck:api": "cd apps/api && node ../../node_modules/typescript/bin/tsc --noEmit -p tsconfig.json"
   },
   "packageManager": "bun@1.3.14",
   "devDependencies": {

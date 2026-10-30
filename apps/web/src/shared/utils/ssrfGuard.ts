@@ -202,17 +202,50 @@ export async function assertPublicUrlResolved(rawUrl) {
 // validated public URL can't 30x its way to an internal target. Bounded to
 // maxRedirects hops (fetch's own default following behavior has no bound
 // relevant here since we never let it auto-follow).
-export async function fetchPublic(url, init = {}, { maxRedirects = 5 } = {}) {
-	await assertPublicUrlResolved(url)
-	let currentUrl = url
-	for (let hop = 0; ; hop++) {
-		const res = await fetch(currentUrl, { ...init, redirect: "manual" })
-		const isRedirect = res.status >= 300 && res.status < 400
-		const location = isRedirect ? res.headers.get("location") : null
-		if (!location) return res
-		if (hop >= maxRedirects) throw new Error("Blocked URL: too many redirects")
-		const nextUrl = new URL(location, currentUrl).toString()
-		await assertPublicUrlResolved(nextUrl)
-		currentUrl = nextUrl
-	}
+//
+// This is a drop-in for `fetch`: `deps.fetchForCaller` is typed `typeof globalThis.fetch`, which
+// under Bun also requires `fetch.preconnect`. So the shape is stated once here instead of being
+// cast away at every call site — a cast would let a real mismatch hide.
+export interface FetchPublic {
+	(input: string | URL | Request, init?: RequestInit): Promise<Response>
+	/**
+	 * Resolve DNS and open a connection ahead of the request.
+	 *
+	 * Delegates rather than re-implements: warming a connection is not a request, so there is no
+	 * URL for the SSRF guard to check here. The guarded call is still the one that sends bytes.
+	 */
+	preconnect(url: string | URL, options?: { dns?: boolean; tcp?: boolean; http?: boolean }): void
 }
+
+export const fetchPublic: FetchPublic = Object.assign(
+	async (
+		input: string | URL | Request,
+		init: RequestInit = {},
+		options?: { maxRedirects?: number },
+	): Promise<Response> => {
+		const { maxRedirects = 5 } = options ?? {}
+		await assertPublicUrlResolved(input)
+		let currentUrl = input
+		for (let hop = 0; ; hop++) {
+			const res = await fetch(currentUrl, { ...init, redirect: "manual" })
+			const isRedirect = res.status >= 300 && res.status < 400
+			const location = isRedirect ? res.headers.get("location") : null
+			if (!location) return res
+			if (hop >= maxRedirects) throw new Error("Blocked URL: too many redirects")
+			const nextUrl = new URL(
+				location,
+				currentUrl instanceof Request ? currentUrl.url : currentUrl,
+			).toString()
+			await assertPublicUrlResolved(nextUrl)
+			currentUrl = nextUrl
+		}
+	},
+	{
+		// `preconnect` exists on Bun's `fetch` but not on the DOM/Node lib this file is compiled
+		// against, so the global is read through a narrow shape rather than widening every call
+		// site. In a non-Bun runtime the warm-up is simply skipped: it is an optimisation, never a
+		// correctness requirement, and the guarded request still happens.
+		preconnect: (url: string | URL, options?: unknown) =>
+			(fetch as { preconnect?: (u: string | URL, o?: unknown) => void }).preconnect?.(url, options),
+	},
+)

@@ -9,22 +9,33 @@ import { getModelInfo } from "@/sse/services/model"
 
 export const dynamic = "force-dynamic"
 
+/**
+ * The inspector accepts either `{ body }` or a bare body, because the three steps are fed raw dump
+ * files and hand-edited JSON alike. Normalised once here rather than at each of the three stages.
+ */
+function inspectorBody(body: unknown): Record<string, unknown> {
+	const wrapped = (body as { body?: unknown }).body
+	return (wrapped ?? body) as Record<string, unknown>
+}
+
+/** Every refusal in this route has the same shape, so it is written once. */
+function refusal(error: string) {
+	return NextResponse.json({ success: false, error }, { status: 400 })
+}
+
 export async function POST(request) {
 	try {
 		const { step, body } = await request.json()
 		const stage = translatorStep(step)
 
 		if (stage === null || !body) {
-			return NextResponse.json(
-				{ success: false, error: "Step (1-3) and body required" },
-				{ status: 400 },
-			)
+			return refusal("Step (1-3) and body required")
 		}
 
 		switch (stage) {
 			case 1: {
 				// Detect provider + formats from 1_req_client.json
-				const clientBody = body.body || body
+				const clientBody = inspectorBody(body)
 				const { provider, model } = await getModelInfo(clientBody.model)
 				const sourceFormat = detectFormat(clientBody)
 				const targetFormat = getTargetFormat(provider)
@@ -37,7 +48,7 @@ export async function POST(request) {
 			case 2: {
 				// source → OpenAI intermediate (mirrors 3_req_openai.json)
 				// Translate source→openai only (half of the pipeline)
-				const clientBody = body.body || body
+				const clientBody = inspectorBody(body)
 				const { provider, model } = await getModelInfo(clientBody.model)
 				const sourceFormat = detectFormat(clientBody)
 				const stream = clientBody.stream !== false
@@ -59,13 +70,10 @@ export async function POST(request) {
 
 			case 3: {
 				// OpenAI intermediate → target + build URL/headers (mirrors 4_req_target.json)
-				const openaiBody = body.body || body
+				const openaiBody = inspectorBody(body)
 				const target = translatorTarget(body.provider, body.model)
 				if (target === null) {
-					return NextResponse.json(
-						{ success: false, error: "provider and model required" },
-						{ status: 400 },
-					)
+					return refusal("provider and model required")
 				}
 				const { provider, model } = target
 
@@ -88,10 +96,7 @@ export async function POST(request) {
 				const connections = await getProviderConnections({ provider })
 				const connection = connections.find((c) => c.isActive !== false)
 				if (!connection) {
-					return NextResponse.json(
-						{ success: false, error: `No active connection for provider: ${provider}` },
-						{ status: 400 },
-					)
+					return refusal(`No active connection for provider: ${provider}`)
 				}
 
 				const credentials = {

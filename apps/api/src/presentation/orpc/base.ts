@@ -211,6 +211,8 @@ export interface AppContext extends RequestContext {
 	readonly codexResetPort?: CodexResetPort
 	/** The same three, for Claude's limit-reset grant. */
 	readonly claudeResetPort?: ClaudeResetPort
+	/** Settings, the auth cookie and the permission catalog, behind one port. */
+	readonly authStatusPort?: import("../../application/use-cases.ts").AuthStatusRequest
 }
 
 /** Anything thrown below presentation becomes a typed ORPCError exactly once. */

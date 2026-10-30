@@ -30,7 +30,15 @@
     "./application/claude-reset/*": "./src/application/claude-reset/*.ts",
     "./presentation/orpc/router": "./src/presentation/orpc/router.ts",
     "./presentation/orpc/base": "./src/presentation/orpc/base.ts",
-    "./presentation/caller-from-session": "./src/presentation/caller-from-session.ts"
+    "./presentation/caller-from-session": "./src/presentation/caller-from-session.ts",
+    "./application/auth-status/*": {
+      "types": "./src/application/auth-status/*.ts",
+      "default": "./src/application/auth-status/*.ts"
+    },
+    "./domain/auth-status": {
+      "types": "./src/domain/auth-status.ts",
+      "default": "./src/domain/auth-status.ts"
+    }
   },
   "scripts": {
     "dev": "bun --conditions=react-server --watch src/main.ts",

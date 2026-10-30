@@ -6,6 +6,7 @@
  * the same shape from fakes.
  */
 
+import type { AuthStatus } from "../domain/auth-status.ts"
 import type { ClaudeResetOutcome } from "../domain/claude-reset.ts"
 import { invalid } from "../domain/errors.ts"
 import type { MimoRegion } from "../domain/mimo-login.ts"
@@ -15,6 +16,11 @@ import { makeCreateApiKey } from "./api-keys/create-api-key.ts"
 import { makeListApiKeys, makeRevokeApiKey } from "./api-keys/manage-api-keys.ts"
 import { makeManageApiKeys } from "./api-keys/manage-api-keys-dashboard.ts"
 import { makeManageSingleKey } from "./api-keys/manage-single-key.ts"
+import {
+	type AuthStatusDeps,
+	type AuthStatusPort,
+	readAuthStatus,
+} from "./auth-status/read-status.ts"
 import { loadChangelog } from "./changelog.ts"
 import type { ClaudeResetPort } from "./claude-reset/reset-grant.ts"
 import { spendResetGrant } from "./claude-reset/reset-grant.ts"
@@ -190,6 +196,21 @@ import { type KeyUsage, makeKeyUsageReport } from "./usage/key-usage-report.ts"
 import { type ConnectionUsage, makeConnectionUsage } from "./usage/read-connection-usage.ts"
 import { makeUsageReports } from "./usage/report-usage.ts"
 import { makeUsagePanels, type UsagePanels } from "./usage/usage-panels.ts"
+
+/**
+ * What the auth-status use-case needs from its caller.
+ *
+ * `port` supplies the two reads that touch host state (settings row, auth cookie); `catalog`
+ * supplies the permission sets so the domain never imports the database layer.
+ */
+export interface AuthStatusRequest {
+	readonly port: AuthStatusPort
+	readonly probes: AuthStatusDeps["probes"]
+	readonly catalog: AuthStatusDeps["catalog"]
+	readonly homePathFor: AuthStatusDeps["homePathFor"]
+	readonly firstAllowedPage: AuthStatusDeps["firstAllowedPage"]
+	readonly onFailure?: AuthStatusDeps["onFailure"]
+}
 
 export interface UseCases {
 	readonly createApiKey: ReturnType<typeof makeCreateApiKey>
@@ -447,10 +468,20 @@ export interface UseCases {
 			wording: NoticeWording,
 		) => Promise<ScanAnswer>
 	}
+
 	/** Codex's rate-limit reset credits. */
 	readonly codexResetCredits: {
 		readonly read: (connectionId: unknown, port: CodexResetPort) => Promise<CodexAnswer>
 		readonly redeem: (connectionId: unknown, port: CodexResetPort) => Promise<CodexAnswer>
+	}
+	/**
+	 * The dashboard's view of the current session.
+	 *
+	 * The port and the permission catalog are injected because they come from the host: the
+	 * cookie, the settings table, and the permission paths live outside this graph.
+	 */
+	readonly authStatus: {
+		readonly read: (deps: AuthStatusRequest) => Promise<AuthStatus>
 	}
 	/** Claude's limit-reset grant. */
 	readonly claudeReset: {
@@ -923,6 +954,17 @@ export function buildUseCases(deps: Dependencies): UseCases {
 			},
 		},
 		headroom: makeHeadroom(deps.headroom),
+		authStatus: {
+			read: (request) =>
+				readAuthStatus({
+					port: request.port,
+					probes: request.probes,
+					catalog: request.catalog,
+					homePathFor: request.homePathFor,
+					firstAllowedPage: request.firstAllowedPage,
+					onFailure: request.onFailure,
+				}),
+		},
 		ttsVoices: makeTtsVoices(deps.ttsVoices),
 		keyUsage: makeKeyUsageReport(deps.keyUsage),
 		usagePanels: makeUsagePanels(deps.usagePanels),
