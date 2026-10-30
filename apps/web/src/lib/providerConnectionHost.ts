@@ -56,7 +56,6 @@ import {
 	getProviderConnections,
 	getProviderNodeById,
 	getProviderNodes,
-	getProxyPoolById,
 	updateProviderConnection,
 } from "@/models"
 import { APIKEY_PROVIDERS, SERVER_CONFIG } from "@/shared/constants/config"
