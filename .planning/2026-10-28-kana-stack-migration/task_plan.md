@@ -22,34 +22,31 @@ gateway serving traffic at every phase boundary.
 
 ## Next Step
 
-Two domain files had no test file of their own. Measuring first — 495 exported names across 84
-`domain/` files, 35 of them referenced by none of the 694 test files — turned up a whole file with
-zero coverage, not just a function.
+Measuring coverage beat reading code for the third time this session, and turned up a live defect
+rather than only missing tests.
 
-### `domain/mimo-login.ts`: 8 exports, nothing testing them
+### `readLimit` wrote a one-token context window
 
-I had declined migrating `oauth/xiaomi-mimo/login/status` earlier on the grounds that it was
-"5 branches, all cookie cycle". The function names contradicted that reading: `firstHopRefusal`,
-`secondHopRefusal`, `needsEgressProbe`, `redactedEgress`. The file is rule logic, and two of the rules
-are security-relevant:
+`Number()` alone accepts `true` as 1 and `[5]` as 5, so a settings write carrying
+`contextWindow: true` stored a model whose window is one token. Fixed and committed with eleven
+mutations caught.
 
-- `redactedEgress` strips `user:pass@` before a proxy URL reaches the log. An unredacted URL in a log
-  file is a credential in a log file.
-- `mimoLoginStatus` answers `done` only with an identity present. The client persists what it returns
-  as a connection, so `done` without one saves a connection that can never authenticate.
+### `asKeyPermissions` was the untested entrance to the permission chain
 
-25 cases, six mutations, six caught.
+29 tests covered every other export of `sub-key-scope.ts`. The one that feeds them — reached from
+`callerFromSession`, read by `mayCreateSubKey` — was unasserted, including its only defence: `=== true`,
+which is what refuses a session carrying `manageApiKeys: "true"`. Eight cases added, five mutations
+caught.
 
-### `domain/credential-import.ts`: `jwtPayloadOf` was doing nothing, twice
+### Where the sweep stands
 
-Writing the test exposed cargo rather than a gap. `jwtPayloadOf` translated `-`→`+`, `_`→`/` and
-re-added `=` padding, justified by a comment about `atob` being strict — but the function uses
-`Buffer`, and `Buffer`'s decoder accepts the URL-safe alphabet and unpadded input on both Bun and
-Node (verified on both runtimes, not assumed). Two surviving mutations proved it: removing the
-translation and removing the padding changed nothing.
+22 of 495 domain functions are still unreferenced by any of the 697 test files, down from 35. Most are
+covered through a sibling that is tested (`findChainTo` inside `findComboCycle`,
+`validateMicrosoftTokenEndpoint` in `kiro-external-idp.test.ts`, `validateEndpointKinds` in
+`key-ownership-and-update.test.ts`). The remainder are catalogue and formatting helpers —
+`languageBucket`, `timedOutAnswer`, `anthropicCompatibleVerdict` — where a test would compare a table
+to itself.
 
-Both steps are gone, and the runtime contract that made them unnecessary is now pinned by its own
-test, so a decoder that stopped accepting base64url would fail loudly instead of silently reducing
-every Codex token to "not a JWT" — no email, no workspace, no expiry, no error.
-
-`readLimit` in `cli-tool-settings.ts` is the same shape and still untested; it is next.
+The next honest step is not more of the same: it is to decide whether the 22 are genuinely
+covered-through-a-sibling by checking that the sibling's assertions reach the behaviour, which is a
+different question from whether the name appears in a test file.

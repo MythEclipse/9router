@@ -2806,3 +2806,29 @@ Every other `Date.now()` in `domain/` and `application/` is already injected. Th
     typecheck   0
     test        8042 passed, 0 failed, 680 files   (from 8029)
     commits     2
+
+## Sweeping the rest of the unmeasured domain
+
+The measuring habit paid twice more, and the second time it found a live defect.
+
+**`readLimit` coerced a boolean into a token count.** `Number(true)` is 1 and `Number([5])` is 5, both
+finite, both positive, both within range — so a settings write carrying `contextWindow: true` stored a
+model with a one-token context window. Nothing rejects it later; it looks deliberate in the config and
+the tool fails every request. The new test failed on its first run, which is how it was found. Eleven
+mutations, eleven caught.
+
+**`asKeyPermissions` was the untested entrance to the permission chain.** The file had 29 tests
+covering every export but that one, and it is the function `callerFromSession` passes the session's
+raw permission map into before `mayCreateSubKey` decides whether an API-key session may mint another
+key. Its only defence is `=== true` — a session carrying `manageApiKeys: "true"` is refused — and
+nothing asserted that. Five mutations, five caught.
+
+    unmeasured domain functions   35 of 495 → 22
+    tests                         8083 → 8108 passed
+    typecheck                     0
+    commits                       4 (2 test, 1 fix, 1 docs)
+
+Of the 22 left, most are covered through a sibling: `findChainTo` runs inside `findComboCycle` (tested),
+`validateMicrosoftTokenEndpoint` is reached by `kiro-external-idp.test.ts`, `validateEndpointKinds`
+through `key-ownership-and-update.test.ts`. The rest are catalogue and formatting helpers where a test
+would assert the table against itself.
