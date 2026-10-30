@@ -2909,3 +2909,47 @@ that before claiming coverage mattered more than the count.
     typecheck   0
     test        8129 passed, 0 failed   (from 8119)
     commits     8
+
+## Route handlers: 120 unreferenced, 4 that actually hide logic
+
+Measured rather than assumed. Of 199 route handlers, 120 are never named by a test file. That number is
+not the work: 94 of them delegate entirely (`client.*` / `useCases`) to use-cases that are tested, and
+of the 26 that do not delegate, 22 still import from `9router-api/domain` for every decision. The
+`antigravity-mitm` route looked like the worst offender by branch count (21) and turned out to be pure
+wiring — all seven domain rules it calls have 25 cases in `mitm-panel.test.ts`. Counting `if`s in a
+route measures nothing; the question is whether the decision lives in the route at all.
+
+That left four: `v1/api/chat`, `headroom/proxy/[...path]`, `translator/console-logs/stream`, `usage/stream`.
+
+### `usage/stream` streamed the whole history under the caller's label
+
+    /api/usage/stream?period=abc   →  200 text/event-stream, every row ever written
+
+`periodCutoff` in `packages/db` maps an unknown period to `null`, and `null` means unbounded. Probed
+directly: `abc`, `90d`, `7D`, `""` all return `null`, identical to `all`. The route read
+`searchParams.get("period") || "today"` and passed it straight through.
+
+This was not unknown to the codebase. `usage/leaderboard` carries a comment that its own version of
+this bug was fixed — "a week of data labelled with what the caller asked for" — via the shared
+`isReportingPeriod` rule. The SSE route was simply not covered by that fix, and it is the worst place
+for it to survive: the other routes return a table nobody can mistake, this one returns a healthy
+stream.
+
+Fixed by refusing the period before the stream opens, with the rule the other six usage routes already
+use. Five cases. Four mutations: guard deleted (the original bug), guard forced false, guard bypassed
+in favour of the raw value, message without the value, status 200 instead of 400 — all killed.
+
+### The mutation harness lied, then lied differently
+
+Two rounds of this. First round reported two survivors; the survivors were real, but the reason was
+not — `ReadableStream.start()` runs lazily, so `getUsageStats` is only called once the body is
+consumed. Second round reported `0 failed / -1 passed`, which I had wired to print "SELAMAT" for three
+mutations that in fact failed with the exact assertion that proves the guard works ("spy called 1
+time", "expected 200 to be 400").
+
+    bun run test ... has exit code 0 even when vitest fails.
+    The only trustworthy signal is the count parsed out of "Tests  N failed | M passed",
+    and a run where M is 0 has to be read as a failed load, never as a pass.
+
+Same shape as the injection lesson from the domain sweep: the instrument was the defect, not the code.
+Both times the wrong answer was the convenient one.

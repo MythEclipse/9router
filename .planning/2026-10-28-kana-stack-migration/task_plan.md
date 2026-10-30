@@ -22,23 +22,33 @@ gateway serving traffic at every phase boundary.
 
 ## Next Step
 
-The domain-coverage sweep is finished for everything that matters, and the measurement itself had to
-be corrected twice before its output could be trusted.
+The route sweep is done for the routes that can hide a decision. Of 199 handlers, 120 are never named
+by a test; 94 delegate to tested use-cases, 22 import their rules from `9router-api/domain`, and the
+`antigravity-mitm` route that looked worst by branch count (21) turned out to be pure wiring. Counting
+`if`s measures nothing — the question is whether the decision lives in the route.
 
-**What is covered now.** 495 exported domain functions; the three that no test executed *and* that
-select a branch — `isReportingPeriod`, `isMitmToolAction`, `tooLarge` — have ten cases. `timedOutAnswer`
-was adopted by its only intended caller and two defects fell out of that. Along the way `readLimit`
-turned out to coerce a boolean into a one-token context window, and `jwtPayloadOf` was carrying two
-no-op steps behind a comment.
+Four routes held real logic. Three were already careful (`v1/api/chat` delegates to `handleChat`;
+`console-logs/stream` has an idempotent `cleanup` with a comment about the listener leak it fixes;
+`headroom/proxy` refuses non-http schemes and strips hop-by-hop headers). The fourth was a defect:
 
-**What the remaining 19 are.** Twelve are executed through a sibling (measured, not assumed), and the
-rest are path helpers and formatting functions reached by tests that do not name them.
+    /api/usage/stream?period=abc  →  200 text/event-stream, the entire history
 
-**The lesson worth keeping.** Sabotage is a better instrument than a coverage report here, because the
-report cannot see outside `root: tests` and the injection answers the actual question — is this code
-ever run. But sabotage is only trustworthy when each injection is verified to load: a one-line edit to
-a two-line arrow declaration broke `errors.ts` and made 30+ files fail collection, which I briefly read
-as "not executed". One function per run; a run with `Failed Suites > 0` is discarded.
+`periodCutoff` in `packages/db` maps an unknown period to `null`, and `null` means unbounded. The other
+six usage routes refuse it through `isReportingPeriod`; `usage/leaderboard` even documents fixing this
+exact bug. The SSE route was the one never covered, and the one where it is silent. Fixed with the
+shared rule, refused before the stream opens. Five cases, four mutations, all killed.
 
-Next: leave the domain alone and go where the tests cannot reach by construction — the route handlers
-that were declined during migration (52, of which 25 are gateway `v1`/`v1beta`), and the build itself.
+**The instrument lied twice, both times in the convenient direction.** `bun run test` exits 0 even when
+vitest fails, so a harness keyed to the exit code reported three guards as surviving when they had in
+fact failed with the assertion that proves them. Parse `Tests  N failed | M passed`, and treat `M == 0`
+as a failed load, never a pass. Same shape as the injection lesson from the domain sweep.
+
+**Also recorded, and benign:** `cli/app` looks like a second 199-route tree but is ignored build output
+from `build-cli.ts`, dated a day behind `apps/web`. `bun run build` does not touch it. The proxy's
+`LOOPBACK_HOSTS` is stricter than `detect.ts`, not looser: `URL` normalises `127.1` to `127.0.0.1`, and
+`0.0.0.0` gets its credentials stripped.
+
+Next: the build itself — the one surface no unit test can reach. `bun run build` is green, but nothing
+checks that the standalone payload serves the same routes the source does. The `cli/app` staleness
+already shipped a fix that never arrived once; a check that the packaged tree matches the built source
+would catch that class before it recurs.
