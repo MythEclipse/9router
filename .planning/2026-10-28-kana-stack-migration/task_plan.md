@@ -22,31 +22,36 @@ gateway serving traffic at every phase boundary.
 
 ## Next Step
 
-**`proxy-pools` is on oRPC — 9 routes, sixty-four across the migration.** The area was already
-delegating to `getUseCases().proxyPools.*` in-process, but no procedure named a pool, so a
-caller outside this Next.js app had no way in. That is the distinction the next areas hinge on:
-*wired to a use-case* is not the same as *reachable through oRPC*.
+**`cli-tools` is partly on oRPC — 16 of 20 settings routes, eighty across the migration.** The
+fourteen near-identical `*-settings` handlers collapsed into one name-keyed registry
+(`apps/web/src/lib/cliToolRegistry.ts`) plus four procedures. Three commit boundaries, because
+each is reviewable on its own: the registry, the router, the route delegation.
 
-The survey that found it is worth repeating before the next pick. Group the routes by whether
-they call `getUseCases()` but never `createApiClient` — 131 do, across 24 areas. `keys` was
-already finished when this round's plan named it; `logs` does not exist. The list is the point,
-not the plan's guess.
+The finding worth keeping is a layering one. My first router imported the registry from
+`apps/web` and it broke the build: **`apps/api` never depends on `apps/web`** — the arrow runs
+the other way, and a bundle of `isInstalled`/config-port/side-write functions is exactly the
+kind of host code that must not move inward. The resolver therefore arrives on
+`RouterContext.cliToolHosts`, defaulted inside `createApiClient`, which is the same seam
+`useCases` and `headers` already use. Reach for the context before reaching for an import
+across packages.
 
-- **`cli-tools` (17 routes, ~1900 lines) is next**, and it is not uniform: `cowork-settings`
-  (449) and `hermes-settings` (369) carry real decisions, the fourteen `*-settings` routes are
-  thin `port + installed` shims, and `antigravity-mitm` legitimately stays where it is because
-  it spawns a privileged proxy. Read before splitting, and expect two commits: the use-cases
-  that are missing, then the procedures over the ones that exist.
-- After that: `proxy-pools` siblings `provider-nodes` (3) and `combos` (4).
+Also: **verify transcriptions against the source, not against memory.** The `smelt` reset
+message came out as "9Router removed from Smelt" where the route said "Smelt 9Router settings
+removed". No type checks it and no existing test asserts it — it was caught by diffing all 48
+messages back against `git show HEAD:<route>`, and that diff is now why the registry test checks
+the shape of every entry.
 
-Two rules this round added:
+**Still in `cli-tools`:** `devin` (70), `hermes` (369) and `cowork` (449) have no
+`ToolConfigPort` and do their own filesystem work, so they need use-case extraction before a
+procedure can name them. `claude` (33) has its own use-case and is a small addition. Then
+`antigravity-mitm` (193+42) stays put and that should be written down as a decision, not a gap.
+Also outstanding in the area: `all-statuses` (63), `codex-profiles` (117),
+`cowork-mcp-registry` (74), `cowork-mcp-tools` (111), `hermes-profiles` (17).
 
-- **A status carried in the domain is only a status once the table says so.** `PoolInUseError`
-  sets `code: "CONFLICT"`; that is a 409 solely because `STATUS_BY_CODE` maps it. The refusal
-  itself tests green either way, so the mapping needs its own assertion.
-- **`failed()` sends `{error}` and nothing else.** `boundConnectionCount` is on the error object
-  and is dropped at the boundary — preserved behaviour, but the next person who needs that
-  count in the body will find it missing and blame the use-case.
+Rule this round added:
 
-**Compare the set of failing test names, never the count.** The suite carries pre-existing
-failures in files that only fail under full-suite load.
+- **A cross-package import is usually a missing injection point.** When the only way to reach
+  something is `../../../../other-package/...`, the dependency graph is telling you the value
+  belongs on the context.
+
+**Compare the set of failing test names, never the count.**

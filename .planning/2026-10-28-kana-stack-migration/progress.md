@@ -2453,3 +2453,27 @@ Two findings worth carrying:
   `boundConnectionCount` and it never reaches the body. That is unchanged behaviour, so it is
   not a regression — but it is the kind of thing a migration quietly makes permanent, and the
   next person to need that count will look in the use-case first.
+
+## cli-tools: the bundle cannot cross the boundary
+
+Sixteen `*-settings` routes each built their own `ToolSettingsDeps` — `isInstalled`, a config
+port, side-write functions, three messages — and handed it to the same three use-case calls.
+The bundle holds functions, so it can never be procedure input. The procedure names the tool;
+something on the host side resolves the name. That something is `cliToolRegistry.ts`.
+
+**The first version put the registry on the wrong side.** I imported it from the router as
+`../../../../web/src/lib/cliToolRegistry.ts` and the build failed — `apps/api` does not depend
+on `apps/web` anywhere, and it should not: those bundles touch the filesystem. The resolver now
+arrives on `RouterContext.cliToolHosts`, defaulted in `createApiClient` beside `useCases` and
+`headers`. A cross-package relative import is usually the dependency graph saying the value
+belongs on the context.
+
+**A transcription error that no test would have caught.** `smelt`'s reset message was retyped
+from memory as "9Router removed from Smelt"; the route said "Smelt 9Router settings removed".
+Nothing in the type system or the suite asserts a toast string, so it was found by diffing all
+48 messages back against `git show HEAD:<route>`. The registry test now asserts each entry has
+non-empty messages, and the diff is the reason to write that check rather than trust the copy.
+
+Four tools stay out on purpose: `claude` (env block, own use-case), `devin`, `hermes` and
+`cowork` (no `ToolConfigPort`, inline filesystem work). Listing them in the registry would
+promise a shape they do not have, so they need use-case extraction first.
