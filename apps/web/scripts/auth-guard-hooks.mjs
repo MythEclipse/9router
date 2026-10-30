@@ -72,13 +72,18 @@ export async function resolve(specifier, context, next) {
 		if (r) return { url: pathToFileURL(r).href, shortCircuit: true }
 	}
 	// Workspace packages live one level above the app, in packages/<name>/src.
-	// Without this the guard cannot load at all and every request answers 503.
+	// The standalone build keeps them beside the app, while the assembled release
+	// keeps them beside the staged src/ tree. Try both layouts so the guard does
+	// not turn every request into a 503 after deployment.
 	if (specifier.startsWith("@9router/")) {
 		const [, name, ...rest] = specifier.split("/")
-		const base = path.join(ROOT, "..", "packages", name, "src")
-		const target = rest.length > 0 ? path.join(base, ...rest) : path.join(base, "index.ts")
-		const r = tryResolve(target)
-		if (r) return { url: pathToFileURL(r).href, shortCircuit: true }
+		const packageRoots = [path.join(ROOT, "packages"), path.join(ROOT, "..", "packages")]
+		for (const packageRoot of packageRoots) {
+			const base = path.join(packageRoot, name, "src")
+			const target = rest.length > 0 ? path.join(base, ...rest) : path.join(base, "index.ts")
+			const r = tryResolve(target)
+			if (r) return { url: pathToFileURL(r).href, shortCircuit: true }
+		}
 	}
 	if (specifier === "next/server") {
 		return { url: "data:text/javascript," + encodeURIComponent(NEXT_SERVER_SHIM), shortCircuit: true }
