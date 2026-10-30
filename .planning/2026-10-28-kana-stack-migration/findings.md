@@ -159,11 +159,15 @@ Three findings decide it:
    procedure layer carries behaviour the route never had. Moving the dashboard onto
    it adds capability, and the REST routes must keep working for the CLI anyway.
 
-2. **`apps/web` has no oRPC client at all** — no `@orpc/client` dependency, no
-   `RPCLink`, nothing in `src/` that reaches port 20127. The 199 dashboard call
-   sites are `fetch("/api/...")` against Next route handlers. Migrating them means
-   adding a second transport alongside the first, in a tree where both must serve
-   the same dashboard.
+2. **`apps/web` had no oRPC client** — no `@orpc/client`, no `RPCLink`, nothing
+   reaching port 20127. That measurement was correct when it was taken and is now
+   stale: `apps/web/src/lib/orpcClient.ts` exists and calls `createRouterClient`
+   in-process, so a route reaches the same procedures with no HTTP hop and no
+   second session lookup. **125 of 199 route handlers** use it. The `RPCLink`
+   framing in the original note was one way to wire this; the in-process client was
+   the one adopted, and it does not need a second transport running alongside the
+   first. Migration is therefore no longer hypothetical and the "163-file rewrite"
+   argument below no longer describes the work.
 
 3. **The value is already banked.** The reason the sweep existed — rules living in
    routes where no test could reach them — is gone: every handler delegates to
@@ -428,3 +432,70 @@ fix is removed, which is the only evidence that a test about a seam is worth its
 synchronous in the use-case but every client method returns a promise, so a missing `await`
 serialised as `{}`. It type-checks: `NextResponse.json` accepts `any`. Any route that returns
 a client call without `await` is a silent empty body, and nothing catches it but a live probe.
+
+## Measured: where the remaining REST routes are, and which are deliberate
+
+`orpcClient.ts` reaches the procedures in-process via `createRouterClient`. 125 of 199 route handlers
+use it. The other 74 are not a backlog of the same work:
+
+| Group | Count | Why it stays REST |
+| ----- | ----- | ----------------- |
+| Gateway `v1/` + `v1beta/` | 46 | Provider SSE proxy. The CLI and every SDK client call it; the procedure layer has nothing to add. |
+| `auth/` (login, logout, OIDC, SAML) | 10 | Cookie and redirect protocol work, not data access. |
+| SSE streams (`usage/stream`, `translator/send`, `console-logs/stream`, `mcp/sse`) | 5 | A use-case cannot own a `ReadableStream` without owning a framework. The *decision* is in the use-case; the stream is the transport. |
+| `headroom/proxy/[...path]` | 1 | Forwards to another host. |
+| `getUseCases()` directly | 21 | Candidates, but see below. |
+
+### Two of the 21 candidates are deliberately not migrated
+
+**`pxpipe/install` and `pxpipe/start`.** The router says it itself: *"Install and start can shell out to
+npm, so they are deliberately not here: this transport is reachable with an API key, and a key that can
+trigger an install is a key that can change what runs on the host."* Moving them onto oRPC would let an
+API key install software. The REST routes keep them behind the password session. This is a security
+boundary, not an oversight — check for it before "finishing" any area.
+
+**`combos/[id]`.** The suspicion was that `PUT` forwards a raw body while the procedure validates with
+`UpdateComboSchema`. The use-case validates too: `isValidComboName`, a name-clash lookup, `assertNoCycle`,
+and it builds `changes` from named fields rather than spreading the body — the comment there says
+spreading "*would let anything the caller sent reach storage*". Zod at the procedure is a second layer,
+not the only one. No defect.
+
+### The lesson
+
+"Route X does not use oRPC" is not by itself a finding. Three of the routes checked in this pass were
+deliberate exceptions, and two of those would have been made **less** safe by migrating them. The
+question is not whether the route could go through the router, but whether the router is a place that
+route is allowed to be reachable from.
+
+## The packaged tree, and four wrong assumptions about it
+
+`copy-standalone-assets.mjs` and `build-cli.ts` both copy source into their output rather than only
+compiling. That makes packaging the one step where a green `bun run build` proves the compiler ran,
+not that the bytes on disk are those bytes. `cli/moon.yml` already records the failure mode: a fix to
+`apps/web/scripts/auth-guard-hooks.mjs` "silently never shipped" because the cached payload was reused.
+
+`tests/unit/standalone-package-matches-source.test.ts` covers the standalone tree properly — every
+copied file hashed against its source, plus the runtime assets that a build can silently drop
+(`migrations/`, the bundled `src/mitm/server.js`, `dashboardGuard.ts` beside the `open-sse/` tree its
+aliases resolve against). Five mutations, all killed.
+
+Writing the `cli/app` half took four attempts, and every wrong attempt was a confident assumption:
+
+1. **"`cli/app` should be byte-identical to `apps/web/src`."** It should not. 211 files differ.
+2. **"Then the packager rewrites `@9router/*` to `@/lib/*`."** It does not either. Those 211 files
+   differ for other reasons, and 181 of them are in fact byte-identical — the comparison itself was
+   reading the two sides with different normalisation. A number that changes from 211 to 181 between
+   two runs of the same check is the check telling you it is broken.
+3. **"The build output is `.next/`."** For the CLI package it is `.next-cli-build/`.
+4. **"The package must carry `migrations/`."** It must not. `apps/web`'s standalone tree needs them;
+   the CLI distribution migrates *the user's* install, and its own log reads
+   `[db][migrate] up to date at ~/.9router`. The SQL lives in the install directory.
+
+The fact that settled it: `next.config.mjs` sets `transpilePackages: ["9router-api"]`, so the API
+package is compiled *into* the build. The `src/*.ts` files in `cli/app` are copies of source the
+running server never executes — `bun server.js` boots and answers `{"ok":true}` while 181 of them
+still import a package that does not exist beside the tree. Comparing them was measuring a file that
+is never read.
+
+**The rule worth keeping:** before asserting two trees must match, establish which one is executed.
+A copy that is never imported can differ from its source indefinitely and it means nothing.
