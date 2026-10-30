@@ -306,6 +306,7 @@ export const MODEL_PRICING = {
 	// Long-context pricing is higher, but this table currently stores one rate per model.
 	"gpt-6-astra": { input: 10.0, output: 50.0, cached: 1.0, reasoning: 50.0, cache_creation: 12.5 },
 	"gpt-6.1-sol": { input: 2.0, output: 10.0, cached: 0.1, reasoning: 10.0, cache_creation: 2.5 },
+	"gpt-6.1-terra": { input: 1.0, output: 5.0, cached: 0.05, reasoning: 5.0, cache_creation: 1.25 },
 	"gpt-6-sol": { input: 2.0, output: 10.0, cached: 0.2, reasoning: 10.0, cache_creation: 2.5 },
 	"gpt-6-luna": { input: 0.1, output: 0.5, cached: 0.01, reasoning: 0.5, cache_creation: 0.125 },
 	o1: { input: 15.0, output: 60.0, cached: 7.5, reasoning: 90.0, cache_creation: 15.0 },
