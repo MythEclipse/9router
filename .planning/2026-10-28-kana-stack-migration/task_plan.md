@@ -22,35 +22,34 @@ gateway serving traffic at every phase boundary.
 
 ## Next Step
 
-**Twenty-two of `cli-tools`' twenty-six routes are on oRPC.** The area is nearly done; what is
-left is three large handlers and one that should not move.
+Two domain files had no test file of their own. Measuring first — 495 exported names across 84
+`domain/` files, 35 of them referenced by none of the 694 test files — turned up a whole file with
+zero coverage, not just a function.
 
-Taken this round, in the order they fell:
+### `domain/mimo-login.ts`: 8 exports, nothing testing them
 
-- `codex-profiles` (117) — three verbs over `~/.codex/*.config.toml`, behind a four-method port.
-- `cowork-mcp-tools` (111) — the probe sequence, with the fetch passed in because the SSRF
-  choice needs the request headers.
-- `cowork-mcp-registry` (74) — the cursor walk in the use-case, the process-wide cache on the
-  host beside `tunnelStatusCache`.
-- `all-statuses` (63) — was importing nineteen sibling `GET` handlers as functions; now one
-  procedure reusing the same context bundles.
-- `devin` (70) — never needed a config port. It has no settings at all, only detection.
+I had declined migrating `oauth/xiaomi-mimo/login/status` earlier on the grounds that it was
+"5 branches, all cookie cycle". The function names contradicted that reading: `firstHopRefusal`,
+`secondHopRefusal`, `needsEgressProbe`, `redactedEgress`. The file is rule logic, and two of the rules
+are security-relevant:
 
-**What is left is `hermes` (369) and `cowork` (449)** — the two biggest single handlers in the
-area — plus `antigravity-mitm` (193 + 42), which stays by decision: it spawns a privileged proxy,
-installs a root CA and rewrites the hosts file. Its *decisions* already live in
-`resolveMitmPassword` and friends; what remains is process control, which is host work by nature.
+- `redactedEgress` strips `user:pass@` before a proxy URL reaches the log. An unredacted URL in a log
+  file is a credential in a log file.
+- `mimoLoginStatus` answers `done` only with an identity present. The client persists what it returns
+  as a connection, so `done` without one saves a connection that can never authenticate.
 
-Rules this round added:
+25 cases, six mutations, six caught.
 
-- **A test that asserts a status the code cannot return is a test of the test.** Wrapping
-  `probeMcpServer` in `try`/`catch` looked right and was dead: the function already catches
-  everything and answers 200. The failing assertion was the only thing that ever noticed.
-- **When a fixture fails, suspect the fixture before the rule.** Five registry tests failed
-  because I invented a flat entry; the real shape is `{ server: { remotes: [{ url }] }, _meta }`.
-  The domain validator was right.
-- **"Blocked on extraction" is worth re-reading before believing it.** `devin` was on that list
-  for three rounds. It was not missing a port — it was missing the recognition that it has
-  nothing to write.
+### `domain/credential-import.ts`: `jwtPayloadOf` was doing nothing, twice
 
-**Compare the set of failing test names, never the count.**
+Writing the test exposed cargo rather than a gap. `jwtPayloadOf` translated `-`→`+`, `_`→`/` and
+re-added `=` padding, justified by a comment about `atob` being strict — but the function uses
+`Buffer`, and `Buffer`'s decoder accepts the URL-safe alphabet and unpadded input on both Bun and
+Node (verified on both runtimes, not assumed). Two surviving mutations proved it: removing the
+translation and removing the padding changed nothing.
+
+Both steps are gone, and the runtime contract that made them unnecessary is now pinned by its own
+test, so a decoder that stopped accepting base64url would fail loudly instead of silently reducing
+every Codex token to "not a JWT" — no email, no workspace, no expiry, no error.
+
+`readLimit` in `cli-tool-settings.ts` is the same shape and still untested; it is next.

@@ -2634,3 +2634,175 @@ move was to assert the domain function directly and delete the route call entire
 
 The remaining dashboard areas are `usage/[connectionId]/codex-reset-credits`, `translator`,
 `notifications`, `dashboard-jobs` and `v1/models`. Nothing large and nothing risky.
+
+## The last dashboard areas
+
+`notifications`, `translator` and `codex-reset-credits` are procedures now. Three findings, one
+per area, none of them about the migration itself:
+
+1. **A comment that claims a guarantee the code does not give is worse than no comment.**
+   I wrote "the limit is clamped in the domain" on `readNotifications`. It was not: the domain's
+   `notificationLimit` only rejects non-positive values, and the ceiling lives in the repo
+   (`Math.min(…, 200)`). The behaviour was safe; the sentence was a lie. My own test caught it,
+   and the fix was to correct the comment and assert the truth — not to add a clamp so the
+   sentence became true.
+2. **`prepareConnection` in the old route ended with a dead branch**: `if (isRefused(attempt))
+   return attempt; return attempt`. Two lines, one outcome. The `GET`/`POST` pair also repeated the
+   whole resolve → prepare → call sequence, so the retry rules had to be read twice to be trusted.
+   Both retry paths now have tests, which they never had — reaching them used to need a live OAuth
+   provider.
+3. **The translator dump routes put a caller-supplied name into `path.join`.** Only
+   `translatorDumpFile`'s exact whitelist stood between that and an arbitrary read or write. The
+   domain rule was already tested; what was *not* tested is the property the route depends on —
+   that a refused name never reaches the filesystem. Thirty cases now say so, on both verbs.
+
+Also fixed while here: my `CodexResetPort` fixture was rejected with 400 until it carried
+`authType`, and the port declared `Promise<void>` for repo writes that actually return a receipt.
+Both were the test and the port being wrong, not the code under them.
+
+## Routes left alone, with the measurement
+
+I said last round that the dashboard areas were done. That was wrong: re-auditing by
+`grep -L createApiClient|getUseCases` turned up `claude-reset`, which is the exact twin of the
+`codex-reset-credits` I had just finished — same three calls, same OAuth refresh, aturan
+eligibility-nya masih inline di route. It is migrated now.
+
+The rest are declined, and this time with a count rather than an opinion:
+
+| route | lines | decision branches | why not |
+| --- | --- | --- | --- |
+| `settings/proxy-test` | 32 | **0** | `testProxyUrl` is the work, `proxyProbeAnswer` is the shape. A use-case would add a layer with nothing in it. |
+| `usage/antigravity-tier` | 41 | 1 | The single branch is `tierProbeFailure` → 200, and that rule already lives in the domain. |
+| `oauth/xiaomi-mimo/login/status` | 68 | 5 | Every branch is cookie lifecycle — re-arming the session on each poll. Same class as `[provider]/[action]`, which is host work by decision. |
+| `translator/send`, `translate`, 2 streams | — | — | SSE pipeline and process buffers. |
+| `headroom/proxy/[...path]` | 104 | — | A byte-forwarding proxy; its "logic" is the stream. |
+| `auth/*` (11 routes) | — | — | Issues the session every other route now requires. |
+
+The lesson is the one that keeps recurring: **a completion claim needs the same check as a
+suspicion.** I trusted my own ledger instead of re-running the query, and it cost a whole twin
+route. The audit command is cheap; the claim is not.
+
+## The constraint I had never checked
+
+Two rounds of "done" and I had never run `bun run build`. The plan lists it as a user constraint
+that must hold at every phase boundary, and I had been verifying with `typecheck` + `test` only.
+It passes — but the first run surfaced something typecheck cannot see.
+
+**`apps/web/custom-server.js` is a build artifact that is checked in, and it had drifted from its
+source.** `apps/web/scripts/copy-standalone-assets.mjs:76` writes it from `custom-server.ts` with
+`ts.transpileModule` on every build. At HEAD:
+
+    custom-server.ts  → 2 hits for MIGRATIONS_DIR
+    custom-server.js  → 0 hits
+
+So the committed launcher — the file `apps/web/package.json` runs as `start` — did not carry the
+migration-journal block its own source declares. A build regenerates it and the difference appears
+as a 906-line "formatting" diff, which is exactly how it went unnoticed: it reads like biome
+churn, so it gets reverted or ignored instead of committed.
+
+I reverted the artifact rather than committing it, because the source is clean and the artifact
+is reproducible — committing build output puts the drift back. **But the drift is real and stays
+until someone commits the regenerated file deliberately.** That is a decision, not a cleanup, and
+it belongs to whoever owns `custom-server.ts`.
+
+The rule worth keeping: **an artifact checked into git must be verified against its source at the
+same commit.** `git show HEAD:x.ts | grep -c SYMBOL` next to `git show HEAD:x.js | grep -c SYMBOL`
+answers it in one command. Nothing in typecheck or the test suite would ever ask.
+
+## Runtime proof, not just green gates
+
+I also stopped relying on 401s. The standalone build was started on port 20999 and driven with a
+real HS256 session minted from `~/.9router/jwt-secret`:
+
+| call | answer | what it proves |
+| --- | --- | --- |
+| `GET /api/notifications` | 200 `{notifications:[],unread:0}` | the use-case and repo port work |
+| `POST {action:"read"}` | 200 `{ok:true,unread:0}` | the recount happens on a mutating branch |
+| `POST {action:"explode"}` | 400 `Unknown action` | no false success |
+| `GET load?file=../../etc/passwd` | 400 `Invalid file name` | traversal refused before the fs |
+| `GET load?file=1_req_client.json` | 404 `File not found` | 400 and 404 stay distinct |
+| `POST save {file:..., no content}` | 400 `Content required` | never writes "undefined" |
+| `POST /usage/nope/claude-reset` | 404 `Connection not found` | eligibility runs in the new code |
+
+Every rule I wrote as a domain comment, confirmed over HTTP against the built server.
+
+## The measurements that were wrong
+
+Two rounds of stating completion, and this round two of the three claims I had written down turned
+out to be wrong when measured rather than remembered.
+
+**"0 decision branches" measured `if (` and `switch`.** `auth/status` scored zero and had four
+chained ternaries plus a `catch` that returned a different shape. The regex was not a proxy for the
+thing I claimed it was a proxy for. Any future "this route is trivial" needs the file read, not
+counted.
+
+**"`custom-server.js` has drifted" understated it.** Drift was the symptom; the cause was
+`.gitignore`'s `/custom-server.js` being anchored at the repo root and never updated when the file
+moved to `apps/web/` during the monorepo split. Fixing the symptom (regenerating and committing)
+would have left the next build rewriting a tracked file. Fixing the cause (pattern per directory,
+`git rm --cached`) means the artefact can never be swept in again, and a test now asserts the
+provenance rather than the bytes — because the build's output is unformatted while the committed
+copy had been formatted by hand, so byte equality could never hold even when the pair was healthy.
+I had written a byte-equality test first and watched it fail on semicolons, which is how I learned
+that.
+
+**The typecheck gate was a third of the codebase short.** `apps/api` was never typechecked. The
+single error hiding there — `fetchPublic` lacking `fetch.preconnect` — was invisible to
+`apps/web` because the two tsconfigs declare different `types`. That is the general shape: a gate
+that inspects part of a system reports health for part of a system.
+
+## A route the plan listed as "declined" was not
+
+`translator/translate` was declined last round for "SSE pipeline". It has no SSE. It calls the
+open-sse engine and the DB directly, which is a *better* reason — but I had not checked, and the
+reason I gave was wrong. Declining for the wrong reason is one query away from declining something
+that should have moved.
+
+## Numbers
+
+    typecheck   0 errors   (now covers apps/web AND apps/api — the api half was never checked)
+    build       0          (standalone server from that build driven on port 20997)
+    test        8029 passed, 0 failed, 679 files   (from 8001)
+    routes      199 total: 147 migrated, 52 declined with a reason each
+    commit      1, pre-commit biome baseline 443 -> 424 violations
+
+The runtime proof that mattered, against the built server and a real HS256 session:
+
+| caller | answer |
+| --- | --- |
+| no cookie | `authenticated: false`, `role: ""`, permissions `{viewUsage: true}`, `homePath: null` |
+| valid session | `authenticated: true`, `role: "admin"`, full permissions, `homePath: "/dashboard"` |
+| key, `permissions: {}` | `role: "apikey"`, `loginMethod: "API Key"`, `homePath: "/dashboard/usage"` |
+
+25 keys, identical on every path. That last row is correct rather than a bug: an empty grant means
+"nothing chosen", so `normalizePermissions` fills the default, and the default really does allow
+`viewUsage` — the key may see that page.
+
+A correction worth keeping: I first reported `routes 146 migrated` in this very section while the
+commit was for `auth/status`, which was the 147th. The count and the work disagreed by one and I
+had written the count from memory. Same failure as the `.planning` ledger reporting "dashboard areas
+complete" while `claude-reset` sat unmigrated — the ledger is not evidence, the query is.
+
+## The audit moved off routes, and found the same shape
+
+Route migration had nothing left to do, so continuing meant auditing something else. The
+architecture held up — no framework imports in `domain/` or `application/`, dependency direction
+clean across all four layers (84/79/27/36 files). The gap was elsewhere.
+
+**A hidden clock.** Two `Date.now()` calls in `domain/`. One was fine (`auto-backup` takes
+`input.now ?? Date.now()`). The other, `resolveExpiresAt` in `kiro-external-idp.ts`, computed a
+credential's expiry from the wall clock inside the function — and had no test for the value it
+computed. `kiro-external-idp.test.ts` stops at `expiresIn: 3600`, the raw number from the provider,
+and never checks `expiresAt`.
+
+That is the same shape as the route audit: a function everyone is confident about, exercised by a
+test that asserts the input rather than the result. Now the clock is a parameter, thirteen cases
+cover the three sources and the default, and three mutations confirm the tests can fail — reading
+seconds as milliseconds fails 4, doubling the default fails 3, dropping the stated-expiry
+precedence fails 3.
+
+Every other `Date.now()` in `domain/` and `application/` is already injected. That was the last one.
+
+    typecheck   0
+    test        8042 passed, 0 failed, 680 files   (from 8029)
+    commits     2
