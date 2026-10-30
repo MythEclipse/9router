@@ -1,6 +1,6 @@
 {
   "name": "9router-tests",
-  "version": "6.0.0",
+  "version": "6.0.1",
   "private": true,
   "type": "module",
   "description": "Unit tests for 9router embeddings endpoint",
