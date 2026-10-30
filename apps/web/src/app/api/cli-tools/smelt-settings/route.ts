@@ -1,38 +1,42 @@
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { NextResponse } from "next/server"
-import { isSmeltInstalled, smeltSettingsConfig } from "@/lib/cliToolHosts"
+import { createApiClient, sessionClaimsOf } from "@/lib/orpcClient"
 import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-/** Smelt keeps one flat file; see `smeltSettingsConfig` for the keys it owns. */
-const deps = () => ({
-	isInstalled: isSmeltInstalled,
-	config: smeltSettingsConfig,
-	notInstalledMessage: "Smelt CLI is not installed",
-	appliedMessage: "Smelt settings applied successfully!",
-	resetMessage: "Smelt 9Router settings removed",
-})
+async function client() {
+	return createApiClient({
+		session: sessionClaimsOf(await getSessionContext()),
+		useCases: getUseCases(),
+		headers: new Headers(),
+	})
+}
 
+/**
+ * smelt settings.
+ *
+ * The host bundle — config port, extra stores, and the three messages — is named in
+ * `lib/cliToolRegistry.ts`, not built here. That table is what the oRPC procedure resolves
+ * against, so this route and any other caller configure the tool identically.
+ */
 export async function GET() {
-	const answer = await getUseCases().cliTools.readToolSettingsStatus(deps())
+	const answer = await (await client()).cliTools.readSettings({ tool: "smelt" })
 	return NextResponse.json(answer.body, { status: answer.status })
 }
 
 export async function POST(request: Request) {
-	const answer = await getUseCases().cliTools.writeToolSettings(await bodyOf(request), deps())
+	let body: unknown
+	try {
+		body = await request.json()
+	} catch {
+		return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
+	}
+	const answer = await (await client()).cliTools.writeSettings({ tool: "smelt", body })
 	return NextResponse.json(answer.body, { status: answer.status })
 }
 
 export async function DELETE() {
-	const answer = await getUseCases().cliTools.resetToolSettings(deps())
+	const answer = await (await client()).cliTools.resetSettings({ tool: "smelt" })
 	return NextResponse.json(answer.body, { status: answer.status })
-}
-
-/** Smelt's screen sends a body it expects to be JSON; a malformed one is a 400, not a crash. */
-async function bodyOf(request: Request): Promise<unknown> {
-	try {
-		return await request.json()
-	} catch {
-		return null
-	}
 }

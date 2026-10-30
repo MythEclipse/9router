@@ -1,21 +1,27 @@
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { NextResponse } from "next/server"
-import { droidSettingsConfig, isDroidInstalled, removeDroidSettings } from "@/lib/cliToolHosts"
+import { createApiClient, sessionClaimsOf } from "@/lib/orpcClient"
 import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-/** Droid keeps an ordered `customModels` array where position one is the default. */
-const deps = () => ({
-	isInstalled: isDroidInstalled,
-	config: droidSettingsConfig,
-	sideRemovals: [removeDroidSettings],
-	notInstalledMessage: "Factory Droid CLI is not installed",
-	appliedMessage: "Droid settings applied successfully!",
-	resetMessage: "9Router settings removed from Droid",
-})
+async function client() {
+	return createApiClient({
+		session: sessionClaimsOf(await getSessionContext()),
+		useCases: getUseCases(),
+		headers: new Headers(),
+	})
+}
 
+/**
+ * droid settings.
+ *
+ * The host bundle — config port, extra stores, and the three messages — is named in
+ * `lib/cliToolRegistry.ts`, not built here. That table is what the oRPC procedure resolves
+ * against, so this route and any other caller configure the tool identically.
+ */
 export async function GET() {
-	const answer = await getUseCases().cliTools.readToolSettingsStatus(deps())
+	const answer = await (await client()).cliTools.readSettings({ tool: "droid" })
 	return NextResponse.json(answer.body, { status: answer.status })
 }
 
@@ -24,13 +30,13 @@ export async function POST(request: Request) {
 	try {
 		body = await request.json()
 	} catch {
-		return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
+		return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
 	}
-	const answer = await getUseCases().cliTools.writeToolSettings(body, deps())
+	const answer = await (await client()).cliTools.writeSettings({ tool: "droid", body })
 	return NextResponse.json(answer.body, { status: answer.status })
 }
 
 export async function DELETE() {
-	const answer = await getUseCases().cliTools.resetToolSettings(deps())
+	const answer = await (await client()).cliTools.resetSettings({ tool: "droid" })
 	return NextResponse.json(answer.body, { status: answer.status })
 }

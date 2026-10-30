@@ -1,24 +1,27 @@
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { NextResponse } from "next/server"
-import { isKiloInstalled, kiloSettingsConfig, writeKiloVsCodeSettings } from "@/lib/cliToolHosts"
+import { createApiClient, sessionClaimsOf } from "@/lib/orpcClient"
 import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-/** Kilo Code keeps its config under one file per tool; see `cliToolHosts`. */
-const deps = () => ({
-	isInstalled: isKiloInstalled,
-	config: kiloSettingsConfig,
-	sideWrites: [
-		(input: { baseUrl: string; apiKey: string; model: string }) => writeKiloVsCodeSettings(input),
-	],
-	sideRemovals: [() => writeKiloVsCodeSettings({ baseUrl: "", apiKey: "", model: "" }, true)],
-	notInstalledMessage: "Kilo Code CLI is not installed",
-	appliedMessage: "Kilo Code settings applied successfully!",
-	resetMessage: "9Router settings removed from Kilo Code",
-})
+async function client() {
+	return createApiClient({
+		session: sessionClaimsOf(await getSessionContext()),
+		useCases: getUseCases(),
+		headers: new Headers(),
+	})
+}
 
+/**
+ * kilo settings.
+ *
+ * The host bundle — config port, extra stores, and the three messages — is named in
+ * `lib/cliToolRegistry.ts`, not built here. That table is what the oRPC procedure resolves
+ * against, so this route and any other caller configure the tool identically.
+ */
 export async function GET() {
-	const answer = await getUseCases().cliTools.readToolSettingsStatus(deps())
+	const answer = await (await client()).cliTools.readSettings({ tool: "kilo" })
 	return NextResponse.json(answer.body, { status: answer.status })
 }
 
@@ -29,11 +32,11 @@ export async function POST(request: Request) {
 	} catch {
 		return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
 	}
-	const answer = await getUseCases().cliTools.writeToolSettings(body, deps())
+	const answer = await (await client()).cliTools.writeSettings({ tool: "kilo", body })
 	return NextResponse.json(answer.body, { status: answer.status })
 }
 
 export async function DELETE() {
-	const answer = await getUseCases().cliTools.resetToolSettings(deps())
+	const answer = await (await client()).cliTools.resetSettings({ tool: "kilo" })
 	return NextResponse.json(answer.body, { status: answer.status })
 }

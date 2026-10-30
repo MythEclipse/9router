@@ -1,21 +1,27 @@
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { NextResponse } from "next/server"
-import { isPiInstalled, piSettingsConfig, removePiSettings } from "@/lib/cliToolHosts"
+import { createApiClient, sessionClaimsOf } from "@/lib/orpcClient"
 import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-/** Pi keeps `providers["9router"]` and a model list; see `piSettingsConfig`. */
-const deps = () => ({
-	isInstalled: isPiInstalled,
-	config: piSettingsConfig,
-	sideRemovals: [removePiSettings],
-	notInstalledMessage: "Pi CLI is not installed",
-	appliedMessage: "Pi settings applied! Use /model in Pi to select the 9Router model.",
-	resetMessage: "9Router removed from Pi",
-})
+async function client() {
+	return createApiClient({
+		session: sessionClaimsOf(await getSessionContext()),
+		useCases: getUseCases(),
+		headers: new Headers(),
+	})
+}
 
+/**
+ * pi settings.
+ *
+ * The host bundle — config port, extra stores, and the three messages — is named in
+ * `lib/cliToolRegistry.ts`, not built here. That table is what the oRPC procedure resolves
+ * against, so this route and any other caller configure the tool identically.
+ */
 export async function GET() {
-	const answer = await getUseCases().cliTools.readToolSettingsStatus(deps())
+	const answer = await (await client()).cliTools.readSettings({ tool: "pi" })
 	return NextResponse.json(answer.body, { status: answer.status })
 }
 
@@ -24,13 +30,13 @@ export async function POST(request: Request) {
 	try {
 		body = await request.json()
 	} catch {
-		return NextResponse.json({ error: { message: "Invalid JSON body" } }, { status: 400 })
+		return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
 	}
-	const answer = await getUseCases().cliTools.writeToolSettings(body, deps())
+	const answer = await (await client()).cliTools.writeSettings({ tool: "pi", body })
 	return NextResponse.json(answer.body, { status: answer.status })
 }
 
 export async function DELETE() {
-	const answer = await getUseCases().cliTools.resetToolSettings(deps())
+	const answer = await (await client()).cliTools.resetSettings({ tool: "pi" })
 	return NextResponse.json(answer.body, { status: answer.status })
 }

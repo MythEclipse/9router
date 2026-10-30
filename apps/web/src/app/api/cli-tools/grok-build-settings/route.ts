@@ -1,25 +1,27 @@
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { NextResponse } from "next/server"
-import {
-	grokBuildSettingsConfig,
-	isGrokBuildInstalled,
-	removeGrokBuildSettings,
-} from "@/lib/cliToolHosts"
+import { createApiClient, sessionClaimsOf } from "@/lib/orpcClient"
 import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-/** Grok Build's `[models]` slots are edited by `domain/grok-build-config.ts`; see the host. */
-const deps = () => ({
-	isInstalled: isGrokBuildInstalled,
-	config: grokBuildSettingsConfig,
-	sideRemovals: [removeGrokBuildSettings],
-	notInstalledMessage: "Grok Build CLI is not installed",
-	appliedMessage: "Grok Build settings applied successfully!",
-	resetMessage: "9router model slots removed from Grok Build",
-})
+async function client() {
+	return createApiClient({
+		session: sessionClaimsOf(await getSessionContext()),
+		useCases: getUseCases(),
+		headers: new Headers(),
+	})
+}
 
+/**
+ * grok-build settings.
+ *
+ * The host bundle — config port, extra stores, and the three messages — is named in
+ * `lib/cliToolRegistry.ts`, not built here. That table is what the oRPC procedure resolves
+ * against, so this route and any other caller configure the tool identically.
+ */
 export async function GET() {
-	const answer = await getUseCases().cliTools.readToolSettingsStatus(deps())
+	const answer = await (await client()).cliTools.readSettings({ tool: "grok-build" })
 	return NextResponse.json(answer.body, { status: answer.status })
 }
 
@@ -28,16 +30,13 @@ export async function POST(request: Request) {
 	try {
 		body = await request.json()
 	} catch {
-		return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
+		return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
 	}
-	const answer = await getUseCases().cliTools.writeToolSettings(body, deps())
-	return NextResponse.json(
-		{ ...answer.body, ...(answer.ok ? { modelSlot: "9router" } : {}) },
-		{ status: answer.status },
-	)
+	const answer = await (await client()).cliTools.writeSettings({ tool: "grok-build", body })
+	return NextResponse.json(answer.body, { status: answer.status })
 }
 
 export async function DELETE() {
-	const answer = await getUseCases().cliTools.resetToolSettings(deps())
+	const answer = await (await client()).cliTools.resetSettings({ tool: "grok-build" })
 	return NextResponse.json(answer.body, { status: answer.status })
 }

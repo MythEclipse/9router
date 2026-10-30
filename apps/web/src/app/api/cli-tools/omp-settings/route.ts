@@ -1,27 +1,27 @@
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { NextResponse } from "next/server"
-import {
-	isOmpInstalled,
-	ompSettingsConfig,
-	removeOmpSettings,
-	writeOmpCredentials,
-} from "@/lib/cliToolHosts"
+import { createApiClient, sessionClaimsOf } from "@/lib/orpcClient"
 import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-/** OMP keeps `models.yml` and mirrors the key into `agent.db`; see the host. */
-const deps = () => ({
-	isInstalled: isOmpInstalled,
-	config: ompSettingsConfig,
-	sideWrites: [writeOmpCredentials],
-	sideRemovals: [removeOmpSettings],
-	notInstalledMessage: "Oh My Pi is not installed",
-	appliedMessage: "Oh My Pi settings applied! Run 'omp' and 9Router models appear under 9router.",
-	resetMessage: "9Router removed from Oh My Pi",
-})
+async function client() {
+	return createApiClient({
+		session: sessionClaimsOf(await getSessionContext()),
+		useCases: getUseCases(),
+		headers: new Headers(),
+	})
+}
 
+/**
+ * omp settings.
+ *
+ * The host bundle — config port, extra stores, and the three messages — is named in
+ * `lib/cliToolRegistry.ts`, not built here. That table is what the oRPC procedure resolves
+ * against, so this route and any other caller configure the tool identically.
+ */
 export async function GET() {
-	const answer = await getUseCases().cliTools.readToolSettingsStatus(deps())
+	const answer = await (await client()).cliTools.readSettings({ tool: "omp" })
 	return NextResponse.json(answer.body, { status: answer.status })
 }
 
@@ -30,13 +30,13 @@ export async function POST(request: Request) {
 	try {
 		body = await request.json()
 	} catch {
-		return NextResponse.json({ error: { message: "Invalid JSON body" } }, { status: 400 })
+		return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
 	}
-	const answer = await getUseCases().cliTools.writeToolSettings(body, deps())
+	const answer = await (await client()).cliTools.writeSettings({ tool: "omp", body })
 	return NextResponse.json(answer.body, { status: answer.status })
 }
 
 export async function DELETE() {
-	const answer = await getUseCases().cliTools.resetToolSettings(deps())
+	const answer = await (await client()).cliTools.resetSettings({ tool: "omp" })
 	return NextResponse.json(answer.body, { status: answer.status })
 }

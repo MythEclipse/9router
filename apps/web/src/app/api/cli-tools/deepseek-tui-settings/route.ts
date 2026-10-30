@@ -1,23 +1,27 @@
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { NextResponse } from "next/server"
-import { deepseekTuiSettingsConfig, isDeepSeekTuiInstalled } from "@/lib/cliToolHosts"
+import { createApiClient, sessionClaimsOf } from "@/lib/orpcClient"
 import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-/**
- * DeepSeek TUI owns its whole `config.toml`, so a save replaces the file and a reset restores
- * the tool's own default rather than deleting it — see the host for why.
- */
-const deps = () => ({
-	isInstalled: isDeepSeekTuiInstalled,
-	config: deepseekTuiSettingsConfig,
-	notInstalledMessage: "DeepSeek TUI is not installed",
-	appliedMessage: "DeepSeek TUI settings applied successfully!",
-	resetMessage: "9router config reset to DeepSeek defaults",
-})
+async function client() {
+	return createApiClient({
+		session: sessionClaimsOf(await getSessionContext()),
+		useCases: getUseCases(),
+		headers: new Headers(),
+	})
+}
 
+/**
+ * deepseek-tui settings.
+ *
+ * The host bundle — config port, extra stores, and the three messages — is named in
+ * `lib/cliToolRegistry.ts`, not built here. That table is what the oRPC procedure resolves
+ * against, so this route and any other caller configure the tool identically.
+ */
 export async function GET() {
-	const answer = await getUseCases().cliTools.readToolSettingsStatus(deps())
+	const answer = await (await client()).cliTools.readSettings({ tool: "deepseek-tui" })
 	return NextResponse.json(answer.body, { status: answer.status })
 }
 
@@ -26,13 +30,13 @@ export async function POST(request: Request) {
 	try {
 		body = await request.json()
 	} catch {
-		return NextResponse.json({ error: { message: "Invalid JSON body" } }, { status: 400 })
+		return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
 	}
-	const answer = await getUseCases().cliTools.writeToolSettings(body, deps())
+	const answer = await (await client()).cliTools.writeSettings({ tool: "deepseek-tui", body })
 	return NextResponse.json(answer.body, { status: answer.status })
 }
 
 export async function DELETE() {
-	const answer = await getUseCases().cliTools.resetToolSettings(deps())
+	const answer = await (await client()).cliTools.resetSettings({ tool: "deepseek-tui" })
 	return NextResponse.json(answer.body, { status: answer.status })
 }
