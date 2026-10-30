@@ -1,12 +1,27 @@
 import { getSessionContext } from "@9router/auth/dashboardPermissions"
+import { isReportingPeriod } from "9router-api/domain/reporting-period"
+import { NextResponse } from "next/server"
 import { getActiveRequests, getUsageStats, statsEmitter } from "@/lib/usageDb"
 
 export const dynamic = "force-dynamic"
 
+/**
+ * GET /api/usage/stream?period= - server-sent usage, the second source the Usage page merges in.
+ *
+ * `?period=` is refused by the same rule the other usage panels use. This route was the one that
+ * skipped it, and an unrefused period here did not fail loudly: `periodCutoff` in the db layer maps
+ * an unknown period to `null`, which means unbounded — so `?period=abc` streamed the entire history
+ * under a label the caller chose. `usage/leaderboard` fixed exactly this and left a comment about a
+ * week of data labelled with what the caller asked for; the SSE route was not covered by it.
+ */
 export async function GET(request) {
 	const encoder = new TextEncoder()
 	const { searchParams } = new URL(request.url)
-	const period = searchParams.get("period") || "today"
+	const requested = searchParams.get("period") ?? "today"
+	if (!isReportingPeriod(requested)) {
+		return NextResponse.json({ error: `Unknown period: ${requested}` }, { status: 400 })
+	}
+	const period = requested
 
 	const ctx = await getSessionContext()
 	// Narrowed locally: the session payload fields are typed `unknown`, but the
