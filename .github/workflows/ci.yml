@@ -116,7 +116,7 @@ jobs:
       # there and flattened into the transfer root the host expects.
       cp apps/web/custom-server.js package.json bun.lock "$R"/
       cp apps/web/tsconfig.json apps/web/next.config.mjs "$R"/
-      cp -r apps/web/src apps/web/open-sse apps/web/public apps/web/scripts "$R"/
+      cp -r apps/web/src apps/web/open-sse apps/web/public deploy apps/web/scripts "$R"/
       # bun install runs on the host against this tree, and the root manifest
       # declares workspaces (apps/*, packages/*, cli) that carry the real
       # deps — next among them. Shipping only the root manifest installs the
@@ -237,6 +237,14 @@ jobs:
         "grep -q '^MIGRATIONS_DIR=' $APP_DIR/.env 2>/dev/null \
           || echo 'MIGRATIONS_DIR=$APP_DIR/migrations' | sudo tee -a $APP_DIR/.env >/dev/null"
 
+      # The unit execs /opt/9router/bin/9router, which lives on the host and
+      # was written for Node. apps/api needs the Bun runtime, so a stale
+      # launcher leaves every database route answering 500 while /api/health
+      # still reports 200. Install it from the payload so the launcher is
+      # versioned with the code it starts.
+      ssh "$VPS_USER@$VPS_HOST" \
+        "sudo install -m 0755 $APP_DIR/deploy/orange/launcher.sh /opt/9router/bin/9router"
+
       # node_modules is root-owned, so the install runs as root with bun's
       # absolute path (sudo's secure_path must not be trusted to find it).
       if [ "$NEED_INSTALL" = "1" ]; then
@@ -255,21 +263,32 @@ jobs:
 
       echo "Deployed: $SHORT_SHA -> $APP_DIR"
 
-   # Health check. /v1/models requires auth (401 without a key), so probe it
-   # from INSIDE the VPS over loopback where a key is unnecessary — and
-   # accept any HTTP response as "the server is up".
+   # Health check. Both probes run from INSIDE the VPS over loopback, where a
+   # key is unnecessary, and both must pass: liveness alone is not enough.
    - name: Verify service
      run: |
+      # /v1/models answers 401 without a key, so 200 or 401 means the gateway
+      # is up. /api/auth/status must be 200: it touches the database, which
+      # is what catches a server that boots and answers /api/health but
+      # cannot open its store — a Node launcher against bun:sqlite did
+      # exactly that and shipped a green deploy with a broken dashboard.
       for i in $(seq 1 10); do
-        code=$(ssh "$VPS_USER@$VPS_HOST" \
+        models=$(ssh "$VPS_USER@$VPS_HOST" \
           "curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:${{ env.PORT }}/v1/models || echo 000")
-        echo "attempt $i: /v1/models -> $code"
-        case "$code" in
-          200|401) echo "::notice::9router is serving on 127.0.0.1:${{ env.PORT }} (HTTP $code)"; exit 0 ;;
+        auth=$(ssh "$VPS_USER@$VPS_HOST" \
+          "curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:${{ env.PORT }}/api/auth/status || echo 000")
+        echo "attempt $i: /v1/models -> $models, /api/auth/status -> $auth"
+        case "$models" in
+          200|401)
+            if [ "$auth" = "200" ]; then
+              echo "::notice::9router is serving on 127.0.0.1:${{ env.PORT }} (/v1/models $models, /api/auth/status $auth)"
+              exit 0
+            fi
+            ;;
         esac
         sleep 3
       done
-      echo "::error::9router did not answer /v1/models on the VPS in time"
+      echo "::error::9router did not serve /v1/models and /api/auth/status on the VPS in time"
       exit 1
 
    # Anything failing above (ship, sync, restart, health) restores the
