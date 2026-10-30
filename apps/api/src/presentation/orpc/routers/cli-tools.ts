@@ -112,6 +112,23 @@ export const cliToolsRouter = {
 
 		return context.useCases.cliTools.readAllStatuses(readers)
 	}),
+
+	/**
+	 * Devin's detection, which is the whole of its settings screen.
+	 *
+	 * Not installed answers 200 with an explanation and an install URL — the same tolerance the
+	 * other seventeen tools have, so the screen can render a panel rather than an error page.
+	 */
+	readDevin: authed.handler(async ({ context }) => {
+		const hosts = context.devinHosts
+		if (!hosts) {
+			throw new ORPCError("INTERNAL_SERVER_ERROR", {
+				status: 500,
+				message: "Devin hosts are not wired into this client",
+			})
+		}
+		return context.useCases.cliTools.readDevinStatus(hosts.install, hosts.version)
+	}),
 }
 
 /**

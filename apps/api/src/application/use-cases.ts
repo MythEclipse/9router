@@ -35,6 +35,12 @@ import {
 import type { AllStatusesAnswer } from "./cli-tools/read-all-statuses.ts"
 import { readAllToolStatuses } from "./cli-tools/read-all-statuses.ts"
 import type {
+	DevinInstallPort,
+	DevinStatusAnswer,
+	DevinVersionPort,
+} from "./cli-tools/read-devin-status.ts"
+import { readDevinStatus } from "./cli-tools/read-devin-status.ts"
+import type {
 	CodexProfilesAnswer,
 	CodexProfilesPort,
 } from "./codex-profiles/manage-codex-profiles.ts"
@@ -355,6 +361,11 @@ export interface UseCases {
 		readonly readAllStatuses: (
 			readers: Readonly<Record<string, () => Promise<Record<string, unknown>>>>,
 		) => Promise<AllStatusesAnswer>
+		/** Devin keeps its own credentials, so there is only detection to read. */
+		readonly readDevinStatus: (
+			install: DevinInstallPort,
+			version: DevinVersionPort,
+		) => Promise<DevinStatusAnswer>
 	}
 	/**
 	 * Claude Code's settings screen, which speaks an `env` block rather than a provider entry
@@ -751,6 +762,7 @@ export function buildUseCases(deps: Dependencies): UseCases {
 			clearActiveModel: (config) => clearActiveModel(config),
 			removeToolModel: (modelId, host) => removeToolModel(modelId, host),
 			readAllStatuses: (readers) => readAllToolStatuses(readers),
+			readDevinStatus: (install, version) => readDevinStatus(install, version),
 		},
 		claudeTools: {
 			readSettingsStatus: (port, isInstalled) => readClaudeSettingsStatus(port, isInstalled),

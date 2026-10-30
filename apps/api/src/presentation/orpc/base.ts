@@ -133,6 +133,17 @@ export interface McpProbeHost {
 	readonly fetchServers?: typeof fetch
 }
 
+/**
+ * Devin's two probes, injected like every other host bundle.
+ *
+ * Devin writes no settings, so there is no config port to carry — only "is it there" and "which
+ * version". Both read the machine.
+ */
+export interface DevinHosts {
+	readonly install: import("../../application/cli-tools/read-devin-status.ts").DevinInstallPort
+	readonly version: import("../../application/cli-tools/read-devin-status.ts").DevinVersionPort
+}
+
 export interface AppContext extends RequestContext {
 	readonly useCases: UseCases
 	/** Present on the in-process dashboard client; absent on a context with no host access. */
@@ -143,6 +154,8 @@ export interface AppContext extends RequestContext {
 	readonly codexProfilesHosts?: CodexProfilesHosts
 	/** Network for the MCP probe; absent on a context with no host access. */
 	readonly mcpProbeHost?: McpProbeHost
+	/** Devin's detection probes; absent on a context with no host access. */
+	readonly devinHosts?: DevinHosts
 }
 
 /** Anything thrown below presentation becomes a typed ORPCError exactly once. */
