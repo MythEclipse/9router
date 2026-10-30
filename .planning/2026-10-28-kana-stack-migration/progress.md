@@ -2431,3 +2431,25 @@ in `afterEach` as well as `beforeEach`. And when a worktree carrying the identic
 the suite leaves behind, not at the diff.
 
 Fixing it resolved 240 pre-existing failures: every file that had been inheriting `222222`.
+
+## proxy-pools: wired is not the same as reachable
+
+Nine routes, all already delegating to `getUseCases().proxyPools.*` — and none of them
+reachable through oRPC, because `presentation/orpc/routers/` had no file naming a pool. The
+routes looked migrated and were not: the migration's unit is the *procedure*, not the
+delegation. That distinction is what the next survey should look for.
+
+Found by grouping routes on `getUseCases()` present and `createApiClient` absent: 131 routes
+across 24 areas. The plan's guess for this round (`keys`, then `logs`) was wrong on both counts
+— `keys` was finished in an earlier pass and `logs` does not exist. The group-by is cheap and
+replaces the guess.
+
+Two findings worth carrying:
+
+- `RELAY_PROVIDERS` already models the four deploy routes as one shape (`RELAY_CONTRACTS`), so
+  the router exposes a single `deploy` with a validated enum instead of four copies of the same
+  handler. A fifth provider now needs one entry, not a fifth route.
+- `failed()` sends `{error}` and drops everything else on the error. `PoolInUseError` carries
+  `boundConnectionCount` and it never reaches the body. That is unchanged behaviour, so it is
+  not a regression — but it is the kind of thing a migration quietly makes permanent, and the
+  next person to need that count will look in the use-case first.

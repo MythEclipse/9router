@@ -22,25 +22,31 @@ gateway serving traffic at every phase boundary.
 
 ## Next Step
 
-**`usage` is on oRPC — 22 routes, fifty-five across the migration so far.** Three use-cases
-carry it: `keyUsage` (per-key aggregates and quota), `usagePanels` (errors, leaderboard,
-providers, token savings, available models, request details) and `connectionUsage` (the ordered
-provider read). The routes that remain carry a query string and a status.
+**`proxy-pools` is on oRPC — 9 routes, sixty-four across the migration.** The area was already
+delegating to `getUseCases().proxyPools.*` in-process, but no procedure named a pool, so a
+caller outside this Next.js app had no way in. That is the distinction the next areas hinge on:
+*wired to a use-case* is not the same as *reachable through oRPC*.
 
-The two lessons this round added, both from rules that fail *quietly*:
+The survey that found it is worth repeating before the next pick. Group the routes by whether
+they call `getUseCases()` but never `createApiClient` — 131 do, across 24 areas. `keys` was
+already finished when this round's plan named it; `logs` does not exist. The list is the point,
+not the plan's guess.
 
-- **An optional port on the host contract must refuse, not answer empty.** `aggregatesOf`,
-  `errorRows` and `leaderboardRows` are filled by the infrastructure factory, so they are
-  optional where the host is the caller — and an optional port that returns `[]` renders as
-  "no API keys yet" on an install with plenty. `required()` in the factory proves nothing about
-  who supplies the value at the other end. Both use-cases throw at construction instead.
-- **A leaked global reads as a flake and costs a bisect.** A test that installs a capability
-  catalog must reset it in `afterEach`, not only `beforeEach`: the next file inherits it, and
-  the failure surfaces in tests that are unrelated to the change being made. This round spent a
-  worktree bisect on exactly that before finding `capabilities-memo.test.ts`. When the
-  before/after failing *sets* differ, bisect the file that leaves global state, not the diff.
+- **`cli-tools` (17 routes, ~1900 lines) is next**, and it is not uniform: `cowork-settings`
+  (449) and `hermes-settings` (369) carry real decisions, the fourteen `*-settings` routes are
+  thin `port + installed` shims, and `antigravity-mitm` legitimately stays where it is because
+  it spawns a privileged proxy. Read before splitting, and expect two commits: the use-cases
+  that are missing, then the procedures over the ones that exist.
+- After that: `proxy-pools` siblings `provider-nodes` (3) and `combos` (4).
 
-**Next area: `keys` (remaining), then `logs`.** Pick by the same survey: which handlers still
-*decide* something rather than delegate. Compare the *set* of failing test names, never the
-bare count — the suite carries pre-existing failures in files that only fail under full-suite
-load, and a count reads those as progress.
+Two rules this round added:
+
+- **A status carried in the domain is only a status once the table says so.** `PoolInUseError`
+  sets `code: "CONFLICT"`; that is a 409 solely because `STATUS_BY_CODE` maps it. The refusal
+  itself tests green either way, so the mapping needs its own assertion.
+- **`failed()` sends `{error}` and nothing else.** `boundConnectionCount` is on the error object
+  and is dropped at the boundary — preserved behaviour, but the next person who needs that
+  count in the body will find it missing and blame the use-case.
+
+**Compare the set of failing test names, never the count.** The suite carries pre-existing
+failures in files that only fail under full-suite load.
