@@ -222,11 +222,16 @@ as_root rm -rf "${RELEASE_DIR}/node_modules"
   as_root env HOME=/root "$BUN" install --frozen-lockfile
 )
 [ -d "${RELEASE_DIR}/node_modules" ] || die "bun install produced no node_modules"
-next_version="$(node -p "require('${RELEASE_DIR}/node_modules/next/package.json').version" 2>/dev/null || echo unknown)"
+next_version="$(cd "${RELEASE_DIR}/apps/web" && node -p "require('next/package.json').version" 2>/dev/null || echo unknown)"
 log "installed next@${next_version} into $RELEASE_DIR"
 # Assert next resolves from the release's own node_modules, not a shared tree.
 # A bad resolution only surfaces much later, as a canonicalBase crash at boot.
-resolved_next="$(cd "$RELEASE_DIR" && node -e "console.log(require.resolve('next'))" 2>/dev/null || echo "")"
+#
+# Resolve from apps/web, not from the release root: the root manifest carries
+# no dependencies (it only declares the workspaces), so `require.resolve`
+# there answers MODULE_NOT_FOUND and the check rejects a perfectly good
+# install. next is declared by apps/web, which is where the server runs.
+resolved_next="$(cd "${RELEASE_DIR}/apps/web" && node -e "console.log(require.resolve('next'))" 2>/dev/null || echo "")"
 case "$resolved_next" in
   "$RELEASE_DIR"/*) : ;;
   *) die "next resolves outside the release ($resolved_next) — refusing to activate" ;;

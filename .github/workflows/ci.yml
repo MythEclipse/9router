@@ -117,7 +117,29 @@ jobs:
       cp apps/web/custom-server.js package.json bun.lock "$R"/
       cp apps/web/tsconfig.json apps/web/next.config.mjs "$R"/
       cp -r apps/web/src apps/web/open-sse apps/web/public apps/web/scripts "$R"/
+      # bun install runs on the host against this tree, and the root manifest
+      # declares workspaces (apps/*, packages/*, cli) that carry the real
+      # deps — next among them. Shipping only the root manifest installs the
+      # six root devDependencies and nothing else, so next never resolves and
+      # the release guard refuses to activate. Ship every workspace manifest.
+      cp -r apps/api packages cli "$R"/
+      for pkg in apps/web apps/api packages/* cli; do
+        [ -f "$pkg/package.json" ] && mkdir -p "$R/$pkg" && cp "$pkg/package.json" "$R/$pkg/"
+      done
       cp apps/web/.next/standalone/apps/web/server.js "$R/server.js"
+      # server.js sits at the payload root and requires 'next' from there, but
+      # next is declared by apps/web, so bun links it under that workspace and
+      # the root require fails ("Cannot find package 'next' from server.js").
+      # Pin next in the payload's own manifest so bun links it at the root too.
+      # The repo manifest is untouched: this is a deploy-layout concern only.
+      next_range="$(node -p "require('./apps/web/package.json').dependencies.next")"
+      node -e '
+        const fs = require("fs");
+        const p = process.argv[1];
+        const pkg = JSON.parse(fs.readFileSync(p, "utf8"));
+        pkg.dependencies = { ...(pkg.dependencies || {}), next: process.argv[2] };
+        fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + "\n");
+      ' "$R/package.json" "$next_range"
       # Anchor both excludes at the transfer root: .next/standalone is a
       # partial copy and .next/cache is build cache — neither belongs on
       # the host (its current tree has neither).
@@ -311,7 +333,29 @@ jobs:
       cp apps/web/custom-server.js package.json bun.lock "$R"/
       cp apps/web/tsconfig.json apps/web/next.config.mjs "$R"/
       cp -r apps/web/src apps/web/open-sse apps/web/public deploy apps/web/scripts "$R"/
+      # bun install runs on the host against this tree, and the root manifest
+      # declares workspaces (apps/*, packages/*, cli) that carry the real
+      # deps — next among them. Shipping only the root manifest installs the
+      # six root devDependencies and nothing else, so next never resolves and
+      # the release guard refuses to activate. Ship every workspace manifest.
+      cp -r apps/api packages cli "$R"/
+      for pkg in apps/web apps/api packages/* cli; do
+        [ -f "$pkg/package.json" ] && mkdir -p "$R/$pkg" && cp "$pkg/package.json" "$R/$pkg/"
+      done
       cp apps/web/.next/standalone/apps/web/server.js "$R/server.js"
+      # server.js sits at the payload root and requires 'next' from there, but
+      # next is declared by apps/web, so bun links it under that workspace and
+      # the root require fails ("Cannot find package 'next' from server.js").
+      # Pin next in the payload's own manifest so bun links it at the root too.
+      # The repo manifest is untouched: this is a deploy-layout concern only.
+      next_range="$(node -p "require('./apps/web/package.json').dependencies.next")"
+      node -e '
+        const fs = require("fs");
+        const p = process.argv[1];
+        const pkg = JSON.parse(fs.readFileSync(p, "utf8"));
+        pkg.dependencies = { ...(pkg.dependencies || {}), next: process.argv[2] };
+        fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + "\n");
+      ' "$R/package.json" "$next_range"
       # Anchor both excludes at the transfer root: .next/standalone is a
       # partial copy and .next/cache is build cache — neither belongs on
       # the host.
