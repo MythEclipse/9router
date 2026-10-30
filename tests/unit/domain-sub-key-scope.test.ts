@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import {
+	asKeyPermissions,
 	clampAllowedModels,
 	clampEndpoints,
 	mayCreateSubKey,
@@ -176,5 +177,67 @@ describe("permissionsForSubKey", () => {
 
 	it("falls back to the defaults when nothing is asked", () => {
 		expect(permissionsForSubKey("admin", null, defaults)).toEqual(defaults)
+	})
+})
+
+describe("asKeyPermissions", () => {
+	// This is the entry point to the whole chain above: `callerFromSession` passes it whatever the
+	// session carries, and `mayCreateSubKey` then decides whether that caller may mint a key. A
+	// truthy value here is the difference between "may not" and "may" escalate.
+
+	it("only `true` grants a flag, so a stray string cannot stand in for a permission", () => {
+		for (const value of ["true", 1, "yes", {}, [], "1"]) {
+			const permissions = asKeyPermissions({ manageApiKeys: value, viewUsage: value })
+			expect(permissions?.manageApiKeys, `${JSON.stringify(value)} must not grant`).toBe(false)
+			expect(permissions?.viewUsage, `${JSON.stringify(value)} must not grant`).toBe(false)
+		}
+	})
+
+	it("keeps an explicit false as false", () => {
+		const permissions = asKeyPermissions({ viewUsage: false, manageApiKeys: false })
+		expect(permissions).toMatchObject({ viewUsage: false, manageApiKeys: false })
+	})
+
+	it("fills a missing flag with false rather than leaving it undefined", () => {
+		// A caller that reads `permissions.manageApiKeys` must see a boolean even when the session
+		// omitted the field.
+		const permissions = asKeyPermissions({})
+		expect(permissions).toEqual({ viewUsage: false, manageApiKeys: false })
+	})
+
+	it("carries the other flags through untouched, because the sidebar reads them by name", () => {
+		const permissions = asKeyPermissions({
+			viewUsage: true,
+			manageApiKeys: false,
+			manageProviders: true,
+			manageModels: true,
+		})
+		expect(permissions).toMatchObject({
+			manageProviders: true,
+			manageModels: true,
+		})
+	})
+
+	it("answers null for anything that is not an object, so no caller inherits a permissive default", () => {
+		for (const value of [null, undefined, "admin", 42, true]) {
+			expect(asKeyPermissions(value), `${JSON.stringify(value)} must be null`).toBeNull()
+		}
+	})
+
+	it("an array is an object, so it normalises to a permissions map with nothing granted", () => {
+		// Recorded rather than refused: the input is a JSON body, and an array reaching here grants
+		// no flag, so the outcome is closed even though the shape is odd.
+		expect(asKeyPermissions([])).toEqual({ viewUsage: false, manageApiKeys: false })
+	})
+
+	it("a normalised key session is still refused when it lacks manageApiKeys", () => {
+		// The shape `callerFromSession` builds, fed to the rule that gates minting.
+		const permissions = asKeyPermissions({ viewUsage: true, manageApiKeys: "true" })
+		expect(mayCreateSubKey("apikey", permissions)).toBe(false)
+	})
+
+	it("a normalised key session that holds manageApiKeys may mint", () => {
+		const permissions = asKeyPermissions({ viewUsage: true, manageApiKeys: true })
+		expect(mayCreateSubKey("apikey", permissions)).toBe(true)
 	})
 })
