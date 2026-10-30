@@ -15,6 +15,7 @@
  *    boundary maps AppError and would otherwise have nothing to map.
  */
 import { ORPCError, os } from "@orpc/server"
+import type { ClaudeResetPort } from "../../application/claude-reset/reset-grant.ts"
 import type { CodexResetPort } from "../../application/codex-reset-credits/reset-credits.ts"
 import type {
 	CoworkDependencies,
@@ -208,6 +209,8 @@ export interface AppContext extends RequestContext {
 	readonly translatorDumpName?: DumpNameRule
 	/** The connection row, the OAuth refresh and the two Codex upstream calls. */
 	readonly codexResetPort?: CodexResetPort
+	/** The same three, for Claude's limit-reset grant. */
+	readonly claudeResetPort?: ClaudeResetPort
 }
 
 /** Anything thrown below presentation becomes a typed ORPCError exactly once. */

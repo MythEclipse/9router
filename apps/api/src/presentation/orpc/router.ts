@@ -12,6 +12,7 @@
  */
 import { base } from "./base.ts"
 import { apiKeysRouter } from "./routers/api-keys.ts"
+import { claudeResetRouter } from "./routers/claude-reset.ts"
 import { claudeToolsRouter } from "./routers/claude-tools.ts"
 import { cliToolsRouter } from "./routers/cli-tools.ts"
 import { codexProfilesRouter } from "./routers/codex-profiles.ts"
@@ -53,6 +54,7 @@ export const appRouter = base.router({
 	notifications: notificationsRouter,
 	translator: translatorRouter,
 	codexResetCredits: codexResetCreditsRouter,
+	claudeReset: claudeResetRouter,
 	errorLogs: errorLogsRouter,
 	hermes: hermesRouter,
 	theme: themeRouter,

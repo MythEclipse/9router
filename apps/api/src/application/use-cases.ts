@@ -6,6 +6,7 @@
  * the same shape from fakes.
  */
 
+import type { ClaudeResetOutcome } from "../domain/claude-reset.ts"
 import { invalid } from "../domain/errors.ts"
 import type { MimoRegion } from "../domain/mimo-login.ts"
 import { readMimoRegion } from "../domain/mimo-login.ts"
@@ -15,6 +16,8 @@ import { makeListApiKeys, makeRevokeApiKey } from "./api-keys/manage-api-keys.ts
 import { makeManageApiKeys } from "./api-keys/manage-api-keys-dashboard.ts"
 import { makeManageSingleKey } from "./api-keys/manage-single-key.ts"
 import { loadChangelog } from "./changelog.ts"
+import type { ClaudeResetPort } from "./claude-reset/reset-grant.ts"
+import { spendResetGrant } from "./claude-reset/reset-grant.ts"
 import type {
 	ClaudeSettingsAnswer,
 	ClaudeSettingsPort,
@@ -449,6 +452,14 @@ export interface UseCases {
 		readonly read: (connectionId: unknown, port: CodexResetPort) => Promise<CodexAnswer>
 		readonly redeem: (connectionId: unknown, port: CodexResetPort) => Promise<CodexAnswer>
 	}
+	/** Claude's limit-reset grant. */
+	readonly claudeReset: {
+		readonly spend: (
+			connectionId: unknown,
+			grantId: unknown,
+			port: ClaudeResetPort,
+		) => Promise<ClaudeResetOutcome>
+	}
 	/** The translator inspector's dump files. */
 	readonly translator: {
 		readonly load: (
@@ -873,6 +884,9 @@ export function buildUseCases(deps: Dependencies): UseCases {
 		codexResetCredits: {
 			read: (connectionId, port) => readResetCredits(connectionId, port),
 			redeem: (connectionId, port) => redeemResetCredit(connectionId, port),
+		},
+		claudeReset: {
+			spend: (connectionId, grantId, port) => spendResetGrant(connectionId, grantId, port),
 		},
 		translator: {
 			load: (rawFile, safeName, store) => loadDump(rawFile, safeName, store),
