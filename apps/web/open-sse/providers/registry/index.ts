@@ -87,6 +87,7 @@ import p83 from "./mistral.ts"
 import p84 from "./morph.ts"
 import p85 from "./muse.ts"
 import p86 from "./muse-web.ts"
+import p145 from "./nace.ts"
 import p87 from "./nanobanana.ts"
 import p88 from "./nebius.ts"
 import p89 from "./nous.ts"
@@ -292,4 +293,5 @@ export default [
 	p142,
 	p143,
 	p144,
+	p145,
 ] as RegistryEntry[]

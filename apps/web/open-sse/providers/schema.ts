@@ -143,6 +143,7 @@ export interface OAuthConfig extends ProviderExtras {
 
 export interface MediaServiceConfig extends ProviderExtras {
 	baseUrl?: string
+	path?: string
 	authType?: string
 	authHeader?: string
 	format?: string
