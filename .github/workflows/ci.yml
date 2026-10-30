@@ -151,6 +151,11 @@ jobs:
         pkg.dependencies = { ...webDeps, ...(pkg.dependencies || {}) };
         fs.writeFileSync(root, JSON.stringify(pkg, null, 2) + "\n");
       ' "$R/package.json" apps/web/package.json
+      # The merged manifest no longer matches the repo's bun.lock, and both
+      # hosts install with --frozen-lockfile, which refuses a stale one
+      # ("lockfile had changes, but lockfile is frozen"). Resolve here so the
+      # payload ships a lockfile describing its own manifest.
+      ( cd "$R" && bun install --lockfile-only )
       # Anchor both excludes at the transfer root: .next/standalone is a
       # partial copy and .next/cache is build cache — neither belongs on
       # the host (its current tree has neither).
@@ -403,6 +408,11 @@ jobs:
         pkg.dependencies = { ...webDeps, ...(pkg.dependencies || {}) };
         fs.writeFileSync(root, JSON.stringify(pkg, null, 2) + "\n");
       ' "$R/package.json" apps/web/package.json
+      # The merged manifest no longer matches the repo's bun.lock, and both
+      # hosts install with --frozen-lockfile, which refuses a stale one
+      # ("lockfile had changes, but lockfile is frozen"). Resolve here so the
+      # payload ships a lockfile describing its own manifest.
+      ( cd "$R" && bun install --lockfile-only )
       # Anchor both excludes at the transfer root: .next/standalone is a
       # partial copy and .next/cache is build cache — neither belongs on
       # the host.
