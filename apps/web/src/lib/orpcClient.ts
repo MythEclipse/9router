@@ -15,6 +15,7 @@ import type {
 	CliToolHosts,
 	CodexProfilesHosts,
 	DevinHosts,
+	HermesHosts,
 	McpProbeHost,
 	SessionClaims,
 } from "9router-api/presentation/orpc/base"
@@ -23,6 +24,7 @@ import { claudeSettingsPort, isClaudeInstalled } from "./claudeToolHost"
 import { devinInstallPort, devinVersionPort } from "./cliToolHosts"
 import { cliToolHost } from "./cliToolRegistry"
 import { codexProfilesPort } from "./codexProfilesHost"
+import { hermesFilesPort } from "./hermesSettingsHost"
 import { mcpProbeHost } from "./mcpProbeHost"
 
 /**
@@ -63,6 +65,8 @@ export interface RouterContext {
 	readonly mcpProbeHost?: McpProbeHost
 	/** Devin's detection probes; defaulted in `createApiClient` like the rest. */
 	readonly devinHosts?: DevinHosts
+	/** Hermes's profile directories; defaulted in `createApiClient` like the rest. */
+	readonly hermesHosts?: HermesHosts
 }
 
 /**
@@ -83,6 +87,7 @@ export function createApiClient(context: RouterContext) {
 			codexProfilesHosts: context.codexProfilesHosts ?? codexProfilesPort,
 			mcpProbeHost: context.mcpProbeHost ?? mcpProbeHost,
 			devinHosts: context.devinHosts ?? { install: devinInstallPort, version: devinVersionPort },
+			hermesHosts: context.hermesHosts ?? hermesFilesPort,
 			claudeSettingsHosts: context.claudeSettingsHosts ?? {
 				port: claudeSettingsPort,
 				isInstalled: isClaudeInstalled,

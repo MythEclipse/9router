@@ -20,6 +20,7 @@ import { coworkMcpRouter } from "./routers/cowork-mcp.ts"
 import { dashboardKeysRouter } from "./routers/dashboard-keys.ts"
 import { errorLogsRouter } from "./routers/error-logs.ts"
 import { headroomRouter } from "./routers/headroom.ts"
+import { hermesRouter } from "./routers/hermes.ts"
 import { mediaProvidersRouter } from "./routers/media-providers.ts"
 import { modelsRouter } from "./routers/models.ts"
 import { oauthRouter } from "./routers/oauth.ts"
@@ -45,6 +46,7 @@ export const appRouter = base.router({
 	coworkMcp: coworkMcpRouter,
 	combos: combosRouter,
 	errorLogs: errorLogsRouter,
+	hermes: hermesRouter,
 	theme: themeRouter,
 	pricing: pricingRouter,
 	usage: usageRouter,

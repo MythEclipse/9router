@@ -67,6 +67,12 @@ import { readMcpRegistry } from "./cowork-mcp/read-mcp-registry.ts"
 import type { Dependencies } from "./dependencies.ts"
 import { makeClearErrorLogs, makeListErrorLogs } from "./error-logs/read-error-logs.ts"
 import { makeHeadroom } from "./headroom/manage-headroom.ts"
+import type { HermesAnswer, HermesFilesPort } from "./hermes/manage-hermes-settings.ts"
+import {
+	readHermesSettings,
+	resetHermesSettings as resetHermesSettingsUseCase,
+	writeHermesSettings,
+} from "./hermes/manage-hermes-settings.ts"
 import { makeModelCatalogue } from "./models/list-models.ts"
 import { makeCustomModels, makeModelAliases } from "./models/manage-aliases.ts"
 import { makeModelAvailability } from "./models/manage-availability.ts"
@@ -388,6 +394,12 @@ export interface UseCases {
 		readonly list: (port: CodexProfilesPort) => Promise<CodexProfilesAnswer>
 		readonly write: (body: unknown, port: CodexProfilesPort) => Promise<CodexProfilesAnswer>
 		readonly remove: (body: unknown, port: CodexProfilesPort) => Promise<CodexProfilesAnswer>
+	}
+	/** Hermes Agent's per-profile YAML, and the bulk endpoint refresh. */
+	readonly hermes: {
+		readonly readSettings: (profile: unknown, port: HermesFilesPort) => Promise<HermesAnswer>
+		readonly writeSettings: (body: unknown, port: HermesFilesPort) => Promise<HermesAnswer>
+		readonly resetSettings: (body: unknown, port: HermesFilesPort) => Promise<HermesAnswer>
 	}
 	/** Probing a Cowork MCP server for the tools it exposes. */
 	readonly coworkMcp: {
@@ -773,6 +785,11 @@ export function buildUseCases(deps: Dependencies): UseCases {
 			list: (port) => listCodexProfiles(port),
 			write: (body, port) => writeCodexProfile(body, port),
 			remove: (body, port) => deleteCodexProfile(body, port),
+		},
+		hermes: {
+			readSettings: (profile, port) => readHermesSettings(profile, port),
+			writeSettings: (body, port) => writeHermesSettings(body, port),
+			resetSettings: (body, port) => resetHermesSettingsUseCase(body, port),
 		},
 		coworkMcp: {
 			probeTools: (body, options) => probeCoworkMcpTools(body, options),

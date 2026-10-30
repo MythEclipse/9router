@@ -144,6 +144,14 @@ export interface DevinHosts {
 	readonly version: import("../../application/cli-tools/read-devin-status.ts").DevinVersionPort
 }
 
+/**
+ * Hermes's profile directories, injected for the same reason as the rest: the file access and
+ * the `hermes` binary probe are host code, and the rules about which directory a profile name
+ * means stay in `domain/hermes-profiles`.
+ */
+export type HermesHosts =
+	import("../../application/hermes/manage-hermes-settings.ts").HermesFilesPort
+
 export interface AppContext extends RequestContext {
 	readonly useCases: UseCases
 	/** Present on the in-process dashboard client; absent on a context with no host access. */
@@ -156,6 +164,8 @@ export interface AppContext extends RequestContext {
 	readonly mcpProbeHost?: McpProbeHost
 	/** Devin's detection probes; absent on a context with no host access. */
 	readonly devinHosts?: DevinHosts
+	/** Hermes's profile directories; absent on a context with no host access. */
+	readonly hermesHosts?: HermesHosts
 }
 
 /** Anything thrown below presentation becomes a typed ORPCError exactly once. */
