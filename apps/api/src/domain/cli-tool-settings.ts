@@ -233,8 +233,15 @@ export function isWritableApiKey(apiKey: string): boolean {
 	return trimmed !== "" && trimmed !== PLACEHOLDER_API_KEY
 }
 
-/** A numeric limit the form sent, or the default when it is missing or out of range. */
+/**
+ * A numeric limit the form sent, or the default when it is missing or out of range.
+ *
+ * Only a number or a numeric string is read. `Number()` alone would accept `true` as 1 and `[5]` as 5,
+ * which turns a nonsense field into a one-token context window instead of falling back — the value then
+ * looks deliberate in the config while no request can fit in it.
+ */
 export function readLimit(value: unknown, fallback: number, maximum: number): number {
+	if (typeof value !== "number" && typeof value !== "string") return fallback
 	const parsed = Number(value)
 	return Number.isFinite(parsed) && parsed > 0 && parsed <= maximum ? parsed : fallback
 }
