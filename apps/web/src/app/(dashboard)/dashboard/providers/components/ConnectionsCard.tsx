@@ -13,7 +13,11 @@ import {
 	Toggle,
 } from "@/shared/components"
 import { getStatusVariant as getConnectionStatusVariant } from "@/shared/utils/connectionStatus"
+import MinimaxLeaseButton from "./MinimaxLeaseButton.tsx"
 import WebLoginButton from "./WebLoginButton.tsx"
+
+/** Providers whose connection can borrow the MiniMax Code desktop app's login. */
+const MCODE_LEASE_PROVIDERS = new Set(["minimax-code", "minimax-code-global"])
 
 // ── CooldownTimer ──────────────────────────────────────────────
 interface CooldownTimerProps {
@@ -699,6 +703,9 @@ export default function ConnectionsCard({
 						<p className="text-sm text-text-muted">No connections yet</p>
 						<div className="flex flex-wrap gap-2">
 							{loginProviderId && <WebLoginButton providerId={loginProviderId} onConnected={fetch_} />}
+							{MCODE_LEASE_PROVIDERS.has(providerId) && (
+								<MinimaxLeaseButton providerId={providerId} onConnected={fetch_} />
+							)}
 							<Button size="sm" icon="add" onClick={() => setShowAddModal(true)}>
 								Add Connection
 							</Button>
@@ -732,6 +739,9 @@ export default function ConnectionsCard({
 								Add
 							</Button>
 							{loginProviderId && <WebLoginButton providerId={loginProviderId} onConnected={fetch_} />}
+							{MCODE_LEASE_PROVIDERS.has(providerId) && (
+								<MinimaxLeaseButton providerId={providerId} onConnected={fetch_} />
+							)}
 						</div>
 					</>
 				)}

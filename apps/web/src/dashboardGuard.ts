@@ -71,6 +71,8 @@ const ALWAYS_PROTECTED = [
 	"/api/oauth/cursor/auto-import",
 	"/api/oauth/kiro/auto-import",
 	"/api/oauth/zed/auto-import",
+	"/api/oauth/minimax-code/lease",
+	"/api/oauth/minimax-code-global/lease",
 	"/api/oauth/perchai/import",
 	"/api/oauth/perchai/auto-import",
 ]
@@ -114,6 +116,8 @@ const LOCAL_ONLY_PATHS = [
 	"/api/oauth/cursor/auto-import",
 	"/api/oauth/kiro/auto-import",
 	"/api/oauth/zed/auto-import",
+	"/api/oauth/minimax-code/lease",
+	"/api/oauth/minimax-code-global/lease",
 	"/api/oauth/perchai/import",
 	"/api/oauth/perchai/auto-import",
 	"/api/auth/reset-password",

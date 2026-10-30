@@ -1,7 +1,15 @@
 import crypto from "node:crypto"
 import { NextResponse } from "next/server"
+import {
+	AuthLeaseError,
+	requestLease,
+	requestStatus,
+	resolveLeaseEndpoint,
+	resolveMcodeDataDir,
+} from "open-sse/services/minimaxCodeLease"
 import { readDesktopPassToken } from "open-sse/shared/mimoAccount"
 import { readPerchCliSession } from "open-sse/shared/perchCredentials"
+import { getProviderConnections } from "@/lib/localDb"
 import { ZED_HOSTED_CONFIG } from "@/lib/oauth/constants/oauth"
 import {
 	exchangeTokens,
@@ -32,6 +40,9 @@ import {
 } from "@/lib/oauth/utils/server"
 import { getUseCases } from "@/lib/useCases"
 import { createProviderConnection } from "@/models"
+
+/** Providers that can ride the MiniMax Code desktop app's sign-in. */
+const MCODE_LEASE_PROVIDERS = ["minimax-code", "minimax-code-global"]
 
 export const dynamic = "force-dynamic"
 
@@ -291,6 +302,26 @@ export async function GET(request, { params }) {
 			})
 		}
 
+		if (action === "lease-status") {
+			// MiniMax Code desktop broker probe: is the desktop app installed,
+			// running and signed in on this machine? Read-only — leases nothing.
+			if (!MCODE_LEASE_PROVIDERS.includes(provider)) {
+				return NextResponse.json(
+					{ error: "lease-status only supported for minimax-code/minimax-code-global" },
+					{ status: 400 },
+				)
+			}
+			const override = searchParams.get("data_dir")
+			const dataDir = override ? String(override).trim() : resolveMcodeDataDir(null)
+			try {
+				const status = await requestStatus(dataDir)
+				return NextResponse.json({ found: true, dataDir, ...status })
+			} catch (error) {
+				const code = error instanceof AuthLeaseError ? error.code : "INTERNAL_ERROR"
+				return NextResponse.json({ found: false, dataDir, error: code, message: error.message })
+			}
+		}
+
 		return NextResponse.json({ error: "Unknown action" }, { status: 400 })
 	} catch (error) {
 		console.log("OAuth GET error:", error)
@@ -308,6 +339,56 @@ export async function POST(request, { params }) {
 			body = await request.json()
 		} catch {
 			return NextResponse.json({ error: "Invalid or empty request body" }, { status: 400 })
+		}
+
+		if (action === "lease-connect") {
+			// MiniMax Code: create a connection that borrows the desktop app's
+			// sign-in over the local auth-lease pipe (authType "mcode-lease").
+			// The router stores no tokens for it — the desktop broker owns refresh.
+			if (!MCODE_LEASE_PROVIDERS.includes(provider)) {
+				return NextResponse.json(
+					{ error: "lease-connect only supported for minimax-code/minimax-code-global" },
+					{ status: 400 },
+				)
+			}
+			const dataDir = body?.dataDir ? String(body.dataDir).trim() : resolveMcodeDataDir(null)
+			try {
+				// Validate availability up front so the operator gets the broker's
+				// exact failure reason instead of a connection that can never run.
+				await requestLease(dataDir)
+			} catch (error) {
+				const code = error instanceof AuthLeaseError ? error.code : "INTERNAL_ERROR"
+				return NextResponse.json({ error: error.message, code }, { status: 409 })
+			}
+
+			// Idempotent: one lease connection per (provider, data dir).
+			resolveLeaseEndpoint(dataDir) // throws INVALID_REQUEST on a relative override
+			const existing = (await getProviderConnections({ provider })).find(
+				(connection) =>
+					connection.authType === "mcode-lease" && resolveMcodeDataDir(connection) === dataDir,
+			)
+			if (existing) {
+				return NextResponse.json({
+					success: true,
+					connection: { id: existing.id, provider: existing.provider },
+					reused: true,
+				})
+			}
+
+			const connection = await createProviderConnection({
+				provider,
+				authType: "mcode-lease",
+				name:
+					provider === "minimax-code-global"
+						? "MiniMax Desktop (Lease, Global)"
+						: "MiniMax Desktop (Lease)",
+				providerSpecificData: { mcodeDataDir: dataDir },
+				testStatus: "active",
+			})
+			return NextResponse.json({
+				success: true,
+				connection: { id: connection.id, provider: connection.provider },
+			})
 		}
 
 		if (action === "register-session") {
