@@ -32,6 +32,7 @@ import {
 	filterFor,
 	liveAnswer,
 	type SuggestedModel,
+	timedOutAnswer,
 	toCatalogueArray,
 } from "../../domain/model-catalogue.ts"
 
@@ -114,8 +115,14 @@ export function makeSuggestModels({
 			const filter = chosen
 
 			const builtIn = fallbackFor(catalogue, type)
+			// Set when the ceiling has already answered. `serve()` checks it after its only
+			// write, so a fetch that lands late cannot refresh the stored copy for a request
+			// nobody is waiting on any more.
+			let abandoned = false
 			try {
-				return await withTimeout(serve(), timeoutMs, builtIn)
+				return await withTimeout(serve(), timeoutMs, builtIn, () => {
+					abandoned = true
+				})
 			} catch (error) {
 				// The ceiling is the one failure with a safe answer; a refusal the
 				// caller caused must still surface as a refusal.
@@ -133,6 +140,7 @@ export function makeSuggestModels({
 					return degradedAnswer(synced, builtIn)
 				}
 				const entries = filter(toCatalogueArray(unwrap(body)))
+				if (abandoned) return timedOutAnswer(builtIn)
 				if (entry && entries.length > 0) refreshSynced(entry.id)
 				return liveAnswer(entries, synced, builtIn)
 			}
@@ -169,15 +177,25 @@ function unwrap(body: unknown): unknown {
  *
  * The timer is cleared on the way out and is `unref`'d, so a fast request leaves
  * no timer behind holding the process open.
+ *
+ * `onTimeout` runs before the fallback is answered, so the caller can stop the work it
+ * started: `Promise.race` does not cancel the loser, and a fetch that lands after the
+ * request has already answered would still reach its continuation. The answer itself comes
+ * from `timedOutAnswer` rather than an inline literal, because the route forwards `message`
+ * as the client's `error` — an inline copy omits it and the panel goes blank with no reason.
  */
 async function withTimeout(
 	work: Promise<CatalogueAnswer>,
 	timeoutMs: number,
 	builtIn: readonly SuggestedModel[],
+	onTimeout: () => void,
 ): Promise<CatalogueAnswer> {
 	let timer: ReturnType<typeof setTimeout> | undefined
 	const ceiling = new Promise<CatalogueAnswer>((resolve) => {
-		timer = setTimeout(() => resolve({ data: builtIn, source: "fallback", stale: false }), timeoutMs)
+		timer = setTimeout(() => {
+			onTimeout()
+			resolve(timedOutAnswer(builtIn))
+		}, timeoutMs)
 		if (typeof timer.unref === "function") timer.unref()
 	})
 	try {

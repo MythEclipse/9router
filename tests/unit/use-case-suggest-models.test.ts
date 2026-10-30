@@ -12,7 +12,8 @@ import {
 	makeSuggestModels,
 	type SyncedCatalogue,
 } from "../../apps/api/src/application/providers/suggest-models.ts"
-import type { CatalogueFilters } from "../../apps/api/src/domain/model-catalogue.ts"
+import type { CatalogueFilters, SuggestedModel } from "../../apps/api/src/domain/model-catalogue.ts"
+import { UNAVAILABLE_MESSAGE } from "../../apps/api/src/domain/model-catalogue.ts"
 
 const catalogue: CatalogueFilters = {
 	filters: {
@@ -174,6 +175,47 @@ describe("the whole-request ceiling", () => {
 		const answer = await useCase.run({ url: "https://x", type: "openai" })
 		expect(answer.data).toEqual([{ id: "built-in", name: "built-in" }])
 		expect(answer.source).toBe("fallback")
+	})
+
+	it("says why the list is empty, because the route forwards the message as the error", async () => {
+		// Without a message the panel receives `{ data: [...] }` and renders a bare row; the
+		// operator reads that as "this provider has no models" rather than "the fetch stalled".
+		const { useCase } = harness({
+			fetch: () => new Promise(() => {}),
+			timeoutMs: 10,
+		})
+		const answer = await useCase.run({ url: "https://x", type: "openai" })
+		expect(answer.message).toBe(UNAVAILABLE_MESSAGE)
+	})
+
+	it("does not claim the built-in table is stale, because nothing older was served", async () => {
+		const { useCase } = harness({
+			fetch: () => new Promise(() => {}),
+			synced: { data: [{ id: "synced-model", name: "synced-model" } satisfies SuggestedModel] },
+			timeoutMs: 10,
+		})
+		const answer = await useCase.run({ url: "https://x", type: "openai" })
+		expect(answer.stale).toBe(false)
+		expect(answer.data).toEqual([{ id: "built-in", name: "built-in" }])
+	})
+
+	it("does not refresh the stored copy for a request it already answered", async () => {
+		// `Promise.race` cannot cancel the loser: the fetch resolves after the ceiling has
+		// answered, and its continuation still runs. Reaching `refreshSynced` there would write
+		// to the database on behalf of a request nobody is waiting on.
+		let land: (body: unknown) => void = () => {}
+		const { useCase, refreshSynced } = harness({
+			fetch: () =>
+				new Promise((resolve) => {
+					land = resolve
+				}),
+			timeoutMs: 10,
+		})
+		const answer = await useCase.run({ url: "https://x", type: "openai" })
+		expect(answer.source).toBe("fallback")
+		land({ data: [{ id: "late-model" }] })
+		await new Promise((r) => setTimeout(r, 20))
+		expect(refreshSynced).not.toHaveBeenCalled()
 	})
 
 	it("still surfaces a caller's refusal instead of masking it as a timeout", async () => {
