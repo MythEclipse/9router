@@ -24,7 +24,9 @@ vi.mock("@/lib/network/connectionProxy", () => ({
 	resolveConnectionProxyConfig: mocks.resolveConnectionProxyConfig,
 }))
 
-vi.mock("@/app/api/usage/[connectionId]/route.js", () => ({
+// The refresher moved out of the route into `lib/usage/connectionRefresh` so the oRPC use-case
+// could share it; the route now imports it from there, so that is the module to fake.
+vi.mock("@/lib/usage/connectionRefresh", () => ({
 	refreshAndUpdateCredentials: mocks.refreshAndUpdateCredentials,
 }))
 

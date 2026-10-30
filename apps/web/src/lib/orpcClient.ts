@@ -21,6 +21,11 @@ import type {
 	SessionClaims,
 } from "9router-api/presentation/orpc/base"
 import { appRouter } from "9router-api/presentation/orpc/router"
+import {
+	buildManagedMcpServers,
+	DEFAULT_PLUGINS,
+	LOCAL_STDIO_PLUGINS,
+} from "@/shared/constants/coworkPlugins"
 import { claudeSettingsPort, isClaudeInstalled } from "./claudeToolHost"
 import { devinInstallPort, devinVersionPort } from "./cliToolHosts"
 import { cliToolHost } from "./cliToolRegistry"
@@ -81,12 +86,10 @@ export interface RouterContext {
  * every later one — the exact class of bug the cookie-based design avoids.
  */
 /**
- * The Cowork host bundle. The presets are read lazily so this module stays importable from
- * anywhere without dragging the plugin catalogue in.
+ * The Cowork host bundle. The presets are the dashboard's own catalogue: which bridges this
+ * install can serve is a web concern, so it is passed in rather than imported by `apps/api`.
  */
 const defaultCoworkHosts = (): CoworkSettingsHosts => {
-	const { DEFAULT_PLUGINS, LOCAL_STDIO_PLUGINS, buildManagedMcpServers } =
-		require("@/shared/constants/coworkPlugins") as typeof import("@/shared/constants/coworkPlugins")
 	return {
 		files: coworkFilesPort,
 		pluginPresets: DEFAULT_PLUGINS,

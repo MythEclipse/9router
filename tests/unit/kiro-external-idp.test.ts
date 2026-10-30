@@ -142,26 +142,18 @@ describe("Kiro external_idp (CLIProxyAPI) import and refresh", () => {
 	})
 
 	it("imports CLIProxyAPI external_idp JSON as a Kiro OAuth connection", async () => {
+		// The route delegates now, so the assertions moved to the layer that builds the row: the
+		// use-case plus the domain normaliser. What used to be checked through a mocked
+		// `createProviderConnection` and a JSON response is checked directly, which is also why
+		// this no longer needs a Next request scope.
+		const { importKiroCliAuth } = await import(
+			"../../apps/api/src/application/oauth/import-kiro-cli-auth.ts"
+		)
+		const { normalizeKiroExternalIdpAuth } = await import(
+			"../../apps/api/src/domain/kiro-external-idp.ts"
+		)
 		const createdConnections = []
-		vi.doMock("next/server", () => ({
-			NextResponse: {
-				json(body, init = {}) {
-					return new Response(JSON.stringify(body), {
-						status: init.status || 200,
-						headers: { "Content-Type": "application/json" },
-					})
-				},
-			},
-		}))
-		vi.doMock("@/models", () => ({
-			createProviderConnection: vi.fn(async (data) => {
-				const connection = { id: "conn-1", ...data }
-				createdConnections.push(connection)
-				return connection
-			}),
-		}))
 
-		const { POST } = await import("../../apps/web/src/app/api/oauth/kiro/import-cli-proxy/route.js")
 		const accessToken = makeJwt({
 			preferred_username: TEST_EMAIL,
 			exp: Math.floor(Date.now() / 1000) + 3600,
@@ -179,17 +171,20 @@ describe("Kiro external_idp (CLIProxyAPI) import and refresh", () => {
 			expired: new Date(Date.now() + 3600_000).toISOString(),
 		}
 
-		const response = await POST(
-			new Request("https://9router.local/api/oauth/kiro/import-cli-proxy", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ cliProxyAuth }),
-			}),
+		const answer = await importKiroCliAuth(
+			{ cliProxyAuth },
+			{
+				normalise: normalizeKiroExternalIdpAuth,
+				createConnection: async (input) => {
+					createdConnections.push(input)
+					return { id: "conn-1" }
+				},
+			},
 		)
-		const body = await response.json()
 
-		expect(response.status).toBe(200)
-		expect(body.success).toBe(true)
+		// Success answers the summary itself, the shape the route has always returned.
+		if (!("success" in answer)) throw new Error(`expected success, got ${JSON.stringify(answer)}`)
+		expect(answer.success).toBe(true)
 		expect(createdConnections).toHaveLength(1)
 		expect(createdConnections[0]).toMatchObject({
 			provider: "kiro",

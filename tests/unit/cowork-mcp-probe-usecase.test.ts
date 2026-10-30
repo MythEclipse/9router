@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import type { ProbeFetch } from "../../apps/api/src/application/cowork-mcp/probe-mcp-tools.ts"
 import {
 	probeCoworkMcpTools,

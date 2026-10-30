@@ -5,6 +5,7 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
+import { isPageFailure, readRequestDetailsPage } from "../../apps/api/src/domain/observability.ts"
 
 vi.mock("@9router/auth/dashboardPermissions", () => ({
 	getSessionContext: vi.fn(async () => ({ allowedModels: "*" })),
@@ -260,57 +261,46 @@ describe("token helpers - render-time crash safety", () => {
 	})
 })
 
-describe("API route contract - validation boundary", () => {
-	let GET
-	beforeAll(async () => {
-		// The route now resolves a dashboard session before it validates paging,
-		// and `cookies()` throws outside a Next request scope. Stub the request
-		// headers so these tests exercise the validation boundary they name
-		// instead of failing on the session lookup that runs before it.
-		vi.doMock("next/headers", () => ({
-			cookies: async () => ({ get: () => undefined }),
-		}))
-		;({ GET } = await import("@/app/api/usage/request-details/route.js"))
+describe("pagination boundary rules", () => {
+	// These used to call the route, which resolved a session and then opened a database while
+	// building its use-case graph. The rules themselves never needed either: they are
+	// `readRequestDetailsPage`, and asserting on it directly is both faster and honest about
+	// what is being proven.
+	const read = (query: Record<string, string>) => readRequestDetailsPage(query)
+
+	it("page=0 is a 400 (the guard that a NaN check used to hide)", () => {
+		const answer = read({ page: "0" })
+		expect(isPageFailure(answer)).toBe(true)
+		if (!isPageFailure(answer)) throw new Error("unreachable")
+		expect(answer.status).toBe(400)
 	})
 
-	function makeReq(query) {
-		return new Request(`http://localhost/api/usage/request-details?${query}`)
-	}
-
-	it("page=0 → 400 (guard now reachable after NaN-check fix)", async () => {
-		const res = await GET(makeReq("page=0"))
-		expect(res.status).toBe(400)
+	it("a negative page is a 400", () => {
+		expect(isPageFailure(read({ page: "-5" }))).toBe(true)
 	})
 
-	it("page=-5 → 400", async () => {
-		const res = await GET(makeReq("page=-5"))
-		expect(res.status).toBe(400)
+	it("pageSize=101 is a 400", () => {
+		const answer = read({ pageSize: "101" })
+		expect(isPageFailure(answer)).toBe(true)
+		if (!isPageFailure(answer)) throw new Error("unreachable")
+		expect(answer.status).toBe(400)
 	})
 
-	it("pageSize=101 → 400", async () => {
-		const res = await GET(makeReq("pageSize=101"))
-		expect(res.status).toBe(400)
+	it("pageSize=abc defaults to 20 rather than failing", () => {
+		const answer = read({ pageSize: "abc" })
+		expect(isPageFailure(answer)).toBe(false)
+		if (isPageFailure(answer)) throw new Error("unreachable")
+		expect(answer.page.pageSize).toBe(20)
 	})
 
-	it("pageSize=abc (NaN) → defaults to 20, returns 200", async () => {
-		const res = await GET(makeReq("pageSize=abc"))
-		expect(res.status).toBe(200)
-		const body = await res.json()
-		expect(body.pagination.pageSize).toBe(20)
+	it("no parameters at all is page 1 with the default size", () => {
+		const answer = read({})
+		if (isPageFailure(answer)) throw new Error("unreachable")
+		expect(answer.page).toEqual({ page: 1, pageSize: 20 })
 	})
 
-	it("invalid startDate → route catches, returns 500 (not thrown)", async () => {
-		const res = await GET(makeReq("startDate=not-a-date"))
-		expect(res.status).toBe(500)
-		const body = await res.json()
-		expect(body.error).toBeDefined()
-	})
-
-	it("valid request → 200 with details + pagination shape", async () => {
-		const res = await GET(makeReq("page=1&pageSize=20"))
-		expect(res.status).toBe(200)
-		const body = await res.json()
-		expect(Array.isArray(body.details)).toBe(true)
-		expect(body.pagination).toMatchObject({ page: 1, pageSize: 20 })
+	it("the largest accepted page size is allowed", () => {
+		const answer = read({ pageSize: "100" })
+		expect(isPageFailure(answer)).toBe(false)
 	})
 })

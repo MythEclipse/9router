@@ -1,7 +1,53 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
+// `getUseCases()` builds the whole graph, and settings is part of it. Only the two readers this
+// route can reach are needed; both are fakes, so nothing opens a database.
 vi.mock("../../apps/web/src/lib/localDb.js", () => ({
 	getProviderConnections: vi.fn(),
+	getSettings: vi.fn(async () => ({})),
+	getProviderNodes: vi.fn(async () => []),
+	getApiKeys: vi.fn(async () => []),
+	updateSettings: vi.fn(async () => {}),
+}))
+
+// The route reaches the real use-case, but not a real database: only the wiring is faked, so the
+// assertions still describe MiniMax's verdict handling rather than a mock's opinion of it.
+vi.mock("@/lib/useCases", async () => {
+	const { makeTtsVoices } = await import("../../apps/api/src/application/tts/tts-voices.ts")
+	const { getProviderConnections } = await import("../../apps/web/src/lib/localDb.js")
+	return {
+		getUseCases: () => ({
+			ttsVoices: makeTtsVoices({
+				// Same query the real reader sends: the provider and `isActive`. Asserting on the
+				// spy is part of these cases — a connection on another provider must not be used,
+				// and case 2 below proves the China host is asked for its own.
+				connectionOf: async (provider: string) => {
+					const all = (await getProviderConnections({
+						provider,
+						isActive: true,
+					} as never)) as { apiKey?: string }[]
+					return all[0] as never
+				},
+				fetchVoices: async () => [],
+				fetchElevenLabs: async () => [],
+				fetchImpl: globalThis.fetch,
+				// The route only ever asks for MiniMax, and this file is about its verdict handling;
+				// an empty allow-list would answer 400 before the fetch these cases assert on.
+				providers: ["minimax", "minimax-cn", "edge-tts"],
+			} as never),
+		}),
+	}
+})
+
+// The route reaches the procedure through the in-process client, which carries the dashboard
+// session. A test file has no Next request scope, so the session is faked here rather than
+// letting the route run without one — that silent case is the bug this guards against.
+vi.mock("@9router/auth/dashboardPermissions", () => ({
+	getSessionContext: async () => ({
+		session: { userId: "owner-1", email: "owner@local", role: "admin" },
+		permissions: [],
+		apiKeyFilter: null,
+	}),
 }))
 
 import { GET } from "../../apps/web/src/app/api/media-providers/tts/minimax/voices/route.js"

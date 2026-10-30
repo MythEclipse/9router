@@ -15,7 +15,7 @@
  *   reset message was in fact transcribed wrong during this migration and caught by comparing
  *   against the routes, not by any test.
  */
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 
 // The registry imports `cliToolHosts`, which probes the filesystem only when called. Importing
 // it here installs nothing and writes nothing.

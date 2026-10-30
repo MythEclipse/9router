@@ -11,7 +11,7 @@
  * snapshot revokes an OpenAI session and logs the account out. The order is four steps and each
  * one has a test that fails if it moves.
  */
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import {
 	type KeyRecord,
 	type KeyUsageDeps,

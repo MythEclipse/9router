@@ -13,7 +13,7 @@
  *   without widening that enum is a 400 on the first deploy of it, which no use-case test
  *   would catch because the use-case never sees the request.
  */
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { PoolInUseError } from "../../apps/api/src/application/proxy-pools/manage-proxy-pools.ts"
 import { RELAY_PROVIDERS } from "../../apps/api/src/domain/relay-deploy.ts"
 import { statusOf } from "../../apps/web/src/lib/routeErrors.ts"

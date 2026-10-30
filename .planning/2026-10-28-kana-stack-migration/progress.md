@@ -2513,3 +2513,71 @@ the smallest handler in the area.
 spliced it *inside* the `probeTools` handler body. `tsc` failed on the syntax error at once, and
 the fix was to rewrite the file rather than patch around the damage. Anchoring a patch on a
 closing `}),` is not a safe anchor when several handlers end the same way.
+
+## cli-tools closed; the next area is not what the plan said
+
+`cli-tools` is done: 24 of 26 routes delegate, and the two that do not are `antigravity-mitm`,
+which stays by decision — it spawns a privileged proxy, installs a root CA and rewrites the hosts
+file, and its *decisions* already live in `resolveMitmPassword`.
+
+**`hermes` fell in two pieces because one file held two verbs.** `hermes-settings` (369) had the
+read/write/reset flow and `hermes-profiles` (17) had discovery; both need the same port, so the
+route went 369 → 66 and the listing became a fourth procedure rather than a second port.
+
+**One test was asserting a status the code could not return.** I wrote "a bulk apply with no model
+is skipped" and the code answered 400 before reaching the bulk branch. I checked the old route
+before "fixing" anything: it also refuses up front. The fixture was the wrong part, and the old
+route was the authority.
+
+## `logs` does not exist any more, and that is the finding
+
+The plan said to go to `logs` next. There is no `apps/web/src/app/api/logs`, no `stats`, no
+`request-logs` — all three were folded into `application/usage/report-usage.ts` in an earlier
+round. The area list is now derived from the tree, not from the plan:
+
+| Area | Routes | Left |
+| --- | --- | --- |
+| cli-tools | 27 | 2 (by decision) |
+| usage | 19 | 1 (`codex-reset-credits`) |
+| v1 / v1beta | 23 / 2 | the gateway itself |
+| oauth | 20 | 4 |
+| auth | 11 | all — public, outside the guard |
+
+Next is `oauth/[provider]/[action]` (640). The honest note before starting it: that route is
+process control. It starts callback proxies (`startXaiProxy`, `startXiaomiMimoProxy`), holds an
+ECDH private key in a session registry, and registers RSA keypairs for Zed. The *validation and
+response* rules can move; the proxies cannot, because they own ports and lifecycles. Boundary
+first, code second.
+
+## `kiro/import-cli-proxy` — the fourth OAuth route, and three traps
+
+The route was 43 lines and every *decision* was already in `domain/kiro-import`. What was left was
+assembly, so the use-case is small. Getting there cost three corrections worth naming.
+
+**The router I sat down to write already existed.** `routers/oauth.ts` has 145 lines, `useCases.
+oauth` is used in eight places, and it documents exactly why `authorize`/`start-proxy`/`poll`/
+`exchange` stay host-side: they mint in-memory sessions and, for MiMo, set an httpOnly cookie the
+browser must receive — "a cookie is not a value a procedure may return". I had planned a new host
+injection for a boundary the file had already drawn correctly. The patch went into the existing
+router instead, and the planned `oauthImportHosts` was never created.
+
+**`orRefuse` returns `T`, not the narrowed `T`.** Adding the procedure produced a cascade: the
+route could not read `.body` because the declared type was still the whole union. My first two
+attempts widened types (`ok` in the success object, an `Outcome` union, a narrowing `if` in the
+router) and each one broke the next layer. The fix was to stop widening: success *is* the summary
+the route always returned, and only the refusal variant goes to `orRefuse`. Changing `orRefuse`
+itself was the wrong fix — it deliberately returns `ok: false` + 200 answers intact, because some
+screens report a failed backup inline.
+
+**`normalizeKiroExternalIdpAuth` was pure code living in `apps/web`.** It had no imports at all.
+Moving it to `domain/kiro-external-idp.ts` surfaced a *third* consumer that no grep of `apps/` had
+found: `open-sse/services/tokenRefresh/providers.ts`, which imports it by relative path. Moving a
+module means finding every importer, and relative-path importers do not look like importers until
+you grep the whole tree.
+
+**And one test was testing the route, not the rule.** `kiro-external-idp.test.ts` imported the
+route's `POST` and mocked `next/server` + `@/models`. After delegation it died on `cookies()` being
+called outside a request scope — which is the correct behaviour, and the reason the decision was
+recorded earlier: a test should drive the use-case, and a mock session must not be invented to keep
+a route callable with no session. The assertions moved down to `importKiroCliAuth` and the
+connection shape it writes is still checked field by field.

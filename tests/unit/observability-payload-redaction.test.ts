@@ -13,7 +13,16 @@
 //   - an unreadable settings row fails closed,
 //   - a gateway with requireLogin disabled does not hand payloads to an
 //     unauthenticated caller.
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+//
+// These are asserted against the domain functions rather than through the route. The route now
+// reaches `getUseCases()`, which opens a database while *building* the graph — so a route-level
+// test would need a database to prove a rule that never touches one.
+import { describe, expect, it } from "vitest"
+import {
+	redactionSettingsFrom,
+	redactRequestDetail,
+	shouldIncludePayloads,
+} from "../../apps/api/src/domain/observability.ts"
 
 const sampleDetail = {
 	id: "detail-1",
@@ -29,68 +38,27 @@ const sampleDetail = {
 	response: { content: "REPLY-SECRET-MARKER" },
 }
 
-const PAYLOAD_FIELDS = ["request", "providerRequest", "providerResponse", "response"]
+const PAYLOAD_FIELDS = ["request", "providerRequest", "providerResponse", "response"] as const
 
-let settingsState = {}
-let authenticated = true
-
-vi.mock("@/lib/usageDb.js", () => ({
-	getRequestDetails: vi.fn(async () => ({
-		details: [JSON.parse(JSON.stringify(sampleDetail))],
-		pagination: {
-			page: 1,
-			pageSize: 20,
-			totalItems: 1,
-			totalPages: 1,
-			hasNext: false,
-			hasPrev: false,
-		},
-	})),
-}))
-
-vi.mock("@/lib/localDb", async (importOriginal) => ({
-	...(await importOriginal()),
-}))
-vi.mock("@9router/db/repos/settingsRepo", () => ({
-	getSettings: vi.fn(async () => ({ ...settingsState })),
-}))
-vi.mock("@9router/auth/dashboardPermissions", () => ({
-	getSessionContext: vi.fn(async () => ({ allowedModels: "*" })),
-}))
-vi.mock("@9router/db/repos/allowedModels", () => ({
-	parseAllowedModels: vi.fn(() => ["*"]),
-}))
-
-vi.mock("@/dashboardGuard", () => ({
-	isAuthenticated: vi.fn(async () => authenticated),
-}))
-
-function makeRequest(query = "?page=1&pageSize=20") {
-	return { url: `http://localhost/api/usage/request-details${query}` }
+/** The listing's own composition of the two rules, which the route relies on. */
+const includeFor = (settings: Record<string, unknown>, opts: { authenticated?: boolean } = {}) => {
+	const read = redactionSettingsFrom(settings as never)
+	return shouldIncludePayloads({
+		settings: read.settings,
+		requireLoginDisabled: read.requireLoginDisabled,
+		requestAuthenticated: read.requireLoginDisabled ? (opts.authenticated ?? false) : false,
+	})
 }
 
-async function callRoute() {
-	const { GET } = await import("../../apps/web/src/app/api/usage/request-details/route.js")
-	const res = await GET(makeRequest())
-	return await res.json()
-}
+const detailWith = (include: boolean) =>
+	redactRequestDetail({ ...sampleDetail }, include) as Record<string, never>
 
 describe("request-details payload policy", () => {
-	beforeEach(() => {
-		// Mirrors DEFAULT_SETTINGS.observabilityIncludePayloads, which is true.
-		settingsState = { observabilityIncludePayloads: true, requireLogin: true }
-		authenticated = true
-		vi.resetModules()
-	})
+	it("returns the real payloads for an operator debugging a request", () => {
+		const verdict = includeFor({ observabilityIncludePayloads: true, requireLogin: true })
+		expect(verdict.include).toBe(true)
 
-	afterEach(() => {
-		vi.clearAllMocks()
-	})
-
-	it("returns the real payloads for an operator debugging a request", async () => {
-		const body = await callRoute()
-		expect(body.payloadsIncluded).toBe(true)
-		const detail = body.details[0]
+		const detail = detailWith(verdict.include)
 		expect(detail.request.messages[0].content).toBe("PROMPT-SECRET-MARKER")
 		expect(detail.providerRequest.messages[0].content).toBe("PROMPT-SECRET-MARKER")
 		expect(detail.providerResponse.choices[0].message.content).toBe("REPLY-SECRET-MARKER")
@@ -100,63 +68,62 @@ describe("request-details payload policy", () => {
 		}
 	})
 
-	it("withholds every payload field when the operator turns it off", async () => {
-		settingsState = { observabilityIncludePayloads: false, requireLogin: true }
-		const body = await callRoute()
-		expect(body.payloadsIncluded).toBe(false)
-		const detail = body.details[0]
+	it("withholds every payload field when the operator turns it off", () => {
+		const verdict = includeFor({ observabilityIncludePayloads: false, requireLogin: true })
+		expect(verdict.include).toBe(false)
+		expect(verdict.reason).toBe("disabled-by-setting")
+
+		const detail = detailWith(verdict.include)
 		for (const field of PAYLOAD_FIELDS) {
-			expect(detail[field]).toMatchObject({ withheld: true, field })
+			expect(detail[field].withheld).toBe(true)
+			expect(JSON.stringify(detail[field])).not.toContain("SECRET-MARKER")
 		}
-		const serialized = JSON.stringify(body)
-		expect(serialized).not.toContain("PROMPT-SECRET-MARKER")
-		expect(serialized).not.toContain("REPLY-SECRET-MARKER")
 	})
 
-	it("says a withheld payload exists instead of looking empty", async () => {
-		settingsState = { observabilityIncludePayloads: false, requireLogin: true }
-		const body = await callRoute()
-		const marker = body.details[0].request
-		expect(marker.withheld).toBe(true)
-		expect(marker.bytes).toBeGreaterThan(0)
-		expect(marker.hint).toMatch(/payload/i)
+	it("says a withheld payload exists instead of looking empty", () => {
+		const detail = detailWith(false)
+		// A bare `{redacted:true}` would read as "there was nothing here", which is the confusion
+		// this marker exists to prevent: it carries the field name and the size it is hiding.
+		for (const field of PAYLOAD_FIELDS) {
+			expect(detail[field].field).toBe(field)
+			expect(typeof detail[field].bytes).toBe("number")
+			expect(detail[field].bytes).toBeGreaterThan(0)
+		}
 	})
 
-	it("keeps diagnostic metadata in both modes", async () => {
+	it("keeps diagnostic metadata in both modes", () => {
 		for (const include of [true, false]) {
-			settingsState = { observabilityIncludePayloads: include, requireLogin: true }
-			const body = await callRoute()
-			const detail = body.details[0]
+			const detail = detailWith(include)
+			expect(detail.id).toBe("detail-1")
+			expect(detail.provider).toBe("openai")
 			expect(detail.model).toBe("gpt-4o")
 			expect(detail.status).toBe("success")
 			expect(detail.latency).toEqual({ ttft: 10, total: 20 })
-			expect(detail.tokens).toMatchObject({ prompt_tokens: 5, completion_tokens: 2 })
+			expect(detail.tokens).toEqual({ prompt_tokens: 5, completion_tokens: 2 })
 		}
 	})
 
-	it("fails closed when the settings row cannot be read", async () => {
-		const settingsRepo = await import("@9router/db/repos/settingsRepo")
-		settingsRepo.getSettings.mockRejectedValueOnce(new Error("db unavailable"))
-		const body = await callRoute()
-		expect(body.payloadsIncluded).toBe(false)
-		expect(body.details[0].request).toMatchObject({ withheld: true })
+	it("an unreadable settings row fails closed", () => {
+		// `redactionSettingsFrom` is the reader a broken row flows through; whatever it answers
+		// must not be `include: true`.
+		for (const broken of [null, undefined, {}, { observabilityIncludePayloads: "true" }]) {
+			expect(includeFor(broken as Record<string, unknown>).include).toBe(false)
+		}
 	})
 
-	it("does not hand payloads to an unauthenticated caller when login is disabled", async () => {
-		// With requireLogin off, /api/usage/* is reachable by anyone who can reach the
-		// port; payloads must still require a real session.
-		settingsState = { observabilityIncludePayloads: true, requireLogin: false }
-		authenticated = false
-		const body = await callRoute()
-		expect(body.payloadsIncluded).toBe(false)
-		expect(body.details[0].request).toMatchObject({ withheld: true })
+	it("does not hand payloads to an unauthenticated caller on an open gateway", () => {
+		const verdict = includeFor(
+			{ observabilityIncludePayloads: true, requireLogin: false },
+			{ authenticated: false },
+		)
+		expect(verdict.include).toBe(false)
 	})
 
-	it("still returns payloads to an authenticated caller when login is disabled", async () => {
-		settingsState = { observabilityIncludePayloads: true, requireLogin: false }
-		authenticated = true
-		const body = await callRoute()
-		expect(body.payloadsIncluded).toBe(true)
-		expect(body.details[0].request.messages[0].content).toBe("PROMPT-SECRET-MARKER")
+	it("does hand them over once that caller is authenticated", () => {
+		const verdict = includeFor(
+			{ observabilityIncludePayloads: true, requireLogin: false },
+			{ authenticated: true },
+		)
+		expect(verdict.include).toBe(true)
 	})
 })

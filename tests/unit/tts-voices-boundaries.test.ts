@@ -6,7 +6,7 @@
  * connection answered as an outage, and a MiniMax failure inside a 200 body passed for success.
  * The grouping itself is covered by the domain tests; these are the boundaries around it.
  */
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { makeTtsVoices, type TtsVoiceDeps } from "../../apps/api/src/application/tts/tts-voices.ts"
 import { AppError } from "../../apps/api/src/domain/errors.ts"
 

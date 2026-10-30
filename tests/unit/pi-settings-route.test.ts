@@ -75,6 +75,16 @@ describe("Pi CLI-tools settings route", () => {
 			}
 		})
 
+		// The client carries the dashboard session; a test has no Next request scope, so the
+		// session is faked here instead of letting the route run without one.
+		vi.doMock("@9router/auth/dashboardPermissions", () => ({
+			getSessionContext: async () => ({
+				session: { userId: "owner-1", email: "owner@local", role: "admin" },
+				permissions: [],
+				apiKeyFilter: null,
+			}),
+		}))
+
 		;({ POST: postPiSettings } = await import("@/app/api/cli-tools/pi-settings/route.js"))
 	})
 

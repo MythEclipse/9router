@@ -104,6 +104,7 @@ import type { IflowCookieAnswer } from "./oauth/iflow-cookie.ts"
 import { importIflowCookie } from "./oauth/iflow-cookie.ts"
 import { type ApiKeyAnswer, importKiroApiKey, importMimoApiKey } from "./oauth/import-api-key.ts"
 import { importCredentialBatch } from "./oauth/import-credentials.ts"
+import { importKiroCliAuth } from "./oauth/import-kiro-cli-auth.ts"
 import { importAnswerOf, importToken, needsRemoteVerification } from "./oauth/import-token.ts"
 import type { KiroSocialAnswer } from "./oauth/kiro-social.ts"
 import { authorizeKiroSocial, exchangeKiroSocial } from "./oauth/kiro-social.ts"
@@ -359,6 +360,9 @@ export interface UseCases {
 		readonly startMimoLogin: (body: unknown, host: MimoLoginStartDeps) => Promise<MimoLoginStarted>
 		readonly authorizeKiroSocial: (provider: string | null) => KiroSocialAnswer
 		readonly exchangeKiroSocial: (body: unknown) => Promise<KiroSocialAnswer>
+		readonly importKiroCliAuth: (
+			body: unknown,
+		) => Promise<import("./oauth/import-kiro-cli-auth.ts").KiroImportOutcome>
 		readonly pollSession: (provider: string, state: string | null) => Promise<DispatchAnswer>
 		readonly stopProxy: (provider: string) => DispatchAnswer
 		readonly ideStatus: (provider: string) => Promise<DispatchAnswer>
@@ -782,6 +786,11 @@ export function buildUseCases(deps: Dependencies): UseCases {
 			exchangeKiroSocial: (body) =>
 				exchangeKiroSocial(body, {
 					...deps.kiroSocial.exchange,
+					createConnection: deps.createProviderConnection,
+				}),
+			importKiroCliAuth: (body) =>
+				importKiroCliAuth(body, {
+					...deps.kiroCliImport,
 					createConnection: deps.createProviderConnection,
 				}),
 		},

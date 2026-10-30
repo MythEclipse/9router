@@ -16,6 +16,28 @@ vi.mock("next/server", () => ({
 	},
 }))
 
+// The route now reaches the procedure through the in-process client, which carries the dashboard
+// session. There is no Next request scope in a test file, so the session is part of the wiring
+// this test fakes — a password session, which is what a dashboard caller has. Mocking it here
+// (rather than making the route tolerate a missing session) is deliberate: a route that silently
+// runs with no session is the bug this avoids.
+vi.mock("@9router/auth/dashboardPermissions", () => ({
+	getSessionContext: async () => ({
+		session: { userId: "owner-1", email: "owner@local", role: "admin" },
+		permissions: [],
+		apiKeyFilter: null,
+	}),
+}))
+
+// The route reaches the real use-case, but not a real database: only the wiring is faked, so
+// these cases still assert the SSRF decision itself rather than a mock's opinion of it.
+vi.mock("@/lib/useCases", async () => {
+	const { probeCoworkMcpTools } = await import(
+		"../../apps/api/src/application/cowork-mcp/probe-mcp-tools.ts"
+	)
+	return { getUseCases: () => ({ coworkMcp: { probeTools: probeCoworkMcpTools } }) }
+})
+
 const { POST } = await import("../../apps/web/src/app/api/cli-tools/cowork-mcp-tools/route.js")
 
 function remoteRequest(url) {

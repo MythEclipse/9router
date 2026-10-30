@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import type { CodexProfilesPort } from "../../apps/api/src/application/codex-profiles/manage-codex-profiles.ts"
 import {
 	deleteCodexProfile,

@@ -91,16 +91,19 @@ export const usageRouter = {
 		.input(
 			z
 				.object({
-					page: z.string().optional(),
-					pageSize: z.string().optional(),
-					provider: z.string().optional(),
-					model: z.string().optional(),
-					connectionId: z.string().optional(),
-					status: z.string().optional(),
-					startDate: z.string().optional(),
-					endDate: z.string().optional(),
+					// `nullish`, not `optional`: `searchParams.get()` answers `null` for an absent
+					// query parameter, and a route that forwards it must not fail validation for
+					// the ordinary case of "the operator did not filter".
+					page: z.string().nullish(),
+					pageSize: z.string().nullish(),
+					provider: z.string().nullish(),
+					model: z.string().nullish(),
+					connectionId: z.string().nullish(),
+					status: z.string().nullish(),
+					startDate: z.string().nullish(),
+					endDate: z.string().nullish(),
 				})
-				.optional(),
+				.nullish(),
 		)
 		.handler(async ({ input, context }) =>
 			context.useCases.usagePanels.requestDetails(

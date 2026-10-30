@@ -107,9 +107,16 @@ export async function probeMcpServer(url: string, fetchFor: ProbeFetch): Promise
 }
 
 /** A flat answer, matching the other CLI-tool answers. */
+/**
+ * A refusal carries `{ error }` alone, which is the body the route has always answered for a
+ * missing or rejected URL: there is no tool list to show, and an empty one would render as
+ * "connected, exposes nothing" instead of "this was refused".
+ */
+export type McpProbeRefusalBody = { readonly error: string }
+
 export interface McpProbeAnswer {
 	readonly status: number
-	readonly body: McpProbeResult
+	readonly body: McpProbeResult | McpProbeRefusalBody
 }
 
 /**
@@ -143,7 +150,7 @@ export async function probeCoworkMcpTools(
 		try {
 			options.assertPublicUrl(url)
 		} catch {
-			return { status: 400, body: { error: "URL not allowed", tools: [] } }
+			return { status: 400, body: { error: "URL not allowed" } }
 		}
 	}
 

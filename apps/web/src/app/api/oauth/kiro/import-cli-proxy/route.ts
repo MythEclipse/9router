@@ -1,12 +1,7 @@
-import {
-	KIRO_IMPORT_REFUSAL_STATUS,
-	kiroImportPayload,
-	kiroImportRefusalMessage,
-	kiroImportSummary,
-} from "9router-api/domain/kiro-import"
+import { getSessionContext } from "@9router/auth/dashboardPermissions"
 import { NextResponse } from "next/server"
-import { normalizeKiroExternalIdpAuth } from "@/lib/oauth/kiroExternalIdp"
-import { createProviderConnection } from "@/models"
+import { createApiClient, sessionClaimsOf } from "@/lib/orpcClient"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
@@ -14,30 +9,23 @@ export const dynamic = "force-dynamic"
  * POST /api/oauth/kiro/import-cli-proxy
  * Import Kiro CLIProxyAPI auth JSON for Microsoft external_idp accounts.
  *
- * The envelope guess and the refusal message are in `domain/kiro-import`; the normaliser stays
- * here because it is the component that knows which fields a Kiro auth blob must carry.
+ * The envelope guess, the refusal message and the normaliser are all in `apps/api` now; this
+ * route only carries the body across and returns the refusal's own status.
  */
-export async function POST(request) {
+export async function POST(request: Request) {
+	let body: unknown
 	try {
-		const body = await request.json()
-		const tokenData = normalizeKiroExternalIdpAuth(kiroImportPayload(body))
-
-		const connection = await createProviderConnection({
-			provider: "kiro",
-			authType: "oauth",
-			accessToken: tokenData.accessToken,
-			refreshToken: tokenData.refreshToken,
-			expiresAt: tokenData.expiresAt,
-			email: tokenData.email || null,
-			providerSpecificData: tokenData.providerSpecificData,
-			testStatus: "active",
-		})
-
-		return NextResponse.json(kiroImportSummary(connection))
-	} catch (error) {
-		return NextResponse.json(
-			{ error: kiroImportRefusalMessage(error) },
-			{ status: KIRO_IMPORT_REFUSAL_STATUS },
-		)
+		body = await request.json()
+	} catch {
+		return NextResponse.json({ error: "Invalid or empty request body" }, { status: 400 })
 	}
+	const client = createApiClient({
+		session: sessionClaimsOf(await getSessionContext()),
+		useCases: getUseCases(),
+		headers: request.headers,
+	})
+	// A refusal never reaches here: `orRefuse` turns it into an `AppError` carrying the provider's
+	// own status, so `toORPCError` answers 4xx and the panel keeps the reason verbatim.
+	const answer = await client.oauth.importKiroCliAuth({ body })
+	return NextResponse.json(answer)
 }

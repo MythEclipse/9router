@@ -308,6 +308,11 @@ export interface Dependencies {
 	/** The OAuth dispatcher's session actions. */
 	readonly oauthSession: import("./oauth/dispatch-actions.ts").DispatchDeps
 	/**
+	 * Kiro's External-IdP normaliser. A host dependency because it reads the auth blob the way the
+	 * Kiro CLI writes it, and that knowledge is the component's, not the use-case's.
+	 */
+	readonly kiroCliImport: import("./oauth/import-kiro-cli-auth.ts").KiroNormaliseDeps
+	/**
 	 * The fetch a credential check may use, chosen by who is asking.
 	 *
 	 * A remote caller must go through the SSRF guard — the base URL in a GitLab PAT import

@@ -11,7 +11,7 @@ function normalizeString(value) {
 	return typeof value === "string" ? value.trim() : ""
 }
 
-export function validateMicrosoftTokenEndpoint(rawEndpoint) {
+export function validateMicrosoftTokenEndpoint(rawEndpoint: unknown): URL {
 	const tokenEndpoint = normalizeString(rawEndpoint)
 	if (!tokenEndpoint) throw new Error("token_endpoint is required")
 
@@ -74,19 +74,23 @@ function resolveExpiresAt(input) {
 	return new Date(Date.now() + DEFAULT_EXPIRES_IN * 1000).toISOString()
 }
 
-export function normalizeKiroExternalIdpAuth(rawAuth) {
-	let input = rawAuth
-	if (typeof input === "string") {
+/** The blob as the Kiro CLI writes it, in either casing. */
+type KiroAuthBlob = Record<string, unknown>
+
+export function normalizeKiroExternalIdpAuth(rawAuth: unknown) {
+	let parsed: unknown = rawAuth
+	if (typeof parsed === "string") {
 		try {
-			input = JSON.parse(input)
+			parsed = JSON.parse(parsed)
 		} catch {
 			throw new Error("CLIProxyAPI auth JSON is invalid")
 		}
 	}
 
-	if (!input || typeof input !== "object") {
+	if (!parsed || typeof parsed !== "object") {
 		throw new Error("CLIProxyAPI auth JSON is required")
 	}
+	const input = parsed as KiroAuthBlob
 
 	const authMethod = normalizeString(input.auth_method || input.authMethod)
 	if (authMethod && authMethod !== "external_idp") {

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { readAllToolStatuses } from "../../apps/api/src/application/cli-tools/read-all-statuses.ts"
 
 /**

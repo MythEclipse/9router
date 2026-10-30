@@ -29,6 +29,7 @@ import type {
 import { buildUseCases, type UseCases } from "../application/use-cases.ts"
 import type { ProviderClassifiers } from "../domain/batch-selection.ts"
 import type { CacheEntry, FreeModel, KiloModel } from "../domain/free-model-cache.ts"
+import { normalizeKiroExternalIdpAuth } from "../domain/kiro-external-idp.ts"
 import type { CatalogueFilters } from "../domain/model-catalogue.ts"
 import type { ProbeTarget } from "../domain/model-probe.ts"
 import { createChangelogSourceFromDisk } from "./changelog-source.ts"
@@ -489,6 +490,9 @@ export function createUseCases(
 		findConnection: required(options, "findConnection"),
 		updateConnection: required(options, "updateConnection"),
 		oauthSession: required(options, "oauthSession"),
+		// The Kiro CLI normaliser is pure domain code now, so the factory supplies it directly
+		// rather than asking the host — there is nothing to inject.
+		kiroCliImport: { normalise: normalizeKiroExternalIdpAuth },
 		/**
 		 * Absent is a hard error, not a lenient default.
 		 *

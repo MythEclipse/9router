@@ -140,6 +140,23 @@ export const oauthRouter = {
 				orRefuse(await context.useCases.oauth.exchangeKiroSocial(input)),
 			),
 	},
+
+	/**
+	 * A Kiro CLIProxyAPI auth blob, for Microsoft external_idp accounts.
+	 *
+	 * Separate from `importToken` because that one dispatches on *provider name* and this one
+	 * dispatches on the blob's *shape*: the CLI writes several envelopes, and the domain is what
+	 * knows which. The body travels untouched for that reason.
+	 */
+	importKiroCliAuth: authed
+		.input(z.object({ body: ImportBody }))
+		.handler(async ({ input, context }) => {
+			const answer = await context.useCases.oauth.importKiroCliAuth(input.body)
+			// Success has no `ok` field — it is the summary the panel already parses. Only the refusal
+			// variant is handed to `orRefuse`, which turns it into an `AppError` with its own status.
+			if ("ok" in answer && answer.ok === false) return orRefuse(answer)
+			return answer
+		}),
 }
 
 export type OAuthRouter = typeof oauthRouter

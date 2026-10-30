@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import type { RegistryCache } from "../../apps/api/src/application/cowork-mcp/read-mcp-registry.ts"
 import {
 	fetchRegistry,

@@ -1,4 +1,4 @@
-import { buildExternalIdpRefreshParams } from "../../../src/lib/oauth/kiroExternalIdp.ts"
+import { buildExternalIdpRefreshParams } from "9router-api/domain/kiro-external-idp"
 import { buildKimiHeaders, GITHUB_COPILOT, OAUTH_ENDPOINTS } from "../../config/appConstants.ts"
 import { PROVIDER_OAUTH, PROVIDERS } from "../../config/providers.ts"
 import { proxyAwareFetch } from "../../utils/proxyFetch.ts"
