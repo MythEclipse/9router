@@ -1,3 +1,7 @@
+import {
+	readResetCredits,
+	redeemResetCredit,
+} from "9router-api/application/codex-reset-credits/reset-credits"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const mocks = vi.hoisted(() => ({
@@ -14,6 +18,30 @@ vi.mock("../../apps/web/open-sse/utils/proxyFetch.js", () => ({
 }))
 
 vi.mock("open-sse/index.js", () => ({}))
+
+// The route reads the dashboard session from the cookie before it reaches the use-case, so the
+// request scope has to exist for it to run outside Next.
+vi.mock("next/headers", () => ({
+	cookies: async () => ({ get: () => ({ value: "session-token" }) }),
+}))
+
+// `getUseCases()` builds the whole graph, and building it opens the database. The route only needs
+// it to hand to the client, so a stand-in keeps the route under test without a DB.
+vi.mock("@/lib/useCases", () => ({
+	getUseCases: () => ({
+		// The real use-case, so the route is tested through the flow it now depends on.
+		codexResetCredits: {
+			read: (id, port) => readResetCredits(id, port),
+			redeem: (id, port) => redeemResetCredit(id, port),
+		},
+	}),
+}))
+
+// The session is verified from the cookie; `sessionFromClaims` needs a real claim set, so the
+// jwt helper is faked rather than the parser.
+vi.mock("@9router/auth/dashboardSession", () => ({
+	getDashboardAuthSession: async () => ({ userId: "user-1", email: "a@b.c", role: "admin" }),
+}))
 
 vi.mock("@/lib/localDb", async (importOriginal) => ({
 	...(await importOriginal()),

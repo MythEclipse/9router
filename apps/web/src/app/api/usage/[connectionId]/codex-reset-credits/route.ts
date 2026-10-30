@@ -1,188 +1,44 @@
-// Ensure proxyFetch is loaded to patch globalThis.fetch
-import "open-sse/index"
-
-import {
-	canRetryAfterExpiry,
-	codexEligibility,
-	codexProxyOptions,
-	consumeOutcome,
-	isAuthExpired,
-	isCodexRefusal,
-} from "9router-api/domain/codex-reset-credits"
-import {
-	consumeCodexRateLimitResetCredit,
-	getCodexRateLimitResetCredits,
-} from "open-sse/services/usage"
-import { getProviderConnectionById } from "@/lib/localDb"
-import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy"
-import { refreshAndUpdateCredentials } from "@/lib/usage/connectionRefresh"
+/**
+ * GET  /api/usage/[connectionId]/codex-reset-credits - what is left to redeem.
+ * POST /api/usage/[connectionId]/codex-reset-credits - redeem one.
+ *
+ * The flow — resolve the row, refresh when the connection is OAuth, call upstream, retry once when
+ * the credential turns out to be expired — is in
+ * `application/codex-reset-credits/reset-credits.ts`. Every rule it applies (eligibility, when a
+ * retry is worth making, how an upstream refusal maps to a status) is in
+ * `domain/codex-reset-credits.ts`. The reachable world is `@/lib/codexResetPort`.
+ */
+import { getDashboardAuthSession } from "@9router/auth/dashboardSession"
+import { sessionFromClaims } from "9router-api/infrastructure/session-from-cookie"
+import { cookies } from "next/headers"
+import { NextResponse } from "next/server"
+import { createApiClient } from "@/lib/orpcClient"
+import { getUseCases } from "@/lib/useCases"
 
 export const dynamic = "force-dynamic"
 
-/**
- * A connection ready to call upstream, or the response that already answers the caller.
- *
- * One shape for every step that can refuse: the eligibility check, the OAuth refresh, and the
- * handlers all speak this, so a refusal can never be mistaken for a result.
- */
-type PreparedConnection =
-	| {
-			readonly ok: true
-			readonly connection: Record<string, unknown>
-			readonly isOAuth: boolean
-			readonly proxyOptions: Record<string, unknown>
-	  }
-	| { readonly ok: false; readonly response: Response }
+type Params = { params: Promise<{ connectionId: string }> }
 
-/**
- * A refusal, narrowed.
- *
- * `apps/web` compiles with `strict: false`, where `if (!step.ok)` does not narrow the union above.
- * A type predicate does, and it keeps working unchanged if strict is turned on later.
- */
-function isRefused(step: PreparedConnection): step is Extract<PreparedConnection, { ok: false }> {
-	return !step.ok
+async function answer(request: Request, params: Params["params"], call: "read" | "redeem") {
+	const cookieStore = await cookies()
+	const payload = await getDashboardAuthSession(cookieStore.get("auth_token")?.value)
+	const session = sessionFromClaims((payload ?? {}) as Record<string, unknown>)
+
+	const { connectionId } = await params
+	const client = createApiClient({
+		session,
+		useCases: getUseCases(),
+		headers: request.headers,
+	})
+	return client.codexResetCredits[call]({ connectionId })
 }
 
-/**
- * Resolves the connection and proxy options, or the response that already answers the caller.
- *
- * The eligibility rule lives in `domain/codex-reset-credits.ts`; this does only the I/O around it.
- */
-async function resolveCodexConnection(connectionId: unknown): Promise<PreparedConnection> {
-	const connection = await getProviderConnectionById(connectionId as string)
-	const verdict = codexEligibility(connection)
-	if (isCodexRefusal(verdict)) {
-		return {
-			ok: false,
-			response: Response.json({ error: verdict.message }, { status: verdict.status }),
-		}
-	}
-	const proxyOptions = codexProxyOptions(
-		await resolveConnectionProxyConfig(connection.providerSpecificData),
-	)
-	return { ok: true, connection, isOAuth: verdict.isOAuth, proxyOptions }
+export async function GET(request: Request, { params }: Params) {
+	const result = await answer(request, params, "read")
+	return NextResponse.json(result.body, { status: result.status })
 }
 
-/** The refreshed connection, or the response that answers 401 when the refresh fails. */
-async function refreshCodexConnection(
-	connection: Record<string, unknown>,
-	proxyOptions: Record<string, unknown>,
-): Promise<PreparedConnection> {
-	try {
-		const result = await refreshAndUpdateCredentials(connection, false, proxyOptions)
-		return { ok: true, connection: result.connection, isOAuth: true, proxyOptions }
-	} catch (refreshError) {
-		console.error("[Codex Reset Credits API] Credential refresh failed:", refreshError)
-		return {
-			ok: false,
-			response: Response.json(
-				{ error: `Credential refresh failed: ${refreshError.message}` },
-				{ status: 401 },
-			),
-		}
-	}
-}
-
-/** Refreshes first when the connection is OAuth, so the upstream sees a live credential. */
-async function prepareConnection(
-	resolved: Extract<PreparedConnection, { ok: true }>,
-): Promise<PreparedConnection> {
-	if (!resolved.isOAuth) return resolved
-	const attempt = await refreshCodexConnection(resolved.connection, resolved.proxyOptions)
-	if (isRefused(attempt)) return attempt
-	return attempt
-}
-
-export async function GET(_request, { params }) {
-	let connection
-	try {
-		const { connectionId } = await params
-		const resolved = await resolveCodexConnection(connectionId)
-		if (isRefused(resolved)) return resolved.response
-		const { isOAuth, proxyOptions } = resolved
-
-		const prepared = await prepareConnection(resolved)
-		if (isRefused(prepared)) return prepared.response
-		connection = prepared.connection
-
-		let result
-		try {
-			result = await getCodexRateLimitResetCredits(
-				connection.accessToken,
-				proxyOptions,
-				connection.providerSpecificData,
-			)
-		} catch (fetchError) {
-			// One retry, and only when a refresh token exists to make it worth anything.
-			const retryable = canRetryAfterExpiry(
-				isOAuth,
-				Boolean(connection.refreshToken),
-				isAuthExpired(fetchError),
-			)
-			if (!retryable) throw fetchError
-			const retryResult = await refreshAndUpdateCredentials(connection, true, proxyOptions)
-			connection = retryResult.connection
-			result = await getCodexRateLimitResetCredits(
-				connection.accessToken,
-				proxyOptions,
-				connection.providerSpecificData,
-			)
-		}
-
-		return Response.json(result)
-	} catch (error) {
-		const provider = connection?.provider ?? "unknown"
-		console.warn(`[Codex Reset Credits] ${provider}: ${error.message}`)
-		return Response.json({ error: error.message }, { status: 500 })
-	}
-}
-
-export async function POST(_request, { params }) {
-	let connection
-	try {
-		const { connectionId } = await params
-		const resolved = await resolveCodexConnection(connectionId)
-		if (isRefused(resolved)) return resolved.response
-		const { isOAuth, proxyOptions } = resolved
-
-		const prepared = await prepareConnection(resolved)
-		if (isRefused(prepared)) return prepared.response
-		connection = prepared.connection
-
-		// Server-generated redeem id prevents client-controlled replay.
-		const redeemRequestId = crypto.randomUUID()
-		let consumeResult = await consumeCodexRateLimitResetCredit(
-			connection.accessToken,
-			redeemRequestId,
-			proxyOptions,
-		)
-
-		const retryable = canRetryAfterExpiry(
-			isOAuth,
-			Boolean(connection.refreshToken),
-			isAuthExpired(consumeResult),
-		)
-		if (retryable) {
-			try {
-				const retryResult = await refreshAndUpdateCredentials(connection, true, proxyOptions)
-				connection = retryResult.connection
-				consumeResult = await consumeCodexRateLimitResetCredit(
-					connection.accessToken,
-					redeemRequestId,
-					proxyOptions,
-				)
-			} catch (retryError) {
-				// The first result stands: it is still the truthful answer from upstream.
-				console.warn(`[Codex Reset Credits] force refresh failed: ${retryError.message}`)
-			}
-		}
-
-		const outcome = consumeOutcome(consumeResult, redeemRequestId)
-		return Response.json(outcome.body, { status: outcome.status })
-	} catch (error) {
-		const provider = connection?.provider ?? "unknown"
-		console.warn(`[Codex Reset Credits] ${provider}: ${error.message}`)
-		return Response.json({ error: error.message }, { status: 500 })
-	}
+export async function POST(request: Request, { params }: Params) {
+	const result = await answer(request, params, "redeem")
+	return NextResponse.json(result.body, { status: result.status })
 }
