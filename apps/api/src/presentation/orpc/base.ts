@@ -77,8 +77,22 @@ export interface RequestContext {
 	readonly headers: Headers
 }
 
+/**
+ * The CLI-tool host bundles, keyed by tool name.
+ *
+ * Injected rather than imported: each bundle holds `isInstalled`, a config port and the
+ * side-write functions, and those live in `apps/web/src/lib/cliToolHosts.ts` — filesystem code
+ * that `apps/api` must not depend on. The dependency runs web -> api, so the resolver arrives
+ * on the context the same way `useCases` does.
+ */
+export type CliToolHosts = (
+	name: string,
+) => import("../../application/cli-tools/manage-tool-settings.ts").ToolSettingsDeps | undefined
+
 export interface AppContext extends RequestContext {
 	readonly useCases: UseCases
+	/** Present on the in-process dashboard client; absent on a context with no host access. */
+	readonly cliToolHosts?: CliToolHosts
 }
 
 /** Anything thrown below presentation becomes a typed ORPCError exactly once. */

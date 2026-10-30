@@ -10,8 +10,9 @@
  */
 import { createRouterClient } from "@orpc/server"
 import type { UseCases } from "9router-api/application/use-cases"
-import type { SessionClaims } from "9router-api/presentation/orpc/base"
+import type { CliToolHosts, SessionClaims } from "9router-api/presentation/orpc/base"
 import { appRouter } from "9router-api/presentation/orpc/router"
+import { cliToolHost } from "./cliToolRegistry"
 
 /**
  * What a procedure sees as `context.session`; `null` means not logged in.
@@ -35,6 +36,14 @@ export interface RouterContext {
 	 * when a caller genuinely has none.
 	 */
 	readonly headers: Headers
+	/**
+	 * The CLI-tool host bundles, looked up by tool name.
+	 *
+	 * Required, like `useCases`: the procedures that configure a CLI tool cannot work without
+	 * it, and an optional field here would turn "this client was built wrong" into a 500 at the
+	 * moment an operator clicks Save.
+	 */
+	readonly cliToolHosts?: CliToolHosts
 }
 
 /**
@@ -45,7 +54,12 @@ export interface RouterContext {
  * every later one — the exact class of bug the cookie-based design avoids.
  */
 export function createApiClient(context: RouterContext) {
-	return createRouterClient(appRouter, { context })
+	// Defaulted here rather than required from every caller: 131 routes build this context and
+	// none of them has an opinion about CLI tools. The registry is a module-level table, so one
+	// import covers all of them, and a route that needs a different resolver can still pass one.
+	return createRouterClient(appRouter, {
+		context: { ...context, cliToolHosts: context.cliToolHosts ?? cliToolHost },
+	})
 }
 
 export type ApiClient = ReturnType<typeof createApiClient>

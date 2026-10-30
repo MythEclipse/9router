@@ -12,6 +12,7 @@
  */
 import { base } from "./base.ts"
 import { apiKeysRouter } from "./routers/api-keys.ts"
+import { cliToolsRouter } from "./routers/cli-tools.ts"
 import { combosRouter } from "./routers/combos.ts"
 import { dashboardKeysRouter } from "./routers/dashboard-keys.ts"
 import { errorLogsRouter } from "./routers/error-logs.ts"
@@ -35,6 +36,7 @@ export const appRouter = base.router({
 	settings: settingsRouter,
 	apiKeys: apiKeysRouter,
 	dashboardKeys: dashboardKeysRouter,
+	cliTools: cliToolsRouter,
 	combos: combosRouter,
 	errorLogs: errorLogsRouter,
 	theme: themeRouter,
