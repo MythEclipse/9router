@@ -21,6 +21,7 @@ import { modelsRouter } from "./routers/models.ts"
 import { oauthRouter } from "./routers/oauth.ts"
 import { pricingRouter } from "./routers/pricing.ts"
 import { providersRouter } from "./routers/providers.ts"
+import { proxyPoolsRouter } from "./routers/proxy-pools.ts"
 import { pxpipeRouter } from "./routers/pxpipe.ts"
 import { settingsRouter } from "./routers/settings.ts"
 import { systemRouter } from "./routers/system.ts"
@@ -45,6 +46,7 @@ export const appRouter = base.router({
 	pxpipe: pxpipeRouter,
 	models: modelsRouter,
 	providers: providersRouter,
+	proxyPools: proxyPoolsRouter,
 	oauth: oauthRouter,
 	tunnel: tunnelRouter,
 	headroom: headroomRouter,
