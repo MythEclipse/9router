@@ -10,6 +10,8 @@
  * restores the caller's original name.
  */
 
+import { TMP_DIRECTORY, WORKSPACE_DIRECTORY } from "./opencodePreamble.ts"
+
 /** Names required by the upstream free-tier gate. */
 export const OPENCODE_FINGERPRINT_TOOLS = ["read", "shell"]
 
@@ -75,16 +77,14 @@ const FINGERPRINT_TOOL_DEFINITIONS = {
 const renamedToolNames = new WeakMap()
 const ENV_TAG = "<env>"
 const ENV_HEADING = "Here is some useful information about the environment you are running in:"
-const ENV_WORKING_DIR = "/workspace"
-const ENV_TMP_DIR = "/tmp/opencode"
 const ENV_FINGERPRINT_PROMPT = [
 	ENV_HEADING,
 	ENV_TAG,
-	`  Working directory: ${ENV_WORKING_DIR}`,
-	`  Workspace root folder: ${ENV_WORKING_DIR}`,
+	`  Working directory: ${WORKSPACE_DIRECTORY}`,
+	`  Workspace root folder: ${WORKSPACE_DIRECTORY}`,
 	"  Is directory a git repo: no",
 	`  Platform: ${process.platform}`,
-	`  Prefer ${ENV_TMP_DIR} over generic system temporary directories such as /tmp; it is pre-created and approved for external access.`,
+	`  Prefer ${TMP_DIRECTORY} over generic system temporary directories such as /tmp; it is pre-created and approved for external access.`,
 	"</env>",
 ].join("\n")
 

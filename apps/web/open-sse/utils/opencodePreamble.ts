@@ -16,8 +16,11 @@
  * through `loadAgentHarness()`.
  */
 
-import { tmpdir } from "node:os"
-import { join } from "node:path"
+/** The directory the preamble describes the CLI running in. */
+export const WORKSPACE_DIRECTORY = "/workspace"
+
+/** The CLI's scratch directory, named in the `<env>` block it sends. */
+export const TMP_DIRECTORY = "/tmp/opencode"
 
 /** The provider id the CLI reports for its own free lane. */
 const PROVIDER_ID = "opencode"
@@ -118,19 +121,19 @@ export function composePreamble(captured: string, identity: PreambleIdentity): s
 /**
  * This machine's half of the identity.
  *
- * The directory reported is the CLI's own temp workspace, not the server's working
- * directory. The capture shows the CLI running in `/tmp/opencode/...`, so a temp
- * workspace is the plausible shape - and the deployment path is something the
- * outgoing preamble has never carried: it would name the operator's project to a
- * third party. `opencode-session.test.ts` pins that.
+ * The directory is a stand-in, never the server's working directory: the outgoing
+ * preamble has never named the deployment path, and doing so would tell a third
+ * party what the operator's project is called. `opencode-session.test.ts` pins
+ * that. The two paths are shared with the fingerprint's own `<env>` block, which
+ * used to spell them out separately - one request could describe two different
+ * directories depending on whether the harness cache was warm.
  */
 export function environmentIdentity(): PreambleEnvironment {
-	const workspace = join(tmpdir(), "opencode")
 	return {
-		workingDirectory: workspace,
-		workspaceRoot: workspace,
+		workingDirectory: WORKSPACE_DIRECTORY,
+		workspaceRoot: WORKSPACE_DIRECTORY,
 		isGitRepo: false,
 		platform: process.platform,
-		tmpDirectory: workspace,
+		tmpDirectory: TMP_DIRECTORY,
 	}
 }
