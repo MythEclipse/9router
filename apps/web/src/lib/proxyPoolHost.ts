@@ -2,7 +2,12 @@ import type {
 	ProxyPoolDeps,
 	StoredPool,
 } from "9router-api/application/proxy-pools/manage-proxy-pools"
-import { usesRelay } from "9router-api/domain/proxy-pool"
+import {
+	RELAY_PROBE_PATH,
+	RELAY_PROBE_TARGET,
+	relayProxied,
+	usesRelay,
+} from "9router-api/domain/proxy-pool"
 import { fetch as undiciFetch } from "undici"
 import { isSupportedProxyScheme } from "@/lib/network/outboundProxy"
 import { testProxyUrl } from "@/lib/network/proxyTest"
@@ -22,7 +27,6 @@ import {
  * The relay probe lives here because it needs a transport: a deployed relay has no proxy
  * URL to dial, so proving it works means asking *it* to fetch something.
  */
-const RELAY_TARGET = "https://httpbin.org"
 const RELAY_TIMEOUT_MS = 10_000
 
 interface RelayProbe {
@@ -40,14 +44,23 @@ async function probeRelay(relayUrl: string): Promise<RelayProbe> {
 	try {
 		const res = await undiciFetch(relayUrl, {
 			method: "GET",
-			headers: { "x-relay-target": RELAY_TARGET, "x-relay-path": "/get" },
+			headers: { "x-relay-target": RELAY_PROBE_TARGET, "x-relay-path": RELAY_PROBE_PATH },
 			signal: controller.signal,
 		})
+		const elapsedMs = Date.now() - startedAt
+		if (!res.ok) {
+			return { ok: false, status: res.status, statusText: res.statusText, elapsedMs }
+		}
+		// A 200 is not proof of a proxy: a deployment that was never compiled into a
+		// function serves its own source with 200, and a captive portal serves a login
+		// page. Only the probe target's own answer proves the hop happened.
+		const proxied = relayProxied(await res.text())
 		return {
-			ok: res.ok,
+			ok: proxied,
 			status: res.status,
 			statusText: res.statusText,
-			elapsedMs: Date.now() - startedAt,
+			elapsedMs,
+			...(proxied ? {} : { error: "Relay answered without proxying the target" }),
 		}
 	} catch (error) {
 		return {

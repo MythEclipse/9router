@@ -10,6 +10,7 @@ import {
 	poolInputOf,
 	poolTestView,
 	poolUpdateOf,
+	relayProxied,
 	testResultPatch,
 	usesRelay,
 } from "../../apps/api/src/domain/proxy-pool.ts"
@@ -258,5 +259,26 @@ describe("poolTestView", () => {
 			elapsedMs: 12,
 			testedAt: "t",
 		})
+	})
+})
+
+describe("relayProxied", () => {
+	it("accepts the probe target's own answer", () => {
+		expect(relayProxied('{"args":{},"url":"https://httpbin.org/get"}')).toBe(true)
+	})
+
+	it("rejects a relay that served its own source with 200", () => {
+		// Live shape of an extensionless Vercel entrypoint: the worker source comes
+		// back with `200 application/octet-stream`.
+		const source = 'export default { fetch: async (request) => { const target = "x-relay-target"; } }'
+		expect(relayProxied(source)).toBe(false)
+	})
+
+	it("rejects a captive portal login page", () => {
+		expect(relayProxied("<html><body>Sign in to continue</body></html>")).toBe(false)
+	})
+
+	it("rejects an empty body", () => {
+		expect(relayProxied("")).toBe(false)
 	})
 })

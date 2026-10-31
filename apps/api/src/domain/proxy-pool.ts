@@ -248,6 +248,27 @@ export interface PoolTestOutcome {
 	readonly elapsedMs?: number | null
 }
 
+/** The host a relay is asked to fetch, and the marker its answer carries. */
+export const RELAY_PROBE_TARGET = "https://httpbin.org"
+export const RELAY_PROBE_PATH = "/get"
+const RELAY_PROBE_MARKER = "httpbin.org/get"
+
+/**
+ * Whether a relay's answer proves it actually proxied.
+ *
+ * A relay is a URL that takes `x-relay-target` and fetches it. A 200 alone proves
+ * nothing: a deployment whose entrypoint was never compiled into a function serves its
+ * own source with `200 application/octet-stream`, a rewrite to the wrong file serves that
+ * file, and a captive portal serves a login page. All three look healthy to a status-code
+ * check, and the pool then stays `active` while every relayed request returns nonsense.
+ *
+ * So the probe asks for a host whose answer is recognisable and looks for that answer.
+ * The target's own body is the only evidence the hop happened.
+ */
+export function relayProxied(body: string): boolean {
+	return body.includes(RELAY_PROBE_MARKER)
+}
+
 /**
  * The row a test attempt writes back.
  *
