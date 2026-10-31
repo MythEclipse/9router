@@ -1,6 +1,6 @@
 {
   "name": "@9router/pricing",
-  "version": "7.0.0",
+  "version": "7.0.1",
   "private": true,
   "type": "module",
   "description": "Provider pricing tables and cost calculation shared by the gateway, the DB layer and the API",
