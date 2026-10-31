@@ -29,6 +29,7 @@ const navItems = [
 	{ href: "/dashboard/token-saver", label: "Token Saver", icon: "savings" },
 	// { href: "/dashboard/pxpipe", label: "PXPIPE", icon: "image" },
 	{ href: "/dashboard/cli-tools", label: "CLI Tools", icon: "terminal" },
+	{ href: "/dashboard/audit", label: "Audit Log", icon: "history" },
 ]
 
 // Custom features added by this fork - open-ended, new tools land here too.
@@ -152,6 +153,8 @@ export default function Sidebar({ onClose }: SidebarProps) {
 		if (item.href === "/dashboard/quota") return permissions.manageProviders
 		if (item.href === "/dashboard/token-saver" || item.href === "/dashboard/cli-tools")
 			return permissions.manageTools
+		// The trail names every change an operator made, so only an operator may read it.
+		if (item.href === "/dashboard/audit") return permissions.manageProviders
 		return false
 	})
 

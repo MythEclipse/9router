@@ -5,6 +5,7 @@ import { Suspense, useState } from "react"
 import { CardSkeleton, RequestLogger, SegmentedControl } from "@/shared/components"
 import UsageStats from "@/shared/components/UsageStats"
 import ErrorClassificationTab from "./components/ErrorClassificationTab.tsx"
+import HealthTab from "./components/HealthTab.tsx"
 import ModelLeaderboardTab from "./components/ModelLeaderboardTab.tsx"
 import RequestDetailsTab from "./components/RequestDetailsTab.tsx"
 import TokenSavingsTab from "./components/TokenSavingsTab.tsx"
@@ -35,7 +36,7 @@ function UsageContent() {
 	const tabFromUrl = searchParams.get("tab")
 	const activeTab =
 		tabFromUrl &&
-		["overview", "logs", "details", "errors", "leaderboard", "savings"].includes(tabFromUrl)
+		["overview", "logs", "details", "errors", "leaderboard", "savings", "health"].includes(tabFromUrl)
 			? tabFromUrl
 			: "overview"
 
@@ -57,6 +58,7 @@ function UsageContent() {
 						{ value: "errors", label: "Errors" },
 						{ value: "leaderboard", label: "Leaderboard" },
 						{ value: "savings", label: "Savings" },
+						{ value: "health", label: "Health" },
 					]}
 					value={activeTab}
 					onChange={handleTabChange}
@@ -65,7 +67,8 @@ function UsageContent() {
 				{(activeTab === "overview" ||
 					activeTab === "errors" ||
 					activeTab === "leaderboard" ||
-					activeTab === "savings") && (
+					activeTab === "savings" ||
+					activeTab === "health") && (
 					<SegmentedControl
 						options={PERIODS}
 						value={period}
@@ -86,6 +89,7 @@ function UsageContent() {
 			{activeTab === "errors" && <ErrorClassificationTab period={period} />}
 			{activeTab === "leaderboard" && <ModelLeaderboardTab period={period} />}
 			{activeTab === "savings" && <TokenSavingsTab period={period} />}
+			{activeTab === "health" && <HealthTab period={period} />}
 		</div>
 	)
 }
