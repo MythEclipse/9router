@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { OPENCODE_AGENT_PREAMBLE } from "../../apps/web/open-sse/assets/opencodeAgentPreamble.js"
+import { OPENCODE_AGENT_TOOLS } from "../../apps/web/open-sse/assets/opencodeAgentTools.js"
+import { getExecutor } from "../../apps/web/open-sse/executors/index.js"
 import {
 	composePreamble,
 	environmentIdentity,
@@ -85,5 +87,26 @@ describe("captured snapshot", () => {
 		for (const marker of ["# Your Model", "Today's date:", "<env>", "</env>"]) {
 			expect(OPENCODE_AGENT_PREAMBLE).toContain(marker)
 		}
+	})
+})
+
+describe("executor wiring", () => {
+	// The module tests above pass whether or not the executor calls it. This is the
+	// one that fails if `transformRequest` ever hands `applyAgentHarness` the raw
+	// capture again.
+	it("sends the composed preamble, not the capture", () => {
+		const executor = getExecutor("opencode")
+		executor.harness = {
+			preamble: OPENCODE_AGENT_PREAMBLE,
+			tools: [...OPENCODE_AGENT_TOOLS],
+		}
+
+		const body = executor.transformRequest("glm-5.3-flash-free", {
+			messages: [{ role: "user", content: "hi" }],
+		})
+
+		expect(body.messages[0].role).toBe("system")
+		expect(body.messages[0].content).toContain("- Model ID: glm-5.3-flash-free")
+		expect(body.messages[0].content).not.toContain("big-pickle")
 	})
 })
