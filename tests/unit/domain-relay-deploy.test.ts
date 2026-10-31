@@ -9,6 +9,7 @@ import {
 	relayUrlOf,
 	shouldKeepPolling,
 	siteNameOf,
+	transportOf,
 } from "../../apps/api/src/domain/relay-deploy.ts"
 
 describe("projectNameOf", () => {
@@ -35,7 +36,12 @@ describe("projectNameOf", () => {
 
 describe("deployRequestOf", () => {
 	it("reads each provider's own token field, trimmed", () => {
-		expect(deployRequestOf("vercel", { vercelToken: " tok " })).toEqual({ token: "tok", fields: {} })
+		// Vercel always carries a transport, because it is the one provider whose
+		// hop can be chosen; the others have a single client and no field.
+		expect(deployRequestOf("vercel", { vercelToken: " tok " })).toEqual({
+			token: "tok",
+			fields: { transport: "https" },
+		})
 		expect(deployRequestOf("netlify", { netlifyToken: "nfp_x" })).toEqual({
 			token: "nfp_x",
 			fields: {},
@@ -166,5 +172,42 @@ describe("deployedPoolOf", () => {
 		for (const provider of ["vercel", "cloudflare", "deno", "netlify"] as const) {
 			expect(deployedPoolOf({ provider, projectName: "r", deployUrl: "u" }).type).toBe(provider)
 		}
+	})
+})
+
+describe("transportOf", () => {
+	it("takes each hop a relay can use", () => {
+		expect(transportOf("https")).toBe("https")
+		expect(transportOf("wreq")).toBe("wreq")
+	})
+
+	it("falls back to the hop that needs no dependency at the provider", () => {
+		// A typo must not cost the operator the deploy, and the fallback has to be
+		// the side that cannot fail for a missing package.
+		expect(transportOf(undefined)).toBe("https")
+		expect(transportOf("")).toBe("https")
+		expect(transportOf("emulate-everything")).toBe("https")
+		expect(transportOf(42)).toBe("https")
+	})
+})
+
+describe("deployRequestOf transport selection", () => {
+	it("carries the hop Vercel asked for", () => {
+		expect(deployRequestOf("vercel", { vercelToken: "t", transport: "wreq" })).toEqual({
+			token: "t",
+			fields: { transport: "wreq" },
+		})
+	})
+
+	it("ignores the field for a provider that has only one hop", () => {
+		// Cloudflare, Deno and Netlify offer no choice, so a `transport` in their
+		// request must not reach the deployer and imply a variant that does not exist.
+		expect(
+			deployRequestOf("cloudflare", { apiToken: "t", accountId: "a", transport: "wreq" }),
+		).toEqual({ token: "t", fields: { accountId: "a" } })
+		expect(deployRequestOf("netlify", { netlifyToken: "t", transport: "wreq" })).toEqual({
+			token: "t",
+			fields: {},
+		})
 	})
 })

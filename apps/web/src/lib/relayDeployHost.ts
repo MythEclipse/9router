@@ -7,6 +7,7 @@ import type {
 } from "9router-api/application/proxy-pools/deploy-relay"
 import { conflict, upstream } from "9router-api/domain/errors"
 import type { RelayProvider } from "9router-api/domain/relay-deploy"
+import { transportOf } from "9router-api/domain/relay-deploy"
 import {
 	buildIndexFile,
 	buildRelayFunctionZip,
@@ -29,7 +30,7 @@ import { createProxyPool } from "@/models"
 import {
 	CLOUDFLARE_WORKER_CODE,
 	DENO_RELAY_CODE,
-	VERCEL_RELAY_CODE,
+	vercelRelayFiles,
 } from "@/lib/network/relayWorkers"
 
 const VERCEL_API = "https://api.vercel.com"
@@ -52,26 +53,13 @@ async function providerError(res: Response, fallback: string): Promise<Error> {
 }
 
 const vercel: RelayProviderDeps = {
-	start: async ({ token, projectName }) => {
+	start: async ({ token, projectName, fields }) => {
 		const res = await fetch(`${VERCEL_API}/v13/deployments`, {
 			method: "POST",
 			headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
 			body: JSON.stringify({
 				name: projectName,
-				files: [
-					{ file: "api/relay", data: VERCEL_RELAY_CODE },
-					{ file: "package.json", data: JSON.stringify({ name: projectName, version: "1.0.0" }) },
-					{
-						file: "vercel.json",
-						data: JSON.stringify({
-							rewrites: [{ source: "/(.*)", destination: "/api/relay" }],
-							// Bun is selected by this key alone. "1.x" tracks the 1.3 line this
-							// repo builds and runs on; "1.4.x" is Bun's Zig-to-Rust rewrite and
-							// is not drop-in compatible, so it is not chosen here.
-							bunVersion: "1.x",
-						}),
-					},
-				],
+				files: vercelRelayFiles(projectName, transportOf(fields.transport)),
 				projectSettings: { framework: null },
 				target: "production",
 			}),

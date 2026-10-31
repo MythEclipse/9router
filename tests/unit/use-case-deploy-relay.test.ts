@@ -80,7 +80,13 @@ describe("deployRelay", () => {
 		const p = provider()
 		const d = deps({ provider: vi.fn(() => p) })
 		await deployRelay({ provider: "vercel", body: { vercelToken: "tok", projectName: " mine " } }, d)
-		expect(p.start).toHaveBeenCalledWith({ token: "tok", projectName: "mine", fields: {} })
+		// Vercel is the one provider that carries a hop choice; it defaults to the
+		// platform client when the request does not ask for the emulated one.
+		expect(p.start).toHaveBeenCalledWith({
+			token: "tok",
+			projectName: "mine",
+			fields: { transport: "https" },
+		})
 	})
 
 	it("does the provider's post-start work before polling", async () => {

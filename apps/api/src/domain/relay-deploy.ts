@@ -11,6 +11,30 @@ export const RELAY_PROVIDERS = ["vercel", "cloudflare", "deno", "netlify"] as co
 
 export type RelayProvider = (typeof RELAY_PROVIDERS)[number]
 
+/**
+ * How a relay's own hop to the upstream is made.
+ *
+ * `https` uses the platform's client, which is cheap and carries nothing extra.
+ * `wreq` runs an emulated TLS stack inside the function, so the upstream sees a
+ * chosen fingerprint instead of the platform's - the difference between a relay
+ * a fingerprinted provider accepts and one it refuses.
+ */
+export const RELAY_TRANSPORTS = ["https", "wreq"] as const
+
+export type RelayTransport = (typeof RELAY_TRANSPORTS)[number]
+
+/**
+ * The transport a request asked for.
+ *
+ * Anything unrecognised falls back to `https` rather than failing the deploy: the
+ * field is an optimisation, and a typo should not cost an operator their whole
+ * request. The fallback is also the safe side - it is the transport that needs no
+ * extra dependency at the provider.
+ */
+export function transportOf(raw: unknown): RelayTransport {
+	return raw === "wreq" ? "wreq" : "https"
+}
+
 /** The longest a deployment may take before it is given up on, in milliseconds. */
 export const DEPLOY_TIMEOUT_MS = 120_000
 
@@ -45,6 +69,14 @@ export interface RelayContract {
 	readonly tokenMessage: string
 	/** Fields the provider requires besides the token, with the message when blank. */
 	readonly required: readonly { readonly field: string; readonly message: string }[]
+	/**
+	 * The hops this provider can carry, when it is more than one.
+	 *
+	 * Only Vercel has a choice: its function can run an emulated TLS stack, while
+	 * Cloudflare and Deno offer no client socket and Netlify's function is Node
+	 * with its own client. Absent means the platform's client and nothing else.
+	 */
+	readonly transports?: readonly RelayTransport[]
 }
 
 export const RELAY_CONTRACTS: Readonly<Record<RelayProvider, RelayContract>> = {
@@ -52,6 +84,7 @@ export const RELAY_CONTRACTS: Readonly<Record<RelayProvider, RelayContract>> = {
 		tokenField: "vercelToken",
 		tokenMessage: "Vercel API token is required",
 		required: [],
+		transports: RELAY_TRANSPORTS,
 	},
 	cloudflare: {
 		tokenField: "apiToken",
@@ -93,6 +126,10 @@ export function deployRequestOf(
 	const sent = body[contract.tokenField]
 	const token = typeof sent === "string" ? sent.trim() : ""
 	if (!token) return { error: contract.tokenMessage }
+	// Carried only for providers that offer a choice, so `fields.transport` is
+	// either a real selection or absent - never a silent default for a platform
+	// that has no alternative.
+	if (contract.transports) fields.transport = transportOf(body.transport)
 	return { token, fields }
 }
 

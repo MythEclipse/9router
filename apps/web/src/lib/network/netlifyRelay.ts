@@ -15,9 +15,14 @@
 
 import { createHash } from "node:crypto"
 
-import { RELAY_REQUEST_DROP_HEADERS, RELAY_RESPONSE_DROP_HEADERS } from "./relayWorkers"
+import {
+	RELAY_REQUEST_DROP_HEADERS,
+	RELAY_REQUEST_DROP_PREFIXES,
+	RELAY_RESPONSE_DROP_HEADERS,
+} from "./relayWorkers"
 
 const REQUEST_DROP = JSON.stringify(RELAY_REQUEST_DROP_HEADERS)
+const PREFIX_DROP = JSON.stringify(RELAY_REQUEST_DROP_PREFIXES)
 const RESPONSE_DROP = JSON.stringify(RELAY_RESPONSE_DROP_HEADERS)
 
 export const NETLIFY_API = "https://api.netlify.com/api/v1"
@@ -33,6 +38,7 @@ export const NETLIFY_FUNCTION_PATH = "/.netlify/functions/relay"
 // stripped, status/body passed through.
 export const NETLIFY_RELAY_FUNCTION_CODE = `exports.handler = async (event) => {
   const DROP_REQUEST = ${REQUEST_DROP};
+  const DROP_PREFIX = ${PREFIX_DROP};
   const DROP_RESPONSE = ${RESPONSE_DROP};
   const TARGET_PREFIX = "https://";
 
@@ -54,7 +60,10 @@ export const NETLIFY_RELAY_FUNCTION_CODE = `exports.handler = async (event) => {
   const origin = target.endsWith("/") ? target.slice(0, -1) : target;
   const forwardHeaders = {};
   for (const [k, v] of Object.entries(event.headers || {})) {
-    if (!DROP_REQUEST.includes(k.toLowerCase())) forwardHeaders[k] = v;
+    const lower = k.toLowerCase();
+    if (DROP_REQUEST.includes(lower)) continue;
+    if (DROP_PREFIX.some((prefix) => lower.startsWith(prefix))) continue;
+    forwardHeaders[k] = v;
   }
 
   try {

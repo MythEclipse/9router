@@ -41,6 +41,12 @@ import {
 // after a navigation, and the banner in the layout dock.
 const PROXY_IMPORT_TASK = "proxy-pools-import"
 
+// The Vercel form's blank state, in one place because it is reset from two.
+// `wreq` is the default: a Vercel relay exists to look like the client it stands
+// in for, and that is the only hop that carries a chosen TLS fingerprint. The
+// lighter `https` hop stays available for an operator who only needs new IPs.
+const VERCEL_FORM_DEFAULTS = { vercelToken: "", projectName: "vercel-relay", transport: "wreq" }
+
 // One task id per operation kind, so the banner, the bell, and a reloaded page
 // all talk about the same run.
 const dashboardTaskId = (kind) => `dashboard-job-${kind}`
@@ -91,7 +97,7 @@ export default function ProxyPoolsPage() {
 	const [editingProxyPool, setEditingProxyPool] = useState(null)
 	const [formData, setFormData] = useState(normalizeFormData())
 	const [batchImportText, setBatchImportText] = useState("")
-	const [vercelForm, setVercelForm] = useState({ vercelToken: "", projectName: "vercel-relay" })
+	const [vercelForm, setVercelForm] = useState(VERCEL_FORM_DEFAULTS)
 	const [cloudflareForm, setCloudflareForm] = useState({
 		accountId: "",
 		apiToken: "",
@@ -672,7 +678,7 @@ export default function ProxyPoolsPage() {
 	}
 
 	const openVercelModal = () => {
-		setVercelForm({ vercelToken: "", projectName: "vercel-relay" })
+		setVercelForm(VERCEL_FORM_DEFAULTS)
 		setShowVercelModal(true)
 	}
 
@@ -1307,6 +1313,14 @@ export default function ProxyPoolsPage() {
 						onChange={(e) => setVercelForm((prev) => ({ ...prev, projectName: e.target.value }))}
 						placeholder="my-relay"
 						hint="Name for your Vercel project (leave empty to auto-generate)"
+					/>
+					<Toggle
+						checked={vercelForm.transport === "wreq"}
+						onChange={(next) =>
+							setVercelForm((prev) => ({ ...prev, transport: next ? "wreq" : "https" }))
+						}
+						label="Emulate the client's TLS fingerprint"
+						description="Installs wreq-js, a native TLS stack, so the upstream sees the same fingerprint as a local client instead of Vercel's. Turn off for a lighter relay that only rotates your IP."
 					/>
 					<div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
 						<Button
