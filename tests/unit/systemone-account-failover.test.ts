@@ -32,10 +32,12 @@ vi.mock("@/lib/localDb", async (importOriginal) => ({
 
 vi.mock("@/sse/services/model.js", () => ({
 	getModelInfo: mocks.getModelInfo,
+	getComboModels: vi.fn().mockResolvedValue(null),
 }))
 
 vi.mock("@/sse/services/keyAccess.js", () => ({
 	getKeyAccessContext: mocks.getKeyAccessContext,
+	enforceKeyAccess: vi.fn().mockResolvedValue(null),
 	enforceKeyAccessResolved: mocks.enforceKeyAccessResolved,
 }))
 

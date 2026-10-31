@@ -1,5 +1,6 @@
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig"
 import { getVideoConfig, handleVideoProxyCore, sanitizeSecrets } from "open-sse/handlers/videoCore"
+import { handleComboChat } from "open-sse/services/combo"
 import { errorResponse } from "open-sse/utils/error"
 import { getProviderConnectionById, getSettings } from "@/lib/localDb"
 import {
@@ -11,8 +12,8 @@ import {
 	markAccountUnavailable,
 	shouldTryNextAccount,
 } from "../services/auth.ts"
-import { enforceKeyAccessResolved, getKeyAccessContext } from "../services/keyAccess.ts"
-import { getModelInfo } from "../services/model.ts"
+import * as keyAccess from "../services/keyAccess.ts"
+import * as modelService from "../services/model.ts"
 import { checkAndRefreshToken, updateProviderCredentials } from "../services/tokenRefresh.ts"
 
 const NO_AUTH_VIDEO_PROVIDERS = new Set(["veoaifree-web"])
@@ -86,19 +87,21 @@ async function readForwardableBody(request) {
 	return { raw: buf, parsed: null, contentType }
 }
 
-async function resolveVideoProvider(parsedBody) {
-	if (!parsedBody?.model) return { provider: DEFAULT_VIDEO_PROVIDER, model: null }
+async function resolveVideoProvider(modelStr) {
+	if (!modelStr) return { provider: DEFAULT_VIDEO_PROVIDER, model: null }
 
-	const modelStr = String(parsedBody.model)
-	const modelInfo = await getModelInfo(modelStr)
+	const modelInfo = await modelService.getModelInfo(modelStr)
 	if (!modelInfo.provider) {
+		// Bare model ids (no explicit "provider/" prefix) fall back to the default
+		// video provider - the prefix-less inference targets chat providers only.
+		if (!modelStr.includes("/")) {
+			return { provider: DEFAULT_VIDEO_PROVIDER, model: modelStr }
+		}
 		return {
-			error: errorResponse(HTTP_STATUS.BAD_REQUEST, "Combos are not supported for video generation"),
+			error: errorResponse(HTTP_STATUS.BAD_REQUEST, "Invalid model format"),
 		}
 	}
 	if (!getVideoConfig(modelInfo.provider)) {
-		// Bare model ids (no explicit "provider/" prefix) fall back to the default
-		// video provider - the prefix-less inference targets chat providers only.
 		if (!modelStr.includes("/")) {
 			return { provider: DEFAULT_VIDEO_PROVIDER, model: modelStr }
 		}
@@ -131,25 +134,72 @@ export async function handleVideoCreate(request, action) {
 	const bodyInfo = await readForwardableBody(request)
 	if (bodyInfo.error) return bodyInfo.error
 
-	const resolved = await resolveVideoProvider(bodyInfo.parsed)
+	const modelStr = bodyInfo.parsed?.model ? String(bodyInfo.parsed.model) : ""
+
+	// Per-key access control: requested target, before combo expansion.
+	const keyCtx = await keyAccess.getKeyAccessContext(request)
+	if (modelStr && typeof keyAccess.enforceKeyAccess === "function") {
+		const keyAccessDenied = await keyAccess.enforceKeyAccess(keyCtx, modelStr)
+		if (keyAccessDenied) return keyAccessDenied
+	}
+
+	// Combo expansion: model may be a combo name → run fallback/round-robin across models
+	const comboModels =
+		modelStr && typeof modelService.getComboModels === "function"
+			? await modelService.getComboModels(modelStr)
+			: null
+	if (comboModels) {
+		const settings = await getSettings()
+		const comboStrategies = settings.comboStrategies || {}
+		const comboStrategy =
+			comboStrategies[modelStr]?.fallbackStrategy || settings.comboStrategy || "fallback"
+		const comboStickyLimit = settings.comboStickyRoundRobinLimit
+		log.info(
+			"VIDEO",
+			`Combo "${modelStr}" with ${comboModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`,
+		)
+		return handleComboChat({
+			body: bodyInfo.parsed || {},
+			models: comboModels,
+			handleSingleModel: (b, m) => handleSingleModelVideo(b, m, action, request, keyCtx, bodyInfo),
+			log,
+			comboName: modelStr,
+			comboStrategy,
+			comboStickyLimit,
+			autoSwitch: false,
+		})
+	}
+
+	return handleSingleModelVideo(bodyInfo.parsed, modelStr, action, request, keyCtx, bodyInfo)
+}
+
+async function handleSingleModelVideo(parsedBody, modelStr, action, request, keyCtx, bodyInfo) {
+	const resolved = await resolveVideoProvider(modelStr)
 	if (resolved.error) return resolved.error
 	const { provider, model } = resolved
 
 	// Per-key access control: the routed provider/model must be listed. A body
 	// we cannot read a model from (multipart) is denied for restricted keys.
-	const keyAccessDenied = await enforceKeyAccessResolved(
-		await getKeyAccessContext(request),
-		bodyInfo.parsed?.model ? String(bodyInfo.parsed.model) : "",
-		provider,
-		model,
-	)
-	if (keyAccessDenied) return keyAccessDenied
+	if (typeof keyAccess.enforceKeyAccessResolved === "function") {
+		const keyAccessDenied = await keyAccess.enforceKeyAccessResolved(
+			keyCtx,
+			modelStr,
+			provider,
+			model,
+		)
+		if (keyAccessDenied) return keyAccessDenied
+	}
 
 	// Strip the provider prefix (e.g. "xai/grok-imagine-video") before forwarding;
 	// otherwise forward the original bytes untouched.
 	let forwardBody = bodyInfo.raw
-	if (bodyInfo.parsed && model && bodyInfo.parsed.model !== model) {
-		forwardBody = JSON.stringify({ ...bodyInfo.parsed, model })
+	if (
+		parsedBody &&
+		model &&
+		(parsedBody.model !== model ||
+			modelStr !== (bodyInfo.parsed?.model ? String(bodyInfo.parsed.model) : ""))
+	) {
+		forwardBody = JSON.stringify({ ...parsedBody, model })
 	}
 
 	const preferredConnectionId = request.headers.get("x-connection-id") || null

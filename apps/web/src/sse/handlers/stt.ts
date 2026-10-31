@@ -1,5 +1,6 @@
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig"
 import { handleSttCore } from "open-sse/handlers/sttCore"
+import { handleComboChat } from "open-sse/services/combo"
 import { errorResponse } from "open-sse/utils/error"
 import { getCustomModels, getSettings } from "@/lib/localDb"
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy"
@@ -14,8 +15,8 @@ import {
 	markAccountUnavailable,
 	shouldTryNextAccount,
 } from "../services/auth.ts"
-import { enforceKeyAccessResolved, getKeyAccessContext } from "../services/keyAccess.ts"
-import { getModelInfo } from "../services/model.ts"
+import * as keyAccess from "../services/keyAccess.ts"
+import * as modelService from "../services/model.ts"
 import { checkAndRefreshToken } from "../services/tokenRefresh.ts"
 import * as log from "../utils/logger.ts"
 
@@ -94,21 +95,60 @@ export async function handleStt(request) {
 	if (!formData.get("file"))
 		return errorResponse(HTTP_STATUS.BAD_REQUEST, "Missing required field: file")
 
-	const modelInfo = await getModelInfo(modelStr)
+	// Per-key access control: requested target, before combo expansion.
+	const keyCtx = await keyAccess.getKeyAccessContext(request)
+	if (typeof keyAccess.enforceKeyAccess === "function") {
+		const keyAccessDenied = await keyAccess.enforceKeyAccess(keyCtx, modelStr)
+		if (keyAccessDenied) return keyAccessDenied
+	}
+
+	// Combo expansion: model may be a combo name → run fallback/round-robin across models
+	const comboModels =
+		typeof modelService.getComboModels === "function"
+			? await modelService.getComboModels(modelStr)
+			: null
+	if (comboModels) {
+		const comboStrategies = settings.comboStrategies || {}
+		const comboStrategy =
+			comboStrategies[modelStr]?.fallbackStrategy || settings.comboStrategy || "fallback"
+		const comboStickyLimit = settings.comboStickyRoundRobinLimit
+		log.info(
+			"STT",
+			`Combo "${modelStr}" with ${comboModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`,
+		)
+		return handleComboChat({
+			body: formData,
+			models: comboModels,
+			handleSingleModel: (fd, m) => handleSingleModelStt(fd, m, request, keyCtx),
+			log,
+			comboName: modelStr,
+			comboStrategy,
+			comboStickyLimit,
+			autoSwitch: false,
+		})
+	}
+
+	return handleSingleModelStt(formData, modelStr, request, keyCtx)
+}
+
+async function handleSingleModelStt(formData, modelStr, request, keyCtx) {
+	const modelInfo = await modelService.getModelInfo(modelStr)
 	if (!modelInfo.provider) return errorResponse(HTTP_STATUS.BAD_REQUEST, "Invalid model format")
 
 	const { provider, model } = modelInfo
 	if (provider === "codex" && model !== "transcribe")
 		return errorResponse(400, "Use model cx/transcribe for Codex STT")
 
-	// Per-key access control: checked before any credential lookup.
-	const keyAccessDenied = await enforceKeyAccessResolved(
-		await getKeyAccessContext(request),
-		modelStr,
-		provider,
-		model,
-	)
-	if (keyAccessDenied) return keyAccessDenied
+	// Per-key access control for direct models
+	if (typeof keyAccess.enforceKeyAccessResolved === "function") {
+		const keyAccessDenied = await keyAccess.enforceKeyAccessResolved(
+			keyCtx,
+			modelStr,
+			provider,
+			model,
+		)
+		if (keyAccessDenied) return keyAccessDenied
+	}
 
 	log.info("ROUTING", `Provider: ${provider}, Model: ${model}`)
 

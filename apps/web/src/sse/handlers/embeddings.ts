@@ -1,6 +1,7 @@
 import { getClientIp } from "@9router/auth/loginLimiter"
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig"
 import { handleEmbeddingsCore } from "open-sse/handlers/embeddingsCore"
+import { handleComboChat } from "open-sse/services/combo"
 import { errorResponse } from "open-sse/utils/error"
 import { getSettings } from "@/lib/localDb"
 import { saveRequestUsage } from "@/lib/usageDb"
@@ -15,8 +16,8 @@ import {
 	shouldLogAuthFailure,
 	shouldTryNextAccount,
 } from "../services/auth.ts"
-import { enforceKeyAccessResolved, getKeyAccessContext } from "../services/keyAccess.ts"
-import { getModelInfo } from "../services/model.ts"
+import * as keyAccess from "../services/keyAccess.ts"
+import * as modelService from "../services/model.ts"
 import { checkAndRefreshToken, updateProviderCredentials } from "../services/tokenRefresh.ts"
 import * as log from "../utils/logger.ts"
 
@@ -114,7 +115,44 @@ export async function handleEmbeddings(request) {
 		return errorResponse(HTTP_STATUS.BAD_REQUEST, "Missing required field: input")
 	}
 
-	const modelInfo = await getModelInfo(modelStr)
+	// Per-key access control: requested target, before combo expansion.
+	const keyCtx = await keyAccess.getKeyAccessContext(request)
+	if (typeof keyAccess.enforceKeyAccess === "function") {
+		const keyAccessDenied = await keyAccess.enforceKeyAccess(keyCtx, modelStr)
+		if (keyAccessDenied) return keyAccessDenied
+	}
+
+	// Combo expansion: model may be a combo name → run fallback/round-robin across models
+	const comboModels =
+		typeof modelService.getComboModels === "function"
+			? await modelService.getComboModels(modelStr)
+			: null
+	if (comboModels) {
+		const comboStrategies = settings.comboStrategies || {}
+		const comboStrategy =
+			comboStrategies[modelStr]?.fallbackStrategy || settings.comboStrategy || "fallback"
+		const comboStickyLimit = settings.comboStickyRoundRobinLimit
+		log.info(
+			"EMBEDDINGS",
+			`Combo "${modelStr}" with ${comboModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`,
+		)
+		return handleComboChat({
+			body,
+			models: comboModels,
+			handleSingleModel: (b, m) => handleSingleModelEmbeddings(b, m, apiKey, url.pathname, keyCtx),
+			log,
+			comboName: modelStr,
+			comboStrategy,
+			comboStickyLimit,
+			autoSwitch: false,
+		})
+	}
+
+	return handleSingleModelEmbeddings(body, modelStr, apiKey, url.pathname, keyCtx)
+}
+
+async function handleSingleModelEmbeddings(body, modelStr, apiKey, endpoint, keyCtx) {
+	const modelInfo = await modelService.getModelInfo(modelStr)
 	if (!modelInfo.provider) {
 		log.warn("EMBEDDINGS", "Invalid model format", { model: modelStr })
 		return errorResponse(HTTP_STATUS.BAD_REQUEST, "Invalid model format")
@@ -124,14 +162,16 @@ export async function handleEmbeddings(request) {
 	// A studio name is the model the caller owns, so its usage belongs to that name.
 	const requestedModel = modelStr && modelStr !== `${provider}/${model}` ? modelStr : null
 
-	// Per-key access control: checked before any credential lookup.
-	const keyAccessDenied = await enforceKeyAccessResolved(
-		await getKeyAccessContext(request),
-		modelStr,
-		provider,
-		model,
-	)
-	if (keyAccessDenied) return keyAccessDenied
+	// Per-key access control for direct models
+	if (typeof keyAccess.enforceKeyAccessResolved === "function") {
+		const keyAccessDenied = await keyAccess.enforceKeyAccessResolved(
+			keyCtx,
+			modelStr,
+			provider,
+			model,
+		)
+		if (keyAccessDenied) return keyAccessDenied
+	}
 
 	if (modelStr !== `${provider}/${model}`) {
 		log.info("ROUTING", `${modelStr} → ${provider}/${model}`)
@@ -190,7 +230,7 @@ export async function handleEmbeddings(request) {
 					model,
 					connectionId: credentials.connectionId,
 					apiKey,
-					endpoint: url.pathname,
+					endpoint,
 					tokens: usage,
 					status: "success",
 				}).catch(() => {})

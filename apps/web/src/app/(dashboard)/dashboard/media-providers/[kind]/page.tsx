@@ -12,10 +12,17 @@ import {
 } from "@/shared/constants/providers"
 import { getCustomLogo } from "@/shared/utils/providerLogo"
 
-// Kinds that support combos (currently disabled for image/tts - temporarily hidden).
+// Kinds that support combos.
 // webSearch/webFetch handled by /web page.
-const COMBO_KINDS = new Set([])
-const COMBO_BASE_NAMES = { image: "image-combo", tts: "tts-combo" }
+const COMBO_KINDS = new Set(["embedding", "systemone", "image", "tts", "stt", "video"])
+const COMBO_BASE_NAMES = {
+	embedding: "embedding-combo",
+	systemone: "systemone-combo",
+	image: "image-combo",
+	tts: "tts-combo",
+	stt: "stt-combo",
+	video: "video-combo",
+}
 
 function getEffectiveStatus(conn: Record<string, unknown>): string | undefined {
 	const isCooldown = Object.entries(conn).some(

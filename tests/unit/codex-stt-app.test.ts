@@ -24,9 +24,11 @@ vi.mock("@/lib/localDb", async (importOriginal) => ({
 }))
 vi.mock("@/sse/services/model.js", () => ({
 	getModelInfo: async () => ({ provider: "codex", model: "transcribe" }),
+	getComboModels: async () => null,
 }))
 vi.mock("@/sse/services/keyAccess.js", () => ({
 	getKeyAccessContext: async () => ({}),
+	enforceKeyAccess: async () => null,
 	enforceKeyAccessResolved: mocks.access,
 }))
 vi.mock("@/sse/services/tokenRefresh.js", () => ({ checkAndRefreshToken: mocks.refresh }))

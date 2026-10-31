@@ -38,6 +38,10 @@ const KIND_LABELS = {
 	webFetch: "Web Fetch",
 	image: "Text to Image",
 	tts: "Text To Speech",
+	embedding: "Text Embedding",
+	systemone: "System One",
+	stt: "Speech to Text",
+	video: "Video Generation",
 }
 
 const EXAMPLE_PATHS = {
@@ -45,6 +49,10 @@ const EXAMPLE_PATHS = {
 	webFetch: "/v1/web/fetch",
 	image: "/v1/images/generations",
 	tts: "/v1/audio/speech",
+	embedding: "/v1/embeddings",
+	systemone: "/v1/systemone",
+	stt: "/v1/audio/transcriptions",
+	video: "/v1/videos/generations",
 }
 
 const EXAMPLE_BODIES = {
@@ -57,6 +65,14 @@ const EXAMPLE_BODIES = {
 	webFetch: (n) => ({ model: n, url: "https://example.com", format: "markdown" }),
 	image: (n) => ({ model: n, prompt: "A cute cat playing piano", n: 1, size: "1024x1024" }),
 	tts: (n) => ({ model: n, input: "Hello, this is a test.", voice: "alloy" }),
+	embedding: (n) => ({ model: n, input: "The quick brown fox jumps over the lazy dog" }),
+	systemone: (n) => ({
+		model: n,
+		state: { prompt: "Analyze this situation" },
+		questions: { q: "Is this correct?" },
+	}),
+	stt: (n) => ({ model: n }),
+	video: (n) => ({ model: n, prompt: "A serene lake at sunrise with mist floating over the water" }),
 }
 
 // Map combo.kind → listing route to go back to
@@ -225,13 +241,28 @@ export default function ComboDetailPage() {
 				URL.revokeObjectURL(testResult.imageUrl)
 			} catch {}
 		}
+		if (testResult?.videoUrl?.startsWith("blob:")) {
+			try {
+				URL.revokeObjectURL(testResult.videoUrl)
+			} catch {}
+		}
 		const startedAt = startRequestClock()
 		try {
 			const path = EXAMPLE_PATHS[combo.kind]
-			const body = EXAMPLE_BODIES[combo.kind](combo.name)
-			const headers = { "Content-Type": "application/json" }
-			if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`
-			const res = await fetch(`/api${path}`, { method: "POST", headers, body: JSON.stringify(body) })
+			let res
+			if (combo.kind === "stt") {
+				const fd = new FormData()
+				fd.append("model", combo.name)
+				fd.append("file", new File([new Uint8Array(100)], "sample.mp3", { type: "audio/mp3" }))
+				const headers = {}
+				if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`
+				res = await fetch(`/api${path}`, { method: "POST", headers, body: fd })
+			} else {
+				const body = EXAMPLE_BODIES[combo.kind](combo.name)
+				const headers = { "Content-Type": "application/json" }
+				if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`
+				res = await fetch(`/api${path}`, { method: "POST", headers, body: JSON.stringify(body) })
+			}
 			const latencyMs = elapsedSince(startedAt)
 			if (!res.ok) {
 				const d = await res.json().catch(() => ({}))
@@ -240,6 +271,12 @@ export default function ComboDetailPage() {
 				return
 			}
 			const ctype = res.headers.get("content-type") || ""
+			// Binary video
+			if (ctype.startsWith("video/")) {
+				const blob = await res.blob()
+				setTestResult({ videoUrl: URL.createObjectURL(blob), latencyMs })
+				return
+			}
 			// Binary image
 			if (ctype.startsWith("image/")) {
 				const blob = await res.blob()
@@ -252,11 +289,12 @@ export default function ComboDetailPage() {
 				setTestResult({ audioUrl: URL.createObjectURL(blob), latencyMs })
 				return
 			}
-			// JSON - could be image (data[0].b64_json/url) or generic
+			// JSON - could be image/video or generic
 			const data = await res.json()
 			const first = data?.data?.[0]
 			const imageUrl = base64PngDataUrl(first?.b64_json) || first?.url || ""
-			setTestResult({ json: JSON.stringify(maskB64(data), null, 2), imageUrl, latencyMs })
+			const videoUrl = data?.video_url || first?.video_url || ""
+			setTestResult({ json: JSON.stringify(maskB64(data), null, 2), imageUrl, videoUrl, latencyMs })
 		} catch (e) {
 			setTestError(e.message || "Network error")
 		}
@@ -286,7 +324,9 @@ export default function ComboDetailPage() {
 	const exampleBody =
 		combo.kind && EXAMPLE_BODIES[combo.kind] ? EXAMPLE_BODIES[combo.kind](combo.name) : null
 	const curlExample = examplePath
-		? `curl -X POST http://localhost:20128${examplePath} \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer ${apiKey || "YOUR_KEY"}" \\\n  -d '${JSON.stringify(exampleBody)}'`
+		? combo.kind === "stt"
+			? `curl -X POST http://localhost:20128${examplePath} \\\n  -H "Authorization: Bearer ${apiKey || "YOUR_KEY"}" \\\n  -F "file=@audio.mp3" \\\n  -F "model=${combo.name}"`
+			: `curl -X POST http://localhost:20128${examplePath} \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer ${apiKey || "YOUR_KEY"}" \\\n  -d '${JSON.stringify(exampleBody)}'`
 		: ""
 	const backHref = getListingHref(combo.kind)
 
@@ -477,6 +517,25 @@ export default function ComboDetailPage() {
 										</a>
 									</div>
 									<audio controls src={testResult.audioUrl} className="w-full" />
+								</div>
+							)}
+							{testResult.videoUrl && (
+								<div>
+									<div className="flex items-center justify-end mb-1.5">
+										<a
+											href={testResult.videoUrl}
+											download="video.mp4"
+											className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-primary transition-colors"
+										>
+											<span className="material-symbols-outlined text-[14px]">download</span>
+											Download
+										</a>
+									</div>
+									<video
+										controls
+										src={testResult.videoUrl}
+										className="w-full max-h-[400px] rounded-lg border border-border"
+									/>
 								</div>
 							)}
 							{testResult.json && (
