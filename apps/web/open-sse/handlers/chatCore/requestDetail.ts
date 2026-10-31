@@ -1,4 +1,5 @@
 import { saveRequestUsage } from "@/lib/usageDb"
+import { recordConnectionOutcome } from "../../services/connectionHealth.ts"
 import { COLORS } from "../../utils/stream.ts"
 import { formatClockTime } from "../../utils/timeFormat.ts"
 import { canonicalizeUsage } from "../../utils/usageTracking.ts"
@@ -148,6 +149,27 @@ function isFailedStatus(status) {
 	return Boolean(status) && !OK_USAGE_STATUSES.has(String(status).trim().toLowerCase())
 }
 
+/**
+ * One finished request's usage, as the callers report it.
+ *
+ * `latency` is optional and means "not measured" when absent; `cached` marks an answer served
+ * from the prompt cache, which is a row with no upstream call behind it.
+ */
+export interface SaveUsageStatsInput {
+	readonly provider: string
+	readonly model: string
+	readonly tokens: Record<string, unknown> | null | undefined
+	readonly connectionId?: string | null
+	readonly apiKey?: string | null
+	readonly endpoint?: string | null
+	readonly label?: string
+	readonly silent?: boolean
+	readonly requestedModel?: string | null
+	readonly status?: string | number | null
+	readonly latency?: { readonly ttft?: number | null; readonly total?: number | null } | null
+	readonly cached?: boolean
+}
+
 export function saveUsageStats({
 	provider,
 	model,
@@ -159,7 +181,21 @@ export function saveUsageStats({
 	silent = false,
 	requestedModel,
 	status = null,
-}) {
+	latency = null,
+	cached = false,
+}: SaveUsageStatsInput) {
+	// Health is filed before any early return: this is the one place that sees every finished
+	// request with both its account and its duration, and a request that reported no tokens is
+	// still evidence about the account that served it. `ok` is the request's own verdict — a 429
+	// the fallback recovered from is still a failure *for that account*, which is what the next
+	// selection needs to know.
+	const failedStatus = isFailedStatus(status)
+	recordConnectionOutcome({
+		connectionId,
+		ok: !failedStatus,
+		latencyMs: latency?.total ?? null,
+	})
+
 	if (!tokens || typeof tokens !== "object") return
 
 	const inTokens = tokens.input_tokens ?? tokens.prompt_tokens ?? 0
@@ -167,9 +203,9 @@ export function saveUsageStats({
 
 	// A failed request prices nothing, but it still happened: keep the row so the
 	// Usage error stats count failures instead of only ever seeing successes.
-	const failed = isFailedStatus(status)
+	const failed = failedStatus
 
-	if (inTokens === 0 && outTokens === 0 && !failed) return
+	if (inTokens === 0 && outTokens === 0 && !failed && !cached) return
 
 	if (!silent) {
 		const time = formatClockTime()
@@ -196,6 +232,13 @@ export function saveUsageStats({
 		apiKey: apiKey || undefined,
 		endpoint: endpoint || null,
 		status: failed ? String(status).trim() : undefined,
+		// Measured here and stored on the row: `requestDetails` is pruned, so a latency that
+		// only lives there is unanswerable within the week.
+		latencyMs: typeof latency?.total === "number" ? latency.total : null,
+		// `0` would claim a non-streamed answer had an instant first token; `null` says it had
+		// no first token to time.
+		ttftMs: typeof latency?.ttft === "number" && latency.ttft > 0 ? latency.ttft : null,
+		cached: cached === true,
 	}).catch(() => {})
 }
 

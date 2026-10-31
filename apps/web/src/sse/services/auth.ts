@@ -10,6 +10,7 @@ import {
 	isModelLockActive,
 	shouldRotateProxy,
 } from "open-sse/services/accountFallback"
+import { rankConnectionsByHealth } from "open-sse/services/connectionHealth"
 import {
 	getProviderConnections,
 	getProxyPools,
@@ -255,7 +256,7 @@ export async function getProviderCredentials(
 		const antigravityQuotaCache = isAntigravity && model ? getAntigravityQuotaCache() : null
 
 		// Filter out model-locked, excluded, and Antigravity quota-exhausted connections.
-		const availableConnections = connections.filter((c) => {
+		const eligibleConnections = connections.filter((c) => {
 			if (excludeSet.has(c.id)) return false
 			if (isModelLockActive(c, model)) return false
 			const enabled = c.providerSpecificData?.enabledModels
@@ -287,6 +288,11 @@ export async function getProviderCredentials(
 			}
 			return true
 		})
+
+		// Two accounts can both be healthy and one of them is still the better choice: the one
+		// answering in 900 ms rather than 6 s, and the one that has not failed a third of its
+		// requests. Priority stays the operator's intent — health only reorders inside a tier.
+		const availableConnections = rankConnectionsByHealth(eligibleConnections)
 
 		log.debug("AUTH", `${provider} | available: ${availableConnections.length}/${connections.length}`)
 		connections.forEach((c) => {

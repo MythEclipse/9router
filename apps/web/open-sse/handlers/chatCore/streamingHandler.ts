@@ -1,6 +1,7 @@
 import { saveRequestDetail } from "@/lib/usageDb"
 import { PROVIDERS } from "../../config/providers.ts"
 import { HTTP_STATUS, STREAM_STALL_TIMEOUT_MS } from "../../config/runtimeConfig.ts"
+import { tapStreamForCache } from "../../rtk/cacheTap.ts"
 import { FORMATS } from "../../translator/formats.ts"
 import { needsTranslation } from "../../translator/index.ts"
 import { calledModelName } from "../../utils/modelAlias.ts"
@@ -320,9 +321,14 @@ export async function handleStreamingResponse({
 
 	return {
 		success: true,
-		response: new Response(transformedBody, {
-			headers: { ...SSE_HEADERS, ...upstreamResponseHeaders(providerResponse.headers) },
-		}),
+		response: new Response(
+			// Tee the client-bound bytes into the prompt cache. `transformedBody` is already in
+			// the client's format, so a replay needs no translation.
+			tapStreamForCache(transformedBody, { body, model, provider }),
+			{
+				headers: { ...SSE_HEADERS, ...upstreamResponseHeaders(providerResponse.headers) },
+			},
+		),
 	}
 }
 
@@ -394,6 +400,9 @@ export function buildOnStreamComplete({
 			endpoint: clientRawRequest?.endpoint,
 			label: "STREAM USAGE",
 			silent: true,
+			// The one place that knows both ends of the stream, so the one place that can
+			// record how long it took.
+			latency,
 		})
 		if (log?.line) log.line(reqTag, "📊", formatDoneLine({ usage: finalUsage, latency }))
 	}

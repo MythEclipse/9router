@@ -1,5 +1,7 @@
 import { initTranslators } from "open-sse/translator/index"
 import { handleChat } from "@/sse/handlers/chat"
+import { withAdmission } from "@/sse/middleware/admission"
+import { withIdempotency } from "@/sse/middleware/idempotency"
 
 export const dynamic = "force-dynamic"
 
@@ -32,5 +34,6 @@ export async function POST(request) {
 	// Fallback to local handling
 	await ensureInitialized()
 
-	return await handleChat(request)
+	// Idempotency first: a replayed answer must not take an admission slot at all.
+	return await withIdempotency(request, () => withAdmission(() => handleChat(request)))
 }

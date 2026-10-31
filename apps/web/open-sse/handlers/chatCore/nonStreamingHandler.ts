@@ -4,6 +4,7 @@ import {
 	SAFEGUARD_STATUS_UNAVAILABLE,
 	SAFEGUARD_STATUS_UNSUPPORTED,
 } from "../../config/safeguardsConstants.ts"
+import { saveToSemanticCache } from "../../rtk/semanticCache.ts"
 import { unwrapClineEnvelope } from "../../shared/clineEnvelope.ts"
 import { openAICompletionToClaudeMessage } from "../../translator/concerns/claudeMessage.ts"
 import { applyJsonGuard } from "../../translator/concerns/jsonGuard.ts"
@@ -630,6 +631,9 @@ export async function handleNonStreamingResponse({
 		usage = applyUsageMultipliers(usage, modelMultipliers)
 	}
 	appendLog({ tokens: usage, status: "200 OK" })
+	// Measured once, used by both the usage row and the log line, so the two cannot disagree
+	// about how long the call took.
+	const elapsedMs = Date.now() - requestStartTime
 	saveUsageStats({
 		provider,
 		model,
@@ -639,6 +643,8 @@ export async function handleNonStreamingResponse({
 		requestedModel,
 		endpoint: clientRawRequest?.endpoint,
 		silent: true,
+		// No first token to time here, only the whole call.
+		latency: { total: elapsedMs },
 	})
 	if (log?.line)
 		log.line(
@@ -786,6 +792,11 @@ export async function handleNonStreamingResponse({
 	// Log first: the operator has to see the model that actually served the call.
 	reqLogger.logConvertedResponse(translatedResponse)
 	applyModelAlias(translatedResponse, calledModelName(requestedModel, model))
+
+	// Save the answer the client is about to receive, so the next identical question does not
+	// reach the provider at all. This call was missing entirely: the cache had a read path and
+	// no write path, so it could never hit.
+	saveToSemanticCache(body, `${provider}/${model}`, translatedResponse)
 
 	const totalLatency = Date.now() - requestStartTime
 	saveRequestDetail(

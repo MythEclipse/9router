@@ -582,6 +582,8 @@ export async function handleForcedSSEToJson({
 				requestedModel,
 				endpoint: clientRawRequest?.endpoint,
 				silent: true,
+				// The stream is consumed before this point, so the duration is complete.
+				latency: { total: Date.now() - requestStartTime },
 			})
 			if (log?.line)
 				log.line(
@@ -772,6 +774,8 @@ export async function handleForcedSSEToJson({
 			requestedModel,
 			endpoint: clientRawRequest?.endpoint,
 			silent: true,
+			// The stream is consumed before this point, so the duration is complete.
+			latency: { total: Date.now() - requestStartTime },
 		})
 		if (log?.line)
 			log.line(
