@@ -11,6 +11,7 @@ import {
 	shouldRotateProxy,
 } from "open-sse/services/accountFallback"
 import { rankConnectionsByHealth } from "open-sse/services/connectionHealth"
+import { modelIdSpellings } from "open-sse/services/model"
 import {
 	getProviderConnections,
 	getProxyPools,
@@ -715,5 +716,11 @@ export async function isValidApiKey(
 ): Promise<ApiKeyVerdict> {
 	if (!apiKey) return false
 	void clientIp // per-IP limits live in the login limiter, not in the key verdict
-	return await validateApiKey(apiKey, requestedModel)
+	// A scope stores the spelling the operator picked; the caller may send another
+	// (alias, canonical id, legacy alias). Check every name the model answers to.
+	return await validateApiKey(
+		apiKey,
+		requestedModel,
+		requestedModel ? modelIdSpellings(requestedModel) : null,
+	)
 }

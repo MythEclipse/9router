@@ -85,6 +85,22 @@ export function matchesAllowedModels(
 	})
 }
 
+/**
+ * Whether any of a model's names is inside the scope.
+ *
+ * One model answers to several ids - a provider alias, its canonical id, a legacy
+ * alias kept for old clients. A scope names whichever one the operator saw when the
+ * key was created, so a hit on any name counts; anything else refuses a model the
+ * operator meant to allow.
+ */
+export function matchesAnyModelName(
+	patterns: AllowedModelScope,
+	names: readonly string[],
+): boolean {
+	if (!patterns) return true
+	return names.some((name) => matchesAllowedModels(patterns, name))
+}
+
 /** A WHERE fragment admitting the allowed models, plus its bound parameters. */
 export interface AllowedModelsSql {
 	sql: string

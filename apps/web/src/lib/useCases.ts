@@ -35,11 +35,8 @@ function backfillCodex(item: Record<string, unknown>): Record<string, unknown> {
 import { existsSync } from "node:fs"
 import { creatorNameFor, visibleApiKeys } from "@9router/auth/keyCreator"
 import { closeDb, getAdapter } from "@9router/db/driver"
-import {
-	getApiKeyById,
-	matchesAllowedModels,
-	parseAllowedModels,
-} from "@9router/db/repos/apiKeysRepo"
+import { matchesAnyModelName } from "@9router/db/repos/allowedModels"
+import { getApiKeyById, parseAllowedModels } from "@9router/db/repos/apiKeysRepo"
 import {
 	getDistinctProviders,
 	getRequestDetailById,
@@ -70,6 +67,7 @@ import {
 import { fetchElevenLabsVoices, VOICE_FETCHERS } from "open-sse/handlers/ttsCore"
 import { getSemanticCacheStats, resetSemanticCacheStats } from "open-sse/rtk/semanticCache"
 import { getTokenSavingsReport } from "open-sse/rtk/tokenSaverStats"
+import { modelIdSpellings } from "open-sse/services/model"
 import { getUsageForProvider } from "open-sse/services/usage"
 import { isCustomQuotaProvider } from "open-sse/services/usage/customCredits"
 import { isLocalHeaders } from "@/dashboardGuard"
@@ -345,7 +343,7 @@ function cache(): Cache {
 			// the provider aliases) plus the open-sse rollup that only it can reach.
 			usagePanels: {
 				admitsModel: (allowedModels, model) =>
-					matchesAllowedModels(parseAllowedModels(allowedModels || "*"), model),
+					matchesAnyModelName(parseAllowedModels(allowedModels || "*"), modelIdSpellings(model)),
 				distinctProviders: (allowedModels) =>
 					getDistinctProviders(parseAllowedModels(allowedModels || "*")),
 				providerLabels: async () => ({

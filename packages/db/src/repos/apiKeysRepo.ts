@@ -19,6 +19,7 @@ import {
 	buildAllowedModelsSql,
 	type ModelChanges,
 	matchesAllowedModels,
+	matchesAnyModelName,
 	parseAllowedModels,
 } from "./allowedModels.ts"
 
@@ -387,6 +388,7 @@ export type ApiKeyVerdict =
 export async function validateApiKey(
 	key: string,
 	requestedModel: string | null = null,
+	modelNames: readonly string[] | null = null,
 ): Promise<ApiKeyVerdict> {
 	const db = await getAdapter()
 	let result: ApiKeyVerdict = false
@@ -487,7 +489,8 @@ export async function validateApiKey(
 		// Check allowed models
 		const allowedPatterns = parseAllowedModels(allowedModels)
 		if (requestedModel && allowedPatterns) {
-			const isAllowed = matchesAllowedModels(allowedPatterns, requestedModel)
+			const names = modelNames?.length ? modelNames : [requestedModel]
+			const isAllowed = matchesAnyModelName(allowedPatterns, names)
 
 			if (!isAllowed) {
 				result = "MODEL_NOT_ALLOWED"
