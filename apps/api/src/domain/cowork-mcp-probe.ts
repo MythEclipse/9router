@@ -35,10 +35,18 @@ export function requiresAuthStatus(status: number): boolean {
  * identifies the answer — taking the first `result` would read a notification as the tool list.
  */
 export function parseSseReply(body: string, id: number): unknown | null {
-	for (const line of body.split("\n")) {
+	let lineStart = 0
+	while (lineStart < body.length) {
+		const lineEnd = body.indexOf("\n", lineStart)
+		const end = lineEnd === -1 ? body.length : lineEnd
+		const line = body.slice(lineStart, end)
+		lineStart = lineEnd === -1 ? body.length : lineEnd + 1
+
 		if (!line.startsWith("data:")) continue
+		const payload = line.slice(5).trimStart()
+		if (!payload) continue
 		try {
-			const message = JSON.parse(line.replace(/^data:\s*/, "")) as { id?: number; result?: unknown }
+			const message = JSON.parse(payload) as { id?: number; result?: unknown }
 			if (message?.id === id && message.result) return message
 		} catch {
 			// A non-JSON `data:` line is not an error: servers emit keep-alives and comments.

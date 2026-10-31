@@ -214,8 +214,11 @@ export function collectJsonFrames(rawText, maxFrames = 1000) {
 	}
 
 	// Fallback: line-by-line scan
-	const lines = text.split("\n")
-	for (const line of lines) {
+	let lineStart = 0
+	while (lineStart < text.length) {
+		const lineEnd = text.indexOf("\n", lineStart)
+		const line = text.slice(lineStart, lineEnd === -1 ? text.length : lineEnd)
+		lineStart = lineEnd === -1 ? text.length : lineEnd + 1
 		const trimmed = line.trim()
 		if (!trimmed) continue
 

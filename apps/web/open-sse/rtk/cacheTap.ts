@@ -29,7 +29,8 @@ export function tapStreamForCache(
 	input: { body: unknown; model: string; provider: string },
 ): ReadableStream<Uint8Array> {
 	const decoder = new TextDecoder()
-	let captured = ""
+	const capturedChunks: string[] = []
+	let capturedLength = 0
 	let overflowed = false
 	let finished = false
 
@@ -40,25 +41,35 @@ export function tapStreamForCache(
 				controller.enqueue(chunk)
 				if (overflowed) return
 				try {
-					captured += decoder.decode(chunk, { stream: true })
-					if (captured.length > MAX_CAPTURE_CHARS) {
+					const decoded = decoder.decode(chunk, { stream: true })
+					capturedLength += decoded.length
+					if (capturedLength > MAX_CAPTURE_CHARS) {
 						overflowed = true
-						captured = ""
+						capturedChunks.length = 0
+						return
 					}
+					if (decoded) capturedChunks.push(decoded)
 				} catch {
 					overflowed = true
-					captured = ""
+					capturedChunks.length = 0
 				}
 			},
 			flush() {
 				if (overflowed || finished) return
 				finished = true
 				try {
-					captured += decoder.decode()
+					const decoded = decoder.decode()
+					capturedLength += decoded.length
+					if (capturedLength > MAX_CAPTURE_CHARS) return
+					if (decoded) capturedChunks.push(decoded)
 				} catch {
 					return
 				}
-				saveStreamToSemanticCache(input.body, `${input.provider}/${input.model}`, captured)
+				saveStreamToSemanticCache(
+					input.body,
+					`${input.provider}/${input.model}`,
+					capturedChunks.join(""),
+				)
 			},
 		}),
 	)
