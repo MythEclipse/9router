@@ -8,6 +8,7 @@ import { OpencodeTlsUnavailableError, opencodeTlsFetch } from "../services/openc
 import { normalizeResponsesInput } from "../translator/formats/responsesApi.ts"
 import { applyAgentHarness, loadAgentHarness } from "../utils/opencodeAgentHarness.ts"
 import { applyFingerprintTools } from "../utils/opencodeFingerprint.ts"
+import { composePreamble, environmentIdentity } from "../utils/opencodePreamble.ts"
 import { injectReasoningContent } from "../utils/reasoningContentInjector.ts"
 import { normalizeResponsesTools, sanitizeResponsesItems } from "../utils/responsesTools.ts"
 import { resolveSessionId } from "../utils/sessionManager.ts"
@@ -24,12 +25,15 @@ import { BaseExecutor } from "./base.ts"
 const OPENCODE_UA = "opencode/latest/2.1.4/cli"
 const OPENCODE_CLIENT = "cli"
 
-/** Per-process project id, sha1-shaped like the CLI's own install id. */
+// The CLI's project identity is one value per directory: it creates a project row
+// for the directory it runs in and reports that row's id, so the id is stable for
+// an install and changes only when the install moves. Mirroring that as
+// sha1("directory:<cwd>") keeps one identity across restarts - a random value per
+// boot would present every restart as a different project.
 let projectHashCache = ""
 function projectHash(): string {
 	if (!projectHashCache) {
-		const seed = crypto.randomBytes(32).toString("hex")
-		projectHashCache = crypto.createHash("sha1").update(seed).digest("hex")
+		projectHashCache = crypto.createHash("sha1").update(`directory:${process.cwd()}`).digest("hex")
 	}
 	return projectHashCache
 }
@@ -255,6 +259,19 @@ function baseModelId(model) {
 		.trim()
 }
 
+/**
+ * The display name the CLI states for a model.
+ *
+ * `# Your Model` reports `Big Pickle` for `big-pickle`, so the registry's name is
+ * what belongs in the preamble. An id the registry does not know is reported as
+ * itself rather than guessed at.
+ */
+function modelDisplayName(config, modelID) {
+	const models = (config as { models?: { id?: string; name?: string }[] })?.models
+	if (!Array.isArray(models)) return modelID
+	return models.find((entry) => entry?.id === modelID)?.name || modelID
+}
+
 // Muse Spark ids are the only family served by /inference/v1/responses; every
 // other model stays on /chat/completions.
 function isResponsesModel(model) {
@@ -370,6 +387,9 @@ export class OpenCodeExecutor extends BaseExecutor {
 		if (body && typeof body === "object" && body.reasoning_effort === "auto") {
 			delete body.reasoning_effort
 		}
+		// The captured harness names the model it was captured against; restate the
+		// per-request blocks so the system prompt agrees with the body.
+		const harness = this.requestHarness(model || body?.model)
 		if (isResponsesModel(model || body?.model) && body && typeof body === "object") {
 			// ponytail: chỉ model đã xác nhận auto-only; mở allowlist khi có bằng chứng.
 			if (
@@ -404,12 +424,34 @@ export class OpenCodeExecutor extends BaseExecutor {
 			// already supplied tools. ZCode/Claude Code requests normally have
 			// non-empty tool arrays; skipping cloaking here triggers 403 FreeTierError.
 			applyFingerprintTools(body, true)
-			applyAgentHarness(body, this.harness, { flat: true })
+			applyAgentHarness(body, harness, { flat: true })
 		} else if (body && typeof body === "object") {
 			applyFingerprintTools(body, false, { claude: isMessagesModel(model || body?.model) })
-			applyAgentHarness(body, this.harness)
+			applyAgentHarness(body, harness)
 		}
 		return injectReasoningContent({ provider: this.provider, model, body })
+	}
+
+	/**
+	 * The harness as this request must present it.
+	 *
+	 * The captured text carries the identity of the request it was captured from;
+	 * `composePreamble` restates the model, date and environment blocks so the
+	 * system prompt describes the model the body actually asks for. The tool
+	 * manifest is passed through: it does not vary per request.
+	 */
+	requestHarness(model) {
+		if (!this.harness?.preamble) return this.harness
+		const modelID = baseModelId(model) || "unknown"
+		return {
+			preamble: composePreamble(this.harness.preamble, {
+				...environmentIdentity(),
+				modelName: modelDisplayName(this.config, modelID),
+				modelID,
+				today: new Date(),
+			}),
+			tools: this.harness.tools,
+		}
 	}
 
 	async execute(args) {
