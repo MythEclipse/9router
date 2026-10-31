@@ -63,6 +63,35 @@ export async function handleSystemoneCore({ body, modelInfo, credentials, log, o
 		return createErrorResult(HTTP_STATUS.BAD_REQUEST, "Missing required field: questions")
 	}
 
+	// Normalize shorthand string questions (e.g. { q: "Is this correct?" } -> { q: { type: "noul", instructions: "Is this correct?" } })
+	let questions = body.questions
+	if (questions && typeof questions === "object" && !Array.isArray(questions)) {
+		let hasShorthand = false
+		for (const val of Object.values(questions)) {
+			if (typeof val === "string") {
+				hasShorthand = true
+				break
+			}
+		}
+		if (hasShorthand) {
+			const normalized: Record<string, unknown> = {}
+			for (const [key, val] of Object.entries(questions)) {
+				normalized[key] = typeof val === "string" ? { type: "noul", instructions: val } : val
+			}
+			questions = normalized
+		}
+	}
+
+	// Normalize shorthand state object (e.g. { prompt: "..." } or { text: "..." }) to string
+	let state = body.state
+	if (state && typeof state === "object" && !Array.isArray(state)) {
+		if (typeof (state as any).prompt === "string") {
+			state = (state as any).prompt
+		} else if (typeof (state as any).text === "string") {
+			state = (state as any).text
+		}
+	}
+
 	// noAuth free lanes carry accessToken "public" from the credential stub.
 	const token = credentials?.apiKey || credentials?.accessToken
 	const headers = {
@@ -73,7 +102,12 @@ export async function handleSystemoneCore({ body, modelInfo, credentials, log, o
 		...(OPENCODE_PROVIDERS.has(provider) ? { "x-opencode-session": generateSessionId() } : {}),
 	}
 	// Cloudflare validates the body model as a short selector (e.g. "clef-flash"), not the full id.
-	const requestBody = { ...body, model: getModelUpstreamId(provider, model) || model }
+	const requestBody = {
+		...body,
+		state,
+		questions,
+		model: getModelUpstreamId(provider, model) || model,
+	}
 
 	log?.debug?.("SYSTEMONE", `${provider.toUpperCase()} | ${model}`)
 

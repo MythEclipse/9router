@@ -87,4 +87,22 @@ describe("handleSystemoneCore request", () => {
 		const r = await call("opencode-zen", "jev-1.13", { apiKey: "k" })
 		expect(r.headers["x-opencode-session"]).toMatch(/^ses_/)
 	})
+
+	it("normalizes shorthand string questions and object state", async () => {
+		const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }))
+		vi.stubGlobal("fetch", fetchMock)
+		const result = await handleSystemoneCore({
+			body: {
+				state: { prompt: "Analyze this situation" },
+				questions: { q: "Is this correct?" },
+			},
+			modelInfo: { provider: "ollama-local", model: "clef-flash" },
+			credentials: { providerSpecificData: { baseUrl: "http://192.168.1.5:11434/" } },
+		})
+		expect(result.success).toBe(true)
+		const [, init] = fetchMock.mock.calls[0]
+		const body = JSON.parse(init.body)
+		expect(body.state).toBe("Analyze this situation")
+		expect(body.questions.q).toEqual({ type: "noul", instructions: "Is this correct?" })
+	})
 })

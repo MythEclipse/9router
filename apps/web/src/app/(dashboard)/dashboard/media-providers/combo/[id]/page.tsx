@@ -68,8 +68,13 @@ const EXAMPLE_BODIES = {
 	embedding: (n) => ({ model: n, input: "The quick brown fox jumps over the lazy dog" }),
 	systemone: (n) => ({
 		model: n,
-		state: { prompt: "Analyze this situation" },
-		questions: { q: "Is this correct?" },
+		state: "My payments have failed for three days and I am losing sales. Please help now.",
+		questions: {
+			is_urgent: {
+				type: "noul",
+				instructions: "Does this request require urgent attention?",
+			},
+		},
 	}),
 	stt: (n) => ({ model: n }),
 	video: (n) => ({ model: n, prompt: "A serene lake at sunrise with mist floating over the water" }),
