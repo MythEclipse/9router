@@ -32,6 +32,14 @@ export {
 	updateApiKey,
 	validateApiKey,
 } from "./repos/apiKeysRepo.ts"
+// Persistent prompt cache (the kv table, so a cache hit survives a restart)
+export {
+	dropCacheEntry,
+	dropCacheScope,
+	pruneCacheScope,
+	readCacheScope,
+	writeCacheEntry,
+} from "./repos/cacheRepo.ts"
 // Combos
 export {
 	createCombo,
@@ -83,7 +91,6 @@ export {
 	getProviderNodes,
 	updateProviderNode,
 } from "./repos/nodesRepo.ts"
-
 // Pricing
 export {
 	getPricing,
@@ -116,12 +123,20 @@ export {
 	isCloudEnabled,
 	updateSettings,
 } from "./repos/settingsRepo.ts"
+export type {
+	HourlySpendQuery,
+	HourlySpendRow,
+	LatencySample,
+	LatencySampleQuery,
+} from "./repos/usageRepo.ts"
 // Usage
 export {
 	appendRequestLog,
 	flushDayRollup,
 	getActiveRequests,
 	getChartData,
+	getHourlySpend,
+	getLatencySamples,
 	getRecentLogs,
 	getSparks,
 	getUsageHistory,

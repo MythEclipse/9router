@@ -3,7 +3,7 @@
 // pre-change safety backup in migrate.js: when the stored version is lower,
 // one lightweight DB backup is taken before applying schema changes. Forgetting
 // to bump only skips that backup - it does NOT break the additive auto-sync.
-export const SCHEMA_VERSION = 17
+export const SCHEMA_VERSION = 18
 
 export const PRAGMA_SQL = `
 PRAGMA journal_mode = WAL;
@@ -162,6 +162,17 @@ export const TABLES: SchemaTables = {
 			tokens: "TEXT",
 			meta: "TEXT",
 			requestId: "TEXT",
+			// Wall-clock cost of the request, measured at the one place that sees both ends
+			// of the stream. It used to live only in `requestDetails.data`, which is pruned,
+			// so every latency question was unanswerable a week later.
+			latencyMs: "INTEGER",
+			// Time to first token. NULL means "not a stream", not "unknown": a non-streaming
+			// answer has no first token to time, and averaging a zero into the percentile
+			// would report a stream that starts instantly.
+			ttftMs: "INTEGER",
+			// 1 when the answer came from the prompt cache, so a zero-cost row is
+			// distinguishable from a request that genuinely cost nothing.
+			cached: "INTEGER DEFAULT 0",
 		},
 		indexes: [
 			"CREATE INDEX IF NOT EXISTS idx_uh_ts ON usageHistory(timestamp DESC)",

@@ -7,6 +7,7 @@ import m002 from "./002-drop-budget-groups.ts"
 import m003 from "./003-drop-prd-docs.ts"
 import m004 from "./004-drop-prd-builder.ts"
 import m005 from "./005-api-key-endpoint-allowlist.ts"
+import m006 from "./006-usage-latency.ts"
 
 /** One entry of the versioned migration chain. */
 export interface Migration {
@@ -18,7 +19,7 @@ export interface Migration {
 	up(db: DbAdapter): void
 }
 
-export const MIGRATIONS: Migration[] = [m001, m002, m003, m004, m005].sort(
+export const MIGRATIONS: Migration[] = [m001, m002, m003, m004, m005, m006].sort(
 	(a, b) => a.version - b.version,
 )
 

@@ -47,6 +47,18 @@ export interface UsageEntry {
 	requestedModel?: string | null
 	/** Correlation id for the log row; see the dedupe note in saveRequestUsage. */
 	requestId?: string | number | null
+	/**
+	 * Wall-clock duration of the request in milliseconds.
+	 *
+	 * Absent means "not measured", which is stored as `NULL` and excluded from every
+	 * percentile. A caller that does not measure latency must not report `0` — a zero is a
+	 * measurement, and it would claim the request finished instantly.
+	 */
+	latencyMs?: number | null
+	/** Time to first token. Only a streamed answer has one. */
+	ttftMs?: number | null
+	/** True when the answer came from the prompt cache rather than an upstream call. */
+	cached?: boolean
 	[key: string]: unknown
 }
 
@@ -166,6 +178,18 @@ function scheduleStatsEvent(event: string, delayMs = 150): void {
 function getLocalDateKey(timestamp?: string | number | null): string {
 	const d = timestamp ? new Date(timestamp) : new Date()
 	return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+}
+
+/**
+ * A duration as it should be stored, or `NULL` when it was never measured.
+ *
+ * `0` is a real measurement (a cached answer takes no time), so it survives. Negative and
+ * non-finite values do not: they come from a clock that moved backwards or from a caller
+ * passing `NaN`, and either would drag a percentile below zero.
+ */
+function measuredOf(value: unknown): number | null {
+	if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return null
+	return Math.round(value)
 }
 
 function addToCounter(
@@ -782,7 +806,7 @@ export async function saveRequestUsage(
 			}
 
 			db.run(
-				`INSERT INTO usageHistory(timestamp, provider, model, connectionId, apiKey, endpoint, promptTokens, completionTokens, cost, status, tokens, meta, requestId) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				`INSERT INTO usageHistory(timestamp, provider, model, connectionId, apiKey, endpoint, promptTokens, completionTokens, cost, status, tokens, meta, requestId, latencyMs, ttftMs, cached) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 				[
 					entry.timestamp,
 					entry.provider || null,
@@ -797,6 +821,9 @@ export async function saveRequestUsage(
 					stringifyJson(tokens),
 					stringifyJson(entry.requestedModel ? { resolvedModel } : {}),
 					entry.requestId || null,
+					measuredOf(entry.latencyMs),
+					measuredOf(entry.ttftMs),
+					entry.cached === true ? 1 : 0,
 				],
 			)
 
@@ -2113,6 +2140,159 @@ export async function getRecentLogs(limit = 200) {
 		})
 	} catch (e) {
 		console.error("[usageRepo] getRecentLogs failed:", e instanceof Error ? e.message : e)
+		return []
+	}
+}
+
+/** One finished request's timing, as the latency report reads it. */
+export interface LatencySample {
+	readonly timestamp: string
+	readonly provider: string | null
+	readonly model: string | null
+	readonly connectionId: string | null
+	readonly apiKey: string | null
+	readonly latencyMs: number
+	/** `null` for a non-streamed answer, which has no first token to time. */
+	readonly ttftMs: number | null
+	readonly cached: boolean
+}
+
+export interface LatencySampleQuery {
+	/** ISO timestamp; rows older than this are not read. */
+	readonly since: string
+	/** Restrict to one key, as an API-key session must. */
+	readonly apiKey?: string | null
+	/** The key's model patterns; `"*"` means all. */
+	readonly allowedModels?: string
+	/** Safety valve for an install with a very busy window. */
+	readonly limit?: number
+}
+
+/**
+ * Timed requests in the window, oldest first.
+ *
+ * Rows without `latencyMs` are excluded in SQL rather than in the caller: they are the
+ * majority on an install that predates the column, and shipping them out to be filtered
+ * would move megabytes to answer a question about a percentile.
+ *
+ * The model filter is applied in JS because the patterns live in `apiKeysRepo` and are not
+ * expressible in SQL without re-implementing the matcher — which is exactly the duplication
+ * that makes an API-key session see another key's traffic.
+ */
+export async function getLatencySamples(query: LatencySampleQuery): Promise<LatencySample[]> {
+	try {
+		const db = await getAdapter()
+		const patterns = parseAllowedModels(query.allowedModels)
+		const where = ["timestamp >= ?", "latencyMs IS NOT NULL"]
+		const params: unknown[] = [query.since]
+		if (query.apiKey) {
+			where.push("apiKey = ?")
+			params.push(query.apiKey)
+		}
+		const limit = Math.max(1, Math.min(Math.trunc(query.limit ?? 50_000), 200_000))
+		const rows = db.all<DbRow>(
+			`SELECT timestamp, provider, model, connectionId, apiKey, latencyMs, ttftMs, cached
+			 FROM usageHistory
+			 WHERE ${where.join(" AND ")}
+			 ORDER BY id DESC
+			 LIMIT ?`,
+			[...params, limit],
+		)
+		return rows
+			.map((row) => sampleOfRow(row))
+			.filter((sample): sample is LatencySample => sample !== null)
+			.filter((sample) => matchesModelPatterns(patterns, sample.model ?? ""))
+			.reverse()
+	} catch (e) {
+		// An unreadable table answers "no measurements", which the report already renders as
+		// "not enough data". Failing the whole page for a panel would hide the rest of it.
+		console.error("[usageRepo] getLatencySamples failed:", e instanceof Error ? e.message : e)
+		return []
+	}
+}
+
+/** A stored row as a sample, or `null` when the timing is unusable. */
+function sampleOfRow(row: DbRow): LatencySample | null {
+	const latencyMs = Number(row.latencyMs)
+	if (!Number.isFinite(latencyMs) || latencyMs < 0) return null
+	const ttft = row.ttftMs === null || row.ttftMs === undefined ? null : Number(row.ttftMs)
+	return {
+		timestamp: String(row.timestamp ?? ""),
+		provider: row.provider ? String(row.provider) : null,
+		model: row.model ? String(row.model) : null,
+		connectionId: row.connectionId ? String(row.connectionId) : null,
+		apiKey: row.apiKey ? String(row.apiKey) : null,
+		latencyMs,
+		ttftMs: ttft !== null && Number.isFinite(ttft) && ttft >= 0 ? ttft : null,
+		cached: Number(row.cached ?? 0) === 1,
+	}
+}
+
+/** One hour of spend for one key (or for the whole install when `key` is `"*"`). */
+export interface HourlySpendRow {
+	readonly key: string
+	/** Local-time hour bucket, `YYYY-MM-DDTHH`. */
+	readonly hour: string
+	readonly cost: number
+}
+
+export interface HourlySpendQuery {
+	readonly since: string
+	/** Restrict to one key, as an API-key session must. */
+	readonly apiKey?: string | null
+	/** The key's model patterns; `"*"` means all. */
+	readonly allowedModels?: string
+}
+
+/**
+ * Spend per key per local hour, oldest first.
+ *
+ * Grouped in SQL because the alternative — one row per request over a month of traffic — is
+ * the whole table. `localtime` is deliberate: an "hour" in this report means the clock on the
+ * wall beside the operator, matching the day buckets `usageDaily` already uses. Grouping in
+ * UTC would put a 02:00 spike (local) in the previous day's last hour, which is precisely the
+ * hour an operator is not watching.
+ *
+ * The model scope is applied in JS for the same reason `getLatencySamples` does it: the
+ * pattern language lives in one place and is not re-implemented in SQL.
+ */
+export async function getHourlySpend(query: HourlySpendQuery): Promise<HourlySpendRow[]> {
+	try {
+		const db = await getAdapter()
+		const patterns = parseAllowedModels(query.allowedModels)
+		const where = ["timestamp >= ?", "status = 'ok'"]
+		const params: unknown[] = [query.since]
+		if (query.apiKey) {
+			where.push("apiKey = ?")
+			params.push(query.apiKey)
+		}
+		const rows = db.all<DbRow>(
+			`SELECT COALESCE(apiKey, '') AS bucketKey,
+			        strftime('%Y-%m-%dT%H', timestamp, 'localtime') AS hour,
+			        model AS model,
+			        COALESCE(cost, 0) AS cost
+			 FROM usageHistory
+			 WHERE ${where.join(" AND ")}
+			 ORDER BY id ASC`,
+			params,
+		)
+		const merged = new Map<string, HourlySpendRow>()
+		for (const row of rows) {
+			const model = row.model ? String(row.model) : ""
+			if (!matchesModelPatterns(patterns, model)) continue
+			const key = row.bucketKey ? String(row.bucketKey) : "*"
+			const hour = String(row.hour ?? "")
+			if (!hour) continue
+			const cost = Number(row.cost)
+			if (!Number.isFinite(cost) || cost <= 0) continue
+			const id = `${key}|${hour}`
+			const existing = merged.get(id)
+			if (existing) merged.set(id, { ...existing, cost: existing.cost + cost })
+			else merged.set(id, { key, hour, cost })
+		}
+		return [...merged.values()].sort((a, b) => a.hour.localeCompare(b.hour))
+	} catch (e) {
+		console.error("[usageRepo] getHourlySpend failed:", e instanceof Error ? e.message : e)
 		return []
 	}
 }
