@@ -4,6 +4,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { notFound, useParams, useRouter } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
+import { fetchTunnelPublicUrl } from "@/app/(dashboard)/dashboard/media-providers/[kind]/[id]/components/exampleShared"
 import { base64PngDataUrl } from "@/app/(dashboard)/dashboard/media-providers/[kind]/[id]/components/imagePreview"
 import { Button, Card, Input, ModelSelectModal, Toggle } from "@/shared/components"
 import ProviderIcon from "@/shared/components/ProviderIcon"
@@ -103,6 +104,13 @@ export default function ComboDetailPage() {
 	const [apiKey, setApiKey] = useState("")
 	const [connections, setConnections] = useState([])
 	const [modelAliases, setModelAliases] = useState({})
+	// Client origin, fixed at first paint — the curl snippet must show the host
+	// the reader actually reached, not a hardcoded localhost.
+	const [localEndpoint] = useState(() =>
+		typeof window === "undefined" ? "" : window.location.origin,
+	)
+	const [tunnelEndpoint, setTunnelEndpoint] = useState("")
+	const [useTunnel, setUseTunnel] = useState(false)
 
 	// Memoized on id, the only value it reads from the component scope, so the
 	// mount effect can list it as a dependency without re-running per render.
@@ -146,6 +154,12 @@ export default function ComboDetailPage() {
 		// Initial load runs in a microtask so the commit writes no state.
 		Promise.resolve().then(fetchAll)
 	}, [fetchAll])
+
+	useEffect(() => {
+		void fetchTunnelPublicUrl().then((url) => {
+			if (url) setTunnelEndpoint(url)
+		})
+	}, [])
 
 	const validateName = (v) => {
 		if (!v.trim()) {
@@ -328,10 +342,14 @@ export default function ComboDetailPage() {
 	const examplePath = EXAMPLE_PATHS[combo.kind]
 	const exampleBody =
 		combo.kind && EXAMPLE_BODIES[combo.kind] ? EXAMPLE_BODIES[combo.kind](combo.name) : null
+	const endpoint = useTunnel ? tunnelEndpoint : localEndpoint
+	const exampleUrl = endpoint ? `${endpoint}${examplePath}` : examplePath
+	const bearerToken = apiKey || "YOUR_KEY"
+	const authHeader = `-H "Authorization: Bearer ` + bearerToken + `"`
 	const curlExample = examplePath
 		? combo.kind === "stt"
-			? `curl -X POST http://localhost:20128${examplePath} \\\n  -H "Authorization: Bearer ${apiKey || "YOUR_KEY"}" \\\n  -F "file=@audio.mp3" \\\n  -F "model=${combo.name}"`
-			: `curl -X POST http://localhost:20128${examplePath} \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer ${apiKey || "YOUR_KEY"}" \\\n  -d '${JSON.stringify(exampleBody)}'`
+			? `curl -X POST ${exampleUrl} \\\n  ${authHeader} \\\n  -F "file=@audio.mp3" \\\n  -F "model=${combo.name}"`
+			: `curl -X POST ${exampleUrl} \\\n  -H "Content-Type: application/json" \\\n  ${authHeader} \\\n  -d '${JSON.stringify(exampleBody)}'`
 		: ""
 	const backHref = getListingHref(combo.kind)
 
@@ -434,6 +452,7 @@ export default function ComboDetailPage() {
 									</div>
 									<div className="flex items-center gap-0.5">
 										<button
+											type="button"
 											onClick={() => handleMove(idx, -1)}
 											disabled={idx === 0}
 											className={`p-1 rounded ${idx === 0 ? "text-text-muted/20" : "text-text-muted hover:text-primary hover:bg-black/5"}`}
@@ -442,6 +461,7 @@ export default function ComboDetailPage() {
 											<span className="material-symbols-outlined text-[16px]">arrow_upward</span>
 										</button>
 										<button
+											type="button"
 											onClick={() => handleMove(idx, 1)}
 											disabled={idx === providers.length - 1}
 											className={`p-1 rounded ${idx === providers.length - 1 ? "text-text-muted/20" : "text-text-muted hover:text-primary hover:bg-black/5"}`}
@@ -450,6 +470,7 @@ export default function ComboDetailPage() {
 											<span className="material-symbols-outlined text-[16px]">arrow_downward</span>
 										</button>
 										<button
+											type="button"
 											onClick={() => handleRemoveProvider(idx)}
 											className="p-1 rounded text-text-muted hover:text-red-500 hover:bg-red-500/10"
 											title="Remove"
@@ -469,14 +490,31 @@ export default function ComboDetailPage() {
 				<Card>
 					<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3">
 						<h2 className="text-lg font-semibold">Test Example</h2>
-						<Button
-							size="sm"
-							icon="play_arrow"
-							onClick={handleTest}
-							disabled={testing || providers.length === 0}
-						>
-							{testing ? "Running..." : "Run"}
-						</Button>
+						<div className="flex items-center gap-2">
+							{tunnelEndpoint && (
+								<button
+									type="button"
+									onClick={() => setUseTunnel((v) => !v)}
+									title={useTunnel ? "Using tunnel" : "Using local"}
+									className={`flex items-center gap-1 text-xs px-2 py-1.5 rounded-lg border shrink-0 transition-colors ${
+										useTunnel
+											? "border-primary/40 bg-primary/10 text-primary"
+											: "border-border text-text-muted hover:text-primary"
+									}`}
+								>
+									<span className="material-symbols-outlined text-[14px]">wifi_tethering</span>
+									Tunnel
+								</button>
+							)}
+							<Button
+								size="sm"
+								icon="play_arrow"
+								onClick={handleTest}
+								disabled={testing || providers.length === 0}
+							>
+								{testing ? "Running..." : "Run"}
+							</Button>
+						</div>
 					</div>
 					<pre className="text-xs font-mono bg-black/[0.03] dark:bg-white/[0.03] p-3 rounded-lg overflow-x-auto whitespace-pre-wrap break-all">
 						{curlExample}
