@@ -12,6 +12,33 @@ const fmt = (n) => {
 
 const money = (n) => "$" + (Number(n) || 0).toFixed(4)
 
+const MONTH_NAMES = [
+	"Jan",
+	"Feb",
+	"Mar",
+	"Apr",
+	"May",
+	"Jun",
+	"Jul",
+	"Aug",
+	"Sep",
+	"Oct",
+	"Nov",
+	"Dec",
+]
+
+/**
+ * `2026-10-29` -> `Oct 29`.
+ *
+ * Parsed from the text, not through `new Date`: an ISO date is UTC midnight, so
+ * a viewer behind UTC renders the previous day and two bars share a label.
+ */
+export function shortDate(iso: string): string {
+	const [, month, day] = String(iso).split("-")
+	const name = MONTH_NAMES[Number(month) - 1]
+	return name ? `${name} ${Number(day)}` : String(iso)
+}
+
 function Bars({ daily }) {
 	if (!daily || daily.length === 0) return null
 	const max = Math.max(...daily.map((d) => d.savedTokens), 1)
@@ -31,7 +58,7 @@ function Bars({ daily }) {
 			<div className="mt-1 flex gap-1.5">
 				{daily.map((d) => (
 					<div key={d.date} className="min-w-0 flex-1 text-center text-[10px] text-text-muted">
-						{d.date.slice(5)}
+						{shortDate(d.date)}
 					</div>
 				))}
 			</div>
@@ -76,7 +103,8 @@ export default function TokenSavingsTab({ period }) {
 		)
 	}
 
-	const rows = (data.models || []).filter((m) =>
+	const recordedModels = data.models || []
+	const rows = recordedModels.filter((m) =>
 		modelFilter ? m.model.toLowerCase().includes(modelFilter.toLowerCase()) : true,
 	)
 
@@ -124,16 +152,18 @@ export default function TokenSavingsTab({ period }) {
 			<div className="rounded-xl border border-border bg-surface-2 p-4">
 				<div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 					<div className="text-sm font-medium text-text-main">Per model</div>
-					<input
-						value={modelFilter}
-						onChange={(e) => setModelFilter(e.target.value)}
-						placeholder="Filter models..."
-						className="w-full rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-sm text-text-main placeholder:text-text-muted sm:w-56"
-					/>
+					{recordedModels.length > 0 && (
+						<input
+							value={modelFilter}
+							onChange={(e) => setModelFilter(e.target.value)}
+							placeholder="Filter models..."
+							className="w-full rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-sm text-text-main placeholder:text-text-muted sm:w-56"
+						/>
+					)}
 				</div>
 				{rows.length === 0 ? (
 					<div className="text-text-muted text-sm">
-						{(data.models || []).length === 0
+						{recordedModels.length === 0
 							? "No savings recorded in this period yet."
 							: "No models match your filter."}
 					</div>

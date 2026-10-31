@@ -20,6 +20,9 @@
 //    executor answered 400 "Gemini Web does not support OpenAI function tools".
 
 import { createHash } from "node:crypto"
+import type { ProxyOptions } from "../types.ts"
+import { formatProviderError } from "../utils/error.ts"
+import { proxyAwareFetch } from "../utils/proxyFetch.ts"
 import { BaseExecutor } from "./base.ts"
 import {
 	buildToolInstructions,
@@ -361,19 +364,39 @@ export function parseStreamReasoning(raw) {
 const SESSION_TTL_MS = 10 * 60 * 1000
 const sessionCache = new Map() // cookie -> { at, bl, expiresAt }
 
-async function fetchSessionParams(cookie, force = false) {
+/**
+ * A bare `fetch failed` names nothing actionable: blocked egress, dead DNS and a
+ * rejected cookie all read the same. `formatProviderError` appends undici's
+ * `err.cause.code`, which is the only part an operator can act on.
+ */
+function describeFetchFailure(err: unknown, model: string): string {
+	return err instanceof Error ? formatProviderError(err, "gemini-web", model, 0) : "unknown"
+}
+
+async function fetchSessionParams(
+	cookie: string,
+	force = false,
+	proxyOptions: ProxyOptions | null = null,
+) {
 	const hit = sessionCache.get(cookie)
 	const now = Date.now()
 	if (!force && hit && hit.expiresAt > now) return { at: hit.at, bl: hit.bl }
 
-	const res = await fetch(GEMINI_URL, {
-		headers: {
-			Cookie: cookie,
-			"User-Agent": GEMINI_USER_AGENT,
-			Accept: "text/html",
-			"Accept-Language": "en-US,en;q=0.9",
+	// A browser-session cookie is bound to the IP it was minted from, so this
+	// call has to leave through the connection's proxy - the host's own egress
+	// gets the session invalidated.
+	const res = await proxyAwareFetch(
+		GEMINI_URL,
+		{
+			headers: {
+				Cookie: cookie,
+				"User-Agent": GEMINI_USER_AGENT,
+				Accept: "text/html",
+				"Accept-Language": "en-US,en;q=0.9",
+			},
 		},
-	})
+		proxyOptions,
+	)
 	if (!res.ok) return null
 	const html = await res.text()
 	const m = html.match(/"SNlM0e":"([^"]+)"/) || html.match(/SNlM0e\\?":\\?"([^"\\]+)/)
@@ -416,18 +439,24 @@ function errorResponse(status, message) {
 }
 
 /**
- * Read the Bard stream to completion - or to the first parseable answer.
+ * Read the Bard stream to completion - or to its terminal frame.
  *
  * StreamGenerate is chunked and Google frequently never closes it: the probe
  * above showed a 186-byte handshake frame, then 45s of silence, then a byte,
  * with the connection staying open. `res.text()` waits for close and hangs
  * forever, which is why so many models "timed out" while the same request
- * succeeds minutes later. So we read incrementally and stop the moment the
- * accumulated buffer parses into a real answer, with two guard rails: 30s of
- * silence after the last byte, and a hard 150s ceiling (measured replies on this
- * box run 4-45s, but the same prompt has been observed at 108s).
+ * succeeds minutes later. So we read incrementally and stop at Google's own
+ * terminal `[["e",...` frame, with two guard rails: 30s of silence after the
+ * last byte, and a hard 150s ceiling (measured replies on this box run 4-45s,
+ * but the same prompt has been observed at 108s).
+ *
+ * Stopping at the first *parseable* frame is wrong: every mid-stream frame
+ * carries the answer so far, so that returns a half-written reply and cuts
+ * tool-call JSON in half, which then parses as "no call".
  */
-async function readGeminiStream(res, externalSignal) {
+const END_FRAME_RE = /\[\["e",\d+/
+
+export async function readGeminiStream(res: Response, externalSignal?: AbortSignal) {
 	if (!res.body) return ""
 	const reader = res.body.getReader()
 	const decoder = new TextDecoder()
@@ -450,10 +479,9 @@ async function readGeminiStream(res, externalSignal) {
 			lastData = Date.now()
 			gotFirst = true
 			buf += decoder.decode(r.value, { stream: true })
-			// Stop on the first frame that carries an actual answer. Partial frames
-			// do not parse (parseStreamResponse walks complete wrb.fr lines), so a
-			// successful parse here means the reply is complete enough to return.
-			if (parseStreamResponse(buf)) break
+			// Each mid-stream frame carries the answer so far, so a parse-based
+			// stop returns a half-written reply. Wait for the terminal frame.
+			if (END_FRAME_RE.test(buf)) break
 		}
 	} catch {
 		// Timeout/abort below: whatever accumulated is what we can use.
@@ -481,7 +509,7 @@ export class GeminiWebExecutor extends BaseExecutor {
 		}
 	}
 
-	async execute({ model, body, stream, credentials, signal, log }) {
+	async execute({ model, body, stream, credentials, signal, log, proxyOptions = null }) {
 		const bodyObj = body || {}
 		const rawCreds = credentials || {}
 		const cookie = normalizeGeminiCookieInput(rawCreds.apiKey || rawCreds.cookie || "")
@@ -499,12 +527,12 @@ export class GeminiWebExecutor extends BaseExecutor {
 
 		let session
 		try {
-			session = await fetchSessionParams(cookie)
+			session = await fetchSessionParams(cookie, false, proxyOptions)
 		} catch (err) {
 			return {
 				response: errorResponse(
 					502,
-					`Gemini session fetch failed: ${err instanceof Error ? err.message : "unknown"}`,
+					`Gemini session fetch failed: ${describeFetchFailure(err, modelId)}`,
 				),
 				url: GEMINI_URL,
 				headers: {},
@@ -587,21 +615,22 @@ export class GeminiWebExecutor extends BaseExecutor {
 			// it the server answers 400 immediately. It is bound to the cookie
 			// session, so it has to be fetched per request rather than cached.
 			if (session.at) form.set("at", session.at)
-			upstream = await fetch(`${STREAM_URL}?${params.toString()}`, {
-				method: "POST",
-				headers: {
-					...headers,
-					"Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+			upstream = await proxyAwareFetch(
+				`${STREAM_URL}?${params.toString()}`,
+				{
+					method: "POST",
+					headers: {
+						...headers,
+						"Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+					},
+					body: form.toString(),
+					signal: signal ?? undefined,
 				},
-				body: form.toString(),
-				signal: signal ?? undefined,
-			})
+				proxyOptions,
+			)
 		} catch (err) {
 			return {
-				response: errorResponse(
-					502,
-					`Gemini fetch failed: ${err instanceof Error ? err.message : "unknown"}`,
-				),
+				response: errorResponse(502, `Gemini fetch failed: ${describeFetchFailure(err, modelId)}`),
 				url: GEMINI_URL,
 				headers: {},
 				transformedBody: body,
@@ -652,19 +681,30 @@ export class GeminiWebExecutor extends BaseExecutor {
 			const base = { id, object: "chat.completion.chunk", created, model: modelId }
 			const readable = new ReadableStream({
 				start(controller) {
-					const push = (obj) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`))
-					if (reasoning)
-						push({ ...base, choices: [{ index: 0, delta: { reasoning_content: reasoning } }] })
-					if (content) push({ ...base, choices: [{ index: 0, delta: { content } }] })
+					// The finish reason is a separate argument because
+					// `emitToolCallChunks` emits its terminator as `chunkFn({}, "tool_calls")`:
+					// folding it into the delta would drop it and leave a client
+					// holding tool_calls with no terminator.
+					const push = (delta, finishReason?: string) =>
+						controller.enqueue(
+							encoder.encode(
+								`data: ${JSON.stringify({
+									...base,
+									choices: [{ index: 0, delta, ...(finishReason ? { finish_reason: finishReason } : {}) }],
+								})}\n\n`,
+							),
+						)
+					if (reasoning) push({ reasoning_content: reasoning })
+					if (content) push({ content })
 					let sentCalls = false
 					if (calls.length) {
 						sentCalls = emitToolCallChunks(
-							(delta) => push({ ...base, choices: [{ index: 0, delta }] }),
-							() => push({ ...base, choices: [{ index: 0, delta: { role: "assistant", content: "" } }] }),
+							(delta, finishReason) => push(delta, finishReason),
+							() => push({ role: "assistant", content: "" }),
 							calls,
 						)
 					}
-					if (!sentCalls) push({ ...base, choices: [{ index: 0, delta: {}, finish_reason: "stop" }] })
+					if (!sentCalls) push({}, "stop")
 					controller.enqueue(encoder.encode("data: [DONE]\n\n"))
 					controller.close()
 				},

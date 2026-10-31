@@ -26,6 +26,12 @@ import { createProxyPool } from "@/models"
  * said instead of a generic 500.
  */
 
+import {
+	CLOUDFLARE_WORKER_CODE,
+	DENO_RELAY_CODE,
+	VERCEL_RELAY_CODE,
+} from "@/lib/network/relayWorkers"
+
 const VERCEL_API = "https://api.vercel.com"
 const CLOUDFLARE_API = "https://api.cloudflare.com/client/v4"
 const DENO_API = "https://api.deno.com/v2"
@@ -45,51 +51,6 @@ async function providerError(res: Response, fallback: string): Promise<Error> {
 	return upstream(message)
 }
 
-const VERCEL_RELAY_CODE = `
-export const config = { runtime: "edge" };
-
-export default async function handler(req) {
-  const target = req.headers.get("x-relay-target");
-  const relayPath = req.headers.get("x-relay-path") || "/";
-  if (!target) {
-    return new Response(JSON.stringify({ error: "Missing x-relay-target header" }), {
-      status: 400,
-      headers: { "content-type": "application/json" },
-    });
-  }
-
-  const targetUrl = target.replace(/\\/$/, "") + relayPath;
-
-  const rawHeaders = {};
-  for (const [k, v] of req.headers.entries()) {
-    const lower = k.toLowerCase();
-    if (
-      lower === "x-relay-target" ||
-      lower === "x-relay-path" ||
-      lower === "host" ||
-      lower.startsWith("x-vercel-") ||
-      lower.startsWith("x-forwarded-") ||
-      lower === "x-real-ip"
-    ) {
-      continue;
-    }
-    rawHeaders[k] = v;
-  }
-
-  const response = await fetch(targetUrl, {
-    method: req.method,
-    headers: rawHeaders,
-    body: req.method !== "GET" && req.method !== "HEAD" ? req.body : undefined,
-    duplex: "half",
-  });
-
-  return new Response(response.body, {
-    status: response.status,
-    headers: response.headers,
-  });
-}
-`
-
 const vercel: RelayProviderDeps = {
 	start: async ({ token, projectName }) => {
 		const res = await fetch(`${VERCEL_API}/v13/deployments`, {
@@ -102,7 +63,13 @@ const vercel: RelayProviderDeps = {
 					{ file: "package.json", data: JSON.stringify({ name: projectName, version: "1.0.0" }) },
 					{
 						file: "vercel.json",
-						data: JSON.stringify({ rewrites: [{ source: "/(.*)", destination: "/api/relay" }] }),
+						data: JSON.stringify({
+							rewrites: [{ source: "/(.*)", destination: "/api/relay" }],
+							// Bun is selected by this key alone. "1.x" tracks the 1.3 line this
+							// repo builds and runs on; "1.4.x" is Bun's Zig-to-Rust rewrite and
+							// is not drop-in compatible, so it is not chosen here.
+							bunVersion: "1.x",
+						}),
 					},
 				],
 				projectSettings: { framework: null },
@@ -152,50 +119,6 @@ const vercel: RelayProviderDeps = {
 		return { state: body.readyState ?? null, url: body.url ?? null }
 	},
 }
-
-const CLOUDFLARE_WORKER_CODE = `
-export default {
-  async fetch(request, env, ctx) {
-    const target = request.headers.get("x-relay-target");
-    const relayPath = request.headers.get("x-relay-path") || "/";
-
-    if (!target) {
-      return new Response(JSON.stringify({ error: "Missing x-relay-target header" }), {
-        status: 400,
-        headers: { "content-type": "application/json" },
-      });
-    }
-
-    const targetUrl = target.replace(/\\/$/, "") + relayPath;
-    const newRequestInit = {
-      method: request.method,
-      headers: new Headers(request.headers),
-    };
-
-    if (request.method !== "GET" && request.method !== "HEAD") {
-      newRequestInit.body = request.body;
-      newRequestInit.duplex = "half";
-    }
-
-    newRequestInit.headers.delete("x-relay-target");
-    newRequestInit.headers.delete("x-relay-path");
-    newRequestInit.headers.delete("host");
-
-    try {
-      const response = await fetch(targetUrl, newRequestInit);
-      return new Response(response.body, {
-        status: response.status,
-        headers: response.headers,
-      });
-    } catch (error) {
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: 502,
-        headers: { "content-type": "application/json" },
-      });
-    }
-  },
-};
-`
 
 /**
  * A Cloudflare deploy is already one answer.
@@ -270,47 +193,6 @@ const cloudflare: RelayProviderDeps = {
 	// Unreachable: `start` answers READY, so the use-case never polls.
 	poll: async () => ({ state: "READY", url: null }),
 }
-
-const DENO_RELAY_CODE = `Deno.serve(async (request) => {
-  const target = request.headers.get("x-relay-target");
-  const relayPath = request.headers.get("x-relay-path") || "/";
-
-  if (!target) {
-    return new Response(JSON.stringify({ error: "Missing x-relay-target header" }), {
-      status: 400,
-      headers: { "content-type": "application/json" },
-    });
-  }
-
-  const targetUrl = target.replace(/\\/$/, "") + relayPath;
-  const newHeaders = new Headers(request.headers);
-  newHeaders.delete("x-relay-target");
-  newHeaders.delete("x-relay-path");
-  newHeaders.delete("host");
-
-  const init = {
-    method: request.method,
-    headers: newHeaders,
-  };
-
-  if (request.method !== "GET" && request.method !== "HEAD") {
-    init.body = request.body;
-    init.duplex = "half";
-  }
-
-  try {
-    const response = await fetch(targetUrl, init);
-    return new Response(response.body, {
-      status: response.status,
-      headers: response.headers,
-    });
-  } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 502,
-      headers: { "content-type": "application/json" },
-    });
-  }
-});`
 
 /**
  * Deno Deploy v2 splits the work: an app is created, a revision is deployed into it, and

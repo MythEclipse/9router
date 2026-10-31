@@ -15,6 +15,11 @@
 
 import { createHash } from "node:crypto"
 
+import { RELAY_REQUEST_DROP_HEADERS, RELAY_RESPONSE_DROP_HEADERS } from "./relayWorkers"
+
+const REQUEST_DROP = JSON.stringify(RELAY_REQUEST_DROP_HEADERS)
+const RESPONSE_DROP = JSON.stringify(RELAY_RESPONSE_DROP_HEADERS)
+
 export const NETLIFY_API = "https://api.netlify.com/api/v1"
 export const NETLIFY_FUNCTION_NAME = "relay"
 export const NETLIFY_FUNCTION_PATH = "/.netlify/functions/relay"
@@ -27,33 +32,33 @@ export const NETLIFY_FUNCTION_PATH = "/.netlify/functions/relay"
 // Response shape mirrors the Vercel/Cloudflare/Deno relays: relay headers
 // stripped, status/body passed through.
 export const NETLIFY_RELAY_FUNCTION_CODE = `exports.handler = async (event) => {
+  const DROP_REQUEST = ${REQUEST_DROP};
+  const DROP_RESPONSE = ${RESPONSE_DROP};
+  const TARGET_PREFIX = "https://";
+
+  const json = (statusCode, error) => ({
+    statusCode,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ error }),
+  });
+
   const headers = {};
-  for (const [k, v] of Object.entries(event.headers || {})) {
-    headers[k.toLowerCase()] = v;
-  }
+  for (const [k, v] of Object.entries(event.headers || {})) headers[k.toLowerCase()] = v;
 
   const target = headers["x-relay-target"];
   const relayPath = headers["x-relay-path"] || "/";
 
-  if (!target) {
-    return {
-      statusCode: 400,
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ error: "Missing x-relay-target header" }),
-    };
-  }
+  if (!target) return json(400, "Missing x-relay-target header");
+  if (!target.startsWith(TARGET_PREFIX)) return json(400, "x-relay-target must be an https origin");
 
-  const targetUrl = target.replace(/\\/$/, "") + relayPath;
-  const forwardHeaders = { ...event.headers };
-  for (const k of Object.keys(forwardHeaders)) {
-    const lower = k.toLowerCase();
-    if (lower === "x-relay-target" || lower === "x-relay-path" || lower === "host") {
-      delete forwardHeaders[k];
-    }
+  const origin = target.endsWith("/") ? target.slice(0, -1) : target;
+  const forwardHeaders = {};
+  for (const [k, v] of Object.entries(event.headers || {})) {
+    if (!DROP_REQUEST.includes(k.toLowerCase())) forwardHeaders[k] = v;
   }
 
   try {
-    const upstream = await fetch(targetUrl, {
+    const upstream = await fetch(origin + relayPath, {
       method: event.httpMethod,
       headers: forwardHeaders,
       body: event.httpMethod !== "GET" && event.httpMethod !== "HEAD" && event.body
@@ -68,7 +73,7 @@ export const NETLIFY_RELAY_FUNCTION_CODE = `exports.handler = async (event) => {
     // Tradeoff vs the other relays: SSE arrives buffered, stays valid SSE.
     const responseHeaders = {};
     upstream.headers.forEach((value, key) => {
-      responseHeaders[key] = value;
+      if (!DROP_RESPONSE.includes(key.toLowerCase())) responseHeaders[key] = value;
     });
     const contentType = upstream.headers.get("content-type") || "";
     const isText = new RegExp("^(text/|[^;]*json|[^;]*event-stream|[^;]*javascript|[^;]*xml|[^;]*urlencoded)", "i").test(contentType);
@@ -83,11 +88,7 @@ export const NETLIFY_RELAY_FUNCTION_CODE = `exports.handler = async (event) => {
       isBase64Encoded: !isText,
     };
   } catch (error) {
-    return {
-      statusCode: 502,
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ error: error.message || "Relay fetch failed" }),
-    };
+    return json(502, (error && error.message) || "Relay fetch failed");
   }
 };
 `
