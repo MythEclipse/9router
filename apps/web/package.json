@@ -1,6 +1,6 @@
 {
   "name": "9router-web",
-  "version": "7.0.2",
+  "version": "8.0.0",
   "description": "9Router web dashboard + gateway host",
   "private": true,
   "type": "module",
