@@ -355,6 +355,22 @@ function normalizeOpencodeReasoning(model, body) {
 	delete body.reasoning_effort
 }
 
+/**
+ * The credential this lane presents.
+ *
+ * `public` is the anonymous identity: one allowance shared by every caller that
+ * sends it, which is why it reads as exhausted for a client that has never used
+ * the tier at all. A connection carrying a key or a Console access token speaks
+ * for that account instead - the same thing the CLI sends after `opencode auth`,
+ * and the only identity whose free allowance is actually its own.
+ */
+function authorizationOf(credentials) {
+	// Same resolution the other noAuth lanes use: a real key wins, the credential
+	// stub's accessToken (which is the literal "public") is next.
+	const token = String(credentials?.apiKey || credentials?.accessToken || "").trim()
+	return `Bearer ${token || "public"}`
+}
+
 export class OpenCodeExecutor extends BaseExecutor {
 	harness: { preamble: string; tools: unknown[] } | null = null
 
@@ -504,7 +520,7 @@ export class OpenCodeExecutor extends BaseExecutor {
 		// Match the fetch-backed OpenCode route's session-affinity headers.
 		const headers = {
 			"Content-Type": "application/json",
-			Authorization: "Bearer public",
+			Authorization: authorizationOf(credentials),
 			"User-Agent": isOpencodeDownstream ? downstreamUa : OPENCODE_UA,
 			"x-opencode-client": lower["x-opencode-client"] || OPENCODE_CLIENT,
 			"x-opencode-session": session,

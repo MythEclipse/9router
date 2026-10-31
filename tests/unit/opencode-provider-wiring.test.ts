@@ -51,4 +51,21 @@ describe("opencode provider wiring", () => {
 		expect(headers["Authorization"]).toBe("Bearer public")
 		expect(headers["x-opencode-session"]).toMatch(/^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/)
 	})
+
+	// `public` is one anonymous allowance shared by every caller, so a connection
+	// that has its own credential has to be able to speak for it.
+	it("presents a configured credential instead of the anonymous identity", () => {
+		const url = "https://opencode.ai/inference/openai/v1/chat/completions"
+
+		expect(opencode.buildHeaders({ apiKey: "console-token" }, true, url).Authorization).toBe(
+			"Bearer console-token",
+		)
+		expect(opencode.buildHeaders({ accessToken: "oauth-token" }, true, url).Authorization).toBe(
+			"Bearer oauth-token",
+		)
+		// The noAuth stub passes "public" through accessToken; it must stay anonymous.
+		expect(opencode.buildHeaders({ accessToken: "public" }, true, url).Authorization).toBe(
+			"Bearer public",
+		)
+	})
 })
