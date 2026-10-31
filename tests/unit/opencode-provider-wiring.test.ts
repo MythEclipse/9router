@@ -19,7 +19,7 @@ describe("opencode provider wiring", () => {
 	it("exposes the free models on the opencode lane", async () => {
 		// Models are keyed by alias in PROVIDER_MODELS, not on the transport map.
 		const { PROVIDER_MODELS } = await import("../../apps/web/open-sse/config/providerModels.js")
-		const models = (PROVIDER_MODELS as unknown as Record<string, Array<{ id: string }>>).oc1
+		const models = (PROVIDER_MODELS as unknown as Record<string, Array<{ id: string }>>).oc
 		expect(Array.isArray(models)).toBe(true)
 		expect(models.length).toBeGreaterThan(0)
 		expect(models.some((m) => m.id === "big-pickle")).toBe(true)

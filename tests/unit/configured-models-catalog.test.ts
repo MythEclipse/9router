@@ -117,9 +117,11 @@ describe("configured public model catalogs", () => {
 		})
 		const models = await buildModelsList(["llm"])
 		expect(models.some((m) => m.id === "curated/chosen")).toBe(false)
-		expect(models.some((m) => m.id === "oc1/union-alpha")).toBe(true)
-		expect(models.some((m) => m.id === "oc1/beam-free")).toBe(true)
-		expect(models.some((m) => m.id === "oc1/big-pickle")).toBe(true)
+		expect(models.some((m) => m.id === "oc/union-alpha")).toBe(true)
+		expect(models.some((m) => m.id === "oc/beam-free")).toBe(true)
+		expect(models.some((m) => m.id === "oc/big-pickle")).toBe(true)
+		// `oc` is the primary alias again; the `oc1` spelling only has to keep routing.
+		expect(models.some((m) => m.id.startsWith("oc1/"))).toBe(false)
 		// The CLI-backed oc2 lane was removed; only the HTTP opencode lane remains.
 		expect(models.some((m) => m.id.startsWith("oc2/"))).toBe(false)
 	})

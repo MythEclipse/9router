@@ -26,7 +26,7 @@ describe("OpenCode Free Muse Spark thinking", () => {
 		// The -contributor-free Muse ids were retired upstream; the registry no
 		// longer lists them. Capability and routing tables still describe the
 		// family, which is what the rest of this test pins.
-		expect(PROVIDER_MODELS.oc1?.some((model) => model.id === MODEL)).toBe(false)
+		expect(PROVIDER_MODELS.oc?.some((model) => model.id === MODEL)).toBe(false)
 		for (const m of [MODEL, "muse-spark-1.3", "muse-spark-1.4", "muse-spark-2.0"]) {
 			expect(getCapabilitiesForModel(PROVIDER, m)).toMatchObject({
 				reasoning: true,

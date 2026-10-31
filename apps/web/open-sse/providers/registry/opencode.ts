@@ -2,9 +2,9 @@ const Opencode = {
 	id: "opencode",
 	priority: 40,
 	hasFree: true,
-	alias: "oc1",
-	uiAlias: "oc1",
-	aliases: ["oc"],
+	alias: "oc",
+	uiAlias: "oc",
+	aliases: ["oc1"],
 	display: {
 		name: "OpenCode Free",
 		icon: "terminal",

@@ -47,7 +47,7 @@ describe("opencode Test button", () => {
 		expect(pingMock).toHaveBeenCalledOnce()
 		const [model, kind, baseUrl] = pingMock.mock.calls[0]
 		// Routed through the alias the chat route resolves, as an llm call.
-		expect(String(model)).toMatch(/^oc1\//)
+		expect(String(model)).toMatch(/^oc\//)
 		expect(kind).toBe("llm")
 		expect(String(baseUrl)).toMatch(/^http:\/\/127\.0\.0\.1:/)
 	})
