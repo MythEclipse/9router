@@ -6,6 +6,8 @@
 // and parsing the model's JSON answer blocks back into standard tool_calls
 // deltas, so downstream CLI tools and agents work as if the support were native.
 
+import { parseDeepSeekToolCalls } from "../translator/deepseekWebTools.ts"
+
 const TOOL_CALL_MARKER = "<<TOOL_CALL>>"
 const TOOL_RESULT_MARKER = "<<TOOL_RESULT>>"
 
@@ -194,6 +196,44 @@ export function parseToolCallReply(text) {
 	if (answerTag) content = answerTag[1].trim()
 
 	return { content, calls }
+}
+
+/** The call's arguments as the object `emitToolCallChunks` and the response
+ * builder expect; a string that is not JSON is an empty call, not a crash. */
+function argumentsObject(raw) {
+	if (raw && typeof raw === "object" && !Array.isArray(raw)) return raw
+	try {
+		const parsed = JSON.parse(String(raw ?? "{}"))
+		return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {}
+	} catch {
+		return {}
+	}
+}
+
+/**
+ * Classify a completed tool-mode reply into `{ content, calls }`.
+ *
+ * The prompt asks for the `<<TOOL_CALL>>` marker, but DeepSeek frequently
+ * ignores it and answers in its own native dialect instead — most often
+ * `<｜｜DSML｜｜ invoke name="…">` with sloppy closers, which no JSON extractor can
+ * read. Parsed only by the marker parser, such a reply reaches the client as
+ * prose with the markup intact and the turn stalls with no call at all, so the
+ * requested contract is tried first and the native parser second.
+ */
+export function parseToolModeReply(text, requestedTools) {
+	const requested = parseToolCallReply(text)
+	if (requested.calls.length > 0) return requested
+
+	const native = parseDeepSeekToolCalls(text, "call", requestedTools)
+	if (!native.toolCalls?.length) return requested
+
+	return {
+		content: native.content,
+		calls: native.toolCalls.map((call) => ({
+			name: call.function.name,
+			arguments: argumentsObject(call.function.arguments),
+		})),
+	}
 }
 
 export function generateToolCallId() {

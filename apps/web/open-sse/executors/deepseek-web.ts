@@ -6,7 +6,7 @@ import {
 	buildToolSystemPrompt,
 	emitToolCallChunks,
 	hasTools,
-	parseToolCallReply,
+	parseToolModeReply,
 	renderSpecialMessages,
 } from "./deepseekWebToolBridge.ts"
 
@@ -869,7 +869,7 @@ export class DeepSeekWebExecutor extends BaseExecutor {
 					// call into OpenAI tool_calls deltas (RAG web backend only speaks
 					// text, so calls can only be classified once the answer completes).
 					const { content, reasoningContent } = await collectSSEContent(resp.body, clientModel)
-					const parsed = parseToolCallReply(content)
+					const parsed = parseToolModeReply(content, bodyObj.tools)
 					await cleanupFn()
 
 					const encoder = new TextEncoder()
@@ -943,7 +943,7 @@ export class DeepSeekWebExecutor extends BaseExecutor {
 			await cleanupFn()
 
 			if (toolMode) {
-				const parsed = parseToolCallReply(content)
+				const parsed = parseToolModeReply(content, bodyObj.tools)
 				if (parsed.calls.length > 0) {
 					return {
 						response: new Response(
