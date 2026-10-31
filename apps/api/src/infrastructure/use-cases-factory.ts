@@ -11,6 +11,7 @@
 
 import { randomUUID } from "node:crypto"
 import { CUSTOM_PLUGIN_KEYS } from "@9router/db/shared/pluginKeys"
+import { makeAdmissionGate } from "../application/batches/admission.ts"
 import type { ComboPresetPort, OverrideStore } from "../application/dependencies.ts"
 import type { PluginCache } from "../application/plugins/manage-plugins.ts"
 import type { ClientListingRegistry } from "../application/providers/list-client-connections.ts"
@@ -32,6 +33,7 @@ import type { CacheEntry, FreeModel, KiloModel } from "../domain/free-model-cach
 import { normalizeKiroExternalIdpAuth } from "../domain/kiro-external-idp.ts"
 import type { CatalogueFilters } from "../domain/model-catalogue.ts"
 import type { ProbeTarget } from "../domain/model-probe.ts"
+import { batchFiles, batchStore } from "./batches/batch-store.ts"
 import { createChangelogSourceFromDisk } from "./changelog-source.ts"
 import { createComboRotationPort } from "./combo-rotation-port.ts"
 import { createDb, resolveDataDir } from "./db/client.ts"
@@ -48,11 +50,13 @@ import {
 	matchesAllowedModels,
 } from "./db/repositories/api-key-dashboard-repository.ts"
 import { createApiKeyRepository } from "./db/repositories/api-key-repository.ts"
+import { budgetPoolStore } from "./db/repositories/budget-pool-repository.ts"
 import {
 	createComboRepository,
 	createStudioTargetRepository,
 } from "./db/repositories/combo-repository.ts"
 import { createComboStrategyRepository } from "./db/repositories/combo-strategy-repository.ts"
+import { configExportSources } from "./db/repositories/config-export-repository.ts"
 import { createErrorLogRepository } from "./db/repositories/error-log-repository.ts"
 import { aggregatesOf as keyUsageAggregates } from "./db/repositories/key-usage-repository.ts"
 import {
@@ -79,13 +83,16 @@ import {
 	leaderboardRows as usageLeaderboardRows,
 } from "./db/repositories/usage-panel-repository.ts"
 import { createUsageReportPort } from "./db/repositories/usage-report-repository.ts"
+import { fileStore } from "./files/file-store.ts"
 import {
 	type CatalogueHost,
 	createCatalogueSyncPort,
 	createModelCataloguePort,
 	createModelProbePort,
 } from "./model-catalogue-port.ts"
+import { alertPorts } from "./notifications/alert-ports.ts"
 import { createPxpipePort, createPxpipeSettings } from "./pxpipe-port.ts"
+import { replayPorts } from "./requests/replay-ports.ts"
 import { required as takeRequired } from "./requiredPort.ts"
 import {
 	createDashboardJobEnvironment,
@@ -128,6 +135,7 @@ export interface UseCaseOptions {
 	readonly headroom?: import("../application/headroom/manage-headroom.ts").HeadroomDeps
 	readonly ttsVoices?: import("../application/tts/tts-voices.ts").TtsVoiceDeps
 	readonly keyUsage?: import("../application/usage/key-usage-report.ts").KeyUsageDeps
+	readonly costCeiling?: import("../application/usage/cost-ceiling.ts").CeilingPorts
 	readonly usagePanels?: import("../application/usage/usage-panels.ts").UsagePanelDeps
 	readonly connectionUsage?: import("../application/usage/read-connection-usage.ts").ConnectionUsageDeps
 	/** The credentials a provider's own tool leaves on this machine, supplied by `apps/web`. */
@@ -373,6 +381,11 @@ export function createUseCases(
 	const connectionHost = options.connectionHost ?? unavailableConnectionHost()
 	const catalogue = createModelCataloguePort(catalogueHost)
 
+	// One gate per process: the bound describes this event loop's outbound budget, so a second
+	// gate would only measure half the traffic and enforce nothing.
+	const admissionLimits = { concurrency: 8, queueCap: 32 }
+	const admissionGate = makeAdmissionGate(admissionLimits)
+
 	const useCases = buildUseCases({
 		apiKeys: createApiKeyRepository(db),
 		dashboardApiKeys: makeApiKeyManagementPort(options.apiKeyStore ?? unavailableApiKeyStore()),
@@ -475,12 +488,24 @@ export function createUseCases(
 		// rules come from the host, because they read the dashboard's auth payload and its
 		// static provider catalogue.
 		keyUsage: { aggregatesOf: keyUsageAggregates, ...required(options, "keyUsage") },
+		costCeiling: required(options, "costCeiling"),
+		fileStore: fileStore(),
+		batchStore: batchStore(),
+		batchFiles: batchFiles(),
+		admissionLimits,
+		admissionGate,
 		usagePanels: {
 			errorRows: usageErrorRows,
 			leaderboardRows: usageLeaderboardRows,
 			...required(options, "usagePanels"),
 		},
 		connectionUsage: required(options, "connectionUsage"),
+		// The three collections are read from the shared database, so the factory supplies them
+		// rather than asking the host for a shape it would only forward.
+		configExportSources: configExportSources(),
+		budgetPoolStore: budgetPoolStore(),
+		alertPorts: alertPorts(),
+		replayPorts: replayPorts(),
 		credentialImport: options.credentialImport ?? {},
 		createProviderConnection: required(options, "createProviderConnection"),
 		localCredentials: options.localCredentials ?? {},

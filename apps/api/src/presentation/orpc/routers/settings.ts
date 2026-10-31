@@ -48,6 +48,14 @@ export const settingsRouter = {
 	/** Every setting, minus the secrets. */
 	read: authed.handler(async ({ context }) => context.useCases.settings.read()),
 
+	/**
+	 * The routing configuration as a document a human reviews in a diff.
+	 *
+	 * Credentials are replaced inside the domain rule (`domain/config-export.ts`), so the
+	 * transport cannot forget to strip one — every export passes through that function.
+	 */
+	exportConfig: authed.handler(async ({ context }) => context.useCases.configExport.export()),
+
 	/** Merge a change into the settings row. `PUT` and `PATCH` are the same operation. */
 	write: authed
 		.input(SettingsBody)

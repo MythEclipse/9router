@@ -43,6 +43,79 @@ export const usageRouter = {
 			context.useCases.usageReports.sparks(input?.period, usageScopeOf(context.session)),
 		),
 
+	/**
+	 * What the current daily rate projects for the period, and when a cap runs out.
+	 *
+	 * `cap` is optional because projecting spend and projecting exhaustion are two questions:
+	 * the overview card asks the first, the key table asks the second. A cap that is absent is
+	 * passed as `null`, never as `0` — `0` is a cap that is already spent, which would report
+	 * every key as exhausted the moment the caller forgot the parameter.
+	 */
+	forecast: authed
+		.input(
+			z.object({ period: z.string().optional(), cap: z.number().positive().optional() }).optional(),
+		)
+		.handler(async ({ input, context }) =>
+			context.useCases.spendForecast.forecast(
+				input?.period,
+				usageScopeOf(context.session),
+				input?.cap ?? null,
+			),
+		),
+
+	/** Cost per request and per million tokens, per model: what it costs to *run*, not to have run. */
+	modelComparison: authed
+		.input(PeriodInput)
+		.handler(async ({ input, context }) =>
+			context.useCases.modelCost.comparison(input?.period, usageScopeOf(context.session)),
+		),
+
+	/** Shared caps across several API keys. Replaces the whole list on write. */
+	pools: {
+		list: authed.handler(async ({ context }) => context.useCases.budgetPools.list()),
+		save: authed
+			.input(z.object({ pools: z.array(z.unknown()) }))
+			.handler(async ({ input, context }) => context.useCases.budgetPools.save(input)),
+	},
+
+	/** The Prometheus scrape, under the same scope rules as every other usage read. */
+	metrics: authed
+		.input(PeriodInput)
+		.handler(async ({ input, context }) =>
+			context.useCases.metrics.exposition(input?.period, usageScopeOf(context.session)),
+		),
+
+	/**
+	 * Preflight: would this request fit under the key's spending ceiling?
+	 *
+	 * Advisory, and deliberately so: the gateway cannot price a request it has not received
+	 * tokens for. A client that asks first can shrink its own request instead of collecting a
+	 * refusal halfway through a stream.
+	 */
+	ceiling: authed
+		.input(
+			z.object({
+				keyId: z.string().min(1),
+				provider: z.string().min(1),
+				model: z.string().min(1),
+				promptTokens: z.number().nullish(),
+				completionTokens: z.number().nullish(),
+				cachedTokens: z.number().nullish(),
+			}),
+		)
+		.handler(async ({ input, context }) =>
+			context.useCases.costCeiling.check({
+				keyId: input.keyId,
+				provider: input.provider,
+				model: input.model,
+				estimate: {
+					promptTokens: input.promptTokens,
+					completionTokens: input.completionTokens,
+					cachedTokens: input.cachedTokens,
+				},
+			}),
+		),
+
 	logs: authed.handler(async ({ context }) => context.useCases.usageReports.logs()),
 
 	history: authed

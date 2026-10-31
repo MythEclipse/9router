@@ -43,6 +43,10 @@ const PUBLIC_API_PATHS = [
 	// is checked inside the route (password session only).
 	"/api/theme",
 	"/api/settings/require-login",
+	// The scrape authenticates itself: a dashboard session, or an API key bearer, and 401
+	// otherwise. It has to be reachable without a cookie because Prometheus has none, and this
+	// guard runs before the route handler that reads the key.
+	"/api/metrics",
 ]
 
 // Public top-level prefixes (LLM API endpoints with their own API key auth).

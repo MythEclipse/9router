@@ -5,7 +5,9 @@
  * database, a cache, or a framework — which is what makes them testable with
  * plain fakes and keeps the composition root the single wiring point.
  */
+
 import type { IApiKeyRepository } from "../domain/api-key.ts"
+import type { GateLimits } from "../domain/backpressure.ts"
 import type { CacheEntry, FreeModel, KiloModel } from "../domain/free-model-cache.ts"
 import type { ProbeTarget } from "../domain/model-probe.ts"
 import type { PricingResetTarget, PricingUpdate } from "../domain/pricing.ts"
@@ -13,7 +15,9 @@ import type { ProviderOverride } from "../domain/provider-override.ts"
 import type { BulkEditPort } from "./api-keys/bulk-edit-api-keys.ts"
 import type { ApiKeyManagementPort } from "./api-keys/manage-api-keys-dashboard.ts"
 import type { SingleKeyAuditPort, SingleKeyPort } from "./api-keys/manage-single-key.ts"
+import type { BatchFiles, BatchStore } from "./batches/batches.ts"
 import type { ChangelogSource } from "./changelog.ts"
+import type { FileStore } from "./files/files.ts"
 import type {
 	AllowedModelReconciler,
 	CatalogueSyncPort,
@@ -28,6 +32,7 @@ import type {
 	ProviderNodePort,
 	StudioModelPort,
 } from "./models/ports.ts"
+import type { AlertPorts } from "./notifications/dispatch-alerts.ts"
 import type { BulkImportDeps } from "./oauth/import-credentials.ts"
 import type { PluginCache, PluginCatalogue, PluginSettingsPort } from "./plugins/manage-plugins.ts"
 import type {
@@ -39,12 +44,16 @@ import type {
 } from "./providers/ports.ts"
 import type { DeployDeps } from "./proxy-pools/deploy-relay.ts"
 import type { ImportJobDeps } from "./proxy-pools/import-proxy-pools.ts"
+import type { ReplayPorts } from "./requests/replay.ts"
+import type { ConfigExportSources } from "./settings/config-export.ts"
 import type {
 	TailscaleCheckDeps,
 	TailscaleInstallDeps,
 	TunnelProbeDeps,
 	TunnelToggleDeps,
 } from "./tunnel/manage-tunnel.ts"
+import type { BudgetPoolStore } from "./usage/budget-pools.ts"
+import type { CeilingPorts } from "./usage/cost-ceiling.ts"
 
 /** Where the override map lives, and how a URL id becomes a canonical one. */
 export interface OverrideStore {
@@ -178,6 +187,24 @@ export interface PricingPort {
  * key, this is about the table an operator edits.
  */
 export interface Dependencies {
+	/** The three collections the config export reads: providers, combos, keys. */
+	readonly configExportSources: ConfigExportSources
+	/** Pool storage plus the per-key counters the pool verdicts sum. */
+	readonly budgetPoolStore: BudgetPoolStore
+	/** Channel settings, the feed, the marker list, and the HTTP transport. */
+	readonly alertPorts: AlertPorts
+	/** The observability log, read by id or by page. */
+	readonly replayPorts: ReplayPorts
+	/** The key's budget and the model's rates, for the preflight ceiling. */
+	readonly costCeiling: CeilingPorts
+	/** Where uploads live. */
+	readonly fileStore: FileStore
+	/** Where batch jobs live, and how their result files are written. */
+	readonly batchStore: BatchStore
+	readonly batchFiles: BatchFiles
+	/** Concurrency bound for outbound work, and the gate that enforces it. */
+	readonly admissionLimits: GateLimits
+	readonly admissionGate: { run: <T>(work: () => Promise<T>) => Promise<T> }
 	readonly apiKeys: IApiKeyRepository
 	readonly dashboardApiKeys: ApiKeyManagementPort
 	readonly bulkApiKeys: BulkEditPort

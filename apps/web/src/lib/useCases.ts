@@ -35,12 +35,17 @@ function backfillCodex(item: Record<string, unknown>): Record<string, unknown> {
 import { existsSync } from "node:fs"
 import { creatorNameFor, visibleApiKeys } from "@9router/auth/keyCreator"
 import { closeDb, getAdapter } from "@9router/db/driver"
-import { matchesAllowedModels, parseAllowedModels } from "@9router/db/repos/apiKeysRepo"
+import {
+	getApiKeyById,
+	matchesAllowedModels,
+	parseAllowedModels,
+} from "@9router/db/repos/apiKeysRepo"
 import {
 	getDistinctProviders,
 	getRequestDetailById,
 	getRequestDetails,
 } from "@9router/db/repos/requestDetailsRepo"
+import { getPricingForModel } from "@9router/pricing"
 import type { UseCases } from "9router-api/application/use-cases"
 import {
 	authExpiryVerdict,
@@ -320,6 +325,21 @@ function cache(): Cache {
 							? key.slice(0, 4) + "***"
 							: key.slice(0, 10) + "***",
 				now: () => Date.now(),
+			},
+			// Preflight for a spending ceiling: the budget comes from the same folding rules the
+			// key list renders, and the rates from the pricing table the cost column uses.
+			costCeiling: {
+				budgetOf: async (keyId: string) => {
+					const key = (await getApiKeyById(keyId)) as never
+					if (!key) return null
+					const today = todayKey()
+					return budgetOf(key, {
+						tokenCap: (key as { tokenLimit?: number }).tokenLimit,
+						tokenUsed: spentTodayOf(key),
+						today,
+					} as never) as { kind: string; cap: number; used: number }
+				},
+				ratesOf: (provider: string, model: string) => getPricingForModel(provider, model) as never,
 			},
 			// The remaining panels: mostly static tables this process owns (the model catalogue,
 			// the provider aliases) plus the open-sse rollup that only it can reach.

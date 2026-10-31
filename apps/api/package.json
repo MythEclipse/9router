@@ -38,7 +38,10 @@
     "./domain/auth-status": {
       "types": "./src/domain/auth-status.ts",
       "default": "./src/domain/auth-status.ts"
-    }
+    },
+    "./application/requests/*": "./src/application/requests/*.ts",
+    "./application/files/*": "./src/application/files/*.ts",
+    "./application/batches/*": "./src/application/batches/*.ts"
   },
   "scripts": {
     "dev": "bun --conditions=react-server --watch src/main.ts",

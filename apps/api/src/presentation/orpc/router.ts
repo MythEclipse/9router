@@ -33,6 +33,8 @@ import { pricingRouter } from "./routers/pricing.ts"
 import { providersRouter } from "./routers/providers.ts"
 import { proxyPoolsRouter } from "./routers/proxy-pools.ts"
 import { pxpipeRouter } from "./routers/pxpipe.ts"
+import { queueRouter } from "./routers/queue.ts"
+import { requestsRouter } from "./routers/requests.ts"
 import { settingsRouter } from "./routers/settings.ts"
 import { systemRouter } from "./routers/system.ts"
 import { cacheStatsRouter, dashboardJobsRouter, pluginsRouter } from "./routers/system-runtime.ts"
@@ -53,6 +55,8 @@ export const appRouter = base.router({
 	combos: combosRouter,
 	coworkSettings: coworkSettingsRouter,
 	notifications: notificationsRouter,
+	requests: requestsRouter,
+	queue: queueRouter,
 	translator: translatorRouter,
 	codexResetCredits: codexResetCreditsRouter,
 	claudeReset: claudeResetRouter,

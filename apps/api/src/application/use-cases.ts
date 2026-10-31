@@ -21,6 +21,8 @@ import {
 	type AuthStatusPort,
 	readAuthStatus,
 } from "./auth-status/read-status.ts"
+import { type AdmissionGate, makeAdmissionGate } from "./batches/admission.ts"
+import { makeBatches } from "./batches/batches.ts"
 import { loadChangelog } from "./changelog.ts"
 import type { ClaudeResetPort } from "./claude-reset/reset-grant.ts"
 import { spendResetGrant } from "./claude-reset/reset-grant.ts"
@@ -83,6 +85,7 @@ import {
 } from "./cowork-settings/manage-cowork-settings.ts"
 import type { Dependencies } from "./dependencies.ts"
 import { makeClearErrorLogs, makeListErrorLogs } from "./error-logs/read-error-logs.ts"
+import { makeFiles } from "./files/files.ts"
 import { makeHeadroom } from "./headroom/manage-headroom.ts"
 import type {
 	HermesAnswer,
@@ -102,6 +105,7 @@ import { makeCatalogueSync, makeModelProbe } from "./models/manage-catalogue-syn
 import { makeBaseUrlValidation, makeDisabledModels } from "./models/manage-disabled-models.ts"
 import { makeProviderNodes } from "./models/manage-provider-nodes.ts"
 import { makeStudioModels } from "./models/manage-studio-models.ts"
+import { makeDispatchAlerts } from "./notifications/dispatch-alerts.ts"
 import type { NotificationAnswer, NotificationStore } from "./notifications/read-notifications.ts"
 import { readNotifications, updateNotification } from "./notifications/read-notifications.ts"
 import type {
@@ -158,6 +162,10 @@ import {
 	updateProxyPool,
 } from "./proxy-pools/manage-proxy-pools.ts"
 import { makePxpipe } from "./pxpipe/manage-pxpipe.ts"
+import { makeExplain } from "./requests/explain.ts"
+import { makeReplay } from "./requests/replay.ts"
+import type { ConfigExportSources } from "./settings/config-export.ts"
+import { makeConfigExport } from "./settings/config-export.ts"
 import { assertSupportedLocale } from "./settings/locale.ts"
 import { readLoginGate } from "./settings/login-gate.ts"
 import {
@@ -192,9 +200,14 @@ import {
 	type TunnelStatusCache,
 	toggleTunnel,
 } from "./tunnel/manage-tunnel.ts"
+import { makeBudgetPools } from "./usage/budget-pools.ts"
+import { makeCostCeiling } from "./usage/cost-ceiling.ts"
 import { type KeyUsage, makeKeyUsageReport } from "./usage/key-usage-report.ts"
+import { makeMetricsExposition } from "./usage/metrics-exposition.ts"
+import { makeModelCostComparison } from "./usage/model-cost-comparison.ts"
 import { type ConnectionUsage, makeConnectionUsage } from "./usage/read-connection-usage.ts"
 import { makeUsageReports } from "./usage/report-usage.ts"
+import { makeSpendForecast } from "./usage/spend-forecast.ts"
 import { makeUsagePanels, type UsagePanels } from "./usage/usage-panels.ts"
 
 /**
@@ -222,6 +235,30 @@ export interface UseCases {
 	readonly singleKey: ReturnType<typeof makeManageSingleKey>
 	/** The read-only usage endpoints: stats, chart, sparks, logs, history. */
 	readonly usageReports: ReturnType<typeof makeUsageReports>
+	/** The spend projection: what the current daily rate says the period will cost. */
+	readonly spendForecast: ReturnType<typeof makeSpendForecast>
+	/** The Prometheus scrape, composed from the leaderboard and the projection. */
+	readonly metrics: ReturnType<typeof makeMetricsExposition>
+	/** Cost per request and per million tokens, per model. */
+	readonly modelCost: ReturnType<typeof makeModelCostComparison>
+	/** The redacted, sorted configuration document. */
+	readonly configExport: ReturnType<typeof makeConfigExport>
+	/** Shared caps across several API keys. */
+	readonly budgetPools: ReturnType<typeof makeBudgetPools>
+	/** Sends the feed's notifications to the configured channels. */
+	readonly alertDispatch: ReturnType<typeof makeDispatchAlerts>
+	/** Turns captured requests into a translator regression suite. */
+	readonly replay: ReturnType<typeof makeReplay>
+	/** Explains one captured request: the pipeline, the diff, the cost. */
+	readonly explain: ReturnType<typeof makeExplain>
+	/** Preflight: does this request fit under the key's spending ceiling? */
+	readonly costCeiling: ReturnType<typeof makeCostCeiling>
+	/** Uploaded files behind `/v1/files`. */
+	readonly files: ReturnType<typeof makeFiles>
+	/** `/v1/batches`: a JSONL job file in, a results file out. */
+	readonly batches: ReturnType<typeof makeBatches>
+	/** The concurrency bound the batch runner shares, and what it reports about itself. */
+	readonly admission: AdmissionGate
 	readonly getChangelog: () => ReturnType<typeof loadChangelog>
 	readonly getLoginGate: () => ReturnType<typeof readLoginGate>
 	readonly listCombos: ReturnType<typeof makeListCombos>
@@ -592,6 +629,10 @@ function tunnelStatusCache(): TunnelStatusCache {
 
 export function buildUseCases(deps: Dependencies): UseCases {
 	const combos = comboDeps(deps)
+	// Built once and shared: the scrape reports the same leaderboard and the same projection
+	// the dashboard reads, so a metric cannot disagree with the page beside it.
+	const usagePanels = makeUsagePanels(deps.usagePanels)
+	const spendForecast = makeSpendForecast({ usage: deps.usageReports })
 	return {
 		createApiKey: makeCreateApiKey(deps),
 		listApiKeys: makeListApiKeys(deps),
@@ -607,6 +648,9 @@ export function buildUseCases(deps: Dependencies): UseCases {
 			audit: deps.apiKeyAudit,
 		}),
 		usageReports: makeUsageReports({ usage: deps.usageReports }),
+		// Same port as the sparkline card, so the projection and the chart above it are
+		// reading one series rather than two queries that can disagree.
+		spendForecast: makeSpendForecast({ usage: deps.usageReports }),
 		singleKey: makeManageSingleKey({
 			keys: deps.singleApiKeys,
 			audit: deps.singleKeyAudit,
@@ -968,7 +1012,18 @@ export function buildUseCases(deps: Dependencies): UseCases {
 		},
 		ttsVoices: makeTtsVoices(deps.ttsVoices),
 		keyUsage: makeKeyUsageReport(deps.keyUsage),
-		usagePanels: makeUsagePanels(deps.usagePanels),
+		usagePanels,
+		metrics: makeMetricsExposition({ panels: usagePanels, forecast: spendForecast }),
+		modelCost: makeModelCostComparison({ panels: usagePanels }),
+		configExport: makeConfigExport(deps.configExportSources),
+		budgetPools: makeBudgetPools(deps.budgetPoolStore),
+		alertDispatch: makeDispatchAlerts(deps.alertPorts),
+		replay: makeReplay(deps.replayPorts),
+		explain: makeExplain({ byId: deps.replayPorts.byId, ratesOf: deps.costCeiling.ratesOf }),
+		costCeiling: makeCostCeiling(deps.costCeiling),
+		files: makeFiles(deps.fileStore),
+		admission: makeAdmissionGate(deps.admissionLimits),
+		batches: makeBatches(deps.batchStore, deps.batchFiles, { gate: deps.admissionGate }),
 		connectionUsage: makeConnectionUsage(deps.connectionUsage),
 	}
 }

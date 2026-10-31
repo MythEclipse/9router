@@ -86,4 +86,18 @@ export const notificationsRouter = {
 				storeOf(context.notificationStore),
 			),
 		),
+
+	/**
+	 * Send pending notifications to the configured channels.
+	 *
+	 * Separate from `scan` on purpose: deriving a condition is a page-load concern, and sending
+	 * it off the box is not — an install with no channels must not pay for a network call on
+	 * every dashboard render.
+	 */
+	alerts: {
+		dispatch: authed.handler(async ({ context }) => context.useCases.alertDispatch.dispatch()),
+
+		/** Send a synthetic message to every channel, so a bad config is found before it matters. */
+		test: authed.handler(async ({ context }) => context.useCases.alertDispatch.test()),
+	},
 }
