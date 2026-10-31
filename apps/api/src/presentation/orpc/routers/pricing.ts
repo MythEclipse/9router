@@ -14,7 +14,7 @@
  * `update` and `reset` are authenticated too; validation is `domain/pricing.ts`'s job.
  */
 import { z } from "zod"
-import { authed } from "../base.ts"
+import { audited, authed } from "../base.ts"
 
 const UpdatePricingInput = z.unknown()
 
@@ -28,11 +28,11 @@ const ResetPricingInput = z
 export const pricingRouter = {
 	get: authed.handler(async ({ context }) => context.useCases.getPricing()),
 
-	update: authed
+	update: audited("pricing.update")
 		.input(UpdatePricingInput)
 		.handler(async ({ input, context }) => context.useCases.updatePricing(input)),
 
-	reset: authed
+	reset: audited("pricing.reset")
 		.input(ResetPricingInput)
 		.handler(async ({ input, context }) =>
 			context.useCases.resetPricing(input?.provider, input?.model),

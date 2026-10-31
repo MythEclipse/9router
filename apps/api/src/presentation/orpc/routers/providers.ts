@@ -28,7 +28,7 @@
  * on its allow-list.
  */
 import { z } from "zod"
-import { authed } from "../base.ts"
+import { audited, authed } from "../base.ts"
 
 const ConnectionId = z.object({ id: z.string().min(1) })
 
@@ -66,18 +66,18 @@ export const providersRouter = {
 		.handler(async ({ input, context }) => context.useCases.connections.get(input.id)),
 
 	/** Create a connection (API key only; OAuth has its own flow). */
-	create: authed
+	create: audited("provider.create")
 		.input(ConnectionBody)
 		.handler(async ({ input, context }) => context.useCases.connections.create(input)),
 
 	/** Every field optional; absent means "leave it alone", including proxy and pool. */
-	update: authed
+	update: audited("provider.update")
 		.input(z.object({ id: z.string().min(1), changes: ConnectionBody }))
 		.handler(async ({ input, context }) =>
 			context.useCases.connections.update(input.id, input.changes),
 		),
 
-	remove: authed
+	remove: audited("provider.remove")
 		.input(ConnectionId)
 		.handler(async ({ input, context }) => context.useCases.connections.remove(input.id)),
 
@@ -103,7 +103,7 @@ export const providersRouter = {
 			.handler(async ({ input, context }) => context.useCases.overrides.get(input.id)),
 
 		/** Body: `{ headers: {name: value} }`. An empty payload clears the override. */
-		set: authed
+		set: audited("provider.model.set")
 			.input(z.object({ id: z.string().min(1), headers: z.unknown().optional() }))
 			.handler(async ({ input, context }) =>
 				context.useCases.overrides.set(input.id, { headers: input.headers }),

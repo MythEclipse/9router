@@ -24,6 +24,16 @@ const SAMPLE_WINDOW = 50
 export interface AdmissionGate {
 	/** Run `work` under the gate, waiting for a slot when one is not free. */
 	readonly run: <T>(work: () => Promise<T>) => Promise<T>
+	/**
+	 * Take a slot and answer the function that gives it back.
+	 *
+	 * `run` cannot serve a streamed response: the promise settles when the `Response` object is
+	 * built, while the work the slot is protecting continues until the last chunk has been
+	 * flushed. A caller holding a stream therefore acquires, returns the response, and releases
+	 * from the stream's own `flush`/`cancel` hooks. Releasing twice is safe — the slot is only
+	 * handed on once — because a cancelled stream can fire both hooks.
+	 */
+	readonly acquire: () => Promise<() => void>
 	readonly snapshot: () => GateSnapshot
 }
 
@@ -56,31 +66,41 @@ export function makeAdmissionGate(limits: GateLimits): AdmissionGate {
 		inFlight -= 1
 	}
 
-	return {
-		async run(work) {
-			const verdict = admissionOf({ concurrency, queueCap }, { inFlight, waiting: waiting.length })
+	/** Take a slot, or throw when the queue is full. */
+	async function acquire(): Promise<() => void> {
+		const verdict = admissionOf({ concurrency, queueCap }, { inFlight, waiting: waiting.length })
 
-			if (verdict === "refuse") {
-				const current = snapshot()
-				throw new AppError("UPSTREAM", "The gateway is saturated; retry later", {
-					data: { retryAfterSeconds: current.retryAfterSeconds ?? 1, ...current },
-				})
-			}
+		if (verdict === "refuse") {
+			const current = snapshot()
+			throw new AppError("UPSTREAM", "The gateway is saturated; retry later", {
+				data: { retryAfterSeconds: current.retryAfterSeconds ?? 1, ...current },
+			})
+		}
 
-			if (verdict === "queue") {
-				await new Promise<void>((resolve) => waiting.push(resolve))
-			} else {
-				inFlight += 1
-			}
+		if (verdict === "queue") {
+			await new Promise<void>((resolve) => waiting.push(resolve))
+		} else {
+			inFlight += 1
+		}
 
-			const startedAt = Date.now()
-			try {
-				return await work()
-			} finally {
-				release(startedAt)
-			}
-		},
-
-		snapshot,
+		const startedAt = Date.now()
+		let released = false
+		return () => {
+			// A stream fires `flush` and may also fire `cancel`; the slot is handed on once.
+			if (released) return
+			released = true
+			release(startedAt)
+		}
 	}
+
+	async function run<T>(work: () => Promise<T>): Promise<T> {
+		const releaseSlot = await acquire()
+		try {
+			return await work()
+		} finally {
+			releaseSlot()
+		}
+	}
+
+	return { acquire, run, snapshot }
 }

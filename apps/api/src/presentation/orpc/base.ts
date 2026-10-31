@@ -237,3 +237,54 @@ export const authed = base.use(async ({ context, next }) => {
 	}
 	return next({ context: { ...context, session: context.session } })
 })
+
+/**
+ * Record a mutation in the audit trail, once it succeeded.
+ *
+ * Applied per procedure rather than inferred, because only the author knows which verb a
+ * procedure performs — a router cannot tell `pools.save` from `pools.list` by its shape. The
+ * action name is therefore written by hand at each site, in the closed `resource.verb` form the
+ * domain's `describeAction` expects.
+ *
+ * Two ordering rules:
+ *
+ *  - **After `next()`, never before.** An attempt that threw changed nothing, and a log full of
+ *    refused writes buries the ones that landed.
+ *  - **Never at the cost of the response.** A failed audit write is logged inside the use-case
+ *    and swallowed there; this middleware only awaits it.
+ */
+export const audited = (action: string) =>
+	authed.use(async ({ context, next }, input) => {
+		const result = await next()
+		// Optional on purpose: the trail must never be able to fail the change it records. A
+		// context assembled without an audit log (a test harness, a narrow worker) loses the log
+		// line rather than the mutation.
+		await context.useCases.auditLog?.record({
+			action,
+			subject: subjectOf(input),
+			payload: payloadOf(input),
+		})
+		return result
+	})
+
+/**
+ * The identifier a mutation acted on.
+ *
+ * `id` first because that is what every procedure takes, then `name` (combos, pools), then the
+ * caller's own identity for actions that have no subject of their own. A dash rather than an
+ * empty string so the audit list has a column that always renders.
+ */
+function subjectOf(input: unknown): string {
+	if (input === null || typeof input !== "object") return "-"
+	const record = input as Record<string, unknown>
+	for (const field of ["id", "name", "provider", "model", "key"]) {
+		const value = record[field]
+		if (typeof value === "string" && value.trim() !== "") return value
+	}
+	return "-"
+}
+
+/** The input as the payload; the use-case reduces it to names and identifiers. */
+function payloadOf(input: unknown): unknown {
+	return input !== null && typeof input === "object" ? input : undefined
+}

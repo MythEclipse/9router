@@ -58,6 +58,7 @@ import {
 import { createComboStrategyRepository } from "./db/repositories/combo-strategy-repository.ts"
 import { configExportSources } from "./db/repositories/config-export-repository.ts"
 import { createErrorLogRepository } from "./db/repositories/error-log-repository.ts"
+import { createIdempotencyStore } from "./db/repositories/idempotency-repository.ts"
 import { aggregatesOf as keyUsageAggregates } from "./db/repositories/key-usage-repository.ts"
 import {
 	createAllowedModelReconciler,
@@ -71,6 +72,10 @@ import {
 	createStudioModelPort,
 	type RegistryHost,
 } from "./db/repositories/model-registry-repository.ts"
+import {
+	createLatencySamplePort,
+	createSpendAnomalyPorts,
+} from "./db/repositories/observability-repository.ts"
 import { createPricingRepository } from "./db/repositories/pricing-repository.ts"
 import {
 	type ConnectionHost,
@@ -390,6 +395,9 @@ export function createUseCases(
 		apiKeys: createApiKeyRepository(db),
 		dashboardApiKeys: makeApiKeyManagementPort(options.apiKeyStore ?? unavailableApiKeyStore()),
 		usageReports: createUsageReportPort(),
+		latencySamples: createLatencySamplePort(),
+		spendAnomalies: createSpendAnomalyPorts(),
+		idempotencyStore: createIdempotencyStore(db),
 		bulkApiKeys: makeBulkEditPort(options.apiKeyStore ?? unavailableApiKeyStore()),
 		singleApiKeys: makeSingleKeyPort(options.apiKeyStore ?? unavailableApiKeyStore()),
 		singleKeyAudit: makeSingleKeyAuditPort(),

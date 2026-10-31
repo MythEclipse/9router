@@ -23,7 +23,7 @@
  */
 import { AppError } from "./errors.ts"
 
-export type MetricType = "counter" | "gauge"
+export type MetricType = "counter" | "gauge" | "histogram"
 
 /** One line of the exposition: a metric family member. */
 export interface MetricSample {
@@ -34,6 +34,15 @@ export interface MetricSample {
 	readonly help: string
 	readonly labels?: Readonly<Record<string, string | number>>
 	readonly value: number
+	/**
+	 * The family this sample belongs to, when it is not its own name.
+	 *
+	 * A histogram is one family whose samples carry suffixes — `_bucket`, `_sum`, `_count` — and
+	 * `# TYPE` names the family, not the sample. Without this field the document would declare
+	 * three separate families and Prometheus would reject the scrape: a `_bucket` series with no
+	 * declared histogram is not something `histogram_quantile()` can read.
+	 */
+	readonly family?: string
 }
 
 /** Decimal places kept before printing, so float noise cannot create a diff. */
@@ -87,15 +96,16 @@ export function expositionDocument(samples: readonly MetricSample[]): string {
 	const declared = new Set<string>()
 
 	for (const sample of samples) {
-		if (!NAME_PATTERN.test(sample.name)) {
+		const family = sample.family ?? sample.name
+		if (!NAME_PATTERN.test(family) || !NAME_PATTERN.test(sample.name)) {
 			// A programming error, not caller input: a metric name is written by us, and a bad
 			// one silently produces a family Prometheus rejects.
 			throw new AppError("INTERNAL", `Invalid metric name: ${sample.name}`)
 		}
-		if (!declared.has(sample.name)) {
-			declared.add(sample.name)
-			lines.push(`# HELP ${sample.name} ${escapeHelp(sample.help)}`)
-			lines.push(`# TYPE ${sample.name} ${sample.type}`)
+		if (!declared.has(family)) {
+			declared.add(family)
+			lines.push(`# HELP ${family} ${escapeHelp(sample.help)}`)
+			lines.push(`# TYPE ${family} ${sample.type}`)
 		}
 		lines.push(`${sample.name}${formatLabels(sample.labels)} ${formatMetricValue(sample.value)}`)
 	}

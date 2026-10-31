@@ -29,6 +29,26 @@ export const activity = sqliteTable("activity", {
 })
 
 /**
+ * Idempotent retries: one client key, one executed request.
+ *
+ * `state` is the claim/answer distinction — a row that is `in_progress` belongs to a request
+ * that is still running, and a concurrent retry must be refused rather than run a second time.
+ * The answer columns are nullable for exactly that window.
+ */
+export const idempotencyKeys = sqliteTable("idempotency_keys", {
+	/** Hash of caller + endpoint + the client's own key, so keys cannot collide across callers. */
+	key: text("key").primaryKey(),
+	/** Hash of the request body: same key + different body is a conflict, not a replay. */
+	fingerprint: text("fingerprint").notNull(),
+	state: text("state").notNull(),
+	status: integer("status"),
+	contentType: text("content_type"),
+	body: text("body"),
+	createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+	expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+})
+
+/**
  * better-auth's own tables. Column names are dictated by better-auth's core
  * schema; do not rename them without checking its migration guide.
  */

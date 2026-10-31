@@ -155,4 +155,47 @@ describe("makeAdmissionGate", () => {
 		await expect(gate.run(async () => "ok")).resolves.toBe("ok")
 		expect(gate.snapshot().inFlight).toBe(0)
 	})
+
+	/**
+	 * The stream path: a caller takes a slot, hands the response back, and releases when the body
+	 * ends. `run()` cannot express that — it settles when the response is *built*, which for a
+	 * stream is before the work is finished.
+	 */
+	it("holds a slot until the holder releases it", async () => {
+		const gate = makeAdmissionGate({ concurrency: 1, queueCap: 1 })
+
+		const release = await gate.acquire()
+		expect(gate.snapshot().inFlight).toBe(1)
+
+		// A second caller waits rather than entering.
+		let entered = false
+		const queued = gate.acquire().then((releaseQueued) => {
+			entered = true
+			releaseQueued()
+		})
+		await sleep(5)
+		expect(entered).toBe(false)
+
+		release()
+		await queued
+		expect(entered).toBe(true)
+		expect(gate.snapshot().inFlight).toBe(0)
+	})
+
+	it("releases only once, so a stream that flushes and cancels cannot free two slots", async () => {
+		const gate = makeAdmissionGate({ concurrency: 2, queueCap: 0 })
+
+		const releaseA = await gate.acquire()
+		const releaseB = await gate.acquire()
+		expect(gate.snapshot().inFlight).toBe(2)
+
+		releaseA()
+		releaseA()
+		releaseA()
+
+		// One slot back, not three: the third call must not have invented capacity.
+		expect(gate.snapshot().inFlight).toBe(1)
+		releaseB()
+		expect(gate.snapshot().inFlight).toBe(0)
+	})
 })

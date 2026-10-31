@@ -17,7 +17,7 @@ import { ORPCError } from "@orpc/server"
 import { z } from "zod"
 import { usageScopeOf } from "../../../application/usage/report-usage.ts"
 import { canReadFullRequestPayload } from "../../../domain/observability.ts"
-import { authed } from "../base.ts"
+import { audited, authed } from "../base.ts"
 
 /** Absent means "the endpoint's own default"; the rule decides which. */
 const PeriodInput = z.object({ period: z.string().optional() }).optional()
@@ -70,10 +70,43 @@ export const usageRouter = {
 			context.useCases.modelCost.comparison(input?.period, usageScopeOf(context.session)),
 		),
 
+	/**
+	 * Latency percentiles per provider and model, from the requests this gateway timed itself.
+	 *
+	 * Scoped like every other usage read: an API-key session sees its own traffic. The window
+	 * rule is the shared one, so `?period=90d` is refused here too instead of quietly answering
+	 * a week.
+	 */
+	latency: authed
+		.input(PeriodInput)
+		.handler(async ({ input, context }) =>
+			context.useCases.latencyReport.report(input?.period, usageScopeOf(context.session)),
+		),
+
+	/**
+	 * Hours whose spend is far above their own trailing baseline.
+	 *
+	 * `raise` is a separate procedure because it writes: it files a notice per finding, and the
+	 * alert dispatch carries it off the box. A poll must never do that, so detection and
+	 * notification are two calls rather than one with a flag.
+	 */
+	anomalies: {
+		detect: authed
+			.input(PeriodInput)
+			.handler(async ({ input, context }) =>
+				context.useCases.spendAnomalies.detect(input?.period, usageScopeOf(context.session)),
+			),
+		raise: authed
+			.input(PeriodInput)
+			.handler(async ({ input, context }) =>
+				context.useCases.spendAnomalies.raise(input?.period, usageScopeOf(context.session)),
+			),
+	},
+
 	/** Shared caps across several API keys. Replaces the whole list on write. */
 	pools: {
 		list: authed.handler(async ({ context }) => context.useCases.budgetPools.list()),
-		save: authed
+		save: audited("budget-pool.save")
 			.input(z.object({ pools: z.array(z.unknown()) }))
 			.handler(async ({ input, context }) => context.useCases.budgetPools.save(input)),
 	},

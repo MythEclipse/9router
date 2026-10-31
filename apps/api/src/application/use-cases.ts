@@ -16,12 +16,13 @@ import { makeCreateApiKey } from "./api-keys/create-api-key.ts"
 import { makeListApiKeys, makeRevokeApiKey } from "./api-keys/manage-api-keys.ts"
 import { makeManageApiKeys } from "./api-keys/manage-api-keys-dashboard.ts"
 import { makeManageSingleKey } from "./api-keys/manage-single-key.ts"
+import { makeAuditLog } from "./audit/read-audit-log.ts"
 import {
 	type AuthStatusDeps,
 	type AuthStatusPort,
 	readAuthStatus,
 } from "./auth-status/read-status.ts"
-import { type AdmissionGate, makeAdmissionGate } from "./batches/admission.ts"
+import type { AdmissionGate } from "./batches/admission.ts"
 import { makeBatches } from "./batches/batches.ts"
 import { loadChangelog } from "./changelog.ts"
 import type { ClaudeResetPort } from "./claude-reset/reset-grant.ts"
@@ -98,6 +99,7 @@ import {
 	resetHermesSettings as resetHermesSettingsUseCase,
 	writeHermesSettings,
 } from "./hermes/manage-hermes-settings.ts"
+import { makeIdempotency } from "./idempotency/idempotency.ts"
 import { makeModelCatalogue } from "./models/list-models.ts"
 import { makeCustomModels, makeModelAliases } from "./models/manage-aliases.ts"
 import { makeModelAvailability } from "./models/manage-availability.ts"
@@ -164,7 +166,6 @@ import {
 import { makePxpipe } from "./pxpipe/manage-pxpipe.ts"
 import { makeExplain } from "./requests/explain.ts"
 import { makeReplay } from "./requests/replay.ts"
-import type { ConfigExportSources } from "./settings/config-export.ts"
 import { makeConfigExport } from "./settings/config-export.ts"
 import { assertSupportedLocale } from "./settings/locale.ts"
 import { readLoginGate } from "./settings/login-gate.ts"
@@ -203,10 +204,12 @@ import {
 import { makeBudgetPools } from "./usage/budget-pools.ts"
 import { makeCostCeiling } from "./usage/cost-ceiling.ts"
 import { type KeyUsage, makeKeyUsageReport } from "./usage/key-usage-report.ts"
+import { makeLatencyReport } from "./usage/latency-report.ts"
 import { makeMetricsExposition } from "./usage/metrics-exposition.ts"
 import { makeModelCostComparison } from "./usage/model-cost-comparison.ts"
 import { type ConnectionUsage, makeConnectionUsage } from "./usage/read-connection-usage.ts"
 import { makeUsageReports } from "./usage/report-usage.ts"
+import { makeSpendAnomalies } from "./usage/spend-anomaly.ts"
 import { makeSpendForecast } from "./usage/spend-forecast.ts"
 import { makeUsagePanels, type UsagePanels } from "./usage/usage-panels.ts"
 
@@ -237,6 +240,14 @@ export interface UseCases {
 	readonly usageReports: ReturnType<typeof makeUsageReports>
 	/** The spend projection: what the current daily rate says the period will cost. */
 	readonly spendForecast: ReturnType<typeof makeSpendForecast>
+	/** Latency percentiles per provider and model, from the timed requests in the window. */
+	readonly latencyReport: ReturnType<typeof makeLatencyReport>
+	/** Hours whose spend is far above their own trailing baseline. */
+	readonly spendAnomalies: ReturnType<typeof makeSpendAnomalies>
+	/** The admin audit trail, newest first. */
+	readonly auditLog: ReturnType<typeof makeAuditLog>
+	/** Claim/complete for `Idempotency-Key` on the non-streaming endpoints. */
+	readonly idempotency: ReturnType<typeof makeIdempotency>
 	/** The Prometheus scrape, composed from the leaderboard and the projection. */
 	readonly metrics: ReturnType<typeof makeMetricsExposition>
 	/** Cost per request and per million tokens, per model. */
@@ -633,6 +644,9 @@ export function buildUseCases(deps: Dependencies): UseCases {
 	// the dashboard reads, so a metric cannot disagree with the page beside it.
 	const usagePanels = makeUsagePanels(deps.usagePanels)
 	const spendForecast = makeSpendForecast({ usage: deps.usageReports })
+	// Built once: the scrape and the latency panel must report the same percentiles, and two
+	// instances would mean two windows computed from the same rows.
+	const latencyReport = makeLatencyReport({ samples: deps.latencySamples })
 	return {
 		createApiKey: makeCreateApiKey(deps),
 		listApiKeys: makeListApiKeys(deps),
@@ -1013,7 +1027,15 @@ export function buildUseCases(deps: Dependencies): UseCases {
 		ttsVoices: makeTtsVoices(deps.ttsVoices),
 		keyUsage: makeKeyUsageReport(deps.keyUsage),
 		usagePanels,
-		metrics: makeMetricsExposition({ panels: usagePanels, forecast: spendForecast }),
+		metrics: makeMetricsExposition({
+			panels: usagePanels,
+			forecast: spendForecast,
+			latency: latencyReport,
+		}),
+		latencyReport,
+		spendAnomalies: makeSpendAnomalies(deps.spendAnomalies),
+		auditLog: makeAuditLog({ port: deps.activity }),
+		idempotency: makeIdempotency({ store: deps.idempotencyStore }),
 		modelCost: makeModelCostComparison({ panels: usagePanels }),
 		configExport: makeConfigExport(deps.configExportSources),
 		budgetPools: makeBudgetPools(deps.budgetPoolStore),
@@ -1022,7 +1044,10 @@ export function buildUseCases(deps: Dependencies): UseCases {
 		explain: makeExplain({ byId: deps.replayPorts.byId, ratesOf: deps.costCeiling.ratesOf }),
 		costCeiling: makeCostCeiling(deps.costCeiling),
 		files: makeFiles(deps.fileStore),
-		admission: makeAdmissionGate(deps.admissionLimits),
+		// ONE gate instance, shared with the batch runner. It used to be constructed a second
+		// time here, which made `GET /api/queue` report a gate nobody ever entered: `inFlight`
+		// was always 0 and the retry-after was always null.
+		admission: deps.admissionGate,
 		batches: makeBatches(deps.batchStore, deps.batchFiles, { gate: deps.admissionGate }),
 		connectionUsage: makeConnectionUsage(deps.connectionUsage),
 	}

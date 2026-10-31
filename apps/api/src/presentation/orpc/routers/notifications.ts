@@ -11,7 +11,7 @@ import type {
 	NoticeWording,
 	NotificationScanStore,
 } from "../../../application/notifications/scan-notifications.ts"
-import { type AppContext, authed } from "../base.ts"
+import { type AppContext, audited, authed } from "../base.ts"
 
 type NotificationStore = NonNullable<AppContext["notificationStore"]>
 
@@ -77,7 +77,7 @@ export const notificationsRouter = {
 	),
 
 	/** Mark read, dismiss a row, or clear a condition — the body names which. */
-	update: authed
+	update: audited("notification.update")
 		.input(z.object({ body: z.unknown() }))
 		.handler(async ({ input, context }) =>
 			context.useCases.notifications.update(

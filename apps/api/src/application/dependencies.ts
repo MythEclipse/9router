@@ -77,6 +77,8 @@ export interface IActivityRepository {
 		payload?: Record<string, unknown>
 		at: Date
 	}): Promise<void>
+	/** Newest-first page of recorded mutations, for the audit log. */
+	list(limit: number): Promise<readonly import("./audit/read-audit-log.ts").AuditRow[]>
 }
 
 /** A combo as the dashboard sees it — the row, with `models` parsed. */
@@ -204,11 +206,17 @@ export interface Dependencies {
 	readonly batchFiles: BatchFiles
 	/** Concurrency bound for outbound work, and the gate that enforces it. */
 	readonly admissionLimits: GateLimits
-	readonly admissionGate: { run: <T>(work: () => Promise<T>) => Promise<T> }
+	readonly admissionGate: import("./batches/admission.ts").AdmissionGate
 	readonly apiKeys: IApiKeyRepository
 	readonly dashboardApiKeys: ApiKeyManagementPort
 	readonly bulkApiKeys: BulkEditPort
 	readonly usageReports: UsageReportPort
+	/** Timed requests in a window, for the latency report. */
+	readonly latencySamples: import("./usage/latency-report.ts").LatencySamplePort
+	/** Hourly spend per key plus the notification writer, for the anomaly detector. */
+	readonly spendAnomalies: import("./usage/spend-anomaly.ts").SpendAnomalyPorts
+	/** The claim/answer store behind `Idempotency-Key`. */
+	readonly idempotencyStore: import("./idempotency/idempotency.ts").IdempotencyStore
 	readonly singleApiKeys: SingleKeyPort
 	readonly singleKeyAudit: SingleKeyAuditPort
 	readonly apiKeyAudit: {

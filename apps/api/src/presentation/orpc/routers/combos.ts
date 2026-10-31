@@ -5,7 +5,7 @@
  * and no database call lives here, so the REST route and this router cannot
  * drift apart.
  */
-import { authed } from "../base.ts"
+import { audited, authed } from "../base.ts"
 import {
 	ComboCycleQuerySchema,
 	ComboIdSchema,
@@ -24,22 +24,28 @@ export const combosRouter = {
 		.input(ComboIdSchema)
 		.handler(async ({ input, context }) => context.useCases.getCombo(input.id)),
 
-	create: authed
+	create: audited("combo.create")
 		.input(CreateComboSchema)
 		.handler(async ({ input, context }) => context.useCases.createCombo(input)),
 
-	update: authed.input(UpdateComboSchema).handler(async ({ input, context }) => {
-		const { id, ...changes } = input
-		return context.useCases.updateCombo(id, changes)
-	}),
+	update: audited("combo.update")
+		.input(UpdateComboSchema)
+		.handler(async ({ input, context }) => {
+			const { id, ...changes } = input
+			return context.useCases.updateCombo(id, changes)
+		}),
 
-	remove: authed.input(ComboIdSchema).handler(async ({ input, context }) => {
-		return context.useCases.deleteCombo(input.id)
-	}),
+	remove: audited("combo.remove")
+		.input(ComboIdSchema)
+		.handler(async ({ input, context }) => {
+			return context.useCases.deleteCombo(input.id)
+		}),
 
-	duplicate: authed.input(ComboIdSchema).handler(async ({ input, context }) => {
-		return context.useCases.duplicateCombo(input.id)
-	}),
+	duplicate: audited("combo.duplicate")
+		.input(ComboIdSchema)
+		.handler(async ({ input, context }) => {
+			return context.useCases.duplicateCombo(input.id)
+		}),
 
 	/** Preview the presets a client source proposes, and which already exist. */
 	previewPresets: authed

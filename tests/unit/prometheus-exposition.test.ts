@@ -129,7 +129,68 @@ const quietForecast = {
 	confidence: "none" as const,
 }
 
-function expositionWith(leaderboard: unknown[], forecast: unknown = quietForecast) {
+/**
+ * A latency report with one provider, so the histogram half of the scrape has something to say.
+ *
+ * The bucket counts are cumulative, as the exposition format requires, and the last bucket is
+ * `+Inf` — a histogram without it cannot be summed.
+ */
+const quietLatency = {
+	period: "7d",
+	since: null,
+	truncated: false,
+	rowCeiling: 20_000,
+	report: {
+		overall: {
+			samples: 10,
+			p50: 400,
+			p90: 900,
+			p95: 1_200,
+			p99: 2_000,
+			mean: 500,
+			min: 100,
+			max: 2_000,
+			ttftSamples: 8,
+			ttftP50: 200,
+			ttftP95: 800,
+			cachedSamples: 2,
+			reliable: false,
+			histogram: [],
+		},
+		byProvider: [
+			{
+				key: "anthropic",
+				summary: {
+					samples: 10,
+					p50: 400,
+					p90: 900,
+					p95: 1_200,
+					p99: 2_000,
+					mean: 500,
+					min: 100,
+					max: 2_000,
+					ttftSamples: 8,
+					ttftP50: 200,
+					ttftP95: 800,
+					cachedSamples: 2,
+					reliable: false,
+					histogram: [
+						{ le: 500, count: 6 },
+						{ le: 2_000, count: 10 },
+						{ le: null, count: 10 },
+					],
+				},
+			},
+		],
+		byModel: [],
+	},
+}
+
+function expositionWith(
+	leaderboard: unknown[],
+	forecast: unknown = quietForecast,
+	latency: unknown = quietLatency,
+) {
 	const calls: Array<Record<string, unknown>> = []
 	const useCase = makeMetricsExposition({
 		panels: {
@@ -140,6 +201,12 @@ function expositionWith(leaderboard: unknown[], forecast: unknown = quietForecas
 		} as never,
 		forecast: {
 			forecast: async () => ({ period: "7d", forecast }),
+		} as never,
+		latency: {
+			report: async (period: unknown, scope: unknown) => {
+				calls.push({ latencyPeriod: period, latencyScope: scope })
+				return latency
+			},
 		} as never,
 	})
 	return { useCase, calls }
@@ -215,5 +282,47 @@ describe("makeMetricsExposition", () => {
 		await useCase.exposition("30d", scope)
 
 		expect(calls[0]).toEqual({ period: "30d", scope })
+	})
+
+	it("reads the latency window with the same period and scope as the leaderboard", async () => {
+		const { useCase, calls } = expositionWith([entry()])
+		const scope = { apiKeyFilter: "key-1", allowedModels: "claude-*" }
+
+		await useCase.exposition("30d", scope)
+
+		// One window, two reads: a scrape and the page beside it cannot disagree about "7d".
+		expect(calls[1]).toEqual({ latencyPeriod: "30d", latencyScope: scope })
+	})
+
+	it("declares the latency histogram once, with an explicit +Inf bucket", async () => {
+		const { useCase } = expositionWith([entry()])
+		const { body } = await useCase.exposition("7d", { apiKeyFilter: null, allowedModels: "*" })
+
+		expect(body).toContain("# TYPE nine_router_latency_ms histogram")
+		expect(body.match(/# TYPE nine_router_latency_ms/g)).toHaveLength(1)
+		expect(body).toContain('nine_router_latency_ms_bucket{le="+Inf",provider="anthropic"} 10')
+		expect(body).toContain('nine_router_latency_ms_count{provider="anthropic"} 10')
+		expect(body).toContain('nine_router_latency_p95_ms{provider="anthropic"} 1200')
+		expect(body).toContain('nine_router_ttft_p95_ms{provider="anthropic"} 800')
+	})
+
+	it("prints a missing percentile as 0 rather than a value Prometheus cannot parse", async () => {
+		const { useCase } = expositionWith([entry()], quietForecast, {
+			...quietLatency,
+			report: {
+				...quietLatency.report,
+				byProvider: [
+					{
+						key: "anthropic",
+						summary: { ...quietLatency.report.byProvider[0].summary, p95: null, ttftP95: null },
+					},
+				],
+			},
+		})
+		const { body } = await useCase.exposition("7d", { apiKeyFilter: null, allowedModels: "*" })
+
+		expect(body).toContain('nine_router_latency_p95_ms{provider="anthropic"} 0')
+		expect(body).not.toContain("NaN")
+		expect(body).not.toContain("null")
 	})
 })

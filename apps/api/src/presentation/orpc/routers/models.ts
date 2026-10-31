@@ -17,7 +17,7 @@
  */
 import { z } from "zod"
 
-import { authed } from "../base.ts"
+import { audited, authed } from "../base.ts"
 
 const AliasInput = z.object({ model: z.string(), alias: z.string() })
 const AliasQuery = z.object({ alias: z.string() })
@@ -60,7 +60,7 @@ export const modelsRouter = {
 		list: authed.handler(async ({ context }) => ({
 			aliases: await context.useCases.modelAliases.list(),
 		})),
-		set: authed
+		set: audited("model.set")
 			.input(AliasInput)
 			.handler(async ({ input, context }) => context.useCases.modelAliases.set(input)),
 		remove: authed.input(AliasQuery).handler(async ({ input, context }) => {
@@ -75,7 +75,7 @@ export const modelsRouter = {
 			.handler(async ({ input, context }) =>
 				context.useCases.disabledModels.list(input?.providerAlias ?? null),
 			),
-		disable: authed
+		disable: audited("model.disable")
 			.input(DisabledInput)
 			.handler(async ({ input, context }) => context.useCases.disabledModels.disable(input)),
 		/** An absent `id` re-enables the provider's whole list. */
