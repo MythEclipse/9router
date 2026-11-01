@@ -15,8 +15,17 @@
  * A full queue is a 429 with `Retry-After`, which is what the gate's own refusal carries. The
  * alternative — letting it throw through the handler — would surface as a 500, and a client
  * cannot back off from a 500.
+ *
+ * A slot that is never given back is worse than a full queue: the queue at least drains. The
+ * release used to depend entirely on the wrapped body's hooks, so a client that disconnected
+ * while the answer was being built took its slot with it and the gate stayed closed for
+ * everyone until the process restarted — measured live, 8 leaked slots and 32 stranded
+ * waiters answering `429` with `Retry-After: 120` in 2 ms to every request for three hours.
+ * `holdSlot` is what makes the return unconditional.
  */
 import { AppError } from "9router-api/domain/errors"
+import { ADMISSION_MAX_HOLD_MS, HTTP_STATUS } from "../../../open-sse/config/runtimeConfig.ts"
+import { holdSlot } from "./slotLease.ts"
 
 /** The refusal a saturated gateway answers with. */
 function tooBusy(retryAfterSeconds: number, message: string): Response {
@@ -99,18 +108,24 @@ function holdSlotUntilBodyEnds(response: Response, release: () => void): Respons
 /**
  * Run `handler` while holding one admission slot.
  *
- * `null` when the gateway is saturated — the caller returns the 429 it was given.
+ * @param signal the request's own signal, so a client that hung up returns its slot instead
+ *               of holding one nobody will read an answer from
+ * @returns the refusal (a 429) when the gateway is saturated, or a 499 when the caller left
+ *          while it was queued
  */
-export async function withAdmission(handler: () => Promise<Response>): Promise<Response> {
+export async function withAdmission(
+	handler: () => Promise<Response>,
+	signal?: AbortSignal,
+): Promise<Response> {
 	// Imported here, not at module scope: this wrapper is loaded by every `/v1` route, and a
 	// static import would drag the whole use-case graph (and the database handle) into any
 	// module that merely mentions the route — a test harness included.
 	const gate = await admissionGate()
 	if (!gate) return handler()
 
-	let release: () => void
+	let releaseSlot: () => void
 	try {
-		release = await gate.acquire()
+		releaseSlot = await gate.acquire()
 	} catch (error) {
 		if (error instanceof AppError) {
 			const data = (error.data ?? {}) as { retryAfterSeconds?: number }
@@ -119,6 +134,22 @@ export async function withAdmission(handler: () => Promise<Response>): Promise<R
 		// An unknown failure in the gate must not take the gateway down with it: the request is
 		// passed through ungated rather than refused for a reason nobody can act on.
 		return handler()
+	}
+
+	const release = holdSlot(releaseSlot, {
+		signal,
+		maxHoldMs: ADMISSION_MAX_HOLD_MS,
+		onOverrun: (heldMs) =>
+			console.warn(
+				`[admission] slot held ${Math.round(heldMs / 1000)}s with no body hook; released it`,
+			),
+	})
+
+	// The client left while this request was queued: the slot has already been paid for, so
+	// hand it straight back rather than run a handler whose answer nobody will read.
+	if (signal?.aborted) {
+		release()
+		return new Response(null, { status: HTTP_STATUS.CLIENT_CLOSED_REQUEST })
 	}
 
 	let response: Response

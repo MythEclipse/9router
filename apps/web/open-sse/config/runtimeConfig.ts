@@ -8,6 +8,9 @@ export const HTTP_STATUS = {
 	NOT_ACCEPTABLE: 406,
 	REQUEST_TIMEOUT: 408,
 	RATE_LIMITED: 429,
+	// Not an RFC status: the client closed the request before an answer existed. Logged by
+	// the engines already, and used where a slot is handed back instead of a real answer.
+	CLIENT_CLOSED_REQUEST: 499,
 	SERVER_ERROR: 500,
 	BAD_GATEWAY: 502,
 	SERVICE_UNAVAILABLE: 503,
@@ -59,6 +62,14 @@ export const STREAM_FIRST_CHUNK_TIMEOUT_MS = envMs("STREAM_FIRST_CHUNK_TIMEOUT_M
 // content-bearing frame before committing to that model (fail-open on expiry).
 // Env: EMPTY_PEEK_DEADLINE_MS.
 export const EMPTY_PEEK_DEADLINE_MS = envMs("EMPTY_PEEK_DEADLINE_MS", 45 * 1000)
+
+// Upper bound on one admission hold. A streamed answer keeps its slot until the body ends,
+// so the slot normally returns from the stream's `flush`/`cancel` hook; when a client
+// disconnects and the runtime drops the body without cancelling it, neither fires and the
+// slot is gone for the life of the process. Eight of those leave the gate refusing every
+// later request with a 429 that no traffic can clear. This deadline is what guarantees the
+// slot comes back. Env: ADMISSION_MAX_HOLD_MS.
+export const ADMISSION_MAX_HOLD_MS = envMs("ADMISSION_MAX_HOLD_MS", 15 * 60 * 1000)
 
 // Fetch connect timeout: abort if upstream doesn't return response headers within this duration
 export const FETCH_CONNECT_TIMEOUT_MS = envMs("FETCH_CONNECT_TIMEOUT_MS", 60 * 1000)

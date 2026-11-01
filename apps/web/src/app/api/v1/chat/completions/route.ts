@@ -35,5 +35,7 @@ export async function POST(request) {
 	await ensureInitialized()
 
 	// Idempotency first: a replayed answer must not take an admission slot at all.
-	return await withIdempotency(request, () => withAdmission(() => handleChat(request)))
+	return await withIdempotency(request, () =>
+		withAdmission(() => handleChat(request), request.signal),
+	)
 }

@@ -28,6 +28,7 @@ import type {
 	TunnelToggleDeps,
 } from "../application/tunnel/manage-tunnel.ts"
 import { buildUseCases, type UseCases } from "../application/use-cases.ts"
+import { positiveInt } from "../domain/backpressure.ts"
 import type { ProviderClassifiers } from "../domain/batch-selection.ts"
 import type { CacheEntry, FreeModel, KiloModel } from "../domain/free-model-cache.ts"
 import { normalizeKiroExternalIdpAuth } from "../domain/kiro-external-idp.ts"
@@ -388,7 +389,17 @@ export function createUseCases(
 
 	// One gate per process: the bound describes this event loop's outbound budget, so a second
 	// gate would only measure half the traffic and enforce nothing.
-	const admissionLimits = { concurrency: 8, queueCap: 32 }
+	//
+	// A slot is held for as long as one answer keeps arriving, so capacity is
+	// `concurrency / meanServiceMs` — 8 slots against a 24 s mean is a third of a request per
+	// second for the whole gateway, which is below what a single coding agent produces. Both
+	// numbers are deploy-time knobs rather than source constants, because the right value
+	// depends on how many streams the box is expected to serve. Env: ADMISSION_CONCURRENCY,
+	// ADMISSION_QUEUE_CAP.
+	const admissionLimits = {
+		concurrency: positiveInt(Number(process.env.ADMISSION_CONCURRENCY), 8),
+		queueCap: positiveInt(Number(process.env.ADMISSION_QUEUE_CAP), 32),
+	}
 	const admissionGate = makeAdmissionGate(admissionLimits)
 
 	const useCases = buildUseCases({
