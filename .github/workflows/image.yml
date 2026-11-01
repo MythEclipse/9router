@@ -2,7 +2,7 @@ name: Container image
 
 # Publish lane, fully independent of the VPS deploys. 9router runs natively
 # under systemd on our own fleet, so nothing here is a deploy: this only builds
-# and publishes ghcr.io/asepharyana/9router so external consumers can pull it.
+# and publishes ghcr.io/mytheclipse/9router so external consumers can pull it.
 #
 # Split out of ci.yml on purpose. In one file the image build shared a run with
 # the deploys, which meant a docker failure and a VPS rollout showed up as one
@@ -60,7 +60,7 @@ jobs:
   runs-on: ${{ matrix.runner }}
   timeout-minutes: 60
   env:
-   IMAGE: ghcr.io/asepharyana/9router
+   IMAGE: ghcr.io/mytheclipse/9router
   outputs:
    tag: ${{ steps.meta.outputs.tag }}
   steps:
@@ -127,7 +127,7 @@ jobs:
   runs-on: ubuntu-latest
   timeout-minutes: 15
   env:
-   IMAGE: ghcr.io/asepharyana/9router
+   IMAGE: ghcr.io/mytheclipse/9router
   steps:
    - name: Download digests
      uses: actions/download-artifact@v4
@@ -165,7 +165,7 @@ jobs:
   runs-on: ubuntu-latest
   timeout-minutes: 20
   env:
-   IMAGE: ghcr.io/asepharyana/9router
+   IMAGE: ghcr.io/mytheclipse/9router
   steps:
    # The arm64 check below runs an arm64 image on an amd64 host, so binfmt has
    # to be registered first.
