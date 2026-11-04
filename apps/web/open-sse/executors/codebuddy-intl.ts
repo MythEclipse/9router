@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "node:crypto"
+import { bridgeCodebuddyToolCalls } from "./codebuddyToolBridge.ts"
 import { DefaultExecutor } from "./default.ts"
 
 function findHeaderKey(headers, name) {
@@ -71,6 +72,11 @@ function stableUuidFrom(account, sessionKey) {
 export class CodeBuddyIntlExecutor extends DefaultExecutor {
 	constructor() {
 		super("codebuddy-intl")
+	}
+
+	/** The models behind this gateway declare tools in DSML text; see the bridge. */
+	async execute(options) {
+		return bridgeCodebuddyToolCalls(await super.execute(options), options.body, "cbai")
 	}
 
 	/**

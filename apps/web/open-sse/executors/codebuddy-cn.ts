@@ -1,3 +1,4 @@
+import { bridgeCodebuddyToolCalls } from "./codebuddyToolBridge.ts"
 import { DefaultExecutor } from "./default.ts"
 
 /**
@@ -12,6 +13,11 @@ import { DefaultExecutor } from "./default.ts"
 export class CodeBuddyExecutor extends DefaultExecutor {
 	constructor() {
 		super("codebuddy-cn")
+	}
+
+	/** The models behind this gateway declare tools in DSML text; see the bridge. */
+	async execute(options) {
+		return bridgeCodebuddyToolCalls(await super.execute(options), options.body, "cbcn")
 	}
 
 	transformRequest(model, body, stream, credentials) {
