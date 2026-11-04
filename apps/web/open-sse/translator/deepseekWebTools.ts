@@ -478,6 +478,28 @@ function extractCall(tagName, innerRaw, requested, schemaMap) {
 const DSML_PIPE = "[｜|]"
 const DSML_MARK = `${DSML_PIPE}{2}DSML${DSML_PIPE}{2}`
 
+// A DSML marker is model-internal bookkeeping, never assistant prose. Whatever the dialect
+// parsers did not consume — an envelope whose closer never arrived, a stream cut mid-invoke, a
+// rejected nonce binding, the single-pipe spelling — must not travel to the client: on the
+// Anthropic protocol it arrives as a `text` block full of markers with `stop_reason: end_turn`,
+// so the client runs nothing and the turn stalls. Scrubbed at the parser's boundary, once, for
+// every shape and every exit.
+const DSML_DEBRIS_RE =
+	/<\/?(?:｜｜|\|\|?)DSML(?:｜｜|\|\|?)\s*(?:calls|call|invoke|parameter|tool_calls|function_calls)\b[^>]*>/gi
+const EMPTY_FENCE_RE = /```[a-zA-Z]*[ \t]*\n?[ \t]*```/g
+
+export function scrubDsmlDebris(content) {
+	if (typeof content !== "string") return content
+	// An empty fence is always the leftover of a stripped block, never something the model wrote.
+	const unFenced = content.replace(EMPTY_FENCE_RE, "")
+	if (!unFenced.includes("DSML")) return unFenced.trim()
+	return unFenced
+		.replace(DSML_DEBRIS_RE, "")
+		.replace(/[ 	]+\n/g, "\n")
+		.replace(/\n{3,}/g, "\n\n")
+		.trim()
+}
+
 // Matches one DSML tag of the given logical kind (calls|invoke|parameter),
 // tolerating the slash before `<`, after the mark, or missing entirely.
 // Group 1 captures the raw attribute text when the tag carries any.
@@ -785,10 +807,21 @@ function normalizeDeepSeekNativeArguments(args, name, tools) {
  * with the recognized blocks stripped (so it can still be streamed to the client) plus the
  * parsed calls, or `null` when none are present.
  *
- * Falls back to the canonical `webTools.parseToolCallsFromText` for tag-free replies so that
- * bare-JSON and plain `<tool>` behavior stays identical to the shared implementation.
+ * The content leaving this function never carries DSML markers: a reply whose call could not be
+ * rebuilt still loses its markup (see `scrubDsmlDebris`), so a client is never handed a text
+ * block full of model-internal syntax.
  */
 export function parseDeepSeekToolCalls(text, idSeed = "call", requestedTools) {
+	const parsed = parseDeepSeekDialects(text, idSeed, requestedTools)
+	return { ...parsed, content: scrubDsmlDebris(parsed.content) }
+}
+
+/**
+ * Classify the reply by dialect and rebuild the calls it declares. Falls back to the canonical
+ * `webTools.parseToolCallsFromText` for tag-free replies so that bare-JSON and plain `<tool>`
+ * behavior stays identical to the shared implementation.
+ */
+function parseDeepSeekDialects(text, idSeed = "call", requestedTools) {
 	if (typeof text !== "string" || text.length === 0) {
 		return { content: text ?? "", toolCalls: null }
 	}
@@ -805,20 +838,24 @@ export function parseDeepSeekToolCalls(text, idSeed = "call", requestedTools) {
 	const dsml = dsmlParsed && dsmlParsed.calls.length > 0 ? dsmlParsed : null
 	if (!dsml) {
 		// Dialects upstream's double-pipe parser does not claim: the single-pipe ASCII |DSML| form
-		// (with string="" attributes) and the WMAdapter ▁-token spelling.
-		// A recognised-but-empty result may only claim the turn when there is no <tool> block left to
-		// try. Otherwise a valid `<tool>{json}` body followed by malformed DSML noise would be
-		// answered with null instead of reaching the tag/salvage path.
-		const hasTagBlock = /<tool\b|<tool:/.test(text)
-		const claims = (r) => (r.toolCalls?.length ?? 0) > 0 || !hasTagBlock
+		// (with string="" attributes) and the WMAdapter ▁-token spelling. Only a dialect that
+		// actually RECOVERED a call may answer for the reply. A merely recognised result used to
+		// claim the turn and hand the markup back as prose — which leaked the markers to the client
+		// and hid both the other dialect and the <tool>/salvage path behind it.
+		const recovered = (r) => (r.toolCalls?.length ?? 0) > 0
 
 		const forkDsml = parseFullWidthDsmlCalls(text, idSeed, requestedTools)
-		if (forkDsml.recognized && claims(forkDsml))
-			return finalizeParsedToolCalls(text, forkDsml, requestedTools)
+		if (recovered(forkDsml)) return finalizeParsedToolCalls(text, forkDsml, requestedTools)
+
+		// An invoke that failed its nonce binding is a rejected call, not prose to re-parse: the
+		// reply keeps its text (the boundary scrubs the markup) and no fallback promotes it.
+		if (forkDsml.rejected) return { content: text, toolCalls: null }
 
 		const native = parseNativeDeepSeekCalls(text, idSeed, requestedTools)
-		if (native.recognized && claims(native))
-			return finalizeParsedToolCalls(text, native, requestedTools)
+		// Same dialect, same policy as the double-pipe blocks above: these carry no `_nonce` to
+		// bind, so `finalizeBoundCalls` (not the schema-validating variant) is the matching gate —
+		// an argument the model typed as a string is still the call it declared.
+		if (recovered(native)) return finalizeBoundCalls(text, native, requestedTools)
 		text = normalizeDeepSeekMarkup(text)
 	}
 
@@ -961,7 +998,8 @@ function extractFullWidthDsmlArgs(body): Record<string, unknown> {
 
 function parseFullWidthDsmlCalls(text, idSeed, requestedTools) {
 	const marker = /<(?:(?:｜｜DSML｜｜)|(?:\|DSML\|))/
-	if (!marker.test(text)) return { content: text, toolCalls: null, recognized: false }
+	if (!marker.test(text))
+		return { content: text, toolCalls: null, recognized: false, rejected: false }
 
 	const requested = getRequestedToolNames(requestedTools)
 	const nonce = getToolNonce(requestedTools)
@@ -979,14 +1017,18 @@ function parseFullWidthDsmlCalls(text, idSeed, requestedTools) {
 	while ((match = invokeRe.exec(text)) !== null) {
 		sawInvokeTag = true
 		const resolvedName = resolveRequestedToolName(match[2], requested)
-		if (!nonce || !resolvedName) {
+		if (!resolvedName) {
 			rejectedInvoke = true
 			continue
 		}
 		const parsedArgs = extractFullWidthDsmlArgs(match[3])
 		const nestedArgs = asRecord(parsedArgs.arguments)
 		const emittedNonce = parsedArgs._nonce ?? nestedArgs?._nonce
-		if (emittedNonce !== nonce) {
+		// A nonce that is present and wrong is a call the model copied instead of making, so the
+		// turn is rejected. An ABSENT nonce is not: the double-pipe spelling of this same dialect
+		// carries none and is promoted by parseDsmlBlocks above, and demanding one here is what
+		// left every plain `|DSML|` reply as prose.
+		if (emittedNonce !== undefined && emittedNonce !== nonce) {
 			rejectedInvoke = true
 			continue
 		}
@@ -998,7 +1040,10 @@ function parseFullWidthDsmlCalls(text, idSeed, requestedTools) {
 			const { _nonce: _boundNonce, name: _redundantName, ...rest } = parsedArgs
 			args = rest
 		}
-		if (!validateToolArguments(requestedTools, resolvedName, args)) {
+		// Only a bound call is held to its schema, matching finalizeBoundCalls: an unbound invoke
+		// is the lenient dialect, where an argument the model typed as a string is still the call
+		// it declared.
+		if (emittedNonce !== undefined && !validateToolArguments(requestedTools, resolvedName, args)) {
 			rejectedInvoke = true
 			continue
 		}
@@ -1010,8 +1055,11 @@ function parseFullWidthDsmlCalls(text, idSeed, requestedTools) {
 		ranges.push({ start: match.index, end: invokeRe.lastIndex })
 	}
 
-	if (rejectedInvoke || calls.length === 0) {
-		return { content: text, toolCalls: null, recognized: sawInvokeTag }
+	// A rejected invoke is dropped on its own, not as the whole reply: a hallucinated tool name or a
+	// copied binding must not cost the calls the reply did declare. Only a reply that recovered
+	// nothing is marked rejected, which is what keeps a fallback from promoting it.
+	if (calls.length === 0) {
+		return { content: text, toolCalls: null, recognized: sawInvokeTag, rejected: rejectedInvoke }
 	}
 
 	const callsEnvelope = /<\/?(?:｜｜DSML｜｜|\|DSML\|)\s*calls\s*>/g
@@ -1019,5 +1067,5 @@ function parseFullWidthDsmlCalls(text, idSeed, requestedTools) {
 	while ((envelope = callsEnvelope.exec(text)) !== null) {
 		ranges.push({ start: envelope.index, end: callsEnvelope.lastIndex })
 	}
-	return { content: stripRanges(text, ranges), toolCalls: calls, recognized: true }
+	return { content: stripRanges(text, ranges), toolCalls: calls, recognized: true, rejected: false }
 }

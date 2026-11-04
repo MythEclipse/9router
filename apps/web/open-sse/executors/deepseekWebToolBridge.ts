@@ -6,7 +6,7 @@
 // and parsing the model's JSON answer blocks back into standard tool_calls
 // deltas, so downstream CLI tools and agents work as if the support were native.
 
-import { parseDeepSeekToolCalls } from "../translator/deepseekWebTools.ts"
+import { parseDeepSeekToolCalls, scrubDsmlDebris } from "../translator/deepseekWebTools.ts"
 
 const TOOL_CALL_MARKER = "<<TOOL_CALL>>"
 const TOOL_RESULT_MARKER = "<<TOOL_RESULT>>"
@@ -225,7 +225,10 @@ export function parseToolModeReply(text, requestedTools) {
 	if (requested.calls.length > 0) return requested
 
 	const native = parseDeepSeekToolCalls(text, "call", requestedTools)
-	if (!native.toolCalls?.length) return requested
+	// No call to emit, but the reply may still carry DSML markers the marker parser cannot see —
+	// a rejected binding, a stream cut mid-invoke, an envelope whose closer never arrived. They
+	// must not reach the client as prose, so the markers are scrubbed from whichever text wins.
+	if (!native.toolCalls?.length) return { content: scrubDsmlDebris(requested.content), calls: [] }
 
 	return {
 		content: native.content,
