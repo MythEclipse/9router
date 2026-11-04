@@ -5,7 +5,7 @@
 # `bun:sqlite`, which Node cannot resolve; the failure surfaces as a 500 on
 # every route that touches the store (the dashboard's auth status among them)
 # while /api/health keeps answering 200, so a liveness check alone does not
-# catch it. deploy-native.sh runs bun on the imrnes host for the same reason.
+# catch it. The deploy lane installs and runs bun for the same reason.
 #
 # Installed to /opt/9router/bin/9router by the deploy job, so it is versioned
 # with the code it starts rather than edited by hand on the host.

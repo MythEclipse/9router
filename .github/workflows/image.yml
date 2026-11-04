@@ -27,8 +27,8 @@ permissions:
 jobs:
  # Rolling container image, published to GHCR so external consumers can pull
  # 9router without building it. This is a PUBLISH lane, not a deploy lane:
- # imrnes now runs 9router natively under systemd (see deploy-imrnes in ci.yml),
- # so nothing on our own fleet consumes this image any more — but the published
+ # orange runs 9router natively under systemd (see deploy-orange in ci.yml), so
+ # nothing on our own fleet consumes this image any more — but the published
  # artifact is still maintained.
  #
  # Runs in parallel with test and gates nothing but itself — a failed image
