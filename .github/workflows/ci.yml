@@ -3,6 +3,7 @@ name: CI
 # Single consolidated pipeline. One file, independent build/deploy lanes:
 #
 #   push master ────── deploy-orange ──► orange VPS  (systemd, /opt/9router, :4014)
+#                └──── deploy-imrnes ──► imrnes VPS  (systemd, /opt/9router, :2028)
 #
 #   tag v* ───────┴── release-prepare ── release-build (amd64+arm64) ── release-publish ──► GHCR
 #
@@ -15,9 +16,15 @@ name: CI
 # never abandon a half-synced tree or half-pulled image mid-restart).
 # image/release/tray lanes stay independent.
 #
-# Both deploy lanes now install 9router natively under systemd and ship the
-# same tarball; image/smoke remain as the GHCR publish lane only, so nothing on
+# Both deploy lanes install 9router natively under systemd and ship the same
+# tarball; image/smoke remain as the GHCR publish lane only, so nothing on
 # our own fleet depends on the container any more.
+#
+# The two deploy lanes differ in exactly one way that matters: how the runner
+# reaches the host. orange takes a shell over ssh and runs sudo; imrnes takes a
+# forced command whose allowlist is `status`, `deploy` and scp into
+# /opt/9router/upload. imrnes is shared with other services, so a key that can
+# open a shell there is a key that can break all of them.
 
 on:
  push:
@@ -329,6 +336,215 @@ jobs:
       sudo systemctl restart 9router
       echo rolled-back
       REMOTE
+
+ # Deploy 9router to imrnes as a native systemd unit at /opt/9router/current,
+ # port 2028, behind https://omniroute.imrnes.team and https://9router.imrnes.team
+ # (Caddy proxies 127.0.0.1:2028; both names are served by one instance).
+ #
+ # Independent of deploy-orange on purpose: two hosts, two failure domains. They
+ # serialize per-host through their own concurrency groups, so a stuck orange
+ # rollout never blocks imrnes and vice versa.
+ #
+ # The runner never gets a shell. The deploy key is a forced command
+ # (/usr/local/bin/gh-actions-9router) whose allowlist is `status`, `deploy` and
+ # scp into /opt/9router/upload, and the workflow asserts the restriction holds
+ # before it writes anything.
+ #
+ # Secrets are per-repo and distinct from the orange lane's: IMRNES_SSH_KEY,
+ # IMRNES_HOST, IMRNES_USER. Sharing VPS_HOST/SSH_PRIVATE_KEY with deploy-orange
+ # would point this lane at orange, which is how a wrong-host deploy happens.
+ deploy-imrnes:
+  name: Deploy to imrnes
+  if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || (inputs.release_tag == '' && inputs.tray_publish != true))
+  runs-on: ubuntu-latest
+  timeout-minutes: 30
+  concurrency:
+   group: 9router-deploy-imrnes
+   cancel-in-progress: false
+  env:
+   VPS_HOST: ${{ secrets.IMRNES_HOST }}
+   VPS_USER: ${{ secrets.IMRNES_USER }}
+   PORT: 2028
+   PUBLIC_HOST: omniroute.imrnes.team
+   ALIAS_HOST: 9router.imrnes.team
+  steps:
+   - name: Checkout
+     uses: actions/checkout@v7
+     with:
+      fetch-depth: 0
+
+   - name: Setup Bun
+     uses: oven-sh/setup-bun@v2
+     with:
+      bun-version: 1.3.14
+
+   - name: Cache Next.js build cache
+     uses: actions/cache@v6
+     with:
+      path: |
+       ${{ github.workspace }}/apps/web/.next/cache
+      key: ${{ runner.os }}-nextjs-imrnes-${{ hashFiles('bun.lock', 'apps/web/next.config.mjs', 'apps/web/src/**/*.ts', 'apps/web/src/**/*.tsx', 'apps/web/open-sse/**/*.ts', 'apps/web/public/**/*', 'apps/web/scripts/**/*.mjs') }}
+      restore-keys: |
+       ${{ runner.os }}-nextjs-imrnes-${{ hashFiles('bun.lock') }}-
+
+   - name: Install deps
+     run: bun install --frozen-lockfile
+
+   - name: Build
+     run: bun run build
+
+   # Same payload shape as deploy-orange: the host installs its own
+   # node_modules against the lockfile this job resolves, so the tarball carries
+   # source and build output but never a 600MB install built for the runner.
+   - name: Assemble release
+     run: |
+      set -euo pipefail
+      R=/tmp/9router-release-imrnes
+      rm -rf "$R"
+      mkdir -p "$R"
+      cp apps/web/custom-server.js package.json bun.lock "$R"/
+      cp apps/web/tsconfig.json apps/web/next.config.mjs "$R"/
+      cp -r apps/web/src apps/web/open-sse apps/web/public deploy apps/web/scripts "$R"/
+      mkdir -p "$R/apps"
+      rsync -a --exclude='node_modules' --exclude='.next' apps/api "$R/apps/"
+      rsync -a --exclude='node_modules' --exclude='.next' --exclude='.next-cli-build' packages cli "$R"/
+      for pkg in apps/web apps/api packages/* cli; do
+        [ -f "$pkg/package.json" ] && mkdir -p "$R/$pkg" && cp "$pkg/package.json" "$R/$pkg/"
+      done
+      cp apps/web/.next/standalone/apps/web/server.js "$R/server.js"
+      # The payload flattens apps/web/src to the root, and both server.js and the
+      # runtime auth guard load those files from there. They import workspace
+      # packages (supplied by the manifests copied above) and ordinary npm deps
+      # that only apps/web declares (uuid, bcryptjs, ...). A root require
+      # resolves neither unless the root manifest declares them, which surfaced
+      # as "Cannot find package 'uuid'" and a guard answering 503 on every route.
+      node -e '
+        const fs = require("fs");
+        const [root, web] = process.argv.slice(1);
+        const pkg = JSON.parse(fs.readFileSync(root, "utf8"));
+        const webDeps = JSON.parse(fs.readFileSync(web, "utf8")).dependencies || {};
+        pkg.dependencies = { ...webDeps, ...(pkg.dependencies || {}) };
+        fs.writeFileSync(root, JSON.stringify(pkg, null, 2) + "\n");
+      ' "$R/package.json" apps/web/package.json
+      # The merged manifest no longer matches the repo's bun.lock, and the host
+      # installs with --frozen-lockfile, which refuses a stale one. Resolve here
+      # so the payload ships a lockfile describing its own manifest.
+      ( cd "$R" && bun install --lockfile-only )
+      # Anchor both excludes at the transfer root: .next/standalone is a partial
+      # copy and .next/cache is build cache — neither belongs on the host.
+      rsync -a --exclude='/standalone' --exclude='/cache' apps/web/.next/ "$R/.next/"
+      # Turbopack rewrites import.meta.url to a repo-relative path, so the
+      # migrator cannot infer where migrations/ sits at runtime and refuses to
+      # boot on an empty schema. Ship the journal and point at it.
+      cp -r apps/api/migrations "$R/migrations"
+      printf '%s' "${GITHUB_SHA:0:7}" > "$R/.deploy-sha"
+      # The filename is part of the contract: scp keeps the source basename, and
+      # the host script reads exactly this name out of /opt/9router/upload. A
+      # mismatch fails as "no payload", after the transfer already succeeded.
+      tar -czf /tmp/9router-payload.tar.gz -C "$R" .
+      echo "release: $(du -h /tmp/9router-payload.tar.gz | cut -f1), $(find "$R" -type f | wc -l) files"
+
+   - name: Install the deploy key
+     env:
+      KEY_PATH: ${{ runner.temp }}/deploy_key
+     run: |
+      set -euo pipefail
+      mkdir -p ~/.ssh
+      chmod 700 ~/.ssh
+      # Written by redirection, never echoed through a pipe, so the key does not
+      # appear in any process's argv.
+      printf '%s\n' "${{ secrets.IMRNES_SSH_KEY }}" > "$KEY_PATH"
+      chmod 600 "$KEY_PATH"
+      # CI secrets are stored with CRLF endings; a stray \r makes ssh reject the
+      # key with an unhelpful "invalid format" error.
+      sed -i 's/\r$//' "$KEY_PATH"
+      ssh-keygen -y -f "$KEY_PATH" >/dev/null
+      # ssh-keyscan intermittently answers "Connection closed by remote host"
+      # (the host rate-limits concurrent handshakes) and returns non-zero, which
+      # `set -euo pipefail` turns into a hard failure before a byte is shipped.
+      for attempt in 1 2 3 4 5; do
+        if ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && \
+           [ -s ~/.ssh/known_hosts ]; then
+          break
+        fi
+        if [ "$attempt" = "5" ]; then
+          echo "::error::could not read host key for $VPS_HOST after 5 attempts"
+          exit 1
+        fi
+        sleep $((attempt * 3))
+      done
+
+   - name: Verify the host is reachable and the key is restricted
+     env:
+      DEPLOY_KEY: ${{ runner.temp }}/deploy_key
+     run: |
+      set -euo pipefail
+      # An allowlisted command: `true` is not in the allowlist and would be
+      # refused, which reads as "cannot SSH" when the key is fine.
+      ssh -i "$DEPLOY_KEY" -o BatchMode=yes -o ConnectTimeout=20 \
+          "$VPS_USER@$VPS_HOST" "status"
+
+      # Negative control. If the forced command ever lets a shell through, the
+      # key is not restricted and the deploy must not proceed.
+      if ssh -i "$DEPLOY_KEY" -o BatchMode=yes -o ConnectTimeout=20 \
+           "$VPS_USER@$VPS_HOST" "id" 2>/dev/null; then
+        echo "::error::the deploy key obtained a shell - refusing to deploy"
+        exit 1
+      fi
+      echo "key is restricted to the deploy allowlist (shell refused as expected)"
+
+   - name: Ship the payload
+     env:
+      DEPLOY_KEY: ${{ runner.temp }}/deploy_key
+     run: |
+      set -euo pipefail
+      # `-O` forces the original scp protocol. Without it scp negotiates SFTP,
+      # which the forced command does not serve, and the failure surfaces as a
+      # bare "scp: Connection closed" that says nothing about the cause. The
+      # allowlist accepts `scp -t`, which is what `-O` produces.
+      scp -O -i "$DEPLOY_KEY" -o BatchMode=yes -o ConnectTimeout=20 \
+          /tmp/9router-payload.tar.gz \
+          "$VPS_USER@$VPS_HOST:upload"
+
+   - name: Deploy
+     env:
+      DEPLOY_KEY: ${{ runner.temp }}/deploy_key
+     run: |
+      set -euo pipefail
+      ssh -i "$DEPLOY_KEY" -o BatchMode=yes -o ConnectTimeout=20 \
+          "$VPS_USER@$VPS_HOST" "deploy"
+
+   # Proves the public path — DNS, TLS, Caddy and the app together — because a
+   # unit can be active while Caddy serves a 502. Both names are checked: they
+   # are the same instance, and a certificate that covers only one of them is a
+   # half-finished cutover.
+   - name: Verify the public URL
+     run: |
+      set -euo pipefail
+      for host in "$PUBLIC_HOST" "$ALIAS_HOST"; do
+        ok=0
+        for attempt in $(seq 1 10); do
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 \
+                   "https://$host/api/health" || echo 000)
+          echo "attempt $attempt: https://$host/api/health -> $code"
+          if [ "$code" = "200" ]; then ok=1; break; fi
+          sleep 5
+        done
+        if [ "$ok" != "1" ]; then
+          echo "::error::https://$host/api/health did not return 200"
+          exit 1
+        fi
+      done
+      echo "both hostnames serve 9router"
+
+   - name: Capture service logs on failure
+     if: failure()
+     env:
+      DEPLOY_KEY: ${{ runner.temp }}/deploy_key
+     run: |
+      echo "=== imrnes 9router unit status ==="
+      ssh -i "$DEPLOY_KEY" -o BatchMode=yes -o ConnectTimeout=20 \
+          "$VPS_USER@$VPS_HOST" "status" 2>&1 || true
 
  # Release lane: runs on v* tags (or dispatch with release_tag). Validates the
  # tag against package.json versions, then builds per-arch images by digest.

@@ -1,0 +1,36 @@
+[Unit]
+Description=9router — AI routing gateway (native, imrnes)
+Documentation=https://github.com/MythEclipse/9router
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=9router
+Group=9router
+# The code runs from the release the symlink points at, so custom-server.js
+# resolves against it. Data does NOT live here: DATA_DIR in .env points at
+# /var/lib/9router, which a deploy never touches.
+WorkingDirectory=/opt/9router/current
+EnvironmentFile=-/opt/9router/.env
+# Bun, not Node: apps/api opens SQLite with `bun:sqlite`, which Node cannot
+# resolve. Under Node every database route answers 500 while /api/health keeps
+# answering 200, so the failure looks like a healthy deploy with a dead
+# dashboard. Keep this path in sync with deploy.sh's resolve_bun.
+Environment=PATH=/opt/9router/.bun/bin:/usr/local/bin:/usr/bin:/bin
+# The migrator cannot infer this: Turbopack rewrites import.meta.url to a
+# repo-relative path, so the bundled search starts in the wrong tree and the
+# process refuses to boot on an empty schema. The release ships migrations/ at
+# its root, which is this path.
+Environment=MIGRATIONS_DIR=/opt/9router/current/migrations
+ExecStart=/opt/9router/.bun/bin/bun /opt/9router/current/custom-server.js
+Restart=always
+RestartSec=5
+# Bounded so a runaway token refresh cannot take down the other services on
+# this box.
+NoNewPrivileges=true
+MemoryMax=2G
+TasksMax=256
+
+[Install]
+WantedBy=multi-user.target
