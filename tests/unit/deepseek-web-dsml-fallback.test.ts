@@ -245,3 +245,78 @@ describe("parseToolModeReply - DSML shapes that used to leak", () => {
 		expect(parsed.content).not.toContain("DSML")
 	})
 })
+
+/**
+ * A reply cut off mid-markup. The stream ends inside a tag — in the middle of the attribute list,
+ * or after the closing attribute but before the `>` — and the client used to receive the marker as
+ * prose (on the Anthropic protocol: a `text` block with `stop_reason: end_turn`, no tool, a stalled
+ * turn). The invoke is what the model declared, so the call it named is what must come back.
+ */
+describe("parseToolModeReply - markup the stream cut off", () => {
+	it("keeps the call whose parameter tag never closed its attribute list", () => {
+		// Exactly what the gateway forwarded: the stream stops inside `string="`.
+		const parsed = parseToolModeReply(
+			[`</${F} invoke>`, `<${F} invoke name="Bash">`, `<${F} parameter name="command" string="`].join(
+				"\n",
+			),
+			[BASH_TOOL],
+		)
+
+		expect(parsed.calls).toHaveLength(1)
+		expect(parsed.calls[0].name).toBe("Bash")
+		// The value itself never arrived, so it is empty — not `{arguments: "<markup…"}` and not the
+		// literal `">"` the synthesized close used to become.
+		expect(parsed.calls[0].arguments).toEqual({ command: "" })
+		expect(parsed.content).not.toContain("DSML")
+	})
+
+	it("keeps the value when the cut ran it onto the closing attribute", () => {
+		// No `>` ever arrived: `string="true"ls` is `string="true"` then the value `ls`.
+		const parsed = parseToolModeReply(
+			`<${F} calls><${F} invoke name="Bash"><${F} parameter name="command" string="true"ls</${F} parameter></${F} invoke></${F} calls>`,
+			[BASH_TOOL],
+		)
+
+		expect(parsed.calls).toEqual([{ name: "Bash", arguments: { command: "ls" } }])
+		expect(parsed.content).not.toContain("DSML")
+	})
+
+	it("does not pair a sloppy closer with the parameter tag that follows it", () => {
+		// `<…invoke>` with no slash closes the invoke; the parameter under it must not be read as a
+		// second invoke whose body is the stray closer.
+		const parsed = parseToolModeReply(
+			`<${F} invoke name="Bash">\n${param("command", "ls")}\n<${F} invoke>\n</${F} calls>`,
+			[BASH_TOOL],
+		)
+
+		expect(parsed.calls).toEqual([{ name: "Bash", arguments: { command: "ls" } }])
+		expect(parsed.content).not.toContain("DSML")
+	})
+
+	it("reads the whole argument object a parameter wraps under `arguments`", () => {
+		const parsed = parseToolModeReply(
+			dsml([
+				`<${F} invoke name="Bash">`,
+				`<${F} parameter name="arguments" string="true">{"command":"ls -la"}</${F} parameter>`,
+				`</${F} invoke>`,
+			]),
+			[BASH_TOOL],
+		)
+
+		// Not `{ arguments: "{\"command\":\"ls -la\"}" }`: the wrapper key is not part of the schema.
+		expect(parsed.calls).toEqual([{ name: "Bash", arguments: { command: "ls -la" } }])
+	})
+
+	it("never emits a call carrying the markup as its argument", () => {
+		const parsed = parseToolModeReply(
+			`<${F} invoke name="Bash"><${F} parameter name="arguments">{"command": "ls`,
+			[BASH_TOOL],
+		)
+
+		for (const call of parsed.calls) {
+			expect(JSON.stringify(call.arguments)).not.toContain("DSML")
+			expect(JSON.stringify(call.arguments)).not.toContain("<")
+		}
+		expect(parsed.content).not.toContain("DSML")
+	})
+})

@@ -504,11 +504,16 @@ export function scrubDsmlDebris(content) {
 // tolerating the slash before `<`, after the mark, or missing entirely.
 // Group 1 captures the raw attribute text when the tag carries any.
 function dsmlTagSource(kind) {
-	return `(?:</?${DSML_MARK}\\s*${kind}\\b([^>]*)>|<${DSML_MARK}\\s*/\\s*${kind}\\s*>)`
+	return `(?:<\\s*/?\\s*${DSML_MARK}\\s*${kind}\\b([^>]*)>|<${DSML_MARK}\\s*/\\s*${kind}\\s*>)`
 }
 
+// A closer cut off before its `>` (`</｜｜DSML｜｜ invoke`, the stream stopped mid-tag) is still a
+// tag boundary the parser has to see: without it the open before it pairs with the NEXT open,
+// which is how a truncated reply swallowed the following call and handed back markup as prose.
+const DSML_CUT_TAG_RE = new RegExp(`</?${DSML_MARK}\\s*(?:calls|invoke|parameter)\\b`, "i")
+
 function hasDsmlTags(text) {
-	return new RegExp(`</?${DSML_MARK}\\s*(?:calls|invoke|parameter)\\b`, "i").test(text)
+	return DSML_CUT_TAG_RE.test(text)
 }
 
 // Any single DSML tag (open/close, sloppy or strict). Used to scrub DSML
@@ -535,38 +540,240 @@ function collectDsmlTags(source, kind, base) {
 	const re = new RegExp(dsmlTagSource(kind), "gi")
 	let m = null
 	while ((m = re.exec(source)) !== null) {
-		out.push({ start: base + m.index, end: base + re.lastIndex, attrs: m[1] ?? "" })
+		const attrs = m[1] ?? ""
+		out.push({
+			start: base + m.index,
+			end: base + re.lastIndex,
+			attrs,
+			// A tag carrying a name opens a block, unless it is written as a closer (`</… invoke>`):
+			// that is the stray closer a truncated reply can leave at its head, and pairing it with
+			// the next open would swallow the call under it. A nameless tag closes the block before.
+			opening: getAttr(attrs, "name") !== null && !/^<\s*\//.test(m[0]),
+		})
 	}
 	return out
 }
 
-function buildDsmlCall(open, close, text, textEnd, requested) {
+/**
+ * Pair each opening DSML tag with the next tag of its kind, as the sloppy dialect is read:
+ * the closer is the next same-kind tag, whatever it is spelled. Returns `[open, close]` pairs
+ * in document order, `close` undefined when the block never closed (reply truncated) — those
+ * are still parsed, so a call the model declared right before the cut is not lost with it.
+ */
+function pairDsmlTags(tags) {
+	const pairs = []
+	for (let i = 0; i < tags.length; i += 1) {
+		if (!tags[i].opening) continue
+		pairs.push([tags[i], tags[i + 1]])
+		if (tags[i + 1]) i += 1 // consume the paired closer
+	}
+	return pairs
+}
+
+/** Where a block that never closed should be considered to end. */
+function dsmlBlockEnd(open, close, text) {
+	if (close) return { innerEnd: close.start, stripEnd: close.end }
+	// Truncated: the block runs to the next tag of its OWN kind — another invoke, or the envelope's
+	// closer; its own parameters are inside it. So neither a later call nor the legitimate prose
+	// after this one is swallowed into its last parameter value.
+	const tagRe = new RegExp(`<\\s*/?\\s*${DSML_MARK}\\s*(?:calls|invoke)\\b[^>]*>`, "gi")
+	tagRe.lastIndex = open.end
+	let end = text.length
+	let m = null
+	while ((m = tagRe.exec(text)) !== null) {
+		end = m.index
+		break
+	}
+	return { innerEnd: end, stripEnd: end }
+}
+
+// A truncated stream can cut a tag off before its `>` — most often in the middle of the attribute
+// list (`<｜｜DSML｜｜ parameter name="command" string="`). Such a tag still opens a block; it only
+// never closes. The other way a tag goes wrong is running straight on into its value
+// (`string="true"ls`), where the `>` never arrived at all.
+//
+// The attribute list is scanned by hand rather than by one composed regex: whether a tag has
+// ended depends on the quote state left by what came before it, and a regex built out of those
+// alternatives reads that state wrong (a quoted value and a bare word do not share a charset).
+
+/** Index just past the `>` that ends the tag opened at `start`, or -1 when the stream cut it. */
+function scanTagEnd(source, start) {
+	let quote = null
+	for (let i = start; i < source.length; i += 1) {
+		const ch = source[i]
+		if (ch === "\\") {
+			i += 1 // an escaped character never closes the value it is in
+			continue
+		}
+		if (quote) {
+			if (ch === quote) quote = null
+			continue
+		}
+		if (ch === '"' || ch === "'") quote = ch
+		else if (ch === ">") return i + 1
+		else if (ch === "<") return -1 // the next tag began before this one closed
+	}
+	return -1
+}
+
+/**
+ * Where a `>` belongs in the attribute list of a tag the stream cut, relative to `start`, or null
+ * when the tag stopped between attributes and opens nothing. Two cuts lose it:
+ *   `name="command" string="`   inside the value -> the value is empty, the tag ends where it stopped
+ *   `string="true"ls`           value ran on    -> `string="true"`, then the value `ls`
+ * Only a CLOSING quote can be followed by a value that ran on; an opening one is always followed
+ * by its own value.
+ */
+function closeAttrList(rest) {
+	const lineEnd = rest.search(/[\n<]/)
+	const attrs = lineEnd === -1 ? rest : rest.slice(0, lineEnd)
+	let quote = null
+	let close = null
+	for (let i = 0; i < attrs.length; i += 1) {
+		const ch = attrs[i]
+		if (ch === "\\") {
+			i += 1
+		} else if (quote) {
+			if (ch !== quote) continue
+			quote = null
+			close = i + 1
+			if (/\S/.test(attrs[i + 1] ?? "") && !/[=>]/.test(attrs[i + 1]))
+				return { end: i + 1, ranOn: true }
+		} else if (ch === '"' || ch === "'") {
+			quote = ch
+		}
+	}
+	// The value of a parameter is its body, so a tag cut inside it has ended; a tag cut between
+	// attributes (`string=`) ended on the attribute before, and opens nothing either way.
+	return close === null ? null : { end: attrs.length, ranOn: false }
+}
+
+/** Put back the separator the cut removed, so the shared attribute reader sees each attribute. */
+function repairDsmlAttrs(attrs) {
+	// A quoted value whose closing quote runs straight into the next attribute (`string="true"ls`
+	// is `string="true" ls`): scan the quote pairs so only the CLOSING quote counts, never the one
+	// that opened the value. A function replacement, since a string one would read `$1` as a
+	// backreference and lose the quote.
+	let out = ""
+	let quote = null
+	for (let i = 0; i < attrs.length; i += 1) {
+		const ch = attrs[i]
+		out += ch
+		if (ch === "\\") {
+			out += attrs[i + 1] ?? ""
+			i += 1
+		} else if (quote) {
+			if (ch !== quote) continue
+			quote = null
+			if (!/[\s=/>]/.test(attrs[i + 1] ?? "")) out += " "
+		} else if (ch === '"' || ch === "'") {
+			quote = ch
+		}
+	}
+	return out.replace(/\s+/g, " ").trim()
+}
+
+const DSML_OPEN_RE = new RegExp(`<${DSML_MARK}\\s*(calls|invoke|parameter)\\b`, "gi")
+
+/**
+ * The text with every DSML tag closed where the stream cut it. A tag whose value ran on into it gets
+ * the back the separator the cut took; the tag simply gets back its `>`. Both let the dialects below
+ * see the block it opened instead of the markup. Null when nothing needed repair.
+ */
+function rewriteCutDsmlTags(text) {
+	const out = []
+	const mark = /^<[｜|]{1,2}DSML[｜|]{1,2}/i
+	DSML_OPEN_RE.lastIndex = 0
+	let m = DSML_OPEN_RE.exec(text)
+	while (m !== null) {
+		const attrsStart = m.index + m[0].length
+		// A tag that closed where the dialect below already reads it needs no repair.
+		const closed = scanTagEnd(text, attrsStart) !== -1
+		const cut = closed ? null : closeAttrList(text.slice(attrsStart))
+		if (!cut) {
+			DSML_OPEN_RE.lastIndex = attrsStart
+			m = DSML_OPEN_RE.exec(text)
+			continue
+		}
+		const stop = attrsStart + cut.end
+		const attrs = repairDsmlAttrs(text.slice(attrsStart, stop))
+		// The mark travels with the tag: `parseDsmlBlocks` reads its parameters by their DSML
+		// spelling, and a bare `<parameter>` is not a tag it can see.
+		const head = `${text.slice(m.index).match(mark)?.[0] ?? ""} ${m[1].toLowerCase()}${attrs ? ` ${attrs}` : ""}`
+		out.push({ start: m.index, end: stop, text: `${head}>` })
+		DSML_OPEN_RE.lastIndex = stop
+		m = DSML_OPEN_RE.exec(text)
+	}
+	return out
+}
+
+/** The reply with each cut tag closed, and where the `>` it never sent now sits. */
+function applyCutRepair(text, repairs) {
+	let out = ""
+	let cursor = 0
+	let shift = 0
+	const inserted = []
+	for (const repair of repairs) {
+		out += text.slice(cursor, repair.start)
+		out += repair.text
+		// Offsets after the splice: each repair moved everything behind it by exactly its own growth.
+		inserted.push(repair.start + shift + repair.text.length - 1)
+		shift += repair.text.length - (repair.end - repair.start)
+		cursor = repair.end
+	}
+	return { text: out + text.slice(cursor), inserted }
+}
+
+function buildDsmlCall(open, close, text, requested, synth) {
 	const rawName = getAttr(open.attrs, "name")
 	if (!rawName) return null // stray closer or nameless invoke — ignore
-	const innerEnd = close ? close.start : textEnd
+	const { innerEnd, stripEnd } = dsmlBlockEnd(open, close, text)
 	const inner = text.slice(open.end, innerEnd)
 	const ptags = collectDsmlTags(inner, "parameter", open.end)
 	const args = {}
 	// End of the last consumed parameter: when the invoke has no closing tag,
 	// the strip range ends here instead of swallowing trailing legitimate text.
 	let consumedEnd = open.end
-	for (let k = 0; k < ptags.length; k += 1) {
-		const pOpen = ptags[k]
+	for (const [pOpen, pClose] of pairDsmlTags(ptags)) {
 		const pName = getAttr(pOpen.attrs, "name")
 		if (!pName) continue
-		const pClose = ptags[k + 1]
+		const pEnd = pClose ? pClose.start : innerEnd
 		// Multiline-safe: value is everything up to the next parameter tag.
 		// Auxiliary attributes (string="true", …) are ignored; a content="…"
 		// attribute is only a fallback when the body is empty.
-		const rawBody = text.slice(pOpen.end, pClose ? pClose.start : innerEnd).trim()
-		args[pName] = rawBody !== "" ? rawBody : (getAttr(pOpen.attrs, "content") ?? "")
-		if (pClose) consumedEnd = pClose.end
-		else consumedEnd = innerEnd
+		let rawBody = text.slice(pOpen.end, pEnd)
+		// A `>` the repair put back closes the tag, it does not open the value: reading it as one
+		// turned every cut parameter into the literal `">"`.
+		for (const at of synth) {
+			if (at >= pOpen.end && at < pEnd) rawBody = rawBody.replace(">", "")
+		}
+		rawBody = rawBody.trim()
+		if (rawBody === "") rawBody = getAttr(pOpen.attrs, "content") ?? ""
+		// A body that opened a DSML tag the stream then cut is not a value: it is the makings of
+		// another parameter, and taking it whole turns the `{` or the marker into the argument.
+		const cutAt = rawBody.search(DSML_CUT_TAG_RE)
+		if (cutAt !== -1) rawBody = rawBody.slice(0, cutAt).trim()
+		// `<parameter name="arguments">{"command":"ls"}</parameter>` carries the call's whole
+		// argument object under a wrapper key; the tool's own schema is keyed by the fields.
+		if (pName === "arguments" && rawBody.startsWith("{")) {
+			const parsed = parseLooseJsonObject(rawBody)
+			if (parsed) {
+				const { _nonce: _boundNonce, ...rest } = parsed
+				Object.assign(args, rest)
+				consumedEnd = pClose ? pClose.end : stripEnd
+				continue
+			}
+		}
+		args[pName] = rawBody
+		consumedEnd = pClose ? pClose.end : stripEnd
 	}
-	// Fail-safe: without at least one non-empty argument value the call is
-	// ambiguous (empty invoke, nameless/valueless parameters) — skip it rather
-	// than emitting a partially-built executable call.
-	if (!Object.values(args).some((v) => v !== "")) return null
+	// Fail-safe: without at least one non-empty argument value the call is ambiguous (empty invoke,
+	// nameless/valueless parameters) — skip it rather than emit a partially-built call. A truncation
+	// is the one exception: the tag the stream cut is a parameter the reply DID declare, so the call
+	// keeps its name and the client can reject it on the schema instead of reading markup as prose.
+	const cutByStream = synth.size > 0
+	if (!Object.values(args).some((v) => v !== "") && !(cutByStream && Object.keys(args).length > 0))
+		return null
 	const name = resolveRequestedToolName(rawName, requested) ?? rawName
 	return { start: open.start, end: close ? close.end : consumedEnd, name, args }
 }
@@ -574,6 +781,18 @@ function buildDsmlCall(open, close, text, textEnd, requested) {
 function parseDsmlBlocks(text, requested) {
 	const out = []
 	const strip = []
+	// A tag the stream cut before its `>` is one the tag scanner cannot see; the strict dialects
+	// below would "read" it — and claim the turn with an empty call. Closing it here keeps the one
+	// call the reply really declared on the path that recovers its arguments.
+	const repairs = rewriteCutDsmlTags(text)
+	// The `>` the repair put back is not something the model wrote: it must never become the value
+	// of the parameter whose tag the stream cut.
+	const synth = new Set()
+	if (repairs.length > 0) {
+		const applied = applyCutRepair(text, repairs)
+		text = applied.text
+		for (const at of applied.inserted) synth.add(at)
+	}
 	const callsRe = new RegExp(
 		`<${DSML_MARK}\\s*calls\\s*>([\\s\\S]*?)(?:</${DSML_MARK}\\s*calls\\s*>|<${DSML_MARK}\\s*/\\s*calls\\s*>)`,
 		"gi",
@@ -595,14 +814,11 @@ function parseDsmlBlocks(text, requested) {
 			start: cm.index + (closeM ? closeM.index : cm[0].length),
 			end: cm.index + cm[0].length,
 		})
-		const tags = collectDsmlTags(body, "invoke", bodyBase)
-		for (let i = 0; i < tags.length; i += 1) {
-			// A nameless tag is a stray closer, not an opener: skip it WITHOUT
-			// consuming the next tag (pre-harden pairing semantics).
-			if (!getAttr(tags[i].attrs, "name")) continue
-			const call = buildDsmlCall(tags[i], tags[i + 1], text, bodyBase + body.length, requested)
+		// A block that never closed is bounded by the end of the reply, not by the envelope's
+		// own closer: look its parameter tags up in the whole text so they are found.
+		for (const [openTag, closeTag] of pairDsmlTags(collectDsmlTags(body, "invoke", bodyBase))) {
+			const call = buildDsmlCall(openTag, closeTag, text, requested, synth)
 			if (call) out.push(call)
-			if (tags[i + 1]) i += 1 // consume the paired closer
 		}
 	}
 	// Bare root-level invokes outside any envelope convert identically.
@@ -610,11 +826,9 @@ function parseDsmlBlocks(text, requested) {
 	const rootTags = collectDsmlTags(text, "invoke", 0).filter(
 		(t) => !envelopeRanges.some((r) => t.start >= r.start && t.end <= r.end),
 	)
-	for (let i = 0; i < rootTags.length; i += 1) {
-		if (!getAttr(rootTags[i].attrs, "name")) continue
-		const call = buildDsmlCall(rootTags[i], rootTags[i + 1], text, text.length, requested)
+	for (const [openTag, closeTag] of pairDsmlTags(rootTags)) {
+		const call = buildDsmlCall(openTag, closeTag, text, requested, synth)
 		if (call) out.push(call)
-		if (rootTags[i + 1]) i += 1 // consume the paired closer
 	}
 	return { calls: out.sort((a, b) => a.start - b.start), strip }
 }
