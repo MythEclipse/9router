@@ -237,3 +237,47 @@ describe("a Claude client of CodeBuddy", () => {
 		expect(out).not.toContain("DSML")
 	})
 })
+
+/**
+ * The marker does not arrive in one frame. A real upstream stream sends a token at a time, so the
+ * client is already being sent `<｜`, then `｜DSML｜`, before the whole marker is recognisable — and
+ * those fragments used to reach it as assistant prose, ahead of the tool call. On the Anthropic
+ * protocol that is a `text` block starting with `</｜｜DSML` next to the `tool_use` block.
+ */
+describe("bridgeCodebuddyToolCalls - a marker split across frames", () => {
+	const INVOKE = `<${F} invoke name="Bash"><${F} parameter name="command" string="true">ls</${F} parameter></${F} invoke>`
+	const oneTokenPerFrame = (text: string) => text.split("").map(deltaFrame)
+
+	it("never forwards a marker fragment as prose", async () => {
+		const body = await run(oneTokenPerFrame(INVOKE))
+
+		expect(callsOf(body)).toHaveLength(1)
+		expect(textOf(body)).toBe("")
+	})
+
+	it("keeps the prose that came before it, and only that", async () => {
+		const body = await run(oneTokenPerFrame(`Sure:\n${INVOKE}`))
+
+		expect(textOf(body)).toBe("Sure:\n")
+		expect(callsOf(body)[0].function.arguments).toBe('{"command":"ls"}')
+	})
+
+	it("forwards prose ending in `<` unchanged when no marker follows", async () => {
+		// The hold-back must not swallow legitimate text: `x <` is not the start of markup.
+		const prose = "The value must satisfy x <"
+		const body = await run(oneTokenPerFrame(prose))
+
+		expect(textOf(body)).toBe(prose)
+		expect(callsOf(body)).toEqual([])
+		// No markup: the reply is untouched, so the upstream's own frames pass straight through.
+		expect(body).not.toContain("tool_calls")
+	})
+
+	it("forwards a reply that only looks like markup unchanged", async () => {
+		const prose = "<div>hello</div> and a literal <| on its own"
+		const body = await run(oneTokenPerFrame(prose))
+
+		expect(textOf(body)).toBe(prose)
+		expect(callsOf(body)).toEqual([])
+	})
+})

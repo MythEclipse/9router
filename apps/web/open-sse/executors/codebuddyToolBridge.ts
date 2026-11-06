@@ -23,6 +23,42 @@ import { parseSSELine } from "../utils/streamHelpers.ts"
 
 const DSML_MARKER_RE = /(?:｜｜|\|\|?)DSML(?:｜｜|\|\|?)/i
 
+/**
+ * How much of the end of `text` cannot be forwarded yet: a DSML marker arrives token by token, so
+ * the frames that carry `<｜`, then `｜DSML｜`, have already passed the client by the time the whole
+ * marker is recognisable — and those fragments leak as assistant prose ahead of the tool call.
+ * Hold back the longest tail that could still become a marker, and let it through otherwise.
+ */
+const MARKER_STAGES = new Set([
+	"<",
+	"<｜",
+	"<｜｜",
+	"<｜｜D",
+	"<｜｜DS",
+	"<｜｜DSM",
+	"<｜｜DSML",
+	"<｜｜DSML｜",
+	"<｜｜DSML｜｜",
+	"<|",
+	"<||",
+	"<||D",
+	"<||DS",
+	"<||DSM",
+	"<||DSML",
+	"<||DSML|",
+	"<|DSML|",
+])
+/**
+ * The longest tail of `text` that could still grow into a DSML marker: `<`, then `<｜`, `<｜｜DSML`,
+ * the whole marker. Everything before it is prose and can be forwarded.
+ */
+function markerTail(text) {
+	for (let n = Math.min(text.length, 12); n > 0; n -= 1) {
+		if (MARKER_STAGES.has(text.slice(-n))) return n
+	}
+	return 0
+}
+
 const encoder = new TextEncoder()
 
 interface StreamedReply {
@@ -111,7 +147,16 @@ export function bridgeCodebuddyToolCalls(result, body, idSeed: string) {
 	const stream = new ReadableStream({
 		async start(controller) {
 			const emit = (text: string) => controller.enqueue(encoder.encode(text))
-			// Text keeps accumulating once buffering starts — only forwarding stops.
+			// A marker arrives one token per frame (`<｜` then `｜DSML｜` …), so by the time the whole
+			// marker is recognisable the frames before it have already been sent — and those
+			// fragments leak to the client as prose. A frame that ENDS in a marker prefix is held
+			// back instead; it is released as prose at the end if no marker ever completes.
+			let held = ""
+			const send = (frame: string) => {
+				const lead = held
+				held = ""
+				return lead ? `${lead}\n\n${frame}\n\n` : `${frame}\n\n`
+			}
 			const absorb = (frame: string) => {
 				const delta = deltaOf(frame)
 				if (!delta) return
@@ -133,13 +178,27 @@ export function bridgeCodebuddyToolCalls(result, body, idSeed: string) {
 						const frame = rest.slice(0, cut)
 						rest = rest.slice(cut + 2)
 						absorb(frame)
-						if (!buffering) emit(`${frame}\n\n`)
+						if (buffering) {
+							held = ""
+						} else if (markerTail(reply.text) > 0) {
+							// The reply ends in what may still become a marker: keep the frame, and
+							// fold it in if the next one completes the marker. Once buffering starts
+							// the held frame is dropped — it was markup, not prose.
+							held = held ? `${held}\n\n${frame}` : frame
+						} else {
+							emit(send(frame))
+						}
 						cut = rest.indexOf("\n\n")
 					}
 				}
 				if (rest.trim()) {
 					absorb(rest)
-					if (!buffering) emit(rest)
+					if (!buffering) emit(send(rest))
+				}
+				// No marker completed: what was held was ordinary prose after all.
+				if (held && !buffering) {
+					emit(held)
+					held = ""
 				}
 				if (buffering) emit(closingFrames(reply, tools, idSeed))
 			} catch {
