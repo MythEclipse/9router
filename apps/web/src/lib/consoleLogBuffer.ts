@@ -26,6 +26,7 @@ if (!state.flushTimer) state.flushTimer = null
 
 const FLUSH_INTERVAL_MS = 100
 const MAX_BATCH_LINES = 50
+const DASHBOARD_EXCLUDED_TAGS = /\[(?:TOKEN_REFRESH|BG_TOKEN_REFRESH)\]\s/
 
 function flushPendingLines() {
 	state.flushTimer = null
@@ -63,6 +64,11 @@ function formatArg(arg) {
 }
 
 function appendLine(line) {
+	// Token refresh is background operational noise for the dashboard console.
+	// The original console method still runs, so these messages remain available
+	// in the server terminal and deployment logs.
+	if (DASHBOARD_EXCLUDED_TAGS.test(line)) return
+
 	state.logs.push(line)
 	const maxLines = CONSOLE_LOG_CONFIG.maxLines
 	if (state.logs.length > maxLines) {
