@@ -172,12 +172,14 @@ describe("OpenCode Go x-opencode-session", () => {
 
 describe("chatCore provider session forwarding", () => {
 	it("passes the original provider session and client tool on initial and retry execution", () => {
-		const source = readFileSync(
-			fileURLToPath(new URL("../../apps/web/open-sse/handlers/chatCore.ts", import.meta.url)),
-			"utf8",
+		// The dispatch sites live in chatCore/executorDispatch.ts since chatCore
+		// was split; both files are scanned so the invariant holds wherever the
+		// call is moved next.
+		const sources = ["handlers/chatCore.ts", "handlers/chatCore/executorDispatch.ts"].map((rel) =>
+			readFileSync(fileURLToPath(new URL(`../../apps/web/open-sse/${rel}`, import.meta.url)), "utf8"),
 		)
-		const calls = [...source.matchAll(/executor\.execute\(\{([\s\S]*?)\}\)/g)].map(
-			(match) => match[1],
+		const calls = sources.flatMap((source) =>
+			[...source.matchAll(/executor\.execute\(\{([\s\S]*?)\}\)/g)].map((match) => match[1]),
 		)
 
 		expect(calls).toHaveLength(4)

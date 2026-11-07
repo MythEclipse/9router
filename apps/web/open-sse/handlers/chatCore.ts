@@ -1,7 +1,6 @@
-import { getAdapter } from "@9router/db/driver"
 import type { CustomPluginResult } from "@/lib/plugins/customPluginsRuntime"
 import { applyCustomPlugins } from "@/lib/plugins/customPluginsRuntime"
-import { appendRequestLog, saveRequestDetail, trackPendingRequest } from "@/lib/usageDb"
+import { appendRequestLog, trackPendingRequest } from "@/lib/usageDb"
 import { supportsGrokCliReasoningEffort } from "../config/grokCli.ts"
 import {
 	getModelStrip,
@@ -12,43 +11,12 @@ import {
 	PROVIDER_ID_TO_ALIAS,
 } from "../config/providerModels.ts"
 import { PROVIDERS } from "../config/providers.ts"
-import {
-	HTTP_STATUS,
-	RESPONSE_PARSE_RETRY_ATTEMPTS,
-	TOKEN_SAVER_HEADER,
-} from "../config/runtimeConfig.ts"
+import { HTTP_STATUS, TOKEN_SAVER_HEADER } from "../config/runtimeConfig.ts"
 import { getExecutor } from "../executors/index.ts"
 import { getCapabilitiesForModel } from "../providers/capabilities.ts"
-import { injectCaveman } from "../rtk/caveman.ts"
-import { pruneContextMessages, resolvePruningLimit } from "../rtk/contextPruning.ts"
-import { injectCustomPrompt } from "../rtk/customPrompt.ts"
-import type { HeadroomDiagnostics } from "../rtk/headroom.ts"
-import {
-	compressWithHeadroom,
-	formatHeadroomLog,
-	formatHeadroomSizeLog,
-	isHeadroomPhantomSavings,
-} from "../rtk/headroom.ts"
 import { compressMessages, formatRtkLog } from "../rtk/index.ts"
-import { injectPonytail } from "../rtk/ponytail.ts"
-import { compressWithPxpipe } from "../rtk/pxpipe.ts"
-import {
-	checkSemanticCache,
-	checkSemanticCacheStream,
-	hydrateSemanticCache,
-	setSemanticCacheMaxEntries,
-	setSemanticCacheTtlMs,
-} from "../rtk/semanticCache.ts"
-import {
-	measureCacheSavings,
-	measurePruningSavings,
-	measureRtkSavings,
-	recordTokenSavings,
-} from "../rtk/tokenSaverStats.ts"
 import { detectFormat, getTargetFormat, resolveTransport } from "../services/provider.ts"
-import { refreshWithRetry } from "../services/tokenRefresh.ts"
 import {
-	collectJsonFrames,
 	isChatCompletionBody,
 	isEventStreamResponse,
 	jsonResponseFromBody,
@@ -67,12 +35,7 @@ import {
 	defaultClaudeToolType,
 	shouldDefaultClaudeToolType,
 } from "../translator/concerns/toolCall.ts"
-import {
-	degrade as degradeToolPayload,
-	isToolCallRejection,
-	repair as repairToolPayload,
-	TOOL_FALLBACK_MAX_LEVEL,
-} from "../translator/concerns/toolCallFallback.ts"
+import { repair as repairToolPayload } from "../translator/concerns/toolCallFallback.ts"
 import { rescueRequest } from "../translator/concerns/toolCallRescue.ts"
 import { anchorClaudeCache, normalizeClaudePassthrough } from "../translator/formats/claude.ts"
 import { cacheConfigFrom } from "../translator/formats/claudeCache.ts"
@@ -80,24 +43,23 @@ import { FORMATS } from "../translator/formats.ts"
 import { translateRequest } from "../translator/index.ts"
 import { handleBypassRequest } from "../utils/bypassHandler.ts"
 import { detectClientTool, isNativePassthrough } from "../utils/clientDetector.ts"
-import { createErrorResult, formatProviderError, parseUpstreamError } from "../utils/error.ts"
-import { applyModelAlias, calledModelName } from "../utils/modelAlias.ts"
-import { takeRenamedToolNames } from "../utils/opencodeFingerprint.ts"
+import { createErrorResult } from "../utils/error.ts"
 import { createRequestLogger } from "../utils/requestLogger.ts"
 import { resolveSessionId } from "../utils/sessionManager.ts"
 import { createStreamController } from "../utils/streamHandler.ts"
 import { prefersStreaming } from "../utils/streamPreference.ts"
 import { dedupeTools } from "../utils/toolDeduper.ts"
-import { upstreamResponseHeaders } from "../utils/upstreamHeaders.ts"
+import { dispatchExecutor } from "./chatCore/executorDispatch.ts"
 import { handleNonStreamingResponse } from "./chatCore/nonStreamingHandler.ts"
 import {
-	buildRequestDetail,
-	extractRequestConfig,
-	saveFailedUsage,
-	saveUsageStats,
-} from "./chatCore/requestDetail.ts"
+	type ChatCoreOptions,
+	type ChatCoreResult,
+	normalizeChatCoreOptions,
+} from "./chatCore/options.ts"
+import { semanticCacheGate } from "./chatCore/semanticCacheGate.ts"
 import { handleForcedSSEToJson } from "./chatCore/sseToJsonHandler.ts"
 import { buildOnStreamComplete, handleStreamingResponse } from "./chatCore/streamingHandler.ts"
+import { applyTokenSavers } from "./chatCore/tokenSavers.ts"
 
 /**
  * Core chat handler - shared between SSE and Worker
@@ -150,216 +112,38 @@ async function logInvalidCodexUpstream({
 	)
 }
 
-/**
- * Check a successful buffered upstream response before handing it to a parser.
- * Streaming responses are deliberately checked only when the client has not
- * received a stream yet; once bytes are sent, replaying the request would
- * duplicate a partial answer.
- */
-async function responseBodyNeedsParseRetry(response) {
-	// HTTP failures (including rate limits and upstream 5xx responses) must
-	// follow the normal error/fallback path, never the malformed-body replay.
-	if (!response?.ok || response.status >= 400) return false
-	if (!response || typeof response.clone !== "function") return true
-	let text = ""
-	try {
-		text = await response.clone().text()
-	} catch {
-		return true
-	}
-	if (!text.trim()) return true
-	if (isEventStreamResponse(response) || looksLikeSseText(text)) {
-		const frames = collectJsonFrames(text)
-		if (frames.some((frame) => frame?.error || frame?.type === "error")) return false
-		return frames.length === 0
-	}
-	try {
-		const body = JSON.parse(text)
-		// Some gateways incorrectly return an error envelope with HTTP 200.
-		// Preserve it for the regular parser instead of replaying the request.
-		if (body?.error || body?.type === "error" || body?.status === "error") return false
-		return false
-	} catch {
-		return true
-	}
-}
-
-/**
- * Structured logger threaded through the handler. Callers pass console-like
- * objects whose optional helpers vary, hence the open index signature.
- */
-interface LogSink {
-	info?: (tag: string, message: string) => void
-	debug?: (tag: string, message: string) => void
-	warn?: (tag: string, message: string) => void
-	error?: (tag: string, message: string) => void
-	line?: (tag: string, icon: string, message: string) => void
-	errorLine?: (tag: string, icon: string, message: string) => void
-	fmtThink?: (thinking: unknown) => string | null
-	tagForSession?: (seed: string) => string
-	nextTag?: () => string
-	[key: string]: unknown
-}
-
-/**
- * Every knob `handleChatCore` accepts. All fields stay optional so the many
- * call sites (routes, other handlers, tests) keep compiling as before; the
- * ones the function relies on unconditionally are marked required.
- */
-interface ChatCoreOptions {
-	body: Record<string, unknown> & { stream?: boolean }
-	modelInfo: { provider: string; model: string }
-	credentials: Record<string, unknown> & {
-		connectionName?: string
-		connectionId?: string
-		runtimeTransport?: { format?: string; [key: string]: unknown }
-		rawHeaders?: Record<string, string>
-		providerSpecificData?: Record<string, unknown> & {
-			connectionProxyEnabled?: boolean
-			connectionProxyUrl?: string
-			connectionNoProxy?: string
-			proxyType?: string
-			relayUrl?: string
-			vercelRelayUrl?: string
-			connectionProxyPoolId?: string | null
-			strictProxy?: boolean
-		}
-	}
-	log?: LogSink
-	onCredentialsRefreshed?: (credentials: Record<string, unknown>) => void | Promise<void>
-	onRequestSuccess?: () => void | Promise<void>
-	onDisconnect?: (reason?: string | { reason: string; duration: number }) => void | Promise<void>
-	clientRawRequest?: {
-		headers?: Record<string, string>
-		endpoint?: string
-		body?: Record<string, unknown>
-		[key: string]: unknown
-	}
-	connectionId?: string
-	userAgent?: string
-	apiKey?: string
-	ccFilterNaming?: boolean
-	rtkEnabled?: unknown
-	contextPruningEnabled?: unknown
-	maxMessagesLimit?: number
-	semanticCacheEnabled?: boolean
-	semanticCacheTtlHours?: number
-	semanticCacheMaxEntries?: number
-	contextPruningLevel?: unknown
-	headroomEnabled?: boolean
-	headroomUrl?: string
-	headroomCompressUserMessages?: boolean
-	headroomTimeoutMs?: number
-	cavemanEnabled?: unknown
-	cavemanLevel?: unknown
-	ponytailEnabled?: unknown
-	ponytailLevel?: unknown
-	pxpipeEnabled?: unknown
-	pxpipeMinChars?: unknown
-	pxpipeTimeoutMs?: number
-	pxpipeTransform?: unknown
-	onPxpipeEvent?: (event: Record<string, unknown>) => void
-	sourceFormatOverride?: string
-	providerThinking?: { mode?: string; [key: string]: unknown }
-	requestedModel?: string
-	toolCallFallbackEnabled?: boolean
-	providerOverrides?: unknown
-	modelMultipliers?: unknown
-	isAntiProbe?: boolean
-	hideError?: boolean
-	customPromptEnabled?: boolean
-	customPrompt?: string
-	clientSignal?: AbortSignal | null
-}
-
 /** Length of a request-side array field without committing to its element type. */
 function countOf(value: unknown): number {
 	return Array.isArray(value) ? value.length : 0
 }
 
-/**
- * Record a cache hit as a usage row.
- *
- * A hit is a request that cost nothing, and that is exactly why it has to be written down: the
- * saving is only checkable per key, per model and per day if the hit is a row with `cached = 1`
- * and a zero cost. The token counts come from the cached answer when it carries them; a streamed
- * hit has no parsed usage, and `0/0` with `cached = 1` is the honest shape.
- */
-function recordCacheHitUsage(input: {
-	provider: string
-	model: string
-	connectionId?: string | null
-	apiKey?: string | null
-	endpoint?: string | null
-	tokens: Record<string, number> | null
-}): void {
-	saveUsageStats({
-		provider: input.provider,
-		model: input.model,
-		tokens: input.tokens ?? { prompt_tokens: 0, completion_tokens: 0 },
-		connectionId: input.connectionId,
-		apiKey: input.apiKey,
-		endpoint: input.endpoint,
-		label: "CACHE HIT",
-		silent: true,
-		cached: true,
-		// Nothing was called upstream, so the duration is the cache lookup, not a model.
-		latency: { total: 0 },
-	})
-}
-
-/** The `usage` block of a cached answer, when it has one. */
-function cachedUsageOf(response: unknown): Record<string, number> | null {
-	if (!response || typeof response !== "object") return null
-	const usage = (response as { usage?: unknown }).usage
-	return usage && typeof usage === "object" ? (usage as Record<string, number>) : null
-}
-
-export async function handleChatCore({
-	body,
-	modelInfo,
-	credentials,
-	log,
-	onCredentialsRefreshed,
-	onRequestSuccess,
-	onDisconnect,
-	clientRawRequest,
-	connectionId,
-	userAgent,
-	apiKey,
-	ccFilterNaming,
-	rtkEnabled,
-	contextPruningEnabled,
-	maxMessagesLimit,
-	semanticCacheEnabled,
-	semanticCacheTtlHours,
-	semanticCacheMaxEntries,
-	contextPruningLevel,
-	headroomEnabled,
-	headroomUrl,
-	headroomCompressUserMessages,
-	headroomTimeoutMs,
-	cavemanEnabled,
-	cavemanLevel,
-	ponytailEnabled,
-	ponytailLevel,
-	pxpipeEnabled,
-	pxpipeMinChars,
-	pxpipeTimeoutMs,
-	pxpipeTransform,
-	onPxpipeEvent,
-	sourceFormatOverride,
-	providerThinking,
-	requestedModel,
-	toolCallFallbackEnabled = true,
-	providerOverrides,
-	modelMultipliers = null,
-	isAntiProbe = false,
-	hideError = false,
-	customPromptEnabled = false,
-	customPrompt = "",
-	clientSignal = null,
-}: ChatCoreOptions) {
+export async function handleChatCore(options: ChatCoreOptions): Promise<ChatCoreResult> {
+	// Groups are folded with the flat legacy fields here, so every existing caller
+	// (route layer, tests, standalone open-sse users) keeps sending what it always
+	// sent while new callers can pass `tokenSavers` / `semanticCache` / `stream` /
+	// `client` / `hooks`.
+	const normalized = normalizeChatCoreOptions(options)
+	// `body` is reassigned below when provider-level thinking config is injected.
+	let { body } = normalized
+	const { modelInfo, credentials, log, tokenSavers, semanticCache, client, hooks } = normalized
+	const { stream: streamConfig } = normalized
+	const {
+		connectionId,
+		userAgent,
+		apiKey,
+		clientRawRequest,
+		ccFilterNaming,
+		requestedModel,
+		providerThinking,
+		providerOverrides,
+		modelMultipliers = null,
+		isAntiProbe = false,
+		hideError = false,
+		sourceFormatOverride,
+		toolCallFallbackEnabled = true,
+	} = client
+	const { onCredentialsRefreshed, onRequestSuccess, onDisconnect } = hooks
+	const { clientSignal = null } = streamConfig
 	const { provider, model } = modelInfo
 	const requestStartTime = Date.now()
 	// Stable per-session color so all lines of one CLI conversation share a tag
@@ -387,72 +171,23 @@ export async function handleChatCore({
 
 	// Check for bypass patterns (warmup, skip, cc naming)
 	const bypassResponse = handleBypassRequest(body, model, userAgent, ccFilterNaming)
-	if (bypassResponse) return bypassResponse
+	// handleBypassRequest answers with a bare Response, which is what this path has
+	// always handed back (typed away here rather than reshaped at runtime).
+	if (bypassResponse) return bypassResponse as unknown as ChatCoreResult
 
-	// Check Semantic / Duplicate Prompt Cache (for non-streaming requests)
-	// Cache TTL and cap come from settings so the Token Saver sliders apply
-	// without a proxy restart.
-	if (semanticCacheEnabled) {
-		const hours = Number(semanticCacheTtlHours)
-		if (Number.isFinite(hours) && hours > 0) setSemanticCacheTtlMs(hours * 60 * 60 * 1000)
-		if (semanticCacheMaxEntries > 0) setSemanticCacheMaxEntries(semanticCacheMaxEntries)
-		// Load the durable copy on first enabled request, not at import: the cache lives in `kv`
-		// now, and a restart should not look like a cold install. Not awaited — the request in
-		// hand must not wait for a table read it may not need.
-		void hydrateSemanticCache()
-	}
-
-	if (semanticCacheEnabled && !body.stream) {
-		const cachedResponse = checkSemanticCache(body, `${provider}/${model}`)
-		if (cachedResponse) {
-			log?.info?.("CACHE", `⚡ Instant semantic cache hit for ${provider}/${model}`)
-			// A hit replays the provider's own billed usage - that is exactly what
-			// the second identical request would have cost.
-			recordTokenSavings(getAdapter(), { provider, model, cache: measureCacheSavings(cachedResponse) })
-			// The hit is a real request that cost nothing. Without this row the saving exists
-			// only in a counter that dies with the process, and "what did the cache save this
-			// key today" has no answer.
-			recordCacheHitUsage({
-				provider,
-				model,
-				connectionId,
-				apiKey,
-				endpoint: clientRawRequest?.endpoint,
-				tokens: cachedUsageOf(cachedResponse),
-			})
-			// A cache hit must not name the model that originally served it either.
-			applyModelAlias(cachedResponse, calledModelName(requestedModel, model))
-			return {
-				success: true,
-				response: new Response(JSON.stringify(cachedResponse), {
-					headers: { "Content-Type": "application/json", "X-9Router-Cache": "HIT" },
-				}),
-			}
-		}
-	}
-
-	// Streamed hits replay the bytes that were captured after translation, so the client
-	// receives the same frames it would have received the first time.
-	if (semanticCacheEnabled && body.stream) {
-		const cachedStream = checkSemanticCacheStream(body, `${provider}/${model}`)
-		if (cachedStream) {
-			log?.info?.("CACHE", `⚡ Instant stream cache hit for ${provider}/${model}`)
-			recordCacheHitUsage({
-				provider,
-				model,
-				connectionId,
-				apiKey,
-				endpoint: clientRawRequest?.endpoint,
-				tokens: null,
-			})
-			return {
-				success: true,
-				response: new Response(cachedStream, {
-					headers: { "Content-Type": "text/event-stream", "X-9Router-Cache": "HIT" },
-				}),
-			}
-		}
-	}
+	// Semantic / duplicate prompt cache (non-streaming and streamed hits).
+	const cachedResult = semanticCacheGate({
+		...semanticCache,
+		body,
+		provider,
+		model,
+		requestedModel,
+		connectionId,
+		apiKey,
+		clientRawRequest,
+		log,
+	})
+	if (cachedResult) return cachedResult
 
 	const alias = PROVIDER_ID_TO_ALIAS[provider] || provider
 	const modelTargetFormat = getModelTargetFormat(alias, model)
@@ -514,7 +249,7 @@ export async function handleChatCore({
 	// shapes 1:1 - keep the post-translate pass there so those providers are
 	// untouched (and a retry never re-compresses an already-compressed body).
 	const preTranslateRtk =
-		provider === "cursor" ? compressMessages(body, tokenSaverEnabled && rtkEnabled) : null
+		provider === "cursor" ? compressMessages(body, tokenSaverEnabled && tokenSavers.rtkEnabled) : null
 	const preTranslateRtkLine = formatRtkLog(preTranslateRtk)
 	if (preTranslateRtkLine) console.log(preTranslateRtkLine)
 
@@ -738,134 +473,24 @@ export async function handleChatCore({
 		}
 	}
 
-	// RTK: compress tool_result content. Skipped when already done pre-translate.
-	const rtkStats =
-		preTranslateRtk || compressMessages(translatedBody, tokenSaverEnabled && rtkEnabled)
-
-	// Headroom: optional external proxy compression; fail open if proxy is absent.
-	const headroomDiagnostics: HeadroomDiagnostics = {}
-	const headroomStats = await compressWithHeadroom(translatedBody, {
-		enabled: tokenSaverEnabled && headroomEnabled,
-		url: headroomUrl,
-		model: upstreamModel,
-		format: finalFormat,
-		compressUserMessages: headroomCompressUserMessages,
-		timeoutMs: headroomTimeoutMs,
-		diagnostics: headroomDiagnostics,
-	})
-	const headroomLine = formatHeadroomLog(headroomStats)
-	const headroomSizeLine = formatHeadroomSizeLog(headroomDiagnostics)
-	if (headroomLine) {
-		log?.info?.("HEADROOM", `${headroomLine}${headroomSizeLine ? ` | ${headroomSizeLine}` : ""}`)
-		if (isHeadroomPhantomSavings(headroomStats, headroomDiagnostics)) {
-			log?.warn?.(
-				"HEADROOM",
-				`reported token delta, but messages and outbound JSON shrank <5% | ${formatHeadroomSizeLog(headroomDiagnostics)}`,
-			)
-		}
-	} else if (tokenSaverEnabled && headroomEnabled)
-		log?.warn?.(
-			"HEADROOM",
-			`skipped: ${headroomDiagnostics.reason || "compression unavailable"}${headroomDiagnostics.endpoint ? ` (${headroomDiagnostics.endpoint})` : ""}`,
-		)
-
 	// Token-saver flags accumulator for the single "⚙" log line below.
 	const xf = []
 
-	// Context Pruning: keep system prompt and most recent messages
-	if (tokenSaverEnabled && contextPruningEnabled) {
-		// A preset only decides the default; an explicit limit still wins.
-		const presetLimit = resolvePruningLimit(contextPruningLevel, undefined)
-		const explicit = Number(maxMessagesLimit)
-		const effective =
-			presetLimit !== undefined && (!Number.isFinite(explicit) || explicit === 20)
-				? presetLimit
-				: maxMessagesLimit || 20
-		const prunedTokens = measurePruningSavings(translatedBody, effective)
-		pruneContextMessages(translatedBody, effective)
-		if (prunedTokens > 0) recordTokenSavings(getAdapter(), { provider, model, pruning: prunedTokens })
-		xf.push(`PRUNING:${effective}msgs`)
-	}
-	if (rtkStats?.hits?.length) {
-		const rtkSaved = measureRtkSavings(rtkStats)
-		if (rtkSaved > 0) recordTokenSavings(getAdapter(), { provider, model, rtk: rtkSaved })
-		xf.push(`RTK:${rtkStats.hits.length}`)
-	}
-
-	// Caveman: inject terse-style system prompt
-	if (tokenSaverEnabled && cavemanEnabled && cavemanLevel) {
-		injectCaveman(translatedBody, finalFormat, cavemanLevel)
-		xf.push(`CAVEMAN:${cavemanLevel}`)
-	}
-
-	// Ponytail: inject lazy-senior-dev system prompt
-	if (tokenSaverEnabled && ponytailEnabled && ponytailLevel) {
-		injectPonytail(translatedBody, finalFormat, ponytailLevel)
-		xf.push(`PONYTAIL:${ponytailLevel}`)
-	}
-
-	// Custom prompt: user-authored instruction, independent of the savers above
-	if (customPromptEnabled && injectCustomPrompt(translatedBody, finalFormat, customPrompt)) {
-		xf.push(`CUSTOMPROMPT:${customPrompt.trim().length}c`)
-	}
-
-	// PXPIPE: image bulky context (Claude-format bodies only), last saver before dispatch
-	let pxpipeSummary = null
-	if (pxpipeEnabled) {
-		const pxpipeResult = await compressWithPxpipe(translatedBody, {
-			enabled: true,
-			format: finalFormat,
-			model: upstreamModel,
-			minChars: pxpipeMinChars as number,
-			timeoutMs: pxpipeTimeoutMs as number,
-			transform: pxpipeTransform as (args: {
-				body: Uint8Array
-				model?: string
-				options?: { minCompressChars?: number; [key: string]: unknown }
-			}) =>
-				| Promise<{
-						applied?: boolean
-						reason?: string
-						detail?: string
-						body?: Uint8Array
-						info?: {
-							compressedChars?: number
-							imageTokens?: number
-							imagePixels?: number
-							imageCount?: number
-							imageBytes?: number
-							baselineTokens?: number
-							[key: string]: unknown
-						}
-						cache?: { ownsCacheControl?: boolean }
-				  }>
-				| {
-						applied?: boolean
-						reason?: string
-						detail?: string
-						body?: Uint8Array
-						info?: {
-							compressedChars?: number
-							imageTokens?: number
-							imagePixels?: number
-							imageCount?: number
-							imageBytes?: number
-							baselineTokens?: number
-							[key: string]: unknown
-						}
-						cache?: { ownsCacheControl?: boolean }
-				  }
-				| null,
-		})
-		pxpipeSummary = pxpipeResult.summary
-		if (pxpipeResult.body) translatedBody = pxpipeResult.body
-		if (pxpipeSummary?.applied) xf.push(`PXPIPE:${pxpipeSummary.imageCount}img`)
-		try {
-			onPxpipeEvent?.({ provider, model, ...pxpipeSummary })
-		} catch {
-			/* stats must not break requests */
-		}
-	}
+	// Token savers: applied at the final body just before dispatch. Each saver
+	// pushes its flag into `xf`; Headroom logs its own info/warn lines inside,
+	// and the single "⚙" line stays here so it still prints after every saver.
+	const savers = await applyTokenSavers(translatedBody, finalFormat, tokenSavers, {
+		provider,
+		model,
+		upstreamModel,
+		finalFormat,
+		tokenSaverEnabled,
+		preTranslateRtk,
+		log,
+		flags: xf,
+	})
+	translatedBody = savers.translatedBody
+	const pxpipeSummary = savers.pxpipeSummary
 
 	if (xf.length && log?.line) log.line(reqTag, "⚙", xf.join(" · "))
 
@@ -963,351 +588,46 @@ export async function handleChatCore({
 		)
 	}
 
-	// Execute request
-	let providerResponse, providerUrl, providerHeaders, finalBody
-	// Most executors return their registry format. Cursor AgentService is an
-	// exception: it is decoded by the executor into OpenAI-compatible output.
-	let providerResponseFormat = targetFormat
-	try {
-		const result = await executor.execute({
-			model,
-			body: translatedBody,
-			stream,
-			credentials,
-			providerSessionId: sessionSeed,
-			clientTool,
-			signal: streamController.signal,
-			log,
-			reqTag,
-			proxyOptions,
-			providerOverrides,
-		})
-		providerResponse = result.response
-		providerUrl = result.url
-		providerHeaders = result.headers
-		finalBody = result.transformedBody
-		providerResponseFormat = result.responseFormat || targetFormat
-		const renamedToolNames = takeRenamedToolNames(translatedBody)
-		if (renamedToolNames?.size) {
-			toolNameMap = new Map([...(toolNameMap || []), ...renamedToolNames])
-		}
-		reqLogger.logTargetRequest(providerUrl, providerHeaders, finalBody)
-	} catch (error) {
-		trackPendingRequest(trackedModel, provider, connectionId, false, true)
-		appendRequestLog({
-			model: trackedModel,
-			provider,
-			connectionId,
-			status: `FAILED ${error.name === "AbortError" ? 499 : HTTP_STATUS.BAD_GATEWAY}`,
-			requestedModel: model,
-		}).catch(() => {})
-		saveRequestDetail(
-			buildRequestDetail({
-				provider,
-				model,
-				connectionId,
-				requestedModel,
-				latency: { ttft: 0, total: Date.now() - requestStartTime },
-				tokens: { prompt_tokens: 0, completion_tokens: 0 },
-				request: extractRequestConfig(body, stream),
-				providerRequest: translatedBody || null,
-				response: {
-					error: error.message || String(error),
-					status: error.name === "AbortError" ? 499 : 502,
-					thinking: null,
-				},
-				pxpipe: pxpipeSummary,
-				status: "error",
-			}),
-		).catch(() => {})
-		saveFailedUsage({
-			provider,
-			model,
-			requestedModel,
-			connectionId,
-			apiKey,
-			endpoint: clientRawRequest?.endpoint,
-			statusCode: error.name === "AbortError" ? 499 : 502,
-		})
-
-		if (error.name === "AbortError") {
-			streamController.handleError(error)
-			return createErrorResult(499, "Request aborted")
-		}
-		const errMsg = formatProviderError(error, provider, model, HTTP_STATUS.BAD_GATEWAY)
-		if (log?.errorLine) {
-			log.errorLine(
-				reqTag,
-				"✗",
-				`ERROR 502 · ${provider}/${model} · ${Date.now() - requestStartTime}ms\n    ${errMsg}${error.stack ? `\n    ${error.stack}` : ""}`,
-			)
-		}
-		try {
-			const { recordErrorLog } = await import("@/lib/localDb")
-			recordErrorLog({
-				provider,
-				model,
-				endpoint: clientRawRequest?.endpoint || "chat",
-				statusCode: 502,
-				errorMessage: errMsg,
-				errorType: "executor_error",
-				stack: error.stack || "",
-			})
-		} catch {
-			/* fail open */
-		}
-		const isHideError = Boolean(hideError)
-		return createErrorResult(HTTP_STATUS.BAD_GATEWAY, errMsg, undefined, null, isHideError)
-	}
-
-	// Handle 401/403 - try token refresh (skip for noAuth providers)
-	if (
-		!executor.noAuth &&
-		(providerResponse.status === HTTP_STATUS.UNAUTHORIZED ||
-			providerResponse.status === HTTP_STATUS.FORBIDDEN)
-	) {
-		try {
-			// Mutate credentials after each successful refresh: rotating refresh_token
-			// providers (xAI/grok-cli) issue a new RT on every refresh; without this,
-			// refreshWithRetry's 2nd/3rd attempt reuses the already-consumed RT →
-			// invalid_grant → auth_failed retryable=false.
-			const newCredentials = await refreshWithRetry(
-				async () => {
-					const result = await executor.refreshCredentials(credentials, log)
-					if (result?.refreshToken && result.refreshToken !== credentials.refreshToken) {
-						if (result.accessToken) credentials.accessToken = result.accessToken
-						credentials.refreshToken = result.refreshToken
-					}
-					return result
-				},
-				3,
-				log,
-			)
-			if (newCredentials?.accessToken || newCredentials?.copilotToken) {
-				if (log?.line) log.line(reqTag, "🔑", `TOKEN REFRESHED · ${provider}/${model}`)
-				Object.assign(credentials, newCredentials)
-				if (onCredentialsRefreshed) {
-					try {
-						await onCredentialsRefreshed(newCredentials)
-					} catch (e) {
-						log?.warn?.("TOKEN", `onCredentialsRefreshed failed: ${e.message}`)
-					}
-				}
-				try {
-					const retryResult = await executor.execute({
-						model,
-						body: translatedBody,
-						stream,
-						credentials,
-						providerSessionId: sessionSeed,
-						clientTool,
-						signal: streamController.signal,
-						log,
-						proxyOptions,
-						providerOverrides,
-					})
-					if (retryResult.response.ok) {
-						providerResponse = retryResult.response
-						providerUrl = retryResult.url
-						providerResponseFormat = retryResult.responseFormat || targetFormat
-					}
-				} catch {
-					log?.warn?.("TOKEN", `${provider.toUpperCase()} | retry after refresh failed`)
-				}
-			} else {
-				log?.warn?.("TOKEN", `${provider.toUpperCase()} | refresh failed`)
-			}
-		} catch (e) {
-			log?.warn?.("TOKEN", `${provider.toUpperCase()} | refresh threw: ${e.message}`)
-		}
-	}
-
-	let parseRetryCount = 0
-	const retryMalformedResponse = async () => {
-		while (
-			providerResponse?.ok &&
-			parseRetryCount < RESPONSE_PARSE_RETRY_ATTEMPTS &&
-			(await responseBodyNeedsParseRetry(providerResponse))
-		) {
-			parseRetryCount += 1
-			try {
-				const retryResult = await executor.execute({
-					model,
-					body: translatedBody,
-					stream,
-					credentials,
-					providerSessionId: sessionSeed,
-					clientTool,
-					signal: streamController.signal,
-					log,
-					reqTag,
-					proxyOptions,
-					providerOverrides,
-				})
-				providerResponse = retryResult.response
-				providerUrl = retryResult.url
-				providerHeaders = retryResult.headers
-				finalBody = retryResult.transformedBody
-				providerResponseFormat = retryResult.responseFormat || targetFormat
-				reqLogger.logTargetRequest(providerUrl, providerHeaders, finalBody)
-				log?.warn?.(
-					"RETRY",
-					`${provider.toUpperCase()} | ${model} | retried malformed response (${parseRetryCount}/${RESPONSE_PARSE_RETRY_ATTEMPTS})`,
-				)
-			} catch (error) {
-				log?.warn?.(
-					"RETRY",
-					`${provider.toUpperCase()} | ${model} | parse retry failed: ${error?.message || error}`,
-				)
-				return false
-			}
-		}
-		return parseRetryCount > 0
-	}
-
-	// Non-streaming responses are fully buffered before reaching the caller, so
-	// an invalid document can be retried safely. For a streaming client, only
-	// retry a non-SSE response before its first byte is forwarded.
-	if (providerResponse?.ok && !clientRequestedStreaming) {
-		await retryMalformedResponse()
-	} else if (providerResponse?.ok && stream) {
-		const initialText =
-			typeof providerResponse.clone === "function"
-				? await providerResponse
-						.clone()
-						.text()
-						.catch(() => "")
-				: ""
-		if (!isEventStreamResponse(providerResponse) && !looksLikeSseText(initialText)) {
-			await retryMalformedResponse()
-		}
-	}
-
-	// Provider returned error
-	if (!providerResponse.ok) {
-		const firstFailure = await parseUpstreamError(providerResponse, executor)
-		let toolFallbackRecovered = false
-
-		// Tool fallback: a provider that refuses the tool payload outright would
-		// otherwise hand the caller a tool error, and inside a combo it would spend
-		// the whole chain on the same malformed shape. Re-dispatch with the tool
-		// machinery relaxed one step at a time, stopping at the first level the
-		// provider accepts. Only for rejections that actually name tools - a context
-		// overflow or a policy refusal must still reach the caller untouched.
-		if (
-			toolCallFallbackEnabled &&
-			Array.isArray(translatedBody.tools) &&
-			translatedBody.tools.length > 0 &&
-			isToolCallRejection(firstFailure.statusCode, firstFailure.message)
-		) {
-			for (let level = 1; level <= TOOL_FALLBACK_MAX_LEVEL; level++) {
-				const fallbackBody = degradeToolPayload(translatedBody, level)
-				if (!fallbackBody) break
-				try {
-					const attempt = await executor.execute({
-						model,
-						body: fallbackBody,
-						stream,
-						credentials,
-						providerSessionId: sessionSeed,
-						clientTool,
-						signal: streamController.signal,
-						log,
-						proxyOptions,
-					})
-					if (attempt.response.ok) {
-						providerResponse = attempt.response
-						providerUrl = attempt.url
-						finalBody = attempt.transformedBody
-						providerResponseFormat = attempt.responseFormat || targetFormat
-						const renamed = takeRenamedToolNames(fallbackBody)
-						if (renamed?.size) toolNameMap = new Map([...(toolNameMap || []), ...renamed])
-						reqLogger.logTargetRequest(providerUrl, attempt.headers, finalBody)
-						toolFallbackRecovered = true
-						log?.info?.(
-							"TOOLFALLBACK",
-							`recovered at level ${level} · ${provider}/${model} · after ${firstFailure.statusCode}`,
-						)
-						break
-					}
-					log?.debug?.(
-						"TOOLFALLBACK",
-						`level ${level} rejected · ${provider}/${model} · ${attempt.response.status}`,
-					)
-				} catch (e) {
-					log?.debug?.("TOOLFALLBACK", `level ${level} threw · ${provider}/${model} · ${e.message}`)
-				}
-			}
-		}
-
-		if (!toolFallbackRecovered) {
-			trackPendingRequest(trackedModel, provider, connectionId, false, true)
-			const { statusCode, message, resetsAtMs } = firstFailure
-			appendRequestLog({
-				model: trackedModel,
-				provider,
-				connectionId,
-				status: `FAILED ${statusCode}`,
-				requestedModel: model,
-			}).catch(() => {})
-			saveRequestDetail(
-				buildRequestDetail({
-					provider,
-					model,
-					connectionId,
-					requestedModel,
-					latency: { ttft: 0, total: Date.now() - requestStartTime },
-					tokens: { prompt_tokens: 0, completion_tokens: 0 },
-					request: extractRequestConfig(body, stream),
-					providerRequest: finalBody || translatedBody || null,
-					response: { error: message, status: statusCode, thinking: null },
-					pxpipe: pxpipeSummary,
-					status: "error",
-				}),
-			).catch(() => {})
-			saveFailedUsage({
-				provider,
-				model,
-				requestedModel,
-				connectionId,
-				apiKey,
-				endpoint: clientRawRequest?.endpoint,
-				statusCode,
-			})
-
-			const errMsg = formatProviderError(new Error(message), provider, model, statusCode)
-			if (log?.errorLine) {
-				const urlStr = providerUrl ? `\n    URL: ${providerUrl}` : ""
-				log.errorLine(
-					reqTag,
-					"✗",
-					`ERROR ${statusCode} · ${provider}/${model} · ${Date.now() - requestStartTime}ms${urlStr}\n    ${errMsg}`,
-				)
-			}
-			reqLogger.logError(new Error(message), finalBody || translatedBody)
-			try {
-				const { recordErrorLog } = await import("@/lib/localDb")
-				recordErrorLog({
-					provider,
-					model,
-					endpoint: clientRawRequest?.endpoint || "chat",
-					statusCode,
-					errorMessage: errMsg,
-					errorType: "upstream_error",
-				})
-			} catch {
-				/* fail open */
-			}
-			const isHideError = Boolean(hideError)
-			return createErrorResult(
-				statusCode,
-				errMsg,
-				resetsAtMs,
-				upstreamResponseHeaders(providerResponse.headers),
-				isHideError,
-			)
-		}
-	}
+	// Execute request, then retry after a token refresh / malformed body and
+	// degrade the tool payload if the upstream rejects it. Everything that
+	// reports a dispatch failure as a Result happens in there.
+	const dispatched = await dispatchExecutor({
+		executor,
+		provider,
+		model,
+		trackedModel,
+		translatedBody,
+		stream,
+		credentials,
+		sessionSeed,
+		clientTool,
+		proxyOptions,
+		providerOverrides,
+		targetFormat,
+		reqLogger,
+		reqTag,
+		log,
+		requestStartTime,
+		connectionId,
+		requestedModel,
+		apiKey,
+		clientRawRequest,
+		body,
+		pxpipeSummary,
+		toolCallFallbackEnabled,
+		toolNameMap,
+		clientRequestedStreaming,
+		onCredentialsRefreshed,
+		streamController,
+		hideError,
+	})
+	if (dispatched.kind === "return") return dispatched.result as ChatCoreResult
+	let { providerResponse } = dispatched
+	let { providerResponseFormat } = dispatched
+	// Written by the executor, never reassigned: safe as a const.
+	const { finalBody } = dispatched
+	const { toolNameMap: resolvedToolNameMap } = dispatched
+	toolNameMap = resolvedToolNameMap
 
 	const sharedCtx = {
 		provider,
@@ -1389,7 +709,7 @@ export async function handleChatCore({
 				appendLog,
 			})
 			streamController.handleComplete()
-			return result
+			return result as ChatCoreResult
 		}
 	}
 
@@ -1413,7 +733,7 @@ export async function handleChatCore({
 		})
 		if (result) {
 			streamController.handleComplete()
-			return result
+			return result as ChatCoreResult
 		}
 	}
 
@@ -1431,7 +751,7 @@ export async function handleChatCore({
 			appendLog,
 		})
 		streamController.handleComplete()
-		return result
+		return result as ChatCoreResult
 	}
 
 	// Streaming response
@@ -1449,7 +769,7 @@ export async function handleChatCore({
 		onStreamComplete,
 		streamDetailId,
 		credentials,
-	})
+	}) as Promise<ChatCoreResult>
 }
 
 export function isTokenExpiringSoon(expiresAt, bufferMs = 5 * 60 * 1000) {

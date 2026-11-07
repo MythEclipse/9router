@@ -11,23 +11,65 @@ import { filterToOpenAIFormat } from "./formats/openai.ts"
 import { FORMATS } from "./formats.ts"
 import { GEMINI_ROLE, ROLE } from "./schema/roles.ts"
 
-// Registry for translators. Lazy-init guards against circular-import order:
-// translator modules call register() (side-effect) before this module's body runs.
-// var (not let): hoisted as undefined so register() can run during circular import (no TDZ).
-var requestRegistry
-var responseRegistry
+/**
+ * Signature every translator receives. Requests are called as
+ * `(model, body, stream, credentials)` and return the converted body; responses
+ * as `(chunk, state)` and return the converted chunk(s).
+ */
+export type TranslatorFn = (...args: any[]) => any
+
+/** `"<source>:<target>"` key — the pair a translator is registered against. */
+type RegistryKey = `${string}:${string}`
+
+/**
+ * Registry for translators.
+ *
+ * Declaration order is load-bearing, do not "tidy" it:
+ * this module ends with side-effect imports, and ES modules evaluate those
+ * imports *before* any statement above them runs. Each imported translator
+ * file calls `register(...)` at its top level, so `register` (a hoisted
+ * function declaration) is reachable, but any `let`/`const` binding declared
+ * here is still in its temporal dead zone. `??=` on a TDZ variable throws
+ * (not `undefined`), which would collapse every translator load.
+ *
+ * Hence `var`: hoisted and initialised to `undefined` at instantiation, so the
+ * lazy `??=` below is safe from the very first side-effect `register()` call.
+ * Always reach the maps through these accessors — never touch the raw `var`s,
+ * or the type guarantee (`Map`, not `Map | undefined`) is lost.
+ */
+var requestRegistry: Map<RegistryKey, TranslatorFn> | undefined
+var responseRegistry: Map<RegistryKey, TranslatorFn> | undefined
+
+function requestRegistryMap(): Map<RegistryKey, TranslatorFn> {
+	requestRegistry ??= new Map()
+	return requestRegistry
+}
+
+function responseRegistryMap(): Map<RegistryKey, TranslatorFn> {
+	responseRegistry ??= new Map()
+	return responseRegistry
+}
 
 // Register translator
-export function register(from, to, requestFn, responseFn) {
-	requestRegistry ??= new Map()
-	responseRegistry ??= new Map()
-	const key = `${from}:${to}`
-	if (requestFn) {
-		requestRegistry.set(key, requestFn)
-	}
-	if (responseFn) {
-		responseRegistry.set(key, responseFn)
-	}
+export function register(
+	from,
+	to,
+	requestFn: TranslatorFn | null,
+	responseFn: TranslatorFn | null,
+) {
+	const key: RegistryKey = `${from}:${to}`
+	if (requestFn) requestRegistryMap().set(key, requestFn)
+	if (responseFn) responseRegistryMap().set(key, responseFn)
+}
+
+/** Whether a translator is registered for this exact request pair (direct route). */
+export function hasRequestTranslator(from, to): boolean {
+	return requestRegistryMap().has(`${from}:${to}`)
+}
+
+/** Whether a translator is registered for this exact response pair (direct route). */
+export function hasResponseTranslator(target, source): boolean {
+	return responseRegistryMap().has(`${target}:${source}`)
 }
 
 // No-op: translators self-register via the static imports at the bottom of this file.
@@ -118,13 +160,13 @@ export function translateRequest(
 		// Direct route: if a translator is registered for this exact source:target
 		// pair, use it instead of pivoting through OpenAI. This is lossless for
 		// pairs like claude:kiro (avoids the claude->openai->kiro double-hop).
-		const directFn = requestRegistry.get(`${sourceFormat}:${targetFormat}`)
+		const directFn = requestRegistryMap().get(`${sourceFormat}:${targetFormat}`)
 		if (directFn) {
 			result = directFn(model, result, stream, credentials)
 		} else {
 			// Step 1: source -> openai (if source is not openai)
 			if (sourceFormat !== FORMATS.OPENAI) {
-				const toOpenAI = requestRegistry.get(`${sourceFormat}:${FORMATS.OPENAI}`)
+				const toOpenAI = requestRegistryMap().get(`${sourceFormat}:${FORMATS.OPENAI}`)
 				if (toOpenAI) {
 					result = toOpenAI(model, result, stream, credentials)
 					// Log OpenAI intermediate format
@@ -134,7 +176,7 @@ export function translateRequest(
 
 			// Step 2: openai -> target (if target is not openai)
 			if (targetFormat !== FORMATS.OPENAI) {
-				const fromOpenAI = requestRegistry.get(`${FORMATS.OPENAI}:${targetFormat}`)
+				const fromOpenAI = requestRegistryMap().get(`${FORMATS.OPENAI}:${targetFormat}`)
 				if (fromOpenAI) {
 					result = fromOpenAI(model, result, stream, credentials)
 				}
@@ -236,7 +278,7 @@ export function translateResponse(targetFormat, sourceFormat, chunk, state) {
 	// target:source pair, use it instead of pivoting through OpenAI. Mirrors the
 	// request-side direct route (e.g. kiro:claude - KiroExecutor already emits
 	// OpenAI-shaped chunks, so this converts them straight to Claude SSE).
-	const directFn = responseRegistry.get(`${targetFormat}:${sourceFormat}`)
+	const directFn = responseRegistryMap().get(`${targetFormat}:${sourceFormat}`)
 	if (directFn) {
 		const converted = directFn(chunk, state)
 		const directResults = converted ? (Array.isArray(converted) ? converted : [converted]) : []
@@ -245,7 +287,7 @@ export function translateResponse(targetFormat, sourceFormat, chunk, state) {
 
 	// Step 1: target -> openai (if target is not openai)
 	if (targetFormat !== FORMATS.OPENAI) {
-		const toOpenAI = responseRegistry.get(`${targetFormat}:${FORMATS.OPENAI}`)
+		const toOpenAI = responseRegistryMap().get(`${targetFormat}:${FORMATS.OPENAI}`)
 		if (toOpenAI) {
 			results = []
 			const converted = toOpenAI(chunk, state)
@@ -258,7 +300,7 @@ export function translateResponse(targetFormat, sourceFormat, chunk, state) {
 
 	// Step 2: openai -> source (if source is not openai)
 	if (sourceFormat !== FORMATS.OPENAI) {
-		const fromOpenAI = responseRegistry.get(`${FORMATS.OPENAI}:${sourceFormat}`)
+		const fromOpenAI = responseRegistryMap().get(`${FORMATS.OPENAI}:${sourceFormat}`)
 		if (fromOpenAI) {
 			finalResults = []
 			for (const r of results) {

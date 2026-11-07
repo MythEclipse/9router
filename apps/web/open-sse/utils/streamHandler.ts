@@ -115,170 +115,62 @@ export function createStreamController({
 	}
 }
 
-/**
- * Create transform stream with disconnect detection
- * Wraps existing transform stream and adds abort capability.
- *
- * Stall detection lives in pipeWithDisconnect (tied to upstream byte
- * activity), not here - output of the transform stream may be silent
- * for long periods while raw bytes still flow (e.g. Kiro EventStream
- * binary frames buffering, Claude reasoning streams).
- *
- * @param {function} [onAbortTerminal] - Receives a human-readable abort
- * message and returns terminal SSE bytes to emit downstream.
- */
-export function createDisconnectAwareStream(
-	transformStream,
-	streamController,
-	onAbortTerminal = null,
-) {
-	const reader = transformStream.readable.getReader()
-	const writer = transformStream.writable.getWriter()
-	const providerName = streamController?.provider || "unknown"
-	const modelName = streamController?.model || "unknown"
-	let terminalEmitted = false
+// ---------------------------------------------------------------------------
+// Shared classifiers - one place that decides what a stream failure *means*
+// ---------------------------------------------------------------------------
 
-	// Emit a synthesized terminal payload (e.g. Responses response.failed + [DONE]) once
-	const emitTerminal = (controller) => {
-		if (terminalEmitted || !onAbortTerminal) return
-		terminalEmitted = true
-		try {
-			const bytes = onAbortTerminal()
-			if (bytes) controller.enqueue(bytes)
-		} catch {
-			/* best-effort terminal */
-		}
-	}
+/** Closed/unusable consumer state surfaced by a ReadableStreamDefaultController. */
+const CONTROLLER_CLOSED_MESSAGE_MARKERS = ["already closed", "Invalid state"]
 
-	return new ReadableStream({
-		async pull(controller) {
-			if (!streamController.isConnected()) {
-				dbg(
-					"STREAM",
-					`pull skipped | disconnected=true | provider=${providerName} | model=${modelName}`,
-				)
-				emitTerminal(controller)
-				controller.close()
-				return
-			}
+/** Transport-level failures that mean "the other end went away", not "we broke". */
+const NETWORK_CLOSE_MESSAGE_MARKERS = [
+	"aborted",
+	"socket hang up",
+	"ECONNRESET",
+	"ETIMEDOUT",
+	"EPIPE",
+]
+const NETWORK_CLOSE_CODES = new Set(["ECONNRESET", "ETIMEDOUT", "EPIPE", "UND_ERR_SOCKET"])
 
-			try {
-				const { done, value } = await reader.read()
-
-				if (done) {
-					dbg("STREAM", `transform reader done | provider=${providerName} | model=${modelName}`)
-					streamController.handleComplete()
-					controller.close()
-					return
-				}
-				controller.enqueue(value)
-			} catch (error) {
-				const wasConnected = streamController.isConnected()
-				const msg0 = error?.message || ""
-				const isControllerClosed = msg0.includes("already closed") || msg0.includes("Invalid state")
-				dbg(
-					"STREAM",
-					`transform pull failed | provider=${providerName} | model=${modelName} | connected=${wasConnected} | locked=${String(msg0).includes("locked")} | reason=${msg0}`,
-				)
-				if (!isControllerClosed) streamController.handleError(error)
-				reader.cancel().catch(() => {})
-				writer.abort().catch(() => {})
-
-				// Treat network resets / socket hang up / abort as graceful close
-				const msg = error?.message || ""
-				const code = error?.code || error?.cause?.code || ""
-				const isNetworkClose =
-					error.name === "AbortError" ||
-					msg.includes("aborted") ||
-					msg.includes("socket hang up") ||
-					msg.includes("ECONNRESET") ||
-					msg.includes("ETIMEDOUT") ||
-					msg.includes("EPIPE") ||
-					code === "ECONNRESET" ||
-					code === "ETIMEDOUT" ||
-					code === "EPIPE" ||
-					code === "UND_ERR_SOCKET"
-
-				// Graceful close on network/abort, or when a structured terminal is available
-				// (Responses passthrough prefers response.failed + [DONE] over a raw transport error)
-				try {
-					if (!wasConnected || isNetworkClose || onAbortTerminal) {
-						emitTerminal(controller)
-						controller.close()
-					} else {
-						controller.error(error)
-					}
-				} catch (_e) {
-					/* already closed or cancelled */
-				}
-			}
-		},
-
-		cancel(reason) {
-			dbg(
-				"STREAM",
-				`cancelled | provider=${providerName} | model=${modelName} | reason=${String(reason || "cancelled")}`,
-			)
-			streamController.handleDisconnect(reason || "cancelled")
-			reader.cancel()
-			writer.abort()
-		},
-	})
+interface StreamErrorClassification {
+	/** Transport reset / abort / hang-up - treat as a graceful close. */
+	isNetworkClose: boolean
+	/** The downstream controller was already closed - do not report it as a stream error. */
+	isControllerClosed: boolean
+	/** Whether the stream controller should be told about the error. */
+	shouldError: boolean
 }
 
 /**
- * Pipe provider response through transform with disconnect detection.
+ * Classify an error thrown while reading/piping a stream.
  *
- * Stall watchdog tracks raw upstream byte activity, not transform output.
- * Reasoning models (Claude thinking via Kiro, etc.) can produce zero SSE
- * output for long stretches while partial EventStream frames keep arriving.
- * Measuring stall on the transform output caused false stalls and the
- * "failed to pipe response" error in Next.
- *
- * Any upstream chunk resets the timer. If no bytes arrive for
- * STREAM_STALL_TIMEOUT_MS, abort the underlying fetch via the controller.
- *
- * @param {Response} providerResponse - Response from provider
- * @param {TransformStream} transformStream - Transform stream for SSE
- * @param {object} streamController - Stream controller from createStreamController
+ * `wasConnected` is the controller's connection state at the moment of the
+ * failure: a disconnect means a teammate path already owns the reporting, so
+ * the error is not reported again.
  */
-function buildClosedTerminalStream(onAbortTerminal = null, reason = "upstream stream closed") {
-	return new ReadableStream({
-		start(controller) {
-			try {
-				if (typeof onAbortTerminal === "function") {
-					const bytes = onAbortTerminal(reason)
-					if (bytes) controller.enqueue(bytes)
-				}
-			} catch {
-				/* terminal emission is best-effort only */
-			}
-			controller.close()
-		},
-	})
+function classifyStreamError(
+	error,
+	{ wasConnected = true }: { wasConnected?: boolean } = {},
+): StreamErrorClassification {
+	const msg = String(error?.message || "")
+	const code = error?.code || error?.cause?.code || ""
+	const isNetworkClose =
+		error?.name === "AbortError" ||
+		NETWORK_CLOSE_MESSAGE_MARKERS.some((marker) => msg.includes(marker)) ||
+		NETWORK_CLOSE_CODES.has(code)
+	const isControllerClosed = CONTROLLER_CLOSED_MESSAGE_MARKERS.some((marker) => msg.includes(marker))
+	return { isNetworkClose, isControllerClosed, shouldError: wasConnected && !isControllerClosed }
 }
 
-export function safePipeResponseBody(
-	response,
-	transformStream,
-	{ context = "response", onError = null } = {},
-) {
-	const body = response?.body
-	const bodyLocked = !!body && typeof body.getReader === "function" && body.locked
-
-	if (!body || bodyLocked) {
-		const reason = bodyLocked ? "upstream body already locked" : "upstream body missing"
-		const err = new TypeError(`${context} pipe skipped: ${reason}`)
-		onError?.(err)
-		return buildClosedTerminalStream(null, reason)
-	}
-
-	try {
-		return body.pipeThrough(transformStream)
-	} catch (error) {
-		onError?.(error)
-		return buildClosedTerminalStream(null, error?.message || "stream pipe failed")
-	}
+/**
+ * Why an upstream body cannot be piped, or null when it can.
+ * `locked` is reported separately because it is a caller bug, not an outage.
+ */
+function bodyUnavailableReason(body): "missing" | "locked" | null {
+	if (!body) return "missing"
+	if (typeof body.getReader !== "function") return "missing"
+	if (body.locked) return "locked"
+	return null
 }
 
 /**
@@ -313,44 +205,220 @@ function buildSafeErrorMessage(error) {
  */
 export type AbortTerminalBuilder = (message: string) => Uint8Array | string | null | undefined
 
-export function pipeWithDisconnect(
-	providerResponse,
+/**
+ * Best-effort teardown of the reader and (optional) writer.
+ * There is no writer when the source was a bare readable - nothing to abort.
+ */
+function releaseStreamEnds(reader, writer) {
+	try {
+		reader?.cancel?.()?.catch?.(() => {})
+	} catch {
+		/* already released */
+	}
+	try {
+		writer?.abort?.()?.catch?.(() => {})
+	} catch {
+		/* already released */
+	}
+}
+
+/** Enqueue terminal bytes onto `controller`; enqueue failures (closed/cancelled consumer) are ignored. */
+function enqueueTerminal(controller, bytes) {
+	if (!bytes) return
+	try {
+		controller.enqueue(bytes)
+	} catch {
+		/* the consumer already closed/cancelled the stream */
+	}
+}
+
+/** Emit terminal bytes then close. The close is swallowed if the consumer already left. */
+function emitTerminalThenClose(controller, bytes) {
+	enqueueTerminal(controller, bytes)
+	try {
+		controller.close()
+	} catch {
+		/* already closed or cancelled */
+	}
+}
+
+/**
+ * Single terminal-emitter: synthesize the stream's closing frame (if a builder
+ * is configured), then close. Returns whether terminal bytes were emitted;
+ * `terminalEmitted` is the caller's once-only guard - a second call is a no-op
+ * so a stream never carries two closing frames.
+ */
+function terminateStream(
+	controller,
+	onAbortTerminal: AbortTerminalBuilder | null,
+	message: string,
+	terminalEmitted: { done: boolean },
+): boolean {
+	if (terminalEmitted.done || !onAbortTerminal) return false
+	terminalEmitted.done = true
+	let bytes = null
+	try {
+		bytes = onAbortTerminal(message)
+	} catch {
+		/* terminal emission is best-effort only */
+	}
+	emitTerminalThenClose(controller, bytes)
+	return true
+}
+
+/**
+ * A stream that emits the terminal payload (if any) and is immediately done.
+ * Used by the pre-pipe bail-outs, where there is nothing left to stream.
+ */
+function buildClosedTerminalStream(
+	onAbortTerminal: AbortTerminalBuilder | null = null,
+	reason = "upstream stream closed",
+) {
+	return new ReadableStream({
+		start(controller) {
+			// Emit the terminal frame (when a builder exists), then close. The close is
+			// unconditional: a start() that never closes leaves the consumer hanging.
+			const terminalEmitted = { done: false }
+			terminateStream(controller, onAbortTerminal, reason, terminalEmitted)
+			if (!terminalEmitted.done) {
+				try {
+					controller.close()
+				} catch {
+					/* already closed or cancelled */
+				}
+			}
+		},
+	})
+}
+
+/**
+ * Create transform stream with disconnect detection
+ * Wraps existing transform stream and adds abort capability.
+ *
+ * Stall detection lives in pipeWithDisconnect (tied to upstream byte
+ * activity), not here - output of the transform stream may be silent
+ * for long periods while raw bytes still flow (e.g. Kiro EventStream
+ * binary frames buffering, Claude reasoning streams).
+ *
+ * Accepts either a bare ReadableStream or a `{ readable, writable }` pair
+ * (backward compatible). A writer is optional: when the source is a plain
+ * readable there is nothing to abort upstream, so teardown is a no-op.
+ *
+ * @param {function} [onAbortTerminal] - Receives a human-readable abort
+ * message and returns terminal SSE bytes to emit downstream.
+ */
+export function createDisconnectAwareStream(
 	transformStream,
 	streamController,
-	onAbortTerminal: AbortTerminalBuilder | null = null,
-	stallTimeoutMs = STREAM_STALL_TIMEOUT_MS,
+	onAbortTerminal = null,
 ) {
+	const readable = transformStream?.readable || transformStream
+	const writer = transformStream?.writable?.getWriter?.() || null
+	const reader = readable.getReader()
+	const providerName = streamController?.provider || "unknown"
+	const modelName = streamController?.model || "unknown"
+	const terminalEmitted = { done: false }
+
+	return new ReadableStream({
+		async pull(controller) {
+			if (!streamController.isConnected()) {
+				dbg(
+					"STREAM",
+					`pull skipped | disconnected=true | provider=${providerName} | model=${modelName}`,
+				)
+				// Once-only terminal; falls through to close when there is no builder.
+				terminateStream(controller, onAbortTerminal, "client disconnected", terminalEmitted)
+				try {
+					controller.close()
+				} catch {
+					/* already closed or cancelled */
+				}
+				return
+			}
+
+			try {
+				const { done, value } = await reader.read()
+
+				if (done) {
+					dbg("STREAM", `transform reader done | provider=${providerName} | model=${modelName}`)
+					streamController.handleComplete()
+					controller.close()
+					return
+				}
+				controller.enqueue(value)
+			} catch (error) {
+				const wasConnected = streamController.isConnected()
+				const msg0 = error?.message || ""
+				const { isNetworkClose, isControllerClosed, shouldError } = classifyStreamError(error, {
+					wasConnected,
+				})
+				dbg(
+					"STREAM",
+					`transform pull failed | provider=${providerName} | model=${modelName} | connected=${wasConnected} | locked=${msg0.includes("locked")} | reason=${msg0}`,
+				)
+				if (shouldError) streamController.handleError(error)
+				releaseStreamEnds(reader, writer)
+
+				// Graceful close on network/abort, or when a structured terminal is available
+				// (Responses passthrough prefers response.failed + [DONE] over a raw transport error)
+				if (!wasConnected || isNetworkClose || onAbortTerminal) {
+					terminateStream(controller, onAbortTerminal, msg0 || "stream closed", terminalEmitted)
+					try {
+						controller.close()
+					} catch (_e) {
+						/* already closed or cancelled */
+					}
+				} else if (!isControllerClosed) {
+					// A closed consumer is expected; anything else is a real stream error.
+					try {
+						controller.error(error)
+					} catch (_e) {
+						/* already closed or cancelled */
+					}
+				}
+			}
+		},
+
+		cancel(reason) {
+			dbg(
+				"STREAM",
+				`cancelled | provider=${providerName} | model=${modelName} | reason=${String(reason || "cancelled")}`,
+			)
+			streamController.handleDisconnect(reason || "cancelled")
+			releaseStreamEnds(reader, writer)
+		},
+	})
+}
+
+/**
+ * Stall watchdog + byte accounting for a piped upstream stream.
+ *
+ * Stall detection tracks raw upstream byte activity, not transform output.
+ * Reasoning models (Claude thinking via Kiro, etc.) can produce zero SSE
+ * output for long stretches while partial EventStream frames keep arriving.
+ * Measuring stall on the transform output caused false stalls and the
+ * "failed to pipe response" error in Next.
+ *
+ * Any upstream chunk resets the timer. If no bytes arrive for
+ * STREAM_STALL_TIMEOUT_MS, abort the underlying fetch via the controller.
+ *
+ * Returns the upstream tap (counts bytes + arms the watchdog) and a
+ * `terminate` controller that clears the watchdog on every termination path.
+ */
+function createStallWatchdog({
+	streamController,
+	stallTimeoutMs,
+}: {
+	streamController
+	stallTimeoutMs: number
+}) {
 	const tag = "STREAM"
-
-	// Validate response before processing
-	if (!isValidStreamResponse(providerResponse)) {
-		const reason = "invalid stream response"
-		const _err = new TypeError(`stream pipe skipped: ${reason}`)
-		dbg(tag, `pipe skip | reason=${reason}`)
-		streamController?.handleDisconnect?.(reason)
-		return buildClosedTerminalStream(onAbortTerminal, reason)
-	}
-
-	const contentType = providerResponse?.headers?.get?.("content-type") || "unknown"
-	const body = providerResponse?.body
-	const bodyLocked = !!body && typeof body.getReader === "function" && body.locked
-
-	if (bodyLocked) {
-		const reason = "upstream body already locked"
-		const _err = new TypeError(`stream pipe skipped: ${reason} | contentType=${contentType}`)
-		dbg(
-			tag,
-			`pipe skip | reason=${reason} | status=${providerResponse?.status || "unknown"} | contentType=${contentType}`,
-		)
-		streamController?.handleDisconnect?.(reason)
-		return buildClosedTerminalStream(onAbortTerminal, reason)
-	}
-
-	// Initialize tracking variables with safe defaults
 	let stallTimer = null
 	let chunkCount = 0
 	let totalBytes = 0
 	let lastChunkAt = Date.now()
+	// Reason handed to the terminal builder: set to "stream stall timeout" /
+	// "stream exceeded maximum size limit" when the watchdog itself terminates.
 	let abortMessage = "upstream connection lost"
 	const t0 = Date.now()
 	let streamErrored = false
@@ -379,8 +447,7 @@ export function pipeWithDisconnect(
 				chunks: chunkCount,
 				totalBytes,
 				sinceLastMs: Date.now() - lastChunkAt,
-				status: providerResponse?.status || "unknown",
-				contentType: contentType,
+				status: streamController?.provider || "unknown",
 			}
 			dbg(
 				tag,
@@ -400,30 +467,28 @@ export function pipeWithDisconnect(
 		streamErrored = true
 	}
 
+	const stats = () => `chunks=${chunkCount} | bytes=${totalBytes} | dur=${Date.now() - t0}ms`
+
 	// Wrap controller so every termination path clears the stall timer.
-	const wrappedController = {
+	const terminate = {
 		signal: streamController.signal,
 		startTime: streamController.startTime,
+		provider: streamController.provider,
+		model: streamController.model,
 		isConnected: () => streamController.isConnected(),
 		handleComplete: () => {
-			dbg(tag, `complete | chunks=${chunkCount} | bytes=${totalBytes} | dur=${Date.now() - t0}ms`)
+			dbg(tag, `complete | ${stats()}`)
 			cleanupStream()
 			streamController.handleComplete()
 		},
 		handleError: (e) => {
 			const safeMsg = buildSafeErrorMessage(e)
-			dbg(
-				tag,
-				`error: ${safeMsg} | chunks=${chunkCount} | bytes=${totalBytes} | dur=${Date.now() - t0}ms`,
-			)
+			dbg(tag, `error: ${safeMsg} | ${stats()}`)
 			cleanupStream()
 			streamController.handleError(e)
 		},
 		handleDisconnect: (r) => {
-			dbg(
-				tag,
-				`disconnect: ${r} | chunks=${chunkCount} | bytes=${totalBytes} | dur=${Date.now() - t0}ms`,
-			)
+			dbg(tag, `disconnect: ${r} | ${stats()}`)
 			cleanupStream()
 			streamController.handleDisconnect(r)
 		},
@@ -434,10 +499,8 @@ export function pipeWithDisconnect(
 		},
 	}
 
-	armStall()
-	dbg(tag, `pipe start | stallTimeout=${stallTimeoutMs}ms`)
-
-	const upstreamTap = new TransformStream({
+	// Single pass over each upstream chunk: size guard, byte/gap accounting, rearm.
+	const tap = new TransformStream({
 		transform(chunk, controller) {
 			if (streamErrored) return // Stop processing if stream has errored
 
@@ -469,10 +532,107 @@ export function pipeWithDisconnect(
 			controller.enqueue(chunk)
 		},
 		flush() {
-			dbg(tag, `upstream EOF | chunks=${chunkCount} | bytes=${totalBytes} | dur=${Date.now() - t0}ms`)
+			dbg(tag, `upstream EOF | ${stats()}`)
 			cleanupStream()
 		},
 	})
+
+	return {
+		tap,
+		terminate,
+		armStall,
+		cleanupStream,
+		/** Why the watchdog last terminated the stream (abort reason for the terminal builder). */
+		abortReason: () => abortMessage,
+	}
+}
+
+export function safePipeResponseBody(
+	response,
+	transformStream,
+	{ context = "response", onError = null } = {},
+) {
+	const body = response?.body
+	const unavailable = bodyUnavailableReason(body)
+
+	if (unavailable) {
+		const reason = unavailable === "locked" ? "upstream body already locked" : "upstream body missing"
+		const err = new TypeError(`${context} pipe skipped: ${reason}`)
+		onError?.(err)
+		return buildClosedTerminalStream(null, reason)
+	}
+
+	try {
+		return body.pipeThrough(transformStream)
+	} catch (error) {
+		onError?.(error)
+		return buildClosedTerminalStream(null, error?.message || "stream pipe failed")
+	}
+}
+
+/**
+ * Pipe provider response through transform with disconnect detection.
+ *
+ * Pipeline: validate → stall watchdog → upstream tap → transform → disconnect wrapper.
+ *
+ * Stall watchdog tracks raw upstream byte activity, not transform output.
+ * Reasoning models (Claude thinking via Kiro, etc.) can produce zero SSE
+ * output for long stretches while partial EventStream frames keep arriving.
+ * Measuring stall on the transform output caused false stalls and the
+ * "failed to pipe response" error in Next.
+ *
+ * Any upstream chunk resets the timer. If no bytes arrive for
+ * STREAM_STALL_TIMEOUT_MS, abort the underlying fetch via the controller.
+ *
+ * @param {Response} providerResponse - Response from provider
+ * @param {TransformStream} transformStream - Transform stream for SSE
+ * @param {object} streamController - Stream controller from createStreamController
+ */
+export function pipeWithDisconnect(
+	providerResponse,
+	transformStream,
+	streamController,
+	onAbortTerminal: AbortTerminalBuilder | null = null,
+	stallTimeoutMs = STREAM_STALL_TIMEOUT_MS,
+) {
+	const tag = "STREAM"
+
+	// Validate response before processing
+	if (!isValidStreamResponse(providerResponse)) {
+		const reason = "invalid stream response"
+		const _err = new TypeError(`stream pipe skipped: ${reason}`)
+		dbg(tag, `pipe skip | reason=${reason}`)
+		streamController?.handleDisconnect?.(reason)
+		return buildClosedTerminalStream(onAbortTerminal, reason)
+	}
+
+	const contentType = providerResponse?.headers?.get?.("content-type") || "unknown"
+	const body = providerResponse?.body
+
+	if (bodyUnavailableReason(body)) {
+		const reason = "upstream body already locked"
+		const _err = new TypeError(`stream pipe skipped: ${reason} | contentType=${contentType}`)
+		dbg(
+			tag,
+			`pipe skip | reason=${reason} | status=${providerResponse?.status || "unknown"} | contentType=${contentType}`,
+		)
+		streamController?.handleDisconnect?.(reason)
+		return buildClosedTerminalStream(onAbortTerminal, reason)
+	}
+
+	const {
+		tap: upstreamTap,
+		terminate,
+		armStall,
+		cleanupStream,
+		abortReason,
+	} = createStallWatchdog({
+		streamController,
+		stallTimeoutMs,
+	})
+
+	armStall()
+	dbg(tag, `pipe start | stallTimeout=${stallTimeoutMs}ms`)
 
 	let transformedBody
 	try {
@@ -485,12 +645,12 @@ export function pipeWithDisconnect(
 		return buildClosedTerminalStream(onAbortTerminal, safeMsg)
 	}
 
+	// Pass the transformed readable (not a fake writable) and the watchdog-wrapped
+	// controller; the terminal builder receives the watchdog's abort reason so a
+	// stall surfaces as "stream stall timeout".
 	return createDisconnectAwareStream(
-		{
-			readable: transformedBody,
-			writable: { getWriter: () => ({ abort: () => Promise.resolve() }) },
-		},
-		wrappedController,
-		onAbortTerminal ? () => onAbortTerminal(abortMessage) : null,
+		transformedBody,
+		terminate,
+		onAbortTerminal ? () => onAbortTerminal(abortReason()) : null,
 	)
 }

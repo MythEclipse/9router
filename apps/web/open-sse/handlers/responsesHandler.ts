@@ -11,6 +11,14 @@ import { safePipeResponseBody } from "../utils/streamHandler.ts"
 import { handleChatCore } from "./chatCore.ts"
 
 /**
+ * The two arms `handleChatCore` can answer with: a ready `Response`, or the
+ * status/error details the caller may hand back as-is.
+ */
+type ChatCoreResult =
+	| { success: true; response: Response }
+	| { success: false; status: number; error: string; response: Response }
+
+/**
  * Handle /v1/responses request
  * @param {object} options
  * @param {object} options.body - Request body (Responses API format)
@@ -44,17 +52,16 @@ export async function handleResponsesCore({
 	}
 
 	// Call chat core handler - force sourceFormat so streaming path knows this is a Responses API client
-	const result = await handleChatCore({
+	// Grouped options: identity/hooks are separate from the request itself.
+	const coreResult = (await handleChatCore({
 		body: convertedBody,
 		modelInfo,
 		credentials,
 		log,
-		onCredentialsRefreshed,
-		onRequestSuccess,
-		onDisconnect,
-		connectionId,
-		sourceFormatOverride: "openai-responses",
-	})
+		client: { connectionId, sourceFormatOverride: "openai-responses" },
+		hooks: { onCredentialsRefreshed, onRequestSuccess, onDisconnect },
+	})) as ChatCoreResult
+	const result = coreResult
 
 	if (!result.success || !result.response) {
 		return result
