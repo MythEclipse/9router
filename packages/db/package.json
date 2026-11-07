@@ -16,6 +16,10 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@9router/pricing": "workspace:*"
+    "@9router/pricing": "workspace:*",
+    "better-sqlite3": "^11.5.0",
+    "node-machine-id": "^1.1.12",
+    "sql.js": "^1.14.1",
+    "uuid": "^13.0.0"
   }
 }
