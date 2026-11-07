@@ -198,6 +198,12 @@ export function normalizeUsage(usage) {
 		;(normalized as Record<string, any>).completion_tokens_details = usage.completion_tokens_details
 	}
 
+	// An estimate is not a measurement. Carry the marker so a provider that never
+	// reports token counts (Kiro) cannot have its derived numbers stored as if the
+	// upstream had counted them — a 0 cache column means "not measured" there, not
+	// "nothing was cached".
+	if (usage?.estimated === true) (normalized as Record<string, any>).estimated = true
+
 	if (Object.keys(normalized).length === 0) return null
 	return normalized
 }
@@ -365,6 +371,10 @@ export function extractUsage(chunk) {
 			reasoning_tokens: reasoningTokens || undefined,
 			prompt_tokens_details: chunk.usage.prompt_tokens_details,
 			completion_tokens_details: chunk.usage.completion_tokens_details,
+			// Kiro's executor derives these counts from the request body when the
+			// upstream reports no tokenUsage; the marker must survive this rebuild
+			// or the estimate is stored as a measurement.
+			estimated: chunk.usage.estimated,
 		})
 	}
 

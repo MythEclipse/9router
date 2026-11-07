@@ -650,8 +650,12 @@ describe("openaiToKiroRequest", () => {
 
 			expect(second.conversationState.conversationId).toBe("hermes-session-openai-replay")
 			expect(second.conversationState).not.toHaveProperty("agentContinuationId")
-			expect(second.conversationState.history[0].userInputMessage.content).toBe(
-				first.conversationState.currentMessage.userInputMessage.content,
+			// The frozen head is what Kiro caches implicitly, so it must not carry
+			// the clock: a timestamp there changes every turn and the prefix cache
+			// can never hit. The clock belongs on the turn being asked, below.
+			expect(second.conversationState.history[0].userInputMessage.content).toBe("first turn")
+			expect(second.conversationState.history[0].userInputMessage.content).not.toContain(
+				"Current time",
 			)
 			expect(second.conversationState.history[0].userInputMessage.modelId).toBe("claude-sonnet-4.6")
 			expect(second.conversationState.currentMessage.userInputMessage.content).toContain(

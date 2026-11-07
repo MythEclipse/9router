@@ -283,7 +283,15 @@ export function claudeToKiroRequest(model, body, _stream, credentials) {
 	if (systemInstruction) systemPromptParts.push(systemInstruction)
 	const systemPrompt = systemPromptParts.filter(Boolean).join("\n\n")
 	const currentTimeContext = `[Context: Current time is ${timestamp}]`
-	const contentPrefix = [systemPrompt, currentTimeContext].filter(Boolean).join("\n\n")
+	// The timestamp must NOT join the prefix that opens the conversation.
+	// contentPrefix is written into the first user turn, i.e. the head of the
+	// prompt, and Kiro caches that prefix implicitly. A `toISOString()` value
+	// carries milliseconds, so every request produced a different first byte
+	// sequence and the cache could never hit — measured at 0% over 5595
+	// requests. The clock belongs on the turn being asked (currentContentPrefix,
+	// prefixed to the current message by applyKiroSessionReplay), where it only
+	// moves the tail of the prompt and leaves the cached head intact.
+	const contentPrefix = systemPrompt
 
 	const sessionIdentity = resolveSessionIdentity({
 		headers: credentials?.rawHeaders,

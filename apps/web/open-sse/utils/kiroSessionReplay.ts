@@ -126,7 +126,14 @@ export function applyKiroSessionReplay({
 		nextCurrent = prefixUserMessage(baseCurrent, currentContentPrefix, modelId)
 	} else {
 		sessionStart = prefixUserMessage(baseCurrent, contentPrefix, modelId)
-		nextCurrent = clone(sessionStart)
+		// No history turn exists to carry the system prompt, so the current
+		// message is its only home — and the clock rides along, since with an
+		// empty history there is no cached prefix to protect yet.
+		nextCurrent = prefixUserMessage(
+			baseCurrent,
+			[contentPrefix, currentContentPrefix].filter(Boolean).join("\n\n"),
+			modelId,
+		)
 	}
 
 	if (conversationId) {
