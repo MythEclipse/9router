@@ -18,6 +18,7 @@ import { decloakToolNames } from "../../utils/claudeCloaking.ts"
 import { createErrorResult } from "../../utils/error.ts"
 import { applyModelAlias, calledModelName } from "../../utils/modelAlias.ts"
 import { restoreToolNames } from "../../utils/opencodeFingerprint.ts"
+import { mergeFragmentedToolCalls } from "../../utils/toolCallRepair.ts"
 import { upstreamResponseHeaders } from "../../utils/upstreamHeaders.ts"
 import {
 	addBufferToUsage,
@@ -544,6 +545,12 @@ export async function handleNonStreamingResponse({
 
 		const parsed = parseSSEToOpenAIResponse(sseText, model)
 		if (!parsed) {
+			// The message alone cannot tell an empty upstream stream from a dialect
+			// the parser has never seen, and both used to look identical in the log.
+			// A bounded prefix settles it without dumping a whole transcript.
+			console.error(
+				`[ChatCore] No completion in SSE from ${provider} (${sseText.length} bytes): ${sseText.slice(0, 200)}`,
+			)
 			appendLog({ status: `FAILED ${HTTP_STATUS.BAD_GATEWAY}` })
 			return createErrorResult(
 				HTTP_STATUS.BAD_GATEWAY,
@@ -608,6 +615,16 @@ export async function handleNonStreamingResponse({
 	// bare OpenAI body and usage tracking sees data.usage. No-op unless the
 	// provider opts in via transport.quirks.clineEnvelope.
 	responseBody = unwrapClineEnvelope(responseBody, provider)
+
+	// Some [OI] gateways answer a non-streaming request with the raw delta
+	// sequence in `message.tool_calls` (one id-bearing entry then a run of
+	// argument fragments). Fold them back together before anything reads the
+	// calls — a Claude client would otherwise get one `tool_use` per fragment,
+	// each with an empty name and `input:{}`.
+	const mergedFragments = mergeFragmentedToolCalls(responseBody)
+	if (mergedFragments > 0) {
+		log?.debug?.("TOOLREPAIR", `${mergedFragments} fragmented tool_call entries merged`)
+	}
 
 	reqLogger.logProviderResponse(
 		providerResponse.status,
