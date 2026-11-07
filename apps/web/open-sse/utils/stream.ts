@@ -179,6 +179,12 @@ export function createSSEStream(options: SSEStreamOptions = {}) {
 	let openAIResponsesTerminalSeen = false
 	let openAIResponsesDoneSent = false
 	let streamDoneSent = false // track duplicate [DONE] across transform + flush
+	// A Chat Completions client expects its stream to close with exactly one
+	// `data: [DONE]`. The upstream's own sentinel is consumed by the parser below
+	// (it becomes `parsed.done`), so it has to be re-emitted here or the client
+	// waits for a terminator that never arrives — verified against kr/ (Kiro),
+	// which sent the sentinel upstream and delivered none to the client.
+	const wantsOpenAIDoneSentinel = sourceFormat === FORMATS.OPENAI
 	const seenToolCallIds = new Map<unknown, unknown>()
 	let finalized = false
 	let completionFlushTimer: ReturnType<typeof setTimeout> | null = null
@@ -526,7 +532,7 @@ export function createSSEStream(options: SSEStreamOptions = {}) {
 						sseEmittedCount++
 					}
 
-					if (keepsOpenAIResponsesFormat && !streamDoneSent) {
+					if ((keepsOpenAIResponsesFormat || wantsOpenAIDoneSentinel) && !streamDoneSent) {
 						const doneOutput = "data: [DONE]\n\n"
 						reqLogger?.appendConvertedChunk?.(doneOutput)
 						controller.enqueue(sharedEncoder.encode(doneOutput))
@@ -799,6 +805,16 @@ export function createSSEStream(options: SSEStreamOptions = {}) {
 					reqLogger?.appendConvertedChunk?.(doneOutput)
 					controller.enqueue(sharedEncoder.encode(doneOutput))
 					openAIResponsesDoneSent = true
+					streamDoneSent = true
+				}
+
+				// An upstream that closes without ever sending the sentinel (Kiro's
+				// EventStream, Gemini) leaves a Chat Completions client waiting for a
+				// terminator. Emit it at flush when the stream never produced one.
+				if (wantsOpenAIDoneSentinel && !streamDoneSent) {
+					const doneOutput = "data: [DONE]\n\n"
+					reqLogger?.appendConvertedChunk?.(doneOutput)
+					controller.enqueue(sharedEncoder.encode(doneOutput))
 					streamDoneSent = true
 				}
 
