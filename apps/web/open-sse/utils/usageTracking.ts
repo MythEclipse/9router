@@ -328,6 +328,7 @@ export function extractUsage(chunk) {
 			completion_tokens: u.output_tokens || 0,
 			cache_read_input_tokens: u.cache_read_input_tokens,
 			cache_creation_input_tokens: u.cache_creation_input_tokens,
+			estimated: u.estimated,
 		})
 	}
 
@@ -338,6 +339,9 @@ export function extractUsage(chunk) {
 			completion_tokens: chunk.usage.output_tokens || 0,
 			cache_read_input_tokens: chunk.usage.cache_read_input_tokens,
 			cache_creation_input_tokens: chunk.usage.cache_creation_input_tokens,
+			// Kiro's derived counts reach the client through this event, so the
+			// marker has to survive it or the estimate is recorded as measured.
+			estimated: chunk.usage.estimated,
 		})
 	}
 

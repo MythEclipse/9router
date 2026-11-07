@@ -91,6 +91,10 @@ export function kiroToClaudeResponse(chunk, state) {
 			data.usage.cache_creation_input_tokens ?? data.usage.prompt_tokens_details?.cache_creation_tokens
 		if (typeof cacheRead === "number") state.usage.cache_read_input_tokens = cacheRead
 		if (typeof cacheCreation === "number") state.usage.cache_creation_input_tokens = cacheCreation
+		// Kiro reports no token counts at all, so the executor derives them from
+		// the request body and flags them. Rebuilding the usage object above used
+		// to drop that flag, leaving an estimate stored as a measurement.
+		if (data.usage.estimated === true) state.usage.estimated = true
 	}
 
 	// First chunk → emit message_start.
@@ -288,6 +292,8 @@ export function kiroToClaudeNonStreaming(data) {
 							usage.cache_creation_input_tokens ?? usage.prompt_tokens_details.cache_creation_tokens,
 					}
 				: {}),
+			// Same estimate marker as the streaming path above.
+			...(usage.estimated === true ? { estimated: true } : {}),
 		},
 	}
 }
