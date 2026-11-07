@@ -137,7 +137,10 @@ jobs:
       # ~600MB of binaries built for the CI runner. rsync excludes both.
       mkdir -p "$R/apps"
       rsync -a --exclude='node_modules' --exclude='.next' apps/api "$R/apps/"
-      rsync -a --exclude='node_modules' --exclude='.next' --exclude='.next-cli-build' packages cli "$R"/
+      # `.build-home` is the throwaway HOME `build:cli` points Next at; it is
+      # gitignored and never present in a deploy job, but if it were it would
+      # add ~570 MB of a resolved toolchain to the payload.
+      rsync -a --exclude='node_modules' --exclude='.next' --exclude='.next-cli-build' --exclude='.build-home' packages cli "$R"/
       for pkg in apps/web apps/api packages/* cli; do
         [ -f "$pkg/package.json" ] && mkdir -p "$R/$pkg" && cp "$pkg/package.json" "$R/$pkg/"
       done
@@ -168,7 +171,10 @@ jobs:
       # Anchor both excludes at the transfer root: .next/standalone is a
       # partial copy and .next/cache is build cache — neither belongs on
       # the host (its current tree has neither).
-      rsync -a --exclude='/standalone' --exclude='/cache' apps/web/.next/ "$R/.next/"
+      # `*.nft.json` are build-time trace manifests: 52 MB of the payload that
+      # nothing in the running server opens (the same files the standalone
+      # postbuild prunes). Excluding them here keeps the deploy tarball small.
+      rsync -a --exclude='/standalone' --exclude='/cache' --exclude='*.nft.json' apps/web/.next/ "$R/.next/"
       # Turbopack rewrites import.meta.url to a repo-relative path, so the
       # migrator cannot infer where migrations/ sits at runtime and refuses
       # to boot on an empty schema. Ship the journal and point at it.
@@ -413,7 +419,10 @@ jobs:
       cp -r apps/web/src apps/web/open-sse apps/web/public deploy apps/web/scripts "$R"/
       mkdir -p "$R/apps"
       rsync -a --exclude='node_modules' --exclude='.next' apps/api "$R/apps/"
-      rsync -a --exclude='node_modules' --exclude='.next' --exclude='.next-cli-build' packages cli "$R"/
+      # `.build-home` is the throwaway HOME `build:cli` points Next at; it is
+      # gitignored and never present in a deploy job, but if it were it would
+      # add ~570 MB of a resolved toolchain to the payload.
+      rsync -a --exclude='node_modules' --exclude='.next' --exclude='.next-cli-build' --exclude='.build-home' packages cli "$R"/
       for pkg in apps/web apps/api packages/* cli; do
         [ -f "$pkg/package.json" ] && mkdir -p "$R/$pkg" && cp "$pkg/package.json" "$R/$pkg/"
       done
@@ -438,7 +447,10 @@ jobs:
       ( cd "$R" && bun install --lockfile-only )
       # Anchor both excludes at the transfer root: .next/standalone is a partial
       # copy and .next/cache is build cache — neither belongs on the host.
-      rsync -a --exclude='/standalone' --exclude='/cache' apps/web/.next/ "$R/.next/"
+      # `*.nft.json` are build-time trace manifests: 52 MB of the payload that
+      # nothing in the running server opens (the same files the standalone
+      # postbuild prunes). Excluding them here keeps the deploy tarball small.
+      rsync -a --exclude='/standalone' --exclude='/cache' --exclude='*.nft.json' apps/web/.next/ "$R/.next/"
       # Turbopack rewrites import.meta.url to a repo-relative path, so the
       # migrator cannot infer where migrations/ sits at runtime and refuses to
       # boot on an empty schema. Ship the journal and point at it.

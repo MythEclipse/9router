@@ -2,6 +2,7 @@ import { cpSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import ts from "typescript"
+import { pruneStandaloneTree } from "./prune-standalone-tree.mjs"
 
 export async function copyStandaloneAssets({
 	projectRoot = process.cwd(),
@@ -158,6 +159,16 @@ export async function copyStandaloneAssets({
 			cpSync(moduleSource, moduleDestination, { recursive: true, force: true })
 			console.log(`[standalone-assets] Mirrored ${runtimeModule} to ${moduleDestination}`)
 		}
+	}
+
+	// Last, because everything above stages files that may still carry their own
+	// trace manifests. Both removals are third-party build artefacts nothing reads
+	// at runtime; see prune-standalone-tree.mjs for how that was established.
+	const { freed, manifests } = pruneStandaloneTree({ root: standaloneRoot })
+	if (manifests > 0 || freed > 0) {
+		console.log(
+			`[standalone-assets] Pruned ${manifests} trace manifest(s) and unused sql.js builds — ${(freed / 1e6).toFixed(1)} MB`,
+		)
 	}
 }
 

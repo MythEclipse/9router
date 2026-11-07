@@ -4,6 +4,7 @@ import { execSync } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { pruneStandaloneTree } from "../../apps/web/scripts/prune-standalone-tree.mjs"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const cliDir = path.resolve(__dirname, "..")
@@ -395,6 +396,17 @@ function buildCliPackage() {
 
 	console.log("✨ CLI package build completed!")
 	console.log(`📁 Output: ${cliAppDir}`)
+
+	// The packaged tree is what npm publishes, so the trace manifests and the
+	// unused sql.js builds are pure download weight here — the same two removals
+	// the web postbuild makes, for the same reasons (see
+	// apps/web/scripts/prune-standalone-tree.mjs). Runs last, after every copy.
+	const pruned = pruneStandaloneTree({ root: cliAppDir })
+	if (pruned.manifests > 0 || pruned.freed > 0) {
+		console.log(
+			`🧹 Pruned ${pruned.manifests} trace manifest(s) and unused sql.js builds — ${(pruned.freed / 1e6).toFixed(1)} MB`,
+		)
+	}
 
 	try {
 		const size = execSync(`du -sh "${cliAppDir}"`, { encoding: "utf8" }).trim()
