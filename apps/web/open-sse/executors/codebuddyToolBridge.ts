@@ -132,11 +132,13 @@ function closingFrames(reply: StreamedReply, tools, idSeed: string): string {
  * them as OpenAI `tool_calls`. Anything else is returned as it arrived.
  */
 export function bridgeCodebuddyToolCalls(result, body, idSeed: string) {
-	const tools = Array.isArray(body?.tools) ? body.tools : []
+	const tools = Array.isArray(body?.tools)
+		? body.tools
+		: Array.isArray(body?.functions)
+			? body.functions.map((fn) => ({ type: "function", function: fn }))
+			: []
 	const response = result?.response
 	if (tools.length === 0 || !response?.ok || !response.body) return result
-	const contentType = response.headers?.get?.("content-type") || ""
-	if (!contentType.includes("event-stream")) return result
 
 	const reader = response.body.getReader()
 	const decoder = new TextDecoder()
@@ -162,11 +164,14 @@ export function bridgeCodebuddyToolCalls(result, body, idSeed: string) {
 				if (!delta) return
 				reply.text += delta.content
 				if (buffering) return
-				reply.forwarded += delta.content
 				if (delta.id) reply.id = delta.id
 				if (delta.created) reply.created = delta.created
 				if (delta.model) reply.model = delta.model
 				if (DSML_MARKER_RE.test(reply.text)) buffering = true
+			}
+			const markForwarded = (frame: string) => {
+				const delta = deltaOf(frame)
+				if (delta) reply.forwarded += delta.content
 			}
 			try {
 				for (;;) {
@@ -187,13 +192,17 @@ export function bridgeCodebuddyToolCalls(result, body, idSeed: string) {
 							held = held ? `${held}\n\n${frame}` : frame
 						} else {
 							emit(send(frame))
+							markForwarded(frame)
 						}
 						cut = rest.indexOf("\n\n")
 					}
 				}
 				if (rest.trim()) {
 					absorb(rest)
-					if (!buffering) emit(send(rest))
+					if (!buffering) {
+						emit(send(rest))
+						markForwarded(rest)
+					}
 				}
 				// No marker completed: what was held was ordinary prose after all.
 				if (held && !buffering) {

@@ -48,6 +48,16 @@ const INVOKE_PARAM_RE = /<parameter\s+name\s*=\s*["']([^"']+)["']\s*>([\s\S]*?)<
 // Claude-style namespaced variant of the same shape.
 const ANTML_INVOKE_RE =
 	/<antml:invoke\s+name\s*=\s*["']([^"']+)["']\s*>([\s\S]*?)<\/antml:invoke>/gi
+// DeepSeek/CodeBuddy models sometimes emit the same invoke grammar with their
+// tokenizer's DSML namespace. Keep this in the provider-neutral bridge so the
+// response repair also works when that output is routed through another provider
+// or translated to the Anthropic protocol.
+const DSML_INVOKE_RE =
+	/<(?:｜｜DSML｜｜|\|DSML\|)\s+invoke\s+name\s*=\s*["']([^"']+)["']\s*>([\s\S]*?)(?:<\/(?:｜｜DSML｜｜|\|DSML\|)\s*invoke\s*>|<(?:｜｜DSML｜｜|\|DSML\|)\s+invoke\s*>)/gi
+const DSML_PARAM_RE =
+	/<(?:｜｜DSML｜｜|\|DSML\|)\s+parameter\s+name\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)(?:<\/(?:｜｜DSML｜｜|\|DSML\|)\s*parameter\s*>|<(?:｜｜DSML｜｜|\|DSML\|)\s+parameter\s*>)/gi
+const DSML_TAG_RE =
+	/<\/?(?:｜｜DSML｜｜|\|DSML\|)\s*(?:calls|call|invoke|parameter|tool_calls|function_calls)\b[^>]*>/gi
 // A trainer shorthand: <function=name>{"args":...}</function>.
 const FUNCTION_TAG_RE = /<function\s*=\s*["']?([A-Za-z_][\w.-]*)["']?\s*>([\s\S]*?)<\/function>/gi
 // A bare {"function": "x", "arguments": {...}} object on its own line.
@@ -89,6 +99,15 @@ function argsFromInvokeXml(inner) {
 	const args = {}
 	for (const m of inner.matchAll(INVOKE_PARAM_RE)) {
 		args[m[1].trim()] = m[2].trim()
+	}
+	return args
+}
+
+function argsFromDsmlInvoke(inner) {
+	const args = {}
+	for (const m of inner.matchAll(DSML_PARAM_RE)) {
+		const value = m[2].trim()
+		args[m[1].trim()] = parseMaybeJson(value) ?? value
 	}
 	return args
 }
@@ -234,6 +253,18 @@ export function extractToolCallsFromText(text) {
 			if (calls.length) break
 		}
 	}
+	// DSML invoke markup is model-internal syntax, not assistant prose. Parse it
+	// here rather than only in provider-specific executors so a malformed tool
+	// response cannot leak through a format translation to Anthropic clients.
+	if (!calls.length) {
+		for (const m of [...text.matchAll(DSML_INVOKE_RE)]) {
+			const name = m[1].trim()
+			const args = argsFromDsmlInvoke(m[2])
+			if (!name || !Object.keys(args).length) continue
+			calls.push({ name, arguments: args })
+			cleaned = cleaned.replace(m[0], "")
+		}
+	}
 	// Trainer shorthand <function=name>args</function>.
 	if (!calls.length) {
 		for (const m of [...text.matchAll(FUNCTION_TAG_RE)]) {
@@ -287,6 +318,7 @@ export function applyOpenAIToolBridge(response, body) {
 	}
 	// Never fight a model that already produced structured calls.
 	if (Array.isArray(response.tool_calls) && response.tool_calls.length) {
+		response.content = response.content.replace(DSML_TAG_RE, "").trim()
 		diagnostics.reason = "already-structured"
 		return Object.assign(response, { openaiToolBridge: diagnostics })
 	}
@@ -302,6 +334,9 @@ export function applyOpenAIToolBridge(response, body) {
 	const catalogue = catalogueOf(body)
 	const { calls, cleaned } = extractToolCallsFromText(response.content)
 	if (!calls.length) {
+		// Even an incomplete or unknown DSML invocation must not be forwarded as
+		// executable-looking assistant prose on a different protocol.
+		response.content = response.content.replace(DSML_TAG_RE, "").trim()
 		diagnostics.reason = "no-tool-marker-in-prose"
 		return Object.assign(response, { openaiToolBridge: diagnostics })
 	}
@@ -350,7 +385,7 @@ export function applyOpenAIToolBridge(response, body) {
 
 	// The prose the model wrote is the explanation of the call it just made;
 	// keeping it means the next turn is not blind.
-	response.content = cleaned
+	response.content = cleaned.replace(DSML_TAG_RE, "").trim()
 	response.tool_calls = toolCalls
 	if (!response.finish_reason) response.finish_reason = "tool_calls"
 

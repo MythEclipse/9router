@@ -1,6 +1,7 @@
 import { saveRequestDetail } from "@/lib/usageDb"
 import { PROVIDERS } from "../../config/providers.ts"
 import { HTTP_STATUS, STREAM_STALL_TIMEOUT_MS } from "../../config/runtimeConfig.ts"
+import { bridgeCodebuddyToolCalls } from "../../executors/codebuddyToolBridge.ts"
 import { tapStreamForCache } from "../../rtk/cacheTap.ts"
 import { FORMATS } from "../../translator/formats.ts"
 import { needsTranslation } from "../../translator/index.ts"
@@ -246,6 +247,19 @@ export async function handleStreamingResponse({
 
 	// The name the client called is the only one it is allowed to see.
 	const aliasModel = calledModelName(requestedModel, model)
+	// Apply the provider-neutral text-tool repair before format translation.
+	// OpenAI-compatible upstreams can emit model-native DSML in content; if that
+	// content is translated directly to Claude, the client otherwise receives
+	// executable-looking markup as a text block.
+	let responseForStreaming = providerResponse
+	if (targetFormat === FORMATS.OPENAI && Array.isArray(body?.tools) && body.tools.length > 0) {
+		responseForStreaming = bridgeCodebuddyToolCalls(
+			{ response: providerResponse },
+			body,
+			`auto-${Date.now().toString(36)}`,
+		).response
+	}
+
 	const transformStream = buildTransformStream({
 		provider,
 		sourceFormat,
@@ -278,7 +292,7 @@ export async function handleStreamingResponse({
 	let transformedBody
 	try {
 		transformedBody = pipeWithDisconnect(
-			providerResponse,
+			responseForStreaming,
 			transformStream,
 			streamController,
 			onAbortTerminal,

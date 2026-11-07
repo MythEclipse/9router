@@ -43,9 +43,11 @@ vi.mock("open-sse/utils/proxyFetch.js", () => ({
 }))
 vi.mock("@/sse/services/model.js", () => ({
 	getModelInfo: async () => ({ provider: "codex", model: "transcribe" }),
+	getComboModels: async () => null,
 }))
 vi.mock("@/sse/services/keyAccess.js", () => ({
 	getKeyAccessContext: async () => ({}),
+	enforceKeyAccess: async () => null,
 	enforceKeyAccessResolved: async () => null,
 }))
 vi.mock("@/lib/network/connectionProxy.js", () => ({

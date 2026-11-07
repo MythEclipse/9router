@@ -26,6 +26,7 @@ vi.mock("@/lib/localDb", async (importOriginal) => ({
 }))
 vi.mock("../../apps/web/src/sse/services/model.js", () => ({
 	getModelInfo: async () => ({ provider: "openai", model: "text-embedding-3-small" }),
+	getComboModels: async () => null,
 }))
 vi.mock("../../apps/web/open-sse/handlers/embeddingsCore.js", () => ({
 	handleEmbeddingsCore: mocks.handleEmbeddingsCore,

@@ -180,7 +180,7 @@ describe("chatCore provider session forwarding", () => {
 			(match) => match[1],
 		)
 
-		expect(calls).toHaveLength(3)
+		expect(calls).toHaveLength(4)
 		for (const call of calls) {
 			expect(call).toMatch(/providerSessionId:\s*sessionSeed/)
 			expect(call).toMatch(/\bclientTool\b/)

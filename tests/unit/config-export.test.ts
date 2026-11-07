@@ -136,7 +136,7 @@ describe("makeConfigExport", () => {
 	it("answers a downloadable document with the three sections", async () => {
 		const answer = await makeConfigExport(sources).export()
 
-		expect(answer.filename).toBe("9router-config-2026-10-31.json")
+		expect(answer.filename).toBe(`9router-config-${new Date().toISOString().slice(0, 10)}.json`)
 		expect(answer.contentType).toContain("application/json")
 		const parsed = JSON.parse(answer.body) as { sections: Record<string, unknown[]> }
 		expect(parsed.sections.providers).toHaveLength(1)

@@ -21,6 +21,7 @@ import { CodeBuddyExecutor } from "../../apps/web/open-sse/executors/codebuddy-c
 import { CodeBuddyIntlExecutor } from "../../apps/web/open-sse/executors/codebuddy-intl.js"
 import { bridgeCodebuddyToolCalls } from "../../apps/web/open-sse/executors/codebuddyToolBridge.js"
 import { DefaultExecutor } from "../../apps/web/open-sse/executors/default.js"
+import { applyOpenAIToolBridge } from "../../apps/web/open-sse/translator/concerns/toolBridge.js"
 import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
 import { createSSEStream } from "../../apps/web/open-sse/utils/stream.js"
 
@@ -102,6 +103,25 @@ describe("bridgeCodebuddyToolCalls - DSML reply", () => {
 		expect(textOf(body)).not.toContain("DSML")
 	})
 
+	describe("global non-stream tool bridge - DSML reply", () => {
+		it("recovers DSML calls before any provider-specific response translation", () => {
+			const response = {
+				content: [
+					"Saya jalankan dulu.\n",
+					`<${F} calls><${F} invoke name="Bash"><${F} parameter name="command" string="true">ls</${F} parameter><${F} invoke></${F} calls>`,
+				].join(""),
+			}
+
+			const bridged = applyOpenAIToolBridge(response, { tools: [BASH_TOOL] })
+
+			expect(bridged.tool_calls).toHaveLength(1)
+			expect(bridged.tool_calls[0].function.name).toBe("Bash")
+			expect(JSON.parse(bridged.tool_calls[0].function.arguments)).toEqual({ command: "ls" })
+			expect(bridged.content).toBe("Saya jalankan dulu.")
+			expect(bridged.content).not.toContain("DSML")
+		})
+	})
+
 	it("keeps the prose the model wrote before the call, and only once", async () => {
 		const body = await run([
 			deltaFrame("Saya cek dulu.\n"),
@@ -111,6 +131,18 @@ describe("bridgeCodebuddyToolCalls - DSML reply", () => {
 
 		expect(callsOf(body)).toHaveLength(1)
 		expect(textOf(body)).toBe("Saya cek dulu.\n")
+	})
+
+	it("keeps prose sharing the frame that starts the DSML marker", async () => {
+		const body = await run([
+			deltaFrame(
+				`Saya cek dulu.\n<${F} calls>\n<${F} invoke name="Bash">\n<${F} parameter name="command">ls</${F} parameter>\n</${F} invoke>\n</${F} calls>`,
+			),
+		])
+
+		expect(callsOf(body)).toHaveLength(1)
+		expect(textOf(body)).toBe("Saya cek dulu.")
+		expect(textOf(body)).not.toContain("DSML")
 	})
 
 	it("keeps the call a truncated reply declared, and strips the markup", async () => {
@@ -153,14 +185,18 @@ describe("bridgeCodebuddyToolCalls - passthrough", () => {
 		expect(bridged).toBe(result)
 	})
 
-	it("returns the response untouched when upstream is not streaming", async () => {
+	it("does not require an event-stream content type when the streaming handler supplies a body", async () => {
 		const result = {
-			response: new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }),
+			response: new Response(`${deltaFrame(`<${F} calls>`)}\n\ndata: [DONE]\n\n`, {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			}),
 			url: "u",
 		}
 		const bridged = await bridgeCodebuddyToolCalls(result, { tools: [BASH_TOOL] }, "cbai")
 
-		expect(bridged).toBe(result)
+		expect(bridged).not.toBe(result)
+		expect(await bridged.response.text()).not.toContain("DSML")
 	})
 })
 

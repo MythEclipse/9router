@@ -25,10 +25,7 @@ vi.mock("next/server", () => ({ NextResponse: { json: mocks.json } }))
 vi.mock("next/headers", () => ({ cookies: mocks.cookies }))
 // The route asks the real use-case graph for `authStatus.read`; only the *host reads* underneath
 // it are faked. Stubbing the graph itself would test that a mock returns a mock.
-vi.mock("@/lib/useCases", async (importOriginal) => ({
-	...(await importOriginal()),
-	getUseCases: mocks.getUseCases,
-}))
+vi.mock("@/lib/useCases", () => ({ getUseCases: mocks.getUseCases }))
 
 /**
  * The real use-case implementation, without building the whole graph.
@@ -42,10 +39,7 @@ const realAuthStatusUseCases = async () => {
 	return { authStatus: { read: readAuthStatus } }
 }
 
-vi.mock("@/lib/localDb", async (importOriginal) => ({
-	...(await importOriginal()),
-	getSettings: mocks.getSettings,
-}))
+vi.mock("@/lib/localDb", () => ({ getSettings: mocks.getSettings }))
 
 vi.mock("@9router/auth/oidc", () => ({ isOidcConfigured: mocks.isOidcConfigured }))
 vi.mock("@9router/auth/saml", () => ({ isSamlConfigured: mocks.isSamlConfigured }))
