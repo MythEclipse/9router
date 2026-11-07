@@ -301,22 +301,42 @@ export function openaiToClaudeResponse(chunk, state) {
 	if (delta?.content) {
 		stopThinkingBlock(state, results)
 
+		// A provider that separates turns with a bare "\n" used to open a text
+		// block for it. The client renders a whitespace-only text block as "…",
+		// so Claude Code showed one between every pair of tool calls. Hold the
+		// leading whitespace until something visible arrives; whitespace that
+		// follows real text is forwarded untouched, so "a" + " b" still reads
+		// as "a b".
+		let contentToEmit = delta.content
 		if (!state.textBlockStarted) {
-			state.textBlockIndex = state.nextBlockIndex++
-			state.textBlockStarted = true
-			state.textBlockClosed = false
-			results.push({
-				type: "content_block_start",
-				index: state.textBlockIndex,
-				content_block: { type: CLAUDE_BLOCK.TEXT, text: "" },
-			})
+			const pending = `${state.pendingText || ""}${delta.content}`
+			if (!/\S/.test(pending)) {
+				state.pendingText = pending
+				contentToEmit = null
+			} else {
+				state.pendingText = ""
+				contentToEmit = pending
+			}
 		}
 
-		results.push({
-			type: "content_block_delta",
-			index: state.textBlockIndex,
-			delta: { type: "text_delta", text: delta.content },
-		})
+		if (contentToEmit !== null) {
+			if (!state.textBlockStarted) {
+				state.textBlockIndex = state.nextBlockIndex++
+				state.textBlockStarted = true
+				state.textBlockClosed = false
+				results.push({
+					type: "content_block_start",
+					index: state.textBlockIndex,
+					content_block: { type: CLAUDE_BLOCK.TEXT, text: "" },
+				})
+			}
+
+			results.push({
+				type: "content_block_delta",
+				index: state.textBlockIndex,
+				delta: { type: "text_delta", text: contentToEmit },
+			})
+		}
 	}
 
 	// Tool calls

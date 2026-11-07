@@ -338,6 +338,8 @@ export interface StreamState {
 	messageId: string | null
 	model: string | null
 	textBlockStarted: boolean
+	/** Whitespace held back before any visible text; see openai-to-claude.ts. */
+	pendingText?: string
 	thinkingBlockStarted: boolean
 	inThinkingBlock: boolean
 	currentBlockIndex: number | null

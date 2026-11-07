@@ -293,6 +293,10 @@ export function initState(sourceFormat) {
 		messageId: null,
 		model: null,
 		textBlockStarted: false,
+		// Whitespace seen before any visible text. A block opened for a bare
+		// "\n" renders as "…" in Claude Code, so it is held here until real
+		// content arrives (see the content branch in openai-to-claude.ts).
+		pendingText: "",
 		thinkingBlockStarted: false,
 		inThinkingBlock: false,
 		currentBlockIndex: null,
