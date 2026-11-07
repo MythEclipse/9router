@@ -2,7 +2,7 @@ import { saveRequestDetail } from "@/lib/usageDb"
 import { PROVIDERS } from "../../config/providers.ts"
 import { HTTP_STATUS, STREAM_STALL_TIMEOUT_MS } from "../../config/runtimeConfig.ts"
 import { tapStreamForCache } from "../../rtk/cacheTap.ts"
-import { bridgeCodebuddyToolCalls } from "../../translator/concerns/streamToolBridge.ts"
+import { bridgeTextToolCalls } from "../../translator/concerns/streamToolBridge.ts"
 import { FORMATS } from "../../translator/formats.ts"
 import { needsTranslation } from "../../translator/index.ts"
 import { calledModelName } from "../../utils/modelAlias.ts"
@@ -248,16 +248,18 @@ export async function handleStreamingResponse({
 	// The name the client called is the only one it is allowed to see.
 	const aliasModel = calledModelName(requestedModel, model)
 	// Apply the provider-neutral text-tool repair before format translation.
-	// OpenAI-compatible upstreams can emit model-native DSML in content; if that
-	// content is translated directly to Claude, the client otherwise receives
-	// executable-looking markup as a text block.
+	// OpenAI-shaped upstream responses can emit model-native DSML in content. Kiro
+	// is included because its executor normalizes EventStream frames to the same
+	// OpenAI chunk shape before this response enters the translator. Run the
+	// provider-neutral bridge before any Kiro/Anthropic translation so markup cannot
+	// become visible assistant prose.
 	let responseForStreaming = providerResponse
 	if (
-		targetFormat === FORMATS.OPENAI &&
+		(targetFormat === FORMATS.OPENAI || targetFormat === FORMATS.KIRO) &&
 		((Array.isArray(body?.tools) && body.tools.length > 0) ||
 			(Array.isArray(body?.functions) && body.functions.length > 0))
 	) {
-		responseForStreaming = bridgeCodebuddyToolCalls(
+		responseForStreaming = bridgeTextToolCalls(
 			{ response: providerResponse },
 			body,
 			`auto-${Date.now().toString(36)}`,

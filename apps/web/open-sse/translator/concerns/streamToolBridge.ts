@@ -1,6 +1,6 @@
-// CodeBuddy tool-call bridge.
+// Global streaming tool-call bridge.
 //
-// CodeBuddy's gateway is OpenAI-compatible, but the models behind it do not all do
+// Some OpenAI-shaped upstream responses do not all do
 // function calling there: a DeepSeek model answers in the model's own DSML dialect inside
 // `delta.content` (`<｜｜DSML｜｜ invoke name="Bash">…`), which the CodeBuddy IDE parses
 // itself. A client of this gateway receives that markup as assistant text instead — on
@@ -131,7 +131,7 @@ function closingFrames(reply: StreamedReply, tools, idSeed: string): string {
  * Rewrite a CodeBuddy response whose reply declares tools in DSML into one that declares
  * them as OpenAI `tool_calls`. Anything else is returned as it arrived.
  */
-export function bridgeCodebuddyToolCalls(result, body, idSeed: string) {
+export function bridgeTextToolCalls(result, body, idSeed: string) {
 	const tools = Array.isArray(body?.tools)
 		? body.tools
 		: Array.isArray(body?.functions)
@@ -234,3 +234,7 @@ export function bridgeCodebuddyToolCalls(result, body, idSeed: string) {
 		}),
 	}
 }
+
+// Backward-compatible name for callers and integrations that still refer to the
+// original CodeBuddy-specific implementation.
+export const bridgeCodebuddyToolCalls = bridgeTextToolCalls

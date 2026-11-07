@@ -17,7 +17,10 @@
  */
 
 import { describe, expect, it } from "vitest"
-import { bridgeCodebuddyToolCalls } from "../../apps/web/open-sse/translator/concerns/streamToolBridge.js"
+import {
+	bridgeCodebuddyToolCalls,
+	bridgeTextToolCalls,
+} from "../../apps/web/open-sse/translator/concerns/streamToolBridge.js"
 import { applyOpenAIToolBridge } from "../../apps/web/open-sse/translator/concerns/toolBridge.js"
 import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
 import { createSSEStream } from "../../apps/web/open-sse/utils/stream.js"
@@ -227,6 +230,18 @@ describe("bridgeCodebuddyToolCalls - passthrough", () => {
 
 		expect(bridged).not.toBe(result)
 		expect(await bridged.response.text()).not.toContain("DSML")
+	})
+})
+
+describe("global bridge export", () => {
+	it("parses DSML for a Kiro-normalized OpenAI stream", async () => {
+		const result = await bridgeTextToolCalls(
+			{ response: sseResponse([deltaFrame(`<${F} calls>`)]), url: "u" },
+			{ tools: [BASH_TOOL] },
+			"kiro",
+		)
+
+		expect(await result.response.text()).not.toContain("DSML")
 	})
 })
 
