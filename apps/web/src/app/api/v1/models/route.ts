@@ -367,44 +367,46 @@ export async function buildModelsList(kindFilter: string[], options: BuildModels
 	// 9router instance's fetchCompatibleModelIds - skip dynamic fetch to break
 	// cross-instance recursive loops.
 	const skipDynamicFetch = options.skipDynamicFetch === true
-	let connections = await readSource(
-		"provider connections",
-		() => getProviderConnections(),
-		[] as Awaited<ReturnType<typeof getProviderConnections>>,
-	)
-	connections = connections.filter((c) => c.isActive !== false)
+	// Every source below is an independent read, so they are issued together: the
+	// listing used to await six round-trips end to end, and on a cold SQLite
+	// handle that was the whole latency of /v1/models. `readSource` already
+	// contains its own failure per source, so Promise.all cannot turn one
+	// unreadable table into a 500.
+	const [rawConnections, combos, customModels, modelAliases, studioModels, disabledByAlias] =
+		await Promise.all([
+			readSource(
+				"provider connections",
+				() => getProviderConnections(),
+				[] as Awaited<ReturnType<typeof getProviderConnections>>,
+			),
+			readSource("combos", () => getCombos(), [] as Awaited<ReturnType<typeof getCombos>>),
+			readSource<CustomModelRow[]>(
+				"custom models",
+				async () => (await getCustomModels()) as CustomModelRow[],
+				[],
+			),
+			readSource(
+				"model aliases",
+				() => getModelAliases(),
+				{} as Awaited<ReturnType<typeof getModelAliases>>,
+			),
+			readSource(
+				"studio models",
+				() => getStudioModels(),
+				[] as Awaited<ReturnType<typeof getStudioModels>>,
+			),
+			readSource(
+				"disabled models",
+				() => getDisabledModels(),
+				{} as Awaited<ReturnType<typeof getDisabledModels>>,
+			),
+		])
+	const connections = rawConnections.filter((c) => c.isActive !== false)
 
-	const combos = await readSource(
-		"combos",
-		() => getCombos(),
-		[] as Awaited<ReturnType<typeof getCombos>>,
-	)
-
-	const customModels = await readSource<CustomModelRow[]>(
-		"custom models",
-		async () => (await getCustomModels()) as CustomModelRow[],
-		[],
-	)
-
-	const modelAliases = await readSource(
-		"model aliases",
-		() => getModelAliases(),
-		{} as Awaited<ReturnType<typeof getModelAliases>>,
-	)
-
-	const studioModels = await readSource(
-		"studio models",
-		() => getStudioModels(),
-		[] as Awaited<ReturnType<typeof getStudioModels>>,
-	)
 	// Studio names are records of their own now; a leftover alias carrying one would
 	// list the same model twice under two different names.
 	const studioNames = new Set(studioModels.map((s) => String(s.callName).toLowerCase()))
-	const disabledByAlias = await readSource(
-		"disabled models",
-		() => getDisabledModels(),
-		{} as Awaited<ReturnType<typeof getDisabledModels>>,
-	)
+
 	const isDisabled = (alias, modelId) =>
 		Array.isArray(disabledByAlias[alias]) && disabledByAlias[alias].includes(modelId)
 
