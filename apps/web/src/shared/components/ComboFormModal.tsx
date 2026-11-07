@@ -44,7 +44,6 @@ function ModelItem({
 			</span>
 			{editing ? (
 				<input
-					autoFocus
 					value={draft}
 					onChange={(e) => setDraft(e.target.value)}
 					onBlur={commit}

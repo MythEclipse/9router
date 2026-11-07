@@ -6,6 +6,7 @@
 // filled in on the response path — the request-side ensureToolCallIds() never
 // sees it.
 import { describe, expect, it } from "vitest"
+import { normalizeKiroToolSpecs } from "../../apps/web/open-sse/translator/concerns/kiroConversation.js"
 import { fixMissingToolResponses } from "../../apps/web/open-sse/translator/concerns/toolCall.js"
 import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
 import { initState, translateResponse } from "../../apps/web/open-sse/translator/index.js"
@@ -60,6 +61,22 @@ describe("ensureStreamToolCallIds", () => {
 
 			expect(body.messages.map((message) => message.tool_call_id).filter(Boolean)).toEqual(["call-a"])
 			expect(body.messages[1].content).toBe("ok")
+		})
+
+		describe("Kiro Claude Code tool aliases", () => {
+			it("advertises Todo as a legacy alias for TodoWrite", () => {
+				const { specs, nameMap, aliases } = normalizeKiroToolSpecs([
+					{
+						name: "TodoWrite",
+						description: "Manage task list",
+						input_schema: { type: "object", properties: { todos: { type: "array" } } },
+					},
+				])
+
+				expect(specs.map((entry) => entry.toolSpecification.name)).toEqual(["TodoWrite", "Todo"])
+				expect(nameMap.has("Todo")).toBe(false)
+				expect(aliases.get("Todo")).toBe("TodoWrite")
+			})
 		})
 
 		it("fills partial multi-call responses and removes duplicate results", () => {

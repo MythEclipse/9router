@@ -149,7 +149,6 @@ function AddCustomModelModal({ isOpen, onSave, onClose }: AddCustomModelModalPro
 						onChange={(e) => setModelId(e.target.value)}
 						onKeyDown={(e) => e.key === "Enter" && handleSave()}
 						placeholder="e.g. tts-1-hd"
-						autoFocus
 					/>
 				</div>
 				<div className="flex gap-2">

@@ -184,6 +184,7 @@ function normalizeRootSchema(schema: unknown): JsonSchemaNode {
 export function normalizeKiroToolSpecs(tools: unknown) {
 	const specs: KiroToolSpec[] = []
 	const nameMap = new Map<string, string>()
+	const aliases = new Map<string, string>()
 	const usedNames = new Set<string>()
 
 	for (const [index, tool] of (Array.isArray(tools)
@@ -212,9 +213,25 @@ export function normalizeKiroToolSpecs(tools: unknown) {
 				inputSchema: { json: normalizeRootSchema(schema) },
 			},
 		})
+
+		// Some Kiro models still request the legacy `Todo` name even when the
+		// Claude Code client declares `TodoWrite`. Kiro selects tools by exact name
+		// and otherwise emits "No such tool available: Todo" as assistant text.
+		// Advertise the alias, then restore it to the client-facing name on response.
+		if (rawName === "TodoWrite" && !usedNames.has("Todo")) {
+			usedNames.add("Todo")
+			aliases.set("Todo", rawName)
+			specs.push({
+				toolSpecification: {
+					name: "Todo",
+					description,
+					inputSchema: { json: normalizeRootSchema(schema) },
+				},
+			})
+		}
 	}
 
-	return { specs, nameMap }
+	return { specs, nameMap, aliases }
 }
 
 function toolCallText(toolUse: { name?: unknown; input?: unknown } | undefined) {

@@ -675,7 +675,6 @@ export function TtsExampleCard({ providerId }) {
 						{/* Search */}
 						<div className="px-4 py-2.5 border-b border-border shrink-0">
 							<input
-								autoFocus
 								value={modalSearch}
 								onChange={(e) => setModalSearch(e.target.value)}
 								placeholder="Search language..."

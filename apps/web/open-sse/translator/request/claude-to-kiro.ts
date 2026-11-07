@@ -258,7 +258,7 @@ export function claudeToKiroRequest(model, body, _stream, credentials) {
 	)
 	const usesNativeGptEffort = usesKiroNativeGptEffort(thinkingBody, upstreamModel)
 
-	const { specs: toolSpecs, nameMap } = normalizeKiroToolSpecs(tools)
+	const { specs: toolSpecs, nameMap, aliases } = normalizeKiroToolSpecs(tools)
 	const { history, currentMessage } = convertClaudeMessagesToKiro(messages, upstreamModel)
 
 	// api_key / idc / external_idp must never use the shared default ARN (belongs
@@ -385,6 +385,7 @@ export function claudeToKiroRequest(model, body, _stream, credentials) {
 	for (const [original, sanitized] of nameMap) {
 		if (original !== sanitized) restoredToolNames.set(sanitized, original)
 	}
+	for (const [alias, original] of aliases) restoredToolNames.set(alias, original)
 	if (restoredToolNames.size) payload._toolNameMap = restoredToolNames
 	return payload
 }
