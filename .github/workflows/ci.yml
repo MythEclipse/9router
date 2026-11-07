@@ -108,6 +108,13 @@ jobs:
    - name: Build
      run: bun run build
 
+   # ffmpeg is a documented runtime dependency of the Codex STT path
+   # (docs/CODEX_STT.md): audio is converted to mono 24 kHz PCM16 locally before
+   # upload. The codex-stt-* tests exercise that real conversion, so the runner
+   # needs the same binary the server does rather than a mock of it.
+   - name: Install ffmpeg
+     run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
    - name: Run tests
      run: bun run test
 
@@ -401,6 +408,13 @@ jobs:
 
    - name: Build
      run: bun run build
+
+   # ffmpeg is a documented runtime dependency of the Codex STT path
+   # (docs/CODEX_STT.md): audio is converted to mono 24 kHz PCM16 locally before
+   # upload. The codex-stt-* tests exercise that real conversion, so the runner
+   # needs the same binary the server does rather than a mock of it.
+   - name: Install ffmpeg
+     run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
 
    - name: Run tests
      run: bun run test
