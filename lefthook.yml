@@ -21,4 +21,7 @@ pre-push:
   typecheck:
    run: node node_modules/typescript/bin/tsc -p apps/web/tsconfig.json --noEmit
   bump:
-   run: bun run bump
+    # The bump commit is created during this hook, so the current push ref is
+    # already fixed and cannot include it. Stop once; the next `git push` sends
+    # the new bump commit instead of silently publishing the old version.
+    run: bun run bump -- --block-push-after-bump

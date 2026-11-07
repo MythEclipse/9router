@@ -21,6 +21,7 @@ const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 
 /** The commit message the bumped version must be committed under. */
 const BUMP_SUBJECT = "chore: adjust package.json version (bump)"
+const BLOCK_PUSH_AFTER_BUMP = process.argv.includes("--block-push-after-bump")
 
 /** Run git, returning stdout, or "" when the command fails. */
 function git(args) {
@@ -191,6 +192,12 @@ function main() {
 		stdio: ["ignore", "ignore", "inherit"],
 	})
 	console.log(`[bump] Committed ${target} as "${BUMP_SUBJECT}".`)
+	if (BLOCK_PUSH_AFTER_BUMP) {
+		console.error(
+			"[bump] Version bump committed. Push stopped once so the bump commit is included on the next push.",
+		)
+		process.exitCode = 1
+	}
 }
 
 main()
