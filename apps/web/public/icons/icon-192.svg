@@ -1,1 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192"><rect width="192" height="192" fill="#0a0a0a" rx="24"/><text x="96" y="120" fill="#fff" font-family="Arial, sans-serif" font-size="80" font-weight="bold" text-anchor="middle">9R</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
+  <title>9Router App - 192px</title>
+  <rect width="192" height="192" fill="#0a0a0a" rx="24"/>
+  <text x="96" y="120" fill="#fff" font-family="Arial, sans-serif" font-size="80" font-weight="bold" text-anchor="middle">9R</text>
+</svg>

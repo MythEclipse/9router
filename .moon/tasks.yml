@@ -3,14 +3,14 @@ $schema: "https://moonrepo.dev/schemas/tasks.json"
 # Workspace-wide tasks live in moon.yml at the repo root and in each project.
 # moon 2.x does not merge a root tasks.yml into projects, so none is defined here.
 fileGroups:
-  sources:
-    - "src/**/*"
-    - "open-sse/**/*"
-  configs:
-    - "*.json"
-    - "*.mjs"
-    - "*.ts"
-    - "tsconfig.json"
-    - "biome.json"
-  tests:
-    - "tests/**/*"
+ sources:
+  - "src/**/*"
+  - "open-sse/**/*"
+ configs:
+  - "*.json"
+  - "*.mjs"
+  - "*.ts"
+  - "tsconfig.json"
+  - "biome.json"
+ tests:
+  - "tests/**/*"
