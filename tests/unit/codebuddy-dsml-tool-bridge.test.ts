@@ -103,6 +103,28 @@ describe("bridgeCodebuddyToolCalls - DSML reply", () => {
 		expect(textOf(body)).not.toContain("DSML")
 	})
 
+	it("converts every invoke in one DSML calls envelope", async () => {
+		const body = await run([
+			deltaFrame(
+				`<${F} calls>\n` +
+					`<${F} invoke name="Bash">\n` +
+					`<${F} parameter name="command" string="true">cd /tmp</${F} parameter>\n` +
+					`<${F} invoke>\n` +
+					`<${F} invoke name="Bash">\n` +
+					`<${F} parameter name="command" string="true">ls</${F} parameter>\n` +
+					`<${F} invoke>\n` +
+					`</${F} calls>`,
+			),
+		])
+
+		expect(callsOf(body)).toHaveLength(2)
+		expect(callsOf(body).map((call) => JSON.parse(call.function.arguments))).toEqual([
+			{ command: "cd /tmp" },
+			{ command: "ls" },
+		])
+		expect(textOf(body)).not.toContain("DSML")
+	})
+
 	describe("global non-stream tool bridge - DSML reply", () => {
 		it("recovers DSML calls before any provider-specific response translation", () => {
 			const response = {

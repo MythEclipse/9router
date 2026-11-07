@@ -252,7 +252,11 @@ export async function handleStreamingResponse({
 	// content is translated directly to Claude, the client otherwise receives
 	// executable-looking markup as a text block.
 	let responseForStreaming = providerResponse
-	if (targetFormat === FORMATS.OPENAI && Array.isArray(body?.tools) && body.tools.length > 0) {
+	if (
+		sourceFormat === FORMATS.OPENAI &&
+		((Array.isArray(body?.tools) && body.tools.length > 0) ||
+			(Array.isArray(body?.functions) && body.functions.length > 0))
+	) {
 		responseForStreaming = bridgeCodebuddyToolCalls(
 			{ response: providerResponse },
 			body,
