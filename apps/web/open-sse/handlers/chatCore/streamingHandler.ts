@@ -253,7 +253,7 @@ export async function handleStreamingResponse({
 	// executable-looking markup as a text block.
 	let responseForStreaming = providerResponse
 	if (
-		sourceFormat === FORMATS.OPENAI &&
+		targetFormat === FORMATS.OPENAI &&
 		((Array.isArray(body?.tools) && body.tools.length > 0) ||
 			(Array.isArray(body?.functions) && body.functions.length > 0))
 	) {
