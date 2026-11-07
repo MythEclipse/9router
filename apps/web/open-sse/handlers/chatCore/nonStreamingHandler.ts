@@ -296,6 +296,7 @@ export function translateNonStreamingResponse(
 				prompt_tokens: number
 				completion_tokens: number
 				total_tokens: number
+				prompt_tokens_details?: { cached_tokens?: number; cache_creation_tokens?: number }
 				completion_tokens_details?: { reasoning_tokens: number }
 			}
 		} = {
@@ -307,15 +308,30 @@ export function translateNonStreamingResponse(
 		}
 
 		if (usage) {
+			const thoughts = usage.thoughtsTokenCount || 0
+			const cached = usage.cachedContentTokenCount || 0
+			// Mirror the streaming extractor (translator/concerns/usage.ts): thoughts
+			// are output-side tokens, and cached prompt tokens are a subset of
+			// promptTokenCount. The old shape added thoughts to prompt_tokens, which
+			// both mis-split the turn and hid the cache read.
 			result.usage = {
-				prompt_tokens: (usage.promptTokenCount || 0) + (usage.thoughtsTokenCount || 0),
-				completion_tokens: usage.candidatesTokenCount || 0,
+				prompt_tokens: usage.promptTokenCount || 0,
+				completion_tokens: (usage.candidatesTokenCount || 0) + thoughts,
 				total_tokens: usage.totalTokenCount || 0,
 			}
-			if (usage.thoughtsTokenCount > 0) {
-				result.usage.completion_tokens_details = { reasoning_tokens: usage.thoughtsTokenCount }
+			if (cached > 0) {
+				result.usage.prompt_tokens_details = { cached_tokens: cached }
+			}
+			if (thoughts > 0) {
+				result.usage.completion_tokens_details = { reasoning_tokens: thoughts }
 			}
 		}
+		// The client's format decides the body. This branch used to return the
+		// OpenAI shape unconditionally, so an Anthropic client calling a Gemini
+		// model non-streaming received `object:"chat.completion"` with `usage:{}`
+		// instead of a `message` — a protocol violation, and the cache read never
+		// reached it.
+		if (sourceFormat === FORMATS.CLAUDE) return openAICompletionToClaudeMessage(result)
 		return result
 	}
 
