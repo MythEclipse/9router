@@ -17,10 +17,7 @@
  */
 
 import { describe, expect, it } from "vitest"
-import { CodeBuddyExecutor } from "../../apps/web/open-sse/executors/codebuddy-cn.js"
-import { CodeBuddyIntlExecutor } from "../../apps/web/open-sse/executors/codebuddy-intl.js"
-import { bridgeCodebuddyToolCalls } from "../../apps/web/open-sse/executors/codebuddyToolBridge.js"
-import { DefaultExecutor } from "../../apps/web/open-sse/executors/default.js"
+import { bridgeCodebuddyToolCalls } from "../../apps/web/open-sse/translator/concerns/streamToolBridge.js"
 import { applyOpenAIToolBridge } from "../../apps/web/open-sse/translator/concerns/toolBridge.js"
 import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
 import { createSSEStream } from "../../apps/web/open-sse/utils/stream.js"
@@ -230,39 +227,6 @@ describe("bridgeCodebuddyToolCalls - passthrough", () => {
 
 		expect(bridged).not.toBe(result)
 		expect(await bridged.response.text()).not.toContain("DSML")
-	})
-})
-
-describe("CodeBuddy executors wire the bridge", () => {
-	it.each([
-		["codebuddy-cn", CodeBuddyExecutor],
-		["codebuddy-intl", CodeBuddyIntlExecutor],
-	])("%s turns a DSML reply into tool_calls", async (_name, Executor) => {
-		const original = DefaultExecutor.prototype.execute
-		DefaultExecutor.prototype.execute = async () => ({
-			response: sseResponse([
-				deltaFrame(`<${F} calls>\n<${F} invoke name="Bash">\n`),
-				deltaFrame(`<${F} parameter name="command">ls</${F} parameter>\n</${F} invoke>\n</${F} calls>`),
-			]),
-			url: "u",
-			headers: {},
-			transformedBody: {},
-		})
-		try {
-			const executor = new Executor()
-			const result = await executor.execute({
-				model: "deepseek-v4-pro",
-				body: { tools: [BASH_TOOL], messages: [] },
-				stream: true,
-				credentials: {},
-			})
-
-			const body = await result.response.text()
-			expect(callsOf(body)).toHaveLength(1)
-			expect(callsOf(body)[0].function.name).toBe("Bash")
-		} finally {
-			DefaultExecutor.prototype.execute = original
-		}
 	})
 })
 

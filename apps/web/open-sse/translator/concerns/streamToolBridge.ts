@@ -16,10 +16,10 @@
 // The parser is the DeepSeek one because the dialect is DeepSeek's — sloppy closers, both
 // pipe widths and the scrubbing of leftover markers already live there.
 
-import { parseDeepSeekToolCalls } from "../translator/deepseekWebTools.ts"
-import { chatChunkSse } from "../utils/sse.ts"
-import { SSE_DONE } from "../utils/sseConstants.ts"
-import { parseSSELine } from "../utils/streamHelpers.ts"
+import { chatChunkSse } from "../../utils/sse.ts"
+import { SSE_DONE } from "../../utils/sseConstants.ts"
+import { parseSSELine } from "../../utils/streamHelpers.ts"
+import { parseDeepSeekToolCalls } from "../deepseekWebTools.ts"
 
 const DSML_MARKER_RE = /(?:｜｜|\|\|?)DSML(?:｜｜|\|\|?)/i
 
