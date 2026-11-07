@@ -101,11 +101,15 @@ def subset_outlines(codes, tmp):
     rlig pulls all 4262 ligatures and exhausts memory."""
     out = os.path.join(tmp, "stage1.woff2")
     unicodes = "U+%s,U+61-7A,U+30-39,U+5F" % ",".join(codes)
+    # `--layout-features=` with an empty value makes fontTools' parser swallow the
+    # next token, so every option that takes a value is passed as `--opt=value`
+    # here. Handing `--output-file` a separate argument made it a positional glyph
+    # name and failed the run with MissingGlyphsSubsettingError.
     subprocess.run(
         [
             sys.executable, "-m", "fontTools.subset", FULL_FONT,
             "--unicodes=" + unicodes, "--layout-features=", "--flavor=woff2",
-            "--output-file", out, "--no-hinting", "--desubroutinize", "--glyph-names",
+            "--output-file=" + out, "--no-hinting", "--desubroutinize", "--glyph-names",
         ],
         check=True, timeout=300,
     )

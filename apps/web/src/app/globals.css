@@ -10,25 +10,20 @@
    the package stylesheet because its unlayered .material-symbols-outlined rule would
    outrank every Tailwind text-[..] utility and pin all icons to 24px.
 
-   Two faces on purpose. The subset holds exactly the ligatures src/ uses (144
-   of them, see scripts/build-icon-subset.mjs) and is what actually gets
-   downloaded; the 3.96 MB package font stays as a src fallback so an icon added
-   without re-running the subset script still renders, just after the big file
-   arrives. `swap` instead of `block` so a slow first paint shows the icon
-   fallback rather than nothing at all. */
+   One face, and it is the subset. The subset holds every ligature src/ renders
+   (see scripts/build_icon_subset.py); a second face pointing at the 3.96 MB
+   package font used to sit behind it as a fallback, and that made the build emit
+   the whole font into .next/static/media on every build. The safety it bought is
+   now bought by a test instead: `ui-icons-and-changelog.test.ts` fails when src/
+   uses an icon the shipped list does not cover, so a new icon breaks CI rather
+   than shipping four megabytes to every client. `swap` instead of `block` so a
+   slow first paint shows the ligature word rather than nothing at all. */
 @font-face {
   font-family: "Material Symbols Outlined";
   font-style: normal;
   font-weight: 100 700;
   font-display: swap;
   src: url("/fonts/material-symbols-subset.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Material Symbols Outlined";
-  font-style: normal;
-  font-weight: 100 700;
-  font-display: block;
-  src: url("../../node_modules/material-symbols/material-symbols-outlined.woff2") format("woff2");
 }
 
 @custom-variant dark (&:where(.dark, .dark *));

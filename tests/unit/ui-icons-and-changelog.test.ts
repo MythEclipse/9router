@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, statSync } from "node:fs"
-import { resolve } from "node:path"
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
+import { join, resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 
 /**
@@ -72,13 +72,48 @@ describe("icon subset: 114 KB instead of the 3.96 MB package font", () => {
 		}
 	})
 
-	it("serves the subset first and keeps the package font as fallback", () => {
+	it("serves exactly one face, the subset, and never the 3.96 MB package font", () => {
 		expect(globals).toContain('url("/fonts/material-symbols-subset.woff2")')
 		const faces = globals.split("@font-face").slice(1)
-		expect(faces.length).toBeGreaterThanOrEqual(2)
+		// A second face pointing into node_modules is what made every build emit the
+		// full font into .next/static/media. The coverage test below is the safety
+		// net that fallback used to be, so the face count is pinned at one.
+		expect(faces).toHaveLength(1)
 		expect(faces[0]).toContain("material-symbols-subset.woff2")
-		expect(faces[1]).toContain("material-symbols")
-		expect(faces[1]).toContain("node_modules/material-symbols")
+		expect(globals).not.toContain("node_modules/material-symbols")
+	})
+
+	it("covers every icon src/ actually renders", () => {
+		// The subset is only safe to serve alone while it is exhaustive. Scanning the
+		// same three shapes the generator scans keeps the two in step: adding an icon
+		// to a component fails here until build_icon_subset.py is re-run.
+		const shipped = new Set(
+			readFileSync(list, "utf8")
+				.split("\n")
+				.map((s) => s.trim())
+				.filter(Boolean),
+		)
+		const patterns = [
+			/icon:\s*"([a-z_0-9]+)"/g,
+			/icon="([a-z_0-9]+)"/g,
+			/material-symbols-outlined[^>]*>\s*([a-z_0-9]+)\s*</g,
+		]
+		const used = new Set<string>()
+		const visit = (dir: string) => {
+			for (const entry of readdirSync(dir, { withFileTypes: true })) {
+				const full = join(dir, entry.name)
+				if (entry.isDirectory()) visit(full)
+				else if (/\.(tsx?|jsx?)$/.test(entry.name)) {
+					const text = readFileSync(full, "utf8")
+					for (const pattern of patterns) {
+						for (const match of text.matchAll(pattern)) used.add(match[1])
+					}
+				}
+			}
+		}
+		visit(resolve(root, "apps/web/src"))
+		const missing = [...used].filter((icon) => !shipped.has(icon)).sort()
+		expect(missing, "re-run apps/web/scripts/build_icon_subset.py").toEqual([])
 	})
 
 	it("enables the rlig feature the font actually ships", () => {
