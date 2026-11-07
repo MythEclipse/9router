@@ -86,6 +86,7 @@ import { takeRenamedToolNames } from "../utils/opencodeFingerprint.ts"
 import { createRequestLogger } from "../utils/requestLogger.ts"
 import { resolveSessionId } from "../utils/sessionManager.ts"
 import { createStreamController } from "../utils/streamHandler.ts"
+import { prefersStreaming } from "../utils/streamPreference.ts"
 import { dedupeTools } from "../utils/toolDeduper.ts"
 import { upstreamResponseHeaders } from "../utils/upstreamHeaders.ts"
 import { handleNonStreamingResponse } from "./chatCore/nonStreamingHandler.ts"
@@ -523,7 +524,7 @@ export async function handleChatCore({
 		sourceFormat === FORMATS.GEMINI ||
 		sourceFormat === FORMATS.GEMINI_CLI
 	const providerRequiresStreaming = PROVIDERS[provider]?.forceStream === true
-	let stream = providerRequiresStreaming ? true : body.stream !== false
+	let stream = providerRequiresStreaming ? true : prefersStreaming(sourceFormat, body)
 
 	// Image generation models require non-streaming (Google v1internal:generateContent)
 	const modelType = getModelType(alias, model)
