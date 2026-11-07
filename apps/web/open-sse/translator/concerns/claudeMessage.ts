@@ -59,6 +59,9 @@ export function openAICompletionToClaudeMessage(responseBody) {
 			output_tokens: usage.completion_tokens || usage.output_tokens || 0,
 			...(cacheReadTokens > 0 ? { cache_read_input_tokens: cacheReadTokens } : {}),
 			...(cacheCreationTokens > 0 ? { cache_creation_input_tokens: cacheCreationTokens } : {}),
+			// A provider that never reports counts (Kiro) leaves an estimate here.
+			// Say so, or the client prices a guess as a measurement.
+			...(usage.estimated === true ? { estimated: true } : {}),
 		},
 	}
 }
