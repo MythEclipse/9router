@@ -6,6 +6,7 @@
 // filled in on the response path — the request-side ensureToolCallIds() never
 // sees it.
 import { describe, expect, it } from "vitest"
+import { fixMissingToolResponses } from "../../apps/web/open-sse/translator/concerns/toolCall.js"
 import { FORMATS } from "../../apps/web/open-sse/translator/formats.js"
 import { initState, translateResponse } from "../../apps/web/open-sse/translator/index.js"
 import { createSSEStream } from "../../apps/web/open-sse/utils/stream.js"
@@ -40,6 +41,50 @@ describe("ensureStreamToolCallIds", () => {
 		expect(ensureStreamToolCallIds(c, seen)).toBe(true)
 		expect(typeof c.choices[0].delta.tool_calls[0].id).toBe("string")
 		expect(c.choices[0].delta.tool_calls[0].id.length).toBeGreaterThan(0)
+	})
+
+	describe("fixMissingToolResponses", () => {
+		it("removes orphan tool results and preserves complete call/result pairs", () => {
+			const body = {
+				messages: [
+					{
+						role: "assistant",
+						tool_calls: [{ id: "call-a", type: "function", function: { name: "a", arguments: "{}" } }],
+					},
+					{ role: "tool", tool_call_id: "stale-call", content: "stale" },
+					{ role: "tool", tool_call_id: "call-a", content: "ok" },
+				],
+			}
+
+			fixMissingToolResponses(body)
+
+			expect(body.messages.map((message) => message.tool_call_id).filter(Boolean)).toEqual(["call-a"])
+			expect(body.messages[1].content).toBe("ok")
+		})
+
+		it("fills partial multi-call responses and removes duplicate results", () => {
+			const body = {
+				messages: [
+					{
+						role: "assistant",
+						tool_calls: [
+							{ id: "call-a", type: "function", function: { name: "a", arguments: "{}" } },
+							{ id: "call-b", type: "function", function: { name: "b", arguments: "{}" } },
+						],
+					},
+					{ role: "tool", tool_call_id: "call-a", content: "ok" },
+					{ role: "tool", tool_call_id: "call-a", content: "duplicate" },
+				],
+			}
+
+			fixMissingToolResponses(body)
+
+			expect(body.messages.map((message) => message.tool_call_id).filter(Boolean)).toEqual([
+				"call-a",
+				"call-b",
+			])
+			expect(body.messages.at(-1)).toMatchObject({ role: "tool", tool_call_id: "call-b", content: "" })
+		})
 	})
 
 	it("reuses the id already seen for the same index instead of minting a new one", () => {

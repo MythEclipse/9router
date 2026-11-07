@@ -131,24 +131,46 @@ export function fixMissingToolResponses(body) {
 
 	for (let i = 0; i < body.messages.length; i++) {
 		const msg = body.messages[i]
-		const nextMsg = body.messages[i + 1]
-
 		newMessages.push(msg)
 
 		// Check if this is assistant with tool_calls/tool_use
 		const toolCallIds = getToolCallIds(msg)
 		if (toolCallIds.length === 0) continue
 
-		// Check if next message has tool_result
-		if (nextMsg && !hasToolResults(nextMsg, toolCallIds)) {
-			// Insert tool responses for each tool_call
-			for (const id of toolCallIds) {
-				// OpenAI format: role = "tool"
-				newMessages.push({
-					role: "tool",
-					tool_call_id: id,
-					content: "",
-				})
+		const expected = new Set(toolCallIds)
+		const seen = new Set()
+		let next = body.messages[i + 1]
+
+		// CodeBuddy validates the complete assistant-call/tool-result block. Drop
+		// orphan results and keep only results belonging to this assistant turn.
+		while (next?.role === "tool") {
+			if (expected.has(next.tool_call_id) && !seen.has(next.tool_call_id)) {
+				seen.add(next.tool_call_id)
+				newMessages.push(next)
+			}
+			i += 1
+			next = body.messages[i + 1]
+		}
+
+		// Claude-style histories carry all results in one user message.
+		if (next?.role === "user" && Array.isArray(next.content)) {
+			const hasToolResults = next.content.some((block) => block?.type === "tool_result")
+			if (hasToolResults) {
+				const results = next.content.filter(
+					(block) => block?.type === "tool_result" && expected.has(block.tool_use_id),
+				)
+				for (const id of new Set(results.map((block) => block.tool_use_id))) seen.add(id)
+				const content = next.content.filter(
+					(block) => block?.type !== "tool_result" || expected.has(block.tool_use_id),
+				)
+				newMessages.push({ ...next, content })
+				i += 1
+			}
+		}
+
+		for (const id of toolCallIds) {
+			if (!seen.has(id)) {
+				newMessages.push({ role: "tool", tool_call_id: id, content: "" })
 			}
 		}
 	}
