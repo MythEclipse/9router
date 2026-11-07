@@ -53,6 +53,10 @@ const EVENT_FRAME_FORMAT = {
 // Responses-API providers (e.g. codex) may emit SSE without content-type + use Responses output shape
 const isResponsesProvider = (p) => PROVIDERS[p]?.format === FORMATS.OPENAI_RESPONSES
 
+function isAbortError(error) {
+	return error?.name === "AbortError" || error?.code === "ABORT_ERR"
+}
+
 import { saveRequestDetail } from "@/lib/usageDb"
 
 function textFromResponsesMessageItem(item) {
@@ -731,6 +735,10 @@ export async function handleForcedSSEToJson({
 				}),
 			}
 		} catch (err) {
+			if (isAbortError(err)) {
+				log?.debug?.(reqTag, "Forced Responses SSE→JSON cancelled after client disconnect")
+				return createErrorResult(499, "Request aborted")
+			}
 			console.error("[ChatCore] Responses API SSE→JSON failed:", err)
 			return createErrorResult(HTTP_STATUS.BAD_GATEWAY, "Failed to convert streaming response to JSON")
 		}
@@ -843,6 +851,10 @@ export async function handleForcedSSEToJson({
 			}),
 		}
 	} catch (err) {
+		if (isAbortError(err)) {
+			log?.debug?.(reqTag, "Forced Chat Completions SSE→JSON cancelled after client disconnect")
+			return createErrorResult(499, "Request aborted")
+		}
 		console.error("[ChatCore] Chat Completions SSE→JSON failed:", err)
 		return createErrorResult(HTTP_STATUS.BAD_GATEWAY, "Failed to convert streaming response to JSON")
 	}

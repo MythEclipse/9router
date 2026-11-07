@@ -52,6 +52,24 @@ const toolItem = {
 }
 
 describe("Claude JSON clients behind forced-stream upstreams", () => {
+	it("treats an aborted upstream read as a client disconnect, not a 502 parse failure", async () => {
+		const abort = Object.assign(new Error("The operation was aborted"), {
+			name: "AbortError",
+		})
+		const result = await handleForcedSSEToJson({
+			...context("", FORMATS.CLAUDE, FORMATS.OPENAI),
+			providerResponse: {
+				headers: new Headers({ "content-type": "text/event-stream" }),
+				text: vi.fn().mockRejectedValue(abort),
+			},
+		})
+
+		expect(result.response.status).toBe(499)
+		expect(await result.response.json()).toMatchObject({
+			error: { message: "Request aborted" },
+		})
+	})
+
 	it.each(["<decision>allow</decision>", "<decision>block</decision>"])(
 		"preserves the upstream text verbatim: %s",
 		async (text) => {
