@@ -145,10 +145,18 @@ export function bridgeTextToolCalls(result, body, idSeed: string) {
 	const reply: StreamedReply = { text: "", forwarded: "", id: null, created: 0, model: null }
 	let buffering = false
 	let rest = ""
+	let keepAlive: ReturnType<typeof setInterval> | null = null
 
 	const stream = new ReadableStream({
 		async start(controller) {
 			const emit = (text: string) => controller.enqueue(encoder.encode(text))
+			// Once DSML is detected the response must be buffered until its tool
+			// envelope is complete. Keep the outer stream/watchdog active while the
+			// model is still producing that envelope. SSE comments are invisible to
+			// clients and are ignored by every response translator.
+			keepAlive = setInterval(() => {
+				if (buffering) emit(": 9router-stream-active\n\n")
+			}, 15_000)
 			// A marker arrives one token per frame (`<｜` then `｜DSML｜` …), so by the time the whole
 			// marker is recognisable the frames before it have already been sent — and those
 			// fragments leak to the client as prose. A frame that ENDS in a marker prefix is held
@@ -213,10 +221,29 @@ export function bridgeTextToolCalls(result, body, idSeed: string) {
 					held = ""
 				}
 				if (buffering) emit(closingFrames(reply, tools, idSeed))
-			} catch {
-				// Client gone: stop pulling the upstream instead of leaving it open.
+			} catch (error) {
+				const message = error?.message || ""
+				const isAbort =
+					error?.name === "AbortError" ||
+					error?.code === "ABORT_ERR" ||
+					message.includes("aborted") ||
+					message.includes("cancelled")
+				// A client cancellation is expected. Other reader failures must
+				// reach pipeWithDisconnect so it can emit the configured terminal
+				// error and release the request correctly.
 				await reader.cancel().catch(() => {})
+				if (!isAbort) {
+					try {
+						controller.error(error)
+					} catch {
+						/* consumer already closed */
+					}
+				}
 			} finally {
+				if (keepAlive) {
+					clearInterval(keepAlive)
+					keepAlive = null
+				}
 				try {
 					controller.close()
 				} catch {

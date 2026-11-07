@@ -243,6 +243,27 @@ describe("global bridge export", () => {
 
 		expect(await result.response.text()).not.toContain("DSML")
 	})
+
+	it("keeps the outer stream active while buffering a long DSML envelope", async () => {
+		const original = globalThis.setInterval
+		const intervals: (() => void)[] = []
+		globalThis.setInterval = ((callback: () => void) => {
+			intervals.push(callback)
+			return 1 as unknown as ReturnType<typeof setInterval>
+		}) as typeof setInterval
+		try {
+			const result = await bridgeTextToolCalls(
+				{ response: sseResponse([deltaFrame(`<${F} calls>`)]), url: "u" },
+				{ tools: [BASH_TOOL] },
+				"kiro",
+			)
+			intervals[0]()
+			const output = await result.response.text()
+			expect(output).toContain(": 9router-stream-active")
+		} finally {
+			globalThis.setInterval = original
+		}
+	})
 })
 
 describe("a Claude client of CodeBuddy", () => {

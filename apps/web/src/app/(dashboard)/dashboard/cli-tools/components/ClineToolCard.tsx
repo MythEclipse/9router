@@ -385,15 +385,18 @@ export default function ClineToolCard({
 										/>
 										{selectedModel && (
 											<button
+												type="button"
 												onClick={() => setSelectedModel("")}
 												className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-red-500 rounded transition-colors"
 												title="Clear"
+												aria-label="Clear selected model"
 											>
 												<span className="material-symbols-outlined text-[14px]">close</span>
 											</button>
 										)}
 									</div>
 									<button
+										type="button"
 										onClick={() => setModalOpen(true)}
 										disabled={!activeProviders?.length}
 										className={`w-full sm:w-auto rounded border px-2 py-2 text-xs transition-colors sm:py-1.5 whitespace-nowrap sm:shrink-0 ${activeProviders?.length ? "bg-surface border-border text-text-main hover:border-primary cursor-pointer" : "opacity-50 cursor-not-allowed border-border"}`}

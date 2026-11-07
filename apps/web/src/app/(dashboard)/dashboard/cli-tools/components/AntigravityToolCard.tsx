@@ -266,6 +266,14 @@ export default function AntigravityToolCard({
 			<div
 				className="flex items-start justify-between gap-3 hover:cursor-pointer sm:items-center"
 				onClick={onToggle}
+				role="button"
+				tabIndex={0}
+				onKeyDown={(e) => {
+					if (e.key === "Enter" || e.key === " ") {
+						e.preventDefault()
+						onToggle()
+					}
+				}}
 			>
 				<div className="flex min-w-0 items-center gap-3">
 					<div className="size-8 flex items-center justify-center shrink-0">
@@ -350,6 +358,7 @@ export default function AntigravityToolCard({
 					<div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr_auto] sm:items-center sm:gap-2">
 						{isRunning ? (
 							<button
+								type="button"
 								onClick={handleStop}
 								disabled={loading}
 								className="px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-500 font-medium text-sm flex items-center gap-2 hover:bg-red-500/20 transition-colors disabled:opacity-50"
@@ -359,6 +368,7 @@ export default function AntigravityToolCard({
 							</button>
 						) : (
 							<button
+								type="button"
 								onClick={handleStart}
 								disabled={loading || !hasActiveProviders}
 								className="px-4 py-2 rounded-lg bg-primary/10 border border-primary/30 text-primary font-medium text-sm flex items-center gap-2 hover:bg-primary/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
