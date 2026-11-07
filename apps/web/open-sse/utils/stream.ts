@@ -130,9 +130,9 @@ export function createSSEStream(options: SSEStreamOptions = {}) {
 	// Tool names a model emits in the wrong case land on no tool at all, since
 	// clients match declared names exactly. A name arrives whole in the first
 	// delta, so it can be corrected as it streams at no latency cost. Arguments
-	// are left alone here: they arrive in fragments and only become a parseable
-	// object at the end, and buffering them would hold back every tool call.
-	// Their recovery happens on the following turn instead, via the history.
+	// are not repaired at this step: they arrive in fragments and only become a
+	// parseable object at the end. A translator that buffers them (openai-to-claude
+	// does) repairs their shape against the declared schema before emitting.
 	const toolNameIndex = indexDeclaredTools(body?.tools)
 	const toolNamesRescued = new Map<string, string>()
 	const fixStreamedToolNames = (chunk: unknown) => {
@@ -157,6 +157,10 @@ export function createSSEStream(options: SSEStreamOptions = {}) {
 					customToolNames: new Set(customToolNames || []),
 					model,
 					sessionId: credentials?._clientSessionId || null,
+					// Declared tool schemas, so a response translator that buffers tool
+					// arguments can un-stringify a parameter the model serialised where
+					// the schema declared an array/object (AskUserQuestion's `questions`).
+					toolSchemas: toolNameIndex,
 					// Which upstream format this stream came from. A response translator can be
 					// reached either directly (target === its registered source) or as the second
 					// hop of a pivot, and on the terminal null chunk the pivot drops it - so a

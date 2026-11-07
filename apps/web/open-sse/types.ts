@@ -354,6 +354,8 @@ export interface StreamState {
 	provider?: string | null
 	toolNameMap?: Map<string, string> | null
 	customToolNames?: Set<string>
+	/** Declared tools (name → schema) from the client request, for input repair. */
+	toolSchemas?: Map<string, { name: string; schema: unknown }> | null
 	sessionId?: string | number | null
 	completionPending?: boolean
 	completedSent?: boolean

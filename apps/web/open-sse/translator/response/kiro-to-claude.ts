@@ -14,6 +14,7 @@
  * format is Claude and target is Kiro.
  */
 
+import { repairToolArguments } from "../concerns/toolCallRescue.ts"
 import { FORMATS } from "../formats.ts"
 import { register } from "../index.ts"
 
@@ -198,10 +199,16 @@ export function kiroToClaudeResponse(chunk, state) {
 			for (const [idx, toolInfo] of state.toolCalls) {
 				const buffered = state.toolArgBuffers?.get(idx)
 				if (buffered) {
+					// Repair the buffered arguments against the schema the client
+					// declared before they reach it. Kiro models serialise nested
+					// parameters (`{"questions":"[{...}]"}`) often enough that the
+					// client rejects the call and retries the same turn forever.
+					const declared = state.toolSchemas?.get(String(toolInfo.name).toLowerCase())
+					const repaired = repairToolArguments(buffered, declared?.schema)
 					results.push({
 						type: "content_block_delta",
 						index: toolInfo.blockIndex,
-						delta: { type: "input_json_delta", partial_json: buffered },
+						delta: { type: "input_json_delta", partial_json: repaired },
 					})
 				}
 				results.push({ type: "content_block_stop", index: toolInfo.blockIndex })

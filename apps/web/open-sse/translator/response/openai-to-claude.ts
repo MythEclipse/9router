@@ -1,5 +1,6 @@
 import { fromOpenAIFinish } from "../concerns/finishReason.ts"
 import { extractReasoningText } from "../concerns/reasoning.ts"
+import { coerceDeclaredTypes } from "../concerns/toolCallRescue.ts"
 import { FORMATS } from "../formats.ts"
 import { register } from "../index.ts"
 import { CLAUDE_BLOCK, MODEL_FALLBACK, ROLE } from "../schema/index.ts"
@@ -11,13 +12,18 @@ import { CLAUDE_BLOCK, MODEL_FALLBACK, ROLE } from "../schema/index.ts"
 const CLAUDE_OAUTH_TOOL_PREFIX = "proxy_"
 
 // Sanitize tool call arguments to fix bad params from non-Anthropic models
-function sanitizeToolArgs(toolName, argsJson) {
+function sanitizeToolArgs(toolName, argsJson, schema) {
 	try {
-		const args = JSON.parse(argsJson)
+		let args = JSON.parse(argsJson)
 		const name = toolName.startsWith(CLAUDE_OAUTH_TOOL_PREFIX)
 			? toolName.slice(CLAUDE_OAUTH_TOOL_PREFIX.length)
 			: toolName
 		if (name === "Read") sanitizeReadArgs(args)
+		// The client validates this call against the schema it declared, so that
+		// schema is the authority on shape. A parameter the model serialised as a
+		// JSON string where an array/object was declared is un-stringified here —
+		// otherwise the client rejects the call and retries it forever.
+		args = coerceDeclaredTypes(args, schema)
 		return JSON.stringify(args)
 	} catch {
 		return argsJson
@@ -394,7 +400,8 @@ export function openaiToClaudeResponse(chunk, state) {
 			// Emit buffered + sanitized args as single delta before stop
 			const buffered = state.toolArgBuffers?.get(idx)
 			if (buffered) {
-				const sanitized = sanitizeToolArgs(toolInfo.name, buffered)
+				const declared = state.toolSchemas?.get(String(toolInfo.name).toLowerCase())
+				const sanitized = sanitizeToolArgs(toolInfo.name, buffered, declared?.schema)
 				results.push({
 					type: "content_block_delta",
 					index: toolInfo.blockIndex,

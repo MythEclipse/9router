@@ -93,6 +93,89 @@ function parseJson(value) {
 	}
 }
 
+const declaredType = (node) => {
+	if (!node || typeof node !== "object") return null
+	if (Array.isArray(node.type)) return node.type[0] ?? null
+	return typeof node.type === "string" ? node.type : null
+}
+
+/**
+ * Un-stringify values the declared schema says are arrays or objects.
+ *
+ * Models routinely serialise a nested parameter — `{"questions":"[{...}]"}` —
+ * and a client that validates against its own schema rejects the call:
+ *
+ *   InputValidationError: The parameter `questions` type is expected as `array`
+ *   but provided as `string`
+ *
+ * Claude Code answers that by retrying the same call, so one stringified
+ * parameter becomes a turn that loops forever.
+ *
+ * Only a value whose *declared* type is array/object is touched, and only when
+ * the string actually parses to that type. A string parameter holding JSON as
+ * text (writing a .json file, say) keeps its string type because its schema
+ * says string. Anything unreadable is left exactly as it arrived.
+ */
+export function coerceDeclaredTypes(value, schema, depth = 0) {
+	if (depth > 6 || value === null || value === undefined) return value
+
+	if (typeof value === "string") {
+		const type = declaredType(schema)
+		if (type !== "array" && type !== "object") return value
+		const parsed = parseJson(value)
+		if (parsed === undefined) return value
+		if (type === "array" && !Array.isArray(parsed)) return value
+		if (type === "object" && (Array.isArray(parsed) || typeof parsed !== "object")) return value
+		return coerceDeclaredTypes(parsed, schema, depth + 1)
+	}
+
+	if (Array.isArray(value)) {
+		const items = schema?.items
+		if (!items) return value
+		let changed = false
+		const next = value.map((entry) => {
+			const coerced = coerceDeclaredTypes(entry, items, depth + 1)
+			if (coerced !== entry) changed = true
+			return coerced
+		})
+		return changed ? next : value
+	}
+
+	if (typeof value === "object") {
+		const props = propertiesOf(schema)
+		if (!props) return value
+		let changed = false
+		const next = { ...value }
+		for (const [key, child] of Object.entries(props)) {
+			if (!Object.hasOwn(next, key)) continue
+			const coerced = coerceDeclaredTypes(next[key], child, depth + 1)
+			if (coerced !== next[key]) {
+				next[key] = coerced
+				changed = true
+			}
+		}
+		return changed ? next : value
+	}
+
+	return value
+}
+
+/**
+ * repairToolArguments(name, argsJson, schema) — JSON string in, JSON string out.
+ *
+ * The buffered form of a tool call, repaired against the schema the client
+ * declared. Fail-open: anything unparseable is returned untouched, because a
+ * call the gateway cannot understand is still the model's call, and mangling it
+ * would replace a bad argument with a wrong one.
+ */
+export function repairToolArguments(argsJson, schema) {
+	if (typeof argsJson !== "string" || !schema) return argsJson
+	const parsed = parseJson(argsJson)
+	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return argsJson
+	const coerced = coerceDeclaredTypes(parsed, schema)
+	return coerced === parsed ? argsJson : JSON.stringify(coerced)
+}
+
 /**
  * indexDeclaredTools(tools) - declared name lookup, case-insensitive.
  * Also exposes the schema so a single pass serves both name resolution and the
@@ -235,6 +318,10 @@ export function rescueToolCall(call, index) {
 		out.call = null
 		return out
 	}
+
+	// A model that serialised a nested parameter still produced the right call;
+	// only its JSON shape is wrong, and the client's schema is what proves it.
+	args = coerceDeclaredTypes(args, schema)
 
 	const encoded = JSON.stringify(args)
 	if (isFlat) out.call = { ...call, name: declared?.name || name, arguments: encoded }
