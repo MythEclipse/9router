@@ -56,6 +56,7 @@ export function extractUsageFromResponse(responseBody) {
 				responseBody.usage.cached_tokens ?? responseBody.usage.input_tokens_details?.cached_tokens,
 			cache_read_input_tokens: responseBody.usage.cache_read_input_tokens,
 			cache_creation_input_tokens: responseBody.usage.cache_creation_input_tokens,
+			...(responseBody.usage.estimated === true ? { estimated: true } : {}),
 		}
 	}
 
@@ -67,6 +68,10 @@ export function extractUsageFromResponse(responseBody) {
 			cached_tokens:
 				responseBody.usage.cached_tokens ?? responseBody.usage.prompt_tokens_details?.cached_tokens,
 			reasoning_tokens: responseBody.usage.completion_tokens_details?.reasoning_tokens,
+			// The upstream body carries the marker when the provider reported no
+			// counts and the gateway derived them (Kiro). Dropping it here stored an
+			// estimate as if it had been measured.
+			...(responseBody.usage.estimated === true ? { estimated: true } : {}),
 		}
 	}
 
