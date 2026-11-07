@@ -19,7 +19,7 @@
     "lint:baseline": "node scripts/biome-baseline.mjs --update",
     "format": "biome format --write",
     "check": "bun run lint && bun run typecheck",
-    "test": "vitest run --root tests",
+    "test": "vitest run --config tests/vitest.config.ts",
     "cli:pack": "bun --filter 9router pack:cli",
     "cli:publish": "bun --filter 9router publish:cli",
     "bump": "node scripts/bump-version.mjs",

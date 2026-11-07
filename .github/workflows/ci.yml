@@ -108,6 +108,9 @@ jobs:
    - name: Build
      run: bun run build
 
+   - name: Run tests
+     run: bun run test
+
    # Assemble exactly what flake.nix used to copy into $out/lib/9router:
    # the standalone server, the full .next build, the runtime source trees
    # and custom-server.js. node_modules is left out on purpose — the host
@@ -392,6 +395,9 @@ jobs:
 
    - name: Build
      run: bun run build
+
+   - name: Run tests
+     run: bun run test
 
    # Same payload shape as deploy-orange: the host installs its own
    # node_modules against the lockfile this job resolves, so the tarball carries
