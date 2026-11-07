@@ -206,7 +206,10 @@ export function bridgeCodebuddyToolCalls(result, body, idSeed: string) {
 				}
 				// No marker completed: what was held was ordinary prose after all.
 				if (held && !buffering) {
-					emit(held)
+					// `held` is a complete SSE frame without the separator that was consumed
+					// while buffering it. Restore the separator so the client dispatches the
+					// final frame instead of treating it as an unterminated event.
+					emit(`${held}\n\n`)
 					held = ""
 				}
 				if (buffering) emit(closingFrames(reply, tools, idSeed))

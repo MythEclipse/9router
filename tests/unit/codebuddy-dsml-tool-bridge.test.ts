@@ -178,6 +178,17 @@ describe("bridgeCodebuddyToolCalls - passthrough", () => {
 		expect(await result.response.text()).toBe(`${frames.join("\n\n")}\n\ndata: [DONE]\n\n`)
 	})
 
+	it("does not truncate a normal reply ending with a possible marker prefix", async () => {
+		const frame = deltaFrame("Contoh operator perbandingan: <")
+		const result = await bridgeCodebuddyToolCalls(
+			{ response: sseResponse([frame]), url: "u", headers: {}, transformedBody: {} },
+			{ tools: [BASH_TOOL] },
+			"cbai",
+		)
+
+		expect(await result.response.text()).toBe(`${frame}\n\ndata: [DONE]\n\n`)
+	})
+
 	it("returns the response untouched when the request carries no tools", async () => {
 		const result = { response: sseResponse([deltaFrame(`<${F} calls>`)]), url: "u" }
 		const bridged = await bridgeCodebuddyToolCalls(result, { tools: [] }, "cbai")
