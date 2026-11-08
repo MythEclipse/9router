@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Button, Modal, Select, Toggle } from "@/shared/components"
 import { CAPACITY_META, STT_TRANSPORT_META, STT_TRANSPORTS } from "@/shared/constants/models"
+import Icon from "../../../../../shared/components/Icon"
 
 const defaultCaps = () => Object.fromEntries(Object.keys(CAPACITY_META).map((key) => [key, false]))
 
@@ -238,13 +239,13 @@ export default function AddCustomModelModal({
 				{/* Test result */}
 				{testStatus === "ok" && (
 					<div className="flex items-center gap-2 text-sm text-green-600">
-						<span className="material-symbols-outlined text-base">check_circle</span>
+						<Icon name="check_circle" size={16} />
 						Model is reachable
 					</div>
 				)}
 				{testStatus === "error" && (
 					<div className="flex items-start gap-2 text-sm text-red-500">
-						<span className="material-symbols-outlined text-base shrink-0">cancel</span>
+						<Icon name="cancel" size={16} className="shrink-0" />
 						<span>{testError || "Model not reachable"}</span>
 					</div>
 				)}

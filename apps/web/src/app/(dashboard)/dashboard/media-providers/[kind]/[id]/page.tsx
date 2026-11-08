@@ -22,6 +22,7 @@ import {
 	OAUTH_PROVIDERS,
 } from "@/shared/constants/providers"
 import { getCustomLogo } from "@/shared/utils/providerLogo"
+import Icon from "../../../../../../shared/components/Icon"
 import { EmbeddingExampleCard } from "./components/EmbeddingExampleCard.tsx"
 import { KIND_EXAMPLE_CONFIG } from "./components/exampleShared.tsx"
 import { GenericExampleCard } from "./components/GenericExampleCard.tsx"
@@ -104,7 +105,7 @@ export default function MediaProviderDetailPage() {
 					href={`/dashboard/media-providers/${kind}`}
 					className="inline-flex items-center gap-1 text-sm text-text-muted hover:text-primary transition-colors mb-4"
 				>
-					<span className="material-symbols-outlined text-lg">arrow_back</span>
+					<Icon name="arrow_back" size={18} />
 					{kindConfig.label}
 				</Link>
 
@@ -133,7 +134,7 @@ export default function MediaProviderDetailPage() {
 									rel="noopener noreferrer"
 									className="text-xs text-primary hover:underline inline-flex items-center gap-1"
 								>
-									<span className="material-symbols-outlined text-sm">open_in_new</span>
+									<Icon name="open_in_new" size={14} />
 									Get API Key
 								</a>
 							)}
@@ -167,7 +168,7 @@ export default function MediaProviderDetailPage() {
 			{/* Kind-specific notice (e.g. codex/image requires Plus) */}
 			{!isCustom && provider.kindNotice?.[kind] && (
 				<div className="flex items-start gap-3 px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400">
-					<span className="material-symbols-outlined text-[20px] mt-0.5">warning</span>
+					<Icon name="warning" size={20} className="mt-0.5" />
 					<p className="text-sm">{provider.kindNotice[kind]}</p>
 				</div>
 			)}
@@ -175,7 +176,7 @@ export default function MediaProviderDetailPage() {
 			{/* Provider notice text (only when there's actual text content) */}
 			{!isCustom && provider.notice?.text && !provider.deprecated && (
 				<div className="flex flex-col gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2 sm:flex-row sm:items-center">
-					<span className="material-symbols-outlined text-[16px] text-blue-500 shrink-0">info</span>
+					<Icon name="info" size={16} className="text-blue-500 shrink-0" />
 					<p className="min-w-0 flex-1 text-xs leading-relaxed text-blue-600 dark:text-blue-400">
 						{provider.notice.text}
 					</p>

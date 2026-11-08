@@ -5,6 +5,7 @@ import { useEffect } from "react"
 import { cn } from "@/shared/utils/cn"
 import { lockBodyScroll, unlockBodyScroll } from "@/shared/utils/scrollLock"
 import Button from "./Button.tsx"
+import Icon from "./Icon"
 import Tooltip from "./Tooltip.tsx"
 
 // Overlay geometry and motion come from the chrome contract
@@ -125,7 +126,7 @@ export default function Modal({
 							aria-label="Close"
 							className="chrome-focus md:hidden shrink-0 p-1 rounded-[var(--r-control)] text-text-muted chrome-row hover:text-text-main"
 						>
-							<span className="material-symbols-outlined text-[20px] leading-none">close</span>
+							<Icon name="close" size={20} className="leading-none" />
 						</button>
 					</div>
 				)}

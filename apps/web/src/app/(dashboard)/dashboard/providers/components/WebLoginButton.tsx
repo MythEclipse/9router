@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { translate } from "@/i18n/runtime"
 import { Button, Modal } from "@/shared/components"
+import Icon from "../../../../../shared/components/Icon"
 
 // Client mirror of open-sse/services/webLoginConfig.js keys — the server list
 // stays authoritative (POST rejects anything not configured there).
@@ -239,7 +240,7 @@ export default function WebLoginButton({
 								disabled={busy}
 								className="flex items-center gap-1 text-xs text-primary hover:underline disabled:opacity-50"
 							>
-								<span className="material-symbols-outlined text-[14px]">add</span>
+								<Icon name="add" size={14} />
 								{translate("New profile")}
 							</button>
 						</div>
@@ -256,13 +257,9 @@ export default function WebLoginButton({
 											selected ? "border-primary ring-1 ring-primary" : "hover:border-accent/60"
 										}`}
 									>
-										<span className="material-symbols-outlined text-[18px] text-text-muted">
-											{profileIcon(name)}
-										</span>
+										<Icon name={profileIcon(name)} size={18} className="text-text-muted" />
 										<span className="min-w-0 flex-1 truncate">{name}</span>
-										{selected && (
-											<span className="material-symbols-outlined text-[16px] text-primary">check_circle</span>
-										)}
+										{selected && <Icon name="check_circle" size={16} className="text-primary" />}
 									</button>
 								)
 							})}
@@ -273,13 +270,12 @@ export default function WebLoginButton({
 						<div className="rounded border border-accent/20 bg-sidebar/50 p-3">
 							{phase === "success" ? (
 								<div className="flex items-center gap-2 text-sm font-medium text-green-400">
-									<span className="material-symbols-outlined text-[18px]">check_circle</span>✓{" "}
-									{message || translate("Connection saved")}
+									<Icon name="check_circle" size={18} />✓ {message || translate("Connection saved")}
 								</div>
 							) : phase === "error" ? (
 								<div className="flex flex-col gap-1">
 									<div className="flex items-center gap-2 text-sm font-medium text-yellow-400">
-										<span className="material-symbols-outlined text-[18px]">error</span>
+										<Icon name="error" size={18} />
 										{translate("Login failed")}
 									</div>
 									{message && <p className="pl-6 text-xs text-red-500 break-words">{message}</p>}
@@ -296,11 +292,11 @@ export default function WebLoginButton({
 													done ? "text-green-400" : active ? "text-primary" : "text-text-muted opacity-50"
 												}`}
 											>
-												<span
-													className={`material-symbols-outlined text-[18px] ${active ? "animate-pulse" : ""}`}
-												>
-													{done ? "check_circle" : stage.icon}
-												</span>
+												<Icon
+													name={done ? "check_circle" : stage.icon}
+													size={18}
+													className={`${active ? "animate-pulse" : ""}`}
+												/>
 												{translate(stage.label)}
 											</li>
 										)

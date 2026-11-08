@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react"
 import { Button, Card, ManualConfigModal, ModelSelectModal } from "@/shared/components"
 import { DEFAULT_LOCAL_API_KEY } from "@/shared/constants/config"
 import { useModelAliases } from "@/shared/hooks/useModelAliases"
+import Icon from "../../../../../shared/components/Icon"
 import ApiKeySelect from "./ApiKeySelect.tsx"
 import BaseUrlSelect from "./BaseUrlSelect.tsx"
 import { matchKnownEndpoint } from "./cliEndpointMatch.ts"
@@ -247,18 +248,18 @@ export default function ClineToolCard({
 						<p className="text-xs text-text-muted truncate">{tool.description}</p>
 					</div>
 				</div>
-				<span
-					className={`material-symbols-outlined text-text-muted text-[20px] transition-transform ${isExpanded ? "rotate-180" : ""}`}
-				>
-					expand_more
-				</span>
+				<Icon
+					name="expand_more"
+					size={20}
+					className={`text-text-muted transition-transform ${isExpanded ? "rotate-180" : ""}`}
+				/>
 			</div>
 
 			{isExpanded && (
 				<div className="mt-4 pt-4 border-t border-border flex flex-col gap-4">
 					{checking && (
 						<div className="flex items-center gap-2 text-text-muted">
-							<span className="material-symbols-outlined animate-spin">progress_activity</span>
+							<Icon name="progress_activity" className="animate-spin" />
 							<span>Checking Cline...</span>
 						</div>
 					)}
@@ -267,7 +268,7 @@ export default function ClineToolCard({
 						<div className="flex flex-col gap-4">
 							<div className="flex flex-col gap-3 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
 								<div className="flex items-start gap-3">
-									<span className="material-symbols-outlined text-yellow-500">warning</span>
+									<Icon name="warning" className="text-yellow-500" />
 									<div className="flex-1">
 										<p className="font-medium text-yellow-600 dark:text-yellow-400">
 											Cline not detected locally
@@ -284,13 +285,11 @@ export default function ClineToolCard({
 										onClick={() => setShowManualConfigModal(true)}
 										className="!bg-yellow-500/20 !border-yellow-500/40 !text-yellow-700 dark:!text-yellow-300 hover:!bg-yellow-500/30"
 									>
-										<span className="material-symbols-outlined text-[18px] mr-1">content_copy</span>
+										<Icon name="content_copy" size={18} className="mr-1" />
 										Manual Config
 									</Button>
 									<Button variant="outline" size="sm" onClick={() => setShowInstallGuide(!showInstallGuide)}>
-										<span className="material-symbols-outlined text-[18px] mr-1">
-											{showInstallGuide ? "expand_less" : "help"}
-										</span>
+										<Icon name={showInstallGuide ? "expand_less" : "help"} size={18} className="mr-1" />
 										{showInstallGuide ? "Hide" : "How to Install"}
 									</Button>
 								</div>
@@ -324,9 +323,7 @@ export default function ClineToolCard({
 									<span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">
 										Select Endpoint
 									</span>
-									<span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">
-										arrow_forward
-									</span>
+									<Icon name="arrow_forward" size={14} className="hidden text-text-muted sm:inline" />
 									<BaseUrlSelect
 										value={customBaseUrl || getDisplayUrl()}
 										onChange={setCustomBaseUrl}
@@ -344,9 +341,7 @@ export default function ClineToolCard({
 										<span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">
 											Current
 										</span>
-										<span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">
-											arrow_forward
-										</span>
+										<Icon name="arrow_forward" size={14} className="hidden text-text-muted sm:inline" />
 										<span className="min-w-0 truncate rounded bg-surface/40 px-2 py-2 text-xs text-text-muted sm:py-1.5">
 											{status.settings.openAiBaseUrl}
 										</span>
@@ -357,9 +352,7 @@ export default function ClineToolCard({
 									<span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">
 										API Key
 									</span>
-									<span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">
-										arrow_forward
-									</span>
+									<Icon name="arrow_forward" size={14} className="hidden text-text-muted sm:inline" />
 									<ApiKeySelect
 										value={selectedApiKey}
 										onChange={setSelectedApiKey}
@@ -372,9 +365,7 @@ export default function ClineToolCard({
 									<span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">
 										Model
 									</span>
-									<span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">
-										arrow_forward
-									</span>
+									<Icon name="arrow_forward" size={14} className="hidden text-text-muted sm:inline" />
 									<div className="relative w-full min-w-0">
 										<input
 											type="text"
@@ -391,7 +382,7 @@ export default function ClineToolCard({
 												title="Clear"
 												aria-label="Clear selected model"
 											>
-												<span className="material-symbols-outlined text-[14px]">close</span>
+												<Icon name="close" size={14} />
 											</button>
 										)}
 									</div>
@@ -410,9 +401,7 @@ export default function ClineToolCard({
 								<div
 									className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs ${message.type === "success" ? "bg-green-500/10 text-green-600" : "bg-red-500/10 text-red-600"}`}
 								>
-									<span className="material-symbols-outlined text-[14px]">
-										{message.type === "success" ? "check_circle" : "error"}
-									</span>
+									<Icon name={message.type === "success" ? "check_circle" : "error"} size={14} />
 									<span>{message.text}</span>
 								</div>
 							)}
@@ -425,7 +414,8 @@ export default function ClineToolCard({
 									disabled={(!selectedApiKey && cloudEnabled && apiKeys.length > 0) || !selectedModel}
 									loading={applying}
 								>
-									<span className="material-symbols-outlined text-[14px] mr-1">save</span>Apply
+									<Icon name="save" size={14} className="mr-1" />
+									Apply
 								</Button>
 								<Button
 									variant="outline"
@@ -434,11 +424,12 @@ export default function ClineToolCard({
 									disabled={restoring}
 									loading={restoring}
 								>
-									<span className="material-symbols-outlined text-[14px] mr-1">restore</span>Reset
+									<Icon name="restore" size={14} className="mr-1" />
+									Reset
 								</Button>
 								<Button variant="ghost" size="sm" onClick={() => setShowManualConfigModal(true)}>
-									<span className="material-symbols-outlined text-[14px] mr-1">content_copy</span>Manual
-									Config
+									<Icon name="content_copy" size={14} className="mr-1" />
+									Manual Config
 								</Button>
 							</div>
 						</>

@@ -5,6 +5,7 @@ import { createPortal } from "react-dom"
 import { LOCALES } from "@/i18n/config"
 import { reloadTranslations } from "@/i18n/runtime"
 import { notifyLocaleChanged, useLocale } from "@/shared/hooks/useLocale"
+import Icon from "./Icon"
 
 // Locale display names and flags - will be translated by runtime i18n
 const getLocaleInfo = (locale) => {
@@ -122,7 +123,7 @@ export default function LanguageSwitcher({
 					title="Language"
 					data-i18n-skip="true"
 				>
-					<span className="material-symbols-outlined text-[20px]">language</span>
+					<Icon name="language" size={20} />
 					<span className="text-sm font-medium">{getLocaleInfo(locale).name}</span>
 					<span className="text-lg">{getLocaleInfo(locale).flag}</span>
 				</button>
@@ -152,7 +153,7 @@ export default function LanguageSwitcher({
 									className="p-1.5 rounded-lg text-text-muted hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
 									aria-label="Close"
 								>
-									<span className="material-symbols-outlined text-[20px]">close</span>
+									<Icon name="close" size={20} />
 								</button>
 							</div>
 
@@ -179,7 +180,7 @@ export default function LanguageSwitcher({
 												<span className="text-center leading-tight line-clamp-2 h-8 flex items-center">
 													{info.name}
 												</span>
-												{active && <span className="material-symbols-outlined text-sm">check</span>}
+												{active && <Icon name="check" size={14} />}
 											</button>
 										)
 									})}

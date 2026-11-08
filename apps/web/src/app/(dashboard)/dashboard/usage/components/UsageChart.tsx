@@ -12,6 +12,7 @@ import {
 } from "recharts"
 import Card from "@/shared/components/Card"
 import { formatCostPrecise, formatRawCount, formatTokenCount } from "@/shared/utils/chartFormat"
+import Icon from "../../../../../shared/components/Icon"
 
 const fmtTokens = formatTokenCount
 const fmtCost = formatCostPrecise
@@ -124,16 +125,12 @@ export default function UsageChart({ period = "7d", updateKey = 0 }: UsageChartP
 
 			{loading ? (
 				<div className="h-44 flex items-center justify-center text-text-muted text-sm gap-2">
-					<span className="material-symbols-outlined text-[18px] animate-spin text-primary">
-						progress_activity
-					</span>
+					<Icon name="progress_activity" size={18} className="animate-spin text-primary" />
 					<span>Loading telemetry series...</span>
 				</div>
 			) : !hasData ? (
 				<div className="h-44 flex flex-col items-center justify-center text-center px-4 gap-2 border border-dashed border-border-subtle rounded-[var(--r-control)] bg-surface-2/30 my-1">
-					<span className="material-symbols-outlined text-[26px] text-text-subtle select-none">
-						show_chart
-					</span>
+					<Icon name="show_chart" size={26} className="text-text-subtle select-none" />
 					<div className="text-xs font-medium text-text-main">
 						No activity recorded for this timeframe
 					</div>

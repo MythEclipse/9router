@@ -6,6 +6,7 @@ import { Button, Card, ManualConfigModal, ModelSelectModal } from "@/shared/comp
 import { CLI_TOOLS } from "@/shared/constants/cliTools"
 import { DEFAULT_LOCAL_API_KEY } from "@/shared/constants/config"
 import { useModelAliases } from "@/shared/hooks/useModelAliases"
+import Icon from "../../../../../shared/components/Icon"
 import ApiKeySelect from "./ApiKeySelect.tsx"
 import { EndpointField } from "./CardField.tsx"
 import { matchKnownEndpoint } from "./cliEndpointMatch.ts"
@@ -449,18 +450,18 @@ export default function HermesToolCard({
 						<p className="text-xs text-text-muted truncate">{tool.description}</p>
 					</div>
 				</div>
-				<span
-					className={`material-symbols-outlined text-text-muted text-[20px] transition-transform ${isExpanded ? "rotate-180" : ""}`}
-				>
-					expand_more
-				</span>
+				<Icon
+					name="expand_more"
+					size={20}
+					className={`text-text-muted transition-transform ${isExpanded ? "rotate-180" : ""}`}
+				/>
 			</div>
 
 			{isExpanded && (
 				<div className="mt-4 pt-4 border-t border-border flex flex-col gap-4">
 					{checking && (
 						<div className="flex items-center gap-2 text-text-muted">
-							<span className="material-symbols-outlined animate-spin">progress_activity</span>
+							<Icon name="progress_activity" className="animate-spin" />
 							<span>Checking Hermes Agent...</span>
 						</div>
 					)}
@@ -469,7 +470,7 @@ export default function HermesToolCard({
 						<div className="flex flex-col gap-4">
 							<div className="flex flex-col gap-3 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
 								<div className="flex items-start gap-3">
-									<span className="material-symbols-outlined text-yellow-500">warning</span>
+									<Icon name="warning" className="text-yellow-500" />
 									<div className="flex-1">
 										<p className="font-medium text-yellow-600 dark:text-yellow-400">
 											Hermes Agent not detected locally
@@ -488,7 +489,7 @@ export default function HermesToolCard({
 										onClick={() => setShowManualConfigModal(true)}
 										className="w-full sm:w-auto !bg-yellow-500/20 !border-yellow-500/40 !text-yellow-700 dark:!text-yellow-300 hover:!bg-yellow-500/30"
 									>
-										<span className="material-symbols-outlined text-[18px] mr-1">content_copy</span>
+										<Icon name="content_copy" size={18} className="mr-1" />
 										Manual Config
 									</Button>
 								</div>
@@ -530,7 +531,7 @@ export default function HermesToolCard({
 										})}
 									</div>
 									<div className="flex items-center gap-2 text-xs text-text-muted">
-										<span className="material-symbols-outlined text-[14px]">terminal</span>
+										<Icon name="terminal" size={14} />
 										<code className="px-1.5 py-0.5 bg-surface/60 rounded font-mono text-[11px]">
 											{profiles.find((p) => p.name === activeProfile)?.command || "hermes"}
 										</code>
@@ -545,11 +546,14 @@ export default function HermesToolCard({
 											}`}
 											title="Copy command"
 										>
-											<span className="material-symbols-outlined text-[14px]">
-												{copiedCommand === (profiles.find((p) => p.name === activeProfile)?.command || "hermes")
-													? "check"
-													: "content_copy"}
-											</span>
+											<Icon
+												name={
+													copiedCommand === (profiles.find((p) => p.name === activeProfile)?.command || "hermes")
+														? "check"
+														: "content_copy"
+												}
+												size={14}
+											/>
 										</button>
 										<span className="hidden sm:inline">
 											— every profile runs as its own agent with its own model.
@@ -575,9 +579,7 @@ export default function HermesToolCard({
 										<span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">
 											Current
 										</span>
-										<span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">
-											arrow_forward
-										</span>
+										<Icon name="arrow_forward" size={14} className="hidden text-text-muted sm:inline" />
 										<span className="min-w-0 truncate rounded bg-surface/40 px-2 py-2 text-xs text-text-muted sm:py-1.5">
 											{hermesStatus.settings.model.base_url}
 										</span>
@@ -588,9 +590,7 @@ export default function HermesToolCard({
 									<span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">
 										API Key
 									</span>
-									<span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">
-										arrow_forward
-									</span>
+									<Icon name="arrow_forward" size={14} className="hidden text-text-muted sm:inline" />
 									<ApiKeySelect
 										value={selectedApiKey}
 										onChange={setSelectedApiKey}
@@ -603,9 +603,7 @@ export default function HermesToolCard({
 									<span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">
 										Default Model
 									</span>
-									<span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">
-										arrow_forward
-									</span>
+									<Icon name="arrow_forward" size={14} className="hidden text-text-muted sm:inline" />
 									<div className="relative w-full min-w-0">
 										<input
 											type="text"
@@ -620,7 +618,7 @@ export default function HermesToolCard({
 												className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-red-500 rounded transition-colors"
 												title="Clear"
 											>
-												<span className="material-symbols-outlined text-[14px]">close</span>
+												<Icon name="close" size={14} />
 											</button>
 										)}
 									</div>
@@ -637,9 +635,7 @@ export default function HermesToolCard({
 									<span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">
 										Audio STT
 									</span>
-									<span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">
-										arrow_forward
-									</span>
+									<Icon name="arrow_forward" size={14} className="hidden text-text-muted sm:inline" />
 									<label
 										className="flex items-center gap-2 text-xs text-text-muted cursor-pointer"
 										title="Route Hermes voice & audio transcription through 9router's /v1/audio/transcriptions — usage is tracked on this instance"
@@ -660,9 +656,7 @@ export default function HermesToolCard({
 										<span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">
 											STT Model
 										</span>
-										<span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">
-											arrow_forward
-										</span>
+										<Icon name="arrow_forward" size={14} className="hidden text-text-muted sm:inline" />
 										<div className="relative w-full min-w-0">
 											<input
 												type="text"
@@ -677,7 +671,7 @@ export default function HermesToolCard({
 													className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-red-500 rounded transition-colors"
 													title="Clear"
 												>
-													<span className="material-symbols-outlined text-[14px]">close</span>
+													<Icon name="close" size={14} />
 												</button>
 											)}
 										</div>
@@ -693,9 +687,11 @@ export default function HermesToolCard({
 
 								<details className="group">
 									<summary className="cursor-pointer select-none text-xs font-semibold text-text-main hover:text-primary transition-colors">
-										<span className="material-symbols-outlined align-middle text-[16px] text-text-muted group-open:rotate-90 transition-transform">
-											chevron_right
-										</span>
+										<Icon
+											name="chevron_right"
+											size={16}
+											className="align-middle text-text-muted group-open:rotate-90 transition-transform"
+										/>
 										Model Roles (optional)
 									</summary>
 									<div className="mt-2 flex flex-col gap-1.5">
@@ -710,9 +706,7 @@ export default function HermesToolCard({
 												>
 													{role.label}
 												</span>
-												<span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">
-													arrow_forward
-												</span>
+												<Icon name="arrow_forward" size={14} className="hidden text-text-muted sm:inline" />
 												<div className="relative w-full min-w-0">
 													<input
 														type="text"
@@ -727,7 +721,7 @@ export default function HermesToolCard({
 															className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-red-500 rounded transition-colors"
 															title="Clear"
 														>
-															<span className="material-symbols-outlined text-[14px]">close</span>
+															<Icon name="close" size={14} />
 														</button>
 													)}
 												</div>
@@ -749,9 +743,7 @@ export default function HermesToolCard({
 								<div
 									className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs ${message.type === "success" ? "bg-green-500/10 text-green-600" : "bg-red-500/10 text-red-600"}`}
 								>
-									<span className="material-symbols-outlined text-[14px]">
-										{message.type === "success" ? "check_circle" : "error"}
-									</span>
+									<Icon name={message.type === "success" ? "check_circle" : "error"} size={14} />
 									<span>{message.text}</span>
 								</div>
 							)}
@@ -766,7 +758,8 @@ export default function HermesToolCard({
 									loading={applying}
 									className="w-full sm:w-auto"
 								>
-									<span className="material-symbols-outlined text-[14px] mr-1">save</span>Apply
+									<Icon name="save" size={14} className="mr-1" />
+									Apply
 								</Button>
 								{profiles.length > 1 && (
 									<Button
@@ -777,8 +770,8 @@ export default function HermesToolCard({
 										title="Set the endpoint and API key on every profile that routes through 9router. Each profile keeps its own model."
 										className="w-full sm:w-auto"
 									>
-										<span className="material-symbols-outlined text-[14px] mr-1">groups</span>Apply to All
-										Profiles
+										<Icon name="groups" size={14} className="mr-1" />
+										Apply to All Profiles
 									</Button>
 								)}
 								<Button
@@ -789,7 +782,8 @@ export default function HermesToolCard({
 									loading={restoring}
 									className="w-full sm:w-auto"
 								>
-									<span className="material-symbols-outlined text-[14px] mr-1">restore</span>Reset
+									<Icon name="restore" size={14} className="mr-1" />
+									Reset
 								</Button>
 								<Button
 									variant="ghost"
@@ -797,8 +791,8 @@ export default function HermesToolCard({
 									onClick={() => setShowManualConfigModal(true)}
 									className="w-full sm:w-auto"
 								>
-									<span className="material-symbols-outlined text-[14px] mr-1">content_copy</span>Manual
-									Config
+									<Icon name="content_copy" size={14} className="mr-1" />
+									Manual Config
 								</Button>
 							</div>
 						</>

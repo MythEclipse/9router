@@ -4,6 +4,7 @@ import Image from "next/image"
 import { useRef, useState } from "react"
 import { Button } from "@/shared/components"
 import { isCustomLogo, readLogoFile } from "@/shared/utils/providerLogo"
+import Icon from "./Icon"
 
 const DEFAULT_HINT =
 	"Optional. PNG, JPEG, WebP or GIF, up to 2 MB. Leave it empty to keep the default icon."
@@ -56,7 +57,7 @@ export default function ProviderLogoField({
 							className="size-full object-contain"
 						/>
 					) : (
-						<span className="material-symbols-outlined text-[18px] text-text-muted">image</span>
+						<Icon name="image" size={18} className="text-text-muted" />
 					)}
 				</span>
 				<Button

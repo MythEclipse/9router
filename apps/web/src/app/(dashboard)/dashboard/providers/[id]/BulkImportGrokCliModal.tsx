@@ -4,6 +4,7 @@ import { useRef, useState } from "react"
 import { translate } from "@/i18n/runtime"
 import { Button, Modal } from "@/shared/components"
 import { useTaskStore } from "@/store/taskStore"
+import Icon from "../../../../../shared/components/Icon"
 
 // Server-side bulk insert runs serially, so very large payloads are split
 // client-side into batches. Keeps each request small and lets the overlay
@@ -278,7 +279,7 @@ export default function BulkImportGrokCliModal({
 
 					{isDragging && (
 						<div className="absolute inset-0 flex flex-col items-center justify-center bg-sidebar/90 rounded pointer-events-none backdrop-blur-xs">
-							<span className="material-symbols-outlined text-3xl text-primary mb-1">upload_file</span>
+							<Icon name="upload_file" size={30} className="text-primary mb-1" />
 							<span className="text-sm font-medium text-primary">
 								{translate("Drop .json files here")}
 							</span>
@@ -288,7 +289,7 @@ export default function BulkImportGrokCliModal({
 
 				{fileCountInfo && (
 					<div className="flex items-center gap-1.5 text-xs text-green-400 font-medium bg-green-500/10 border border-green-500/20 px-2.5 py-1.5 rounded">
-						<span className="material-symbols-outlined text-sm">check_circle</span>
+						<Icon name="check_circle" size={14} />
 						<span>
 							{translate("Loaded")} {fileCountInfo.accountsCount} {translate("account(s) from")}{" "}
 							{fileCountInfo.filesCount} {translate("file(s)")}

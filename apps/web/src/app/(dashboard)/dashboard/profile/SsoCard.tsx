@@ -9,6 +9,7 @@
  */
 import { Button, Card, Input } from "@/shared/components"
 import { cn } from "@/shared/utils/cn"
+import Icon from "../../../../shared/components/Icon"
 import type { SsoController } from "./useSso.ts"
 import { ssoCallbackUrls } from "./useSso.ts"
 
@@ -63,7 +64,7 @@ export default function SsoCard({ sso, settings, origin, settingsLoading: loadin
 				className="w-full flex items-center gap-3 text-left"
 			>
 				<div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-500 shrink-0">
-					<span className="material-symbols-outlined text-[20px]">lock_open</span>
+					<Icon name="lock_open" size={20} />
 				</div>
 				<div className="flex-1 min-w-0">
 					<h3 className="text-base sm:text-lg font-semibold">Single Sign-On (SSO)</h3>
@@ -75,9 +76,10 @@ export default function SsoCard({ sso, settings, origin, settingsLoading: loadin
 								: "Optional SSO via Okta, Entra ID, Keycloak, or OIDC"}
 					</p>
 				</div>
-				<span className="material-symbols-outlined text-text-muted shrink-0">
-					{oidcExpanded ? "expand_less" : "expand_more"}
-				</span>
+				<Icon
+					name={oidcExpanded ? "expand_less" : "expand_more"}
+					className="text-text-muted shrink-0"
+				/>
 			</button>
 			{oidcExpanded && (
 				<div className="flex flex-col gap-4 mt-4">
@@ -176,7 +178,7 @@ export default function SsoCard({ sso, settings, origin, settingsLoading: loadin
 									className="w-full p-3 flex items-center justify-between gap-2 text-left hover:bg-surface/50 transition-colors"
 								>
 									<div className="flex items-center gap-2">
-										<span className="material-symbols-outlined text-primary text-lg">menu_book</span>
+										<Icon name="menu_book" size={18} className="text-primary" />
 										<div>
 											<p className="font-semibold text-xs sm:text-sm text-text-main">
 												IdP Setup Guidelines & Provider Configuration Instructions
@@ -187,12 +189,12 @@ export default function SsoCard({ sso, settings, origin, settingsLoading: loadin
 											</p>
 										</div>
 									</div>
-									<span
-										className="material-symbols-outlined text-text-muted transition-transform text-lg"
+									<Icon
+										name="expand_more"
+										size={18}
 										style={{ transform: showSamlGuide ? "rotate(180deg)" : "none" }}
-									>
-										expand_more
-									</span>
+										className="text-text-muted transition-transform"
+									/>
 								</button>
 
 								{showSamlGuide && (
@@ -477,7 +479,7 @@ export default function SsoCard({ sso, settings, origin, settingsLoading: loadin
 										download="9router-sp-metadata.xml"
 										className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
 									>
-										<span className="material-symbols-outlined text-[16px]">download</span>
+										<Icon name="download" size={16} />
 										Download XML
 									</a>
 								</div>

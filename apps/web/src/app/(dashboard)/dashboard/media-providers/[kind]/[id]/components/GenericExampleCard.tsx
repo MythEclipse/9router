@@ -10,6 +10,7 @@ import {
 	resolveProviderId,
 } from "@/shared/constants/providers"
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard"
+import Icon from "../../../../../../../shared/components/Icon"
 import {
 	fetchFirstActiveApiKey,
 	fetchTunnelPublicUrl,
@@ -319,7 +320,7 @@ export function GenericExampleCard({ providerId, kind }) {
 										: "border-border text-text-muted hover:text-primary"
 								}`}
 							>
-								<span className="material-symbols-outlined text-[14px]">wifi_tethering</span>
+								<Icon name="wifi_tethering" size={14} />
 								Tunnel
 							</button>
 						)}
@@ -375,7 +376,7 @@ export function GenericExampleCard({ providerId, kind }) {
 								onClick={() => setInput("")}
 								className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-primary transition-colors"
 							>
-								<span className="material-symbols-outlined text-[14px]">close</span>
+								<Icon name="close" size={14} />
 							</button>
 						)}
 					</div>
@@ -397,7 +398,7 @@ export function GenericExampleCard({ providerId, kind }) {
 									onClick={() => setQuestion("")}
 									className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-primary transition-colors"
 								>
-									<span className="material-symbols-outlined text-[14px]">close</span>
+									<Icon name="close" size={14} />
 								</button>
 							)}
 						</div>
@@ -421,7 +422,7 @@ export function GenericExampleCard({ providerId, kind }) {
 										onClick={() => setRefImage("")}
 										className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-primary transition-colors"
 									>
-										<span className="material-symbols-outlined text-[14px]">close</span>
+										<Icon name="close" size={14} />
 									</button>
 								)}
 							</div>
@@ -463,7 +464,7 @@ export function GenericExampleCard({ providerId, kind }) {
 										onClick={() => setMaskImage("")}
 										className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-primary transition-colors"
 									>
-										<span className="material-symbols-outlined text-[14px]">close</span>
+										<Icon name="close" size={14} />
 									</button>
 								)}
 							</div>
@@ -528,7 +529,7 @@ export function GenericExampleCard({ providerId, kind }) {
 										className="flex-1 min-w-0 px-3 py-1.5 text-sm border border-border rounded-lg bg-background focus:outline-none focus:border-primary"
 									/>
 									<label className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 text-sm border border-border rounded-lg bg-background hover:bg-accent cursor-pointer transition-colors">
-										<span className="material-symbols-outlined text-[16px]">upload</span>
+										<Icon name="upload" size={16} />
 										Upload
 										<input
 											type="file"
@@ -598,9 +599,7 @@ export function GenericExampleCard({ providerId, kind }) {
 								onClick={() => copyCurl(curlSnippet)}
 								className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-primary transition-colors"
 							>
-								<span className="material-symbols-outlined text-[14px]">
-									{copiedCurl ? "check" : "content_copy"}
-								</span>
+								<Icon name={copiedCurl ? "check" : "content_copy"} size={14} />
 								{copiedCurl ? "Copied" : "Copy"}
 							</button>
 							<button
@@ -608,12 +607,11 @@ export function GenericExampleCard({ providerId, kind }) {
 								disabled={running || !input.trim() || !modelFull}
 								className="flex w-full sm:w-auto items-center justify-center gap-1.5 px-3 py-1 rounded-lg bg-primary text-white text-xs font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 							>
-								<span
-									className="material-symbols-outlined text-[14px]"
+								<Icon
+									name="play_arrow"
+									size={14}
 									style={running ? { animation: "spin 1s linear infinite" } : undefined}
-								>
-									play_arrow
-								</span>
+								/>
 								{running ? "Running..." : "Run"}
 							</button>
 						</div>
@@ -626,12 +624,12 @@ export function GenericExampleCard({ providerId, kind }) {
 				{/* Streaming progress */}
 				{(running || progress) && useStreaming && (
 					<div className="flex flex-col gap-2 px-3 py-2 rounded-lg bg-sidebar border border-border sm:flex-row sm:items-center sm:gap-3">
-						<span
-							className="material-symbols-outlined text-[16px] text-primary"
+						<Icon
+							name={running ? "progress_activity" : "check_circle"}
+							size={16}
 							style={running ? { animation: "spin 1s linear infinite" } : undefined}
-						>
-							{running ? "progress_activity" : "check_circle"}
-						</span>
+							className="text-primary"
+						/>
 						<span className="text-xs text-text-muted">
 							{progress?.stage || "starting"}
 							{!running && progress?.bytesReceived
@@ -675,9 +673,7 @@ export function GenericExampleCard({ providerId, kind }) {
 								onClick={() => copyRes(resultJson)}
 								className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-primary transition-colors"
 							>
-								<span className="material-symbols-outlined text-[14px]">
-									{copiedRes ? "check" : "content_copy"}
-								</span>
+								<Icon name={copiedRes ? "check" : "content_copy"} size={14} />
 								{copiedRes ? "Copied" : "Copy"}
 							</button>
 						)}
@@ -695,7 +691,7 @@ export function GenericExampleCard({ providerId, kind }) {
 									download="image.png"
 									className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-primary transition-colors"
 								>
-									<span className="material-symbols-outlined text-[14px]">download</span>
+									<Icon name="download" size={14} />
 									Download
 								</a>
 							</div>
@@ -723,7 +719,7 @@ export function GenericExampleCard({ providerId, kind }) {
 									download="video.mp4"
 									className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-primary transition-colors"
 								>
-									<span className="material-symbols-outlined text-[14px]">download</span>
+									<Icon name="download" size={14} />
 									Download
 								</a>
 							</div>

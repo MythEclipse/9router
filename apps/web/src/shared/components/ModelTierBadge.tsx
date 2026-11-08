@@ -1,4 +1,5 @@
 import { isOpencodeFreeModel } from "@/shared/utils/modelTier"
+import Icon from "./Icon"
 
 interface ModelTierBadgeProps {
 	model?: string | object
@@ -22,7 +23,7 @@ export default function ModelTierBadge({
 			title="Free Model (Free Tier)"
 			className={`shrink-0 inline-flex items-center gap-1 text-[9px] font-bold tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-1.5 py-0.5 rounded leading-none align-middle ${className}`}
 		>
-			<span className="material-symbols-outlined text-[10px] leading-none select-none">sell</span>
+			<Icon name="sell" size={10} className="leading-none select-none" />
 			FREE
 		</span>
 	)

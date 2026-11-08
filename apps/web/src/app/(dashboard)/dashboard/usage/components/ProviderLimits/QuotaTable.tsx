@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import Icon from "../../../../../../shared/components/Icon"
 import { formatResetTime, getRemainingPercentage } from "./utils.ts"
 
 const PAGE_SIZE = 10
@@ -193,7 +194,7 @@ export default function QuotaTable({
 								aria-label={`Open usage details for ${quota.name}`}
 							>
 								{resetDisplay}
-								<span className="material-symbols-outlined text-[12px]">open_in_new</span>
+								<Icon name="open_in_new" size={12} />
 							</a>
 						) : (
 							resetDisplay
@@ -261,7 +262,7 @@ export default function QuotaTable({
 												title="Hide this quota row"
 												aria-label={`Hide quota ${quota.name}`}
 											>
-												<span className="material-symbols-outlined text-[13px]">visibility_off</span>
+												<Icon name="visibility_off" size={13} />
 											</button>
 										)}
 									</div>

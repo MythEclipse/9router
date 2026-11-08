@@ -3,6 +3,7 @@
 import { useState } from "react"
 import Badge from "./Badge.tsx"
 import Button from "./Button.tsx"
+import Icon from "./Icon"
 import Modal from "./Modal.tsx"
 
 const QUICK_THRESHOLDS = [60, 70, 75, 80, 85, 90]
@@ -143,9 +144,7 @@ export default function SmartPolicyModal({
 											{isSelected && <span className="size-1.5 rounded-full bg-white" />}
 										</span>
 										<span className="size-5 rounded flex items-center justify-center shrink-0 text-text-muted">
-											<span className="material-symbols-outlined text-[15px] leading-none select-none inline-block">
-												{p.icon}
-											</span>
+											<Icon name={p.icon} size={15} className="leading-none select-none inline-block" />
 										</span>
 										<span className="text-sm font-medium text-text-main">{p.title}</span>
 										{p.recommended && (
@@ -208,9 +207,7 @@ export default function SmartPolicyModal({
 
 				{/* Prompt Cache Benefit Callout */}
 				<div className="rounded-xl border border-primary/20 bg-primary/[0.03] p-3 text-xs flex items-start gap-2.5">
-					<span className="material-symbols-outlined text-primary text-[18px] shrink-0 mt-0.5">
-						bolt
-					</span>
+					<Icon name="bolt" size={18} className="text-primary shrink-0 mt-0.5" />
 					<div className="text-text-muted leading-relaxed">
 						<span className="font-medium text-text-main">Prompt Cache Benefits: </span>
 						Retaining the same model across session turns keeps upstream prompt caches warm, reducing

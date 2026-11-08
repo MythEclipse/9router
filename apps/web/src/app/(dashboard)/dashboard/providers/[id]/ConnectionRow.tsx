@@ -5,6 +5,7 @@ import { createPortal } from "react-dom"
 import { Badge, Toggle, Tooltip } from "@/shared/components"
 import type { BadgeVariant } from "@/shared/components/Badge"
 import { getStatusVariant as getConnectionStatusVariant } from "@/shared/utils/connectionStatus"
+import Icon from "../../../../../shared/components/Icon"
 import CooldownTimer from "./CooldownTimer.tsx"
 
 interface ConnectionRowProps {
@@ -295,17 +296,17 @@ export default function ConnectionRow({
 						disabled={isFirst}
 						className={`p-0.5 rounded ${isFirst ? "text-text-muted/30 cursor-not-allowed" : "hover:bg-sidebar text-text-muted hover:text-primary"}`}
 					>
-						<span className="material-symbols-outlined text-sm">keyboard_arrow_up</span>
+						<Icon name="keyboard_arrow_up" size={14} />
 					</button>
 					<button
 						onClick={onMoveDown}
 						disabled={isLast}
 						className={`p-0.5 rounded ${isLast ? "text-text-muted/30 cursor-not-allowed" : "hover:bg-sidebar text-text-muted hover:text-primary"}`}
 					>
-						<span className="material-symbols-outlined text-sm">keyboard_arrow_down</span>
+						<Icon name="keyboard_arrow_down" size={14} />
 					</button>
 				</div>
-				<span className="material-symbols-outlined shrink-0 text-base text-text-muted">{authIcon}</span>
+				<Icon name={authIcon} size={16} className="shrink-0 text-text-muted" />
 				<div className="flex-1 min-w-0">
 					<p className="text-sm font-medium truncate">{displayName}</p>
 					{secondaryDisplayName && (
@@ -380,9 +381,7 @@ export default function ConnectionRow({
 								className={`flex w-full flex-col items-center rounded px-2 py-1 transition-colors hover:bg-black/5 dark:hover:bg-white/5 ${hasAnyProxy ? "text-primary" : "text-text-muted hover:text-primary"}`}
 								disabled={updatingProxy}
 							>
-								<span className="material-symbols-outlined text-[18px]">
-									{updatingProxy ? "progress_activity" : "lan"}
-								</span>
+								<Icon name={updatingProxy ? "progress_activity" : "lan"} size={18} />
 								<span className="text-[10px] leading-tight">Proxy</span>
 							</button>
 							{showProxyDropdown &&
@@ -418,7 +417,7 @@ export default function ConnectionRow({
 								onClick={autoPing.onConfigure}
 								className={`flex w-full flex-col items-center rounded px-2 py-1 transition-colors hover:bg-black/5 dark:hover:bg-white/5 ${autoPing.isActive ? "text-primary" : "text-text-muted hover:text-primary"}`}
 							>
-								<span className="material-symbols-outlined text-[18px]">bolt</span>
+								<Icon name="bolt" size={18} />
 								<span className="text-[10px] leading-tight">Auto-ping</span>
 							</button>
 						</Tooltip>
@@ -427,14 +426,14 @@ export default function ConnectionRow({
 						onClick={onEdit}
 						className="flex flex-col items-center rounded px-2 py-1 text-text-muted hover:bg-black/5 hover:text-primary dark:hover:bg-white/5"
 					>
-						<span className="material-symbols-outlined text-[18px]">edit</span>
+						<Icon name="edit" size={18} />
 						<span className="text-[10px] leading-tight">Edit</span>
 					</button>
 					<button
 						onClick={onDelete}
 						className="flex flex-col items-center rounded px-2 py-1 text-red-500 hover:bg-red-500/10"
 					>
-						<span className="material-symbols-outlined text-[18px]">delete</span>
+						<Icon name="delete" size={18} />
 						<span className="text-[10px] leading-tight">Delete</span>
 					</button>
 				</div>

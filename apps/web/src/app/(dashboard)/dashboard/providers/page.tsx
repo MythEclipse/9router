@@ -20,6 +20,7 @@ import { getCustomLogo } from "@/shared/utils/providerLogo"
 import { useHeaderSearchStore } from "@/store/headerSearchStore"
 import { useNotificationStore } from "@/store/notificationStore"
 import { useTaskStore } from "@/store/taskStore"
+import Icon from "../../../../shared/components/Icon"
 import AddCompatibleModal from "./components/AddCompatibleModal.tsx"
 import ModelAvailabilityBadge from "./components/ModelAvailabilityBadge.tsx"
 import { matchesStatusFilter, STATUS_FILTER_OPTIONS } from "./utils.ts"
@@ -424,7 +425,7 @@ export default function ProvidersPage() {
 
 			{!hasAnyResult && (
 				<div className="text-center py-8 border border-dashed border-border rounded-xl">
-					<span className="material-symbols-outlined text-[32px] text-text-muted mb-2">search_off</span>
+					<Icon name="search_off" size={32} className="text-text-muted mb-2" />
 					<p className="text-text-muted text-sm">No providers match your search or filters</p>
 				</div>
 			)}
@@ -466,7 +467,7 @@ export default function ProvidersPage() {
 				</div>
 				{compatibleProviders.length === 0 && anthropicCompatibleProviders.length === 0 ? (
 					<div className="flex items-center justify-center gap-2 py-2 border border-dashed border-border rounded-xl text-text-muted text-sm">
-						<span className="material-symbols-outlined text-[18px]">extension</span>
+						<Icon name="extension" size={18} />
 						<span>
 							No custom providers - use buttons above to add OpenAI/Anthropic/MoonshotAI compatible
 							endpoints
@@ -508,11 +509,11 @@ export default function ProvidersPage() {
 								title="Test all OAuth connections"
 								aria-label="Test all OAuth connections"
 							>
-								<span
-									className={`material-symbols-outlined text-[14px]${testingMode === "oauth" ? " animate-spin" : ""}`}
-								>
-									play_arrow
-								</span>
+								<Icon
+									name="play_arrow"
+									size={14}
+									className={`${testingMode === "oauth" ? " animate-spin" : ""}`}
+								/>
 								Test All
 							</button>
 						</div>
@@ -553,11 +554,11 @@ export default function ProvidersPage() {
 							title="Test all Free connections"
 							aria-label="Test all Free provider connections"
 						>
-							<span
-								className={`material-symbols-outlined text-[14px]${testingMode === "free" ? " animate-spin" : ""}`}
-							>
-								play_arrow
-							</span>
+							<Icon
+								name="play_arrow"
+								size={14}
+								className={`${testingMode === "free" ? " animate-spin" : ""}`}
+							/>
 							Test All
 						</button>
 					</div>
@@ -635,11 +636,11 @@ export default function ProvidersPage() {
 							title="Test all API Key connections"
 							aria-label="Test all API Key connections"
 						>
-							<span
-								className={`material-symbols-outlined text-[14px]${testingMode === "apikey" ? " animate-spin" : ""}`}
-							>
-								play_arrow
-							</span>
+							<Icon
+								name="play_arrow"
+								size={14}
+								className={`${testingMode === "apikey" ? " animate-spin" : ""}`}
+							/>
 							Test All
 						</button>
 					</div>
@@ -660,7 +661,7 @@ export default function ProvidersPage() {
 							onClick={() => setShowAllApikey(true)}
 							className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-primary/40 px-3 py-2.5 text-sm font-medium text-primary transition-colors hover:border-primary hover:bg-primary/5"
 						>
-							<span className="material-symbols-outlined text-[16px]">expand_more</span>
+							<Icon name="expand_more" size={16} />
 							Show all {apikeyEntries.length} providers
 						</button>
 					)}
@@ -716,7 +717,7 @@ export default function ProvidersPage() {
 								className="p-1 rounded-lg hover:bg-bg text-text-muted hover:text-text-main transition-colors"
 								aria-label="Close test results"
 							>
-								<span className="material-symbols-outlined text-lg">close</span>
+								<Icon name="close" size={18} />
 							</button>
 						</div>
 						<div className="p-5">
@@ -775,7 +776,7 @@ function ProviderCard({ providerId, provider, stats, authType, onToggle }) {
 								{allDisabled ? (
 									<Badge variant="default" size="sm">
 										<span className="flex items-center gap-1">
-											<span className="material-symbols-outlined text-[12px]">pause_circle</span>
+											<Icon name="pause_circle" size={12} />
 											Disabled
 										</span>
 									</Badge>
@@ -888,7 +889,7 @@ function ApiKeyProviderCard({ providerId, provider, stats, authType, onToggle })
 								{allDisabled ? (
 									<Badge variant="default" size="sm">
 										<span className="flex items-center gap-1">
-											<span className="material-symbols-outlined text-[12px]">pause_circle</span>
+											<Icon name="pause_circle" size={12} />
 											Disabled
 										</span>
 									</Badge>
@@ -954,7 +955,7 @@ function ProviderTestResultsView({ results }) {
 	if (results.error && !results.results) {
 		return (
 			<div className="text-center py-6">
-				<span className="material-symbols-outlined text-red-500 text-[32px] mb-2 block">error</span>
+				<Icon name="error" size={32} className="text-red-500 mb-2 block" />
 				<p className="text-sm text-red-400">{results.error}</p>
 			</div>
 		)
@@ -992,11 +993,11 @@ function ProviderTestResultsView({ results }) {
 					key={r.connectionId || i}
 					className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg bg-surface-2/60 px-3 py-2 text-xs sm:flex-nowrap"
 				>
-					<span
-						className={`material-symbols-outlined text-[16px] ${r.valid ? "text-emerald-500" : "text-red-500"}`}
-					>
-						{r.valid ? "check_circle" : "error"}
-					</span>
+					<Icon
+						name={r.valid ? "check_circle" : "error"}
+						size={16}
+						className={`${r.valid ? "text-emerald-500" : "text-red-500"}`}
+					/>
 					<div className="min-w-0 flex-[1_1_160px]">
 						<span className="block truncate font-medium sm:inline">{r.connectionName}</span>
 						<span className="block truncate text-text-muted sm:ml-1.5 sm:inline">({r.provider})</span>

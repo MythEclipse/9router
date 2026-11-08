@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Button, Card, PageShell } from "@/shared/components"
+import Icon from "../../../../shared/components/Icon"
 
 function getStatusBadge(code) {
 	const num = Number(code) || 500
@@ -156,7 +157,7 @@ export default function ErrorLogClient() {
 				<div className="flex flex-wrap items-center justify-between gap-3">
 					<div>
 						<h1 className="text-xl font-bold text-text-main flex items-center gap-2">
-							<span className="material-symbols-outlined text-[24px] text-rose-500">bug_report</span>
+							<Icon name="bug_report" size={24} className="text-rose-500" />
 							Error Monitor
 						</h1>
 						<p className="text-xs text-text-muted mt-0.5">
@@ -222,7 +223,7 @@ export default function ErrorLogClient() {
 				<Card className="flex flex-col overflow-hidden border-border bg-surface">
 					<div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 border-b border-border/60 bg-surface-2/30">
 						<div className="flex items-center gap-2 flex-1 min-w-[220px]">
-							<span className="material-symbols-outlined text-[18px] text-text-muted">search</span>
+							<Icon name="search" size={18} className="text-text-muted" />
 							<input
 								type="text"
 								placeholder="Search error message, model, or provider..."
@@ -232,7 +233,7 @@ export default function ErrorLogClient() {
 							/>
 							{search && (
 								<button onClick={() => setSearch("")} className="text-text-muted hover:text-text-main">
-									<span className="material-symbols-outlined text-[14px]">close</span>
+									<Icon name="close" size={14} />
 								</button>
 							)}
 						</div>
@@ -263,9 +264,7 @@ export default function ErrorLogClient() {
 									className="ml-2 text-xs text-text-muted hover:text-text-main flex items-center gap-1 px-2 py-1 rounded hover:bg-surface-2"
 									title="Toggle collapse/expand all"
 								>
-									<span className="material-symbols-outlined text-[15px]">
-										{expandedIds.size > 0 ? "unfold_less" : "unfold_more"}
-									</span>
+									<Icon name={expandedIds.size > 0 ? "unfold_less" : "unfold_more"} size={15} />
 									<span>{expandedIds.size > 0 ? "Collapse All" : "Expand All"}</span>
 								</button>
 							)}
@@ -278,7 +277,7 @@ export default function ErrorLogClient() {
 							<div className="py-16 text-center text-text-muted text-xs">Loading error records...</div>
 						) : filteredLogs.length === 0 ? (
 							<div className="py-16 flex flex-col items-center justify-center text-center text-text-muted text-xs gap-2">
-								<span className="material-symbols-outlined text-4xl text-emerald-500">check_circle</span>
+								<Icon name="check_circle" size={36} className="text-emerald-500" />
 								<span className="text-sm font-semibold text-text-main">All Systems Operational</span>
 								<span className="max-w-xs text-text-muted">
 									{logs.length === 0
@@ -303,7 +302,7 @@ export default function ErrorLogClient() {
 												<span
 													className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border tracking-wide leading-none select-none mt-0.5 ${badge.bg}`}
 												>
-													<span className="material-symbols-outlined text-[12px]">{badge.icon}</span>
+													<Icon name={badge.icon} size={12} />
 													{badge.label}
 												</span>
 
@@ -338,9 +337,7 @@ export default function ErrorLogClient() {
 													className="p-1 rounded text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors"
 													title="Copy error details"
 												>
-													<span className="material-symbols-outlined text-[16px]">
-														{copiedId === log.id ? "check" : "content_copy"}
-													</span>
+													<Icon name={copiedId === log.id ? "check" : "content_copy"} size={16} />
 												</button>
 
 												{log.stack && (
@@ -350,9 +347,7 @@ export default function ErrorLogClient() {
 														className="p-1 rounded text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors"
 														title={isExpanded ? "Collapse trace" : "View stack trace"}
 													>
-														<span className="material-symbols-outlined text-[16px]">
-															{isExpanded ? "expand_less" : "expand_more"}
-														</span>
+														<Icon name={isExpanded ? "expand_less" : "expand_more"} size={16} />
 													</button>
 												)}
 											</div>

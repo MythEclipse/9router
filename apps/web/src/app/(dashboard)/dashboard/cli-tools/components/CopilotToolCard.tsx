@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react"
 import { Button, Card, ManualConfigModal, ModelSelectModal } from "@/shared/components"
 import { DEFAULT_LOCAL_API_KEY } from "@/shared/constants/config"
 import { useModelAliases } from "@/shared/hooks/useModelAliases"
+import Icon from "../../../../../shared/components/Icon"
 import ApiKeySelect from "./ApiKeySelect.tsx"
 import BaseUrlSelect from "./BaseUrlSelect.tsx"
 import { matchKnownEndpoint } from "./cliEndpointMatch.ts"
@@ -280,18 +281,18 @@ export default function CopilotToolCard({
 						<p className="text-xs text-text-muted truncate">{tool.description}</p>
 					</div>
 				</div>
-				<span
-					className={`material-symbols-outlined text-text-muted text-[20px] transition-transform ${isExpanded ? "rotate-180" : ""}`}
-				>
-					expand_more
-				</span>
+				<Icon
+					name="expand_more"
+					size={20}
+					className={`text-text-muted transition-transform ${isExpanded ? "rotate-180" : ""}`}
+				/>
 			</div>
 
 			{isExpanded && (
 				<div className="mt-4 pt-4 border-t border-border flex flex-col gap-4">
 					{checking && (
 						<div className="flex items-center gap-2 text-text-muted">
-							<span className="material-symbols-outlined animate-spin">progress_activity</span>
+							<Icon name="progress_activity" className="animate-spin" />
 							<span>Checking Copilot config...</span>
 						</div>
 					)}
@@ -299,7 +300,7 @@ export default function CopilotToolCard({
 					{!checking && (
 						<>
 							<div className="flex items-start gap-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-								<span className="material-symbols-outlined text-blue-500 text-lg">info</span>
+								<Icon name="info" size={18} className="text-blue-500" />
 								<div className="text-xs text-blue-700 dark:text-blue-300">
 									<p className="font-medium">
 										Writes to{" "}
@@ -319,9 +320,7 @@ export default function CopilotToolCard({
 									<span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">
 										Select Endpoint
 									</span>
-									<span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">
-										arrow_forward
-									</span>
+									<Icon name="arrow_forward" size={14} className="hidden text-text-muted sm:inline" />
 									<BaseUrlSelect
 										value={customBaseUrl || getDisplayUrl()}
 										onChange={setCustomBaseUrl}
@@ -339,9 +338,7 @@ export default function CopilotToolCard({
 									<span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">
 										API Key
 									</span>
-									<span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">
-										arrow_forward
-									</span>
+									<Icon name="arrow_forward" size={14} className="hidden text-text-muted sm:inline" />
 									<ApiKeySelect
 										value={selectedApiKey}
 										onChange={setSelectedApiKey}
@@ -355,9 +352,7 @@ export default function CopilotToolCard({
 									<span className="w-32 shrink-0 text-sm font-semibold text-text-main text-right pt-1">
 										Models
 									</span>
-									<span className="material-symbols-outlined text-text-muted text-[14px] mt-1.5">
-										arrow_forward
-									</span>
+									<Icon name="arrow_forward" size={14} className="text-text-muted mt-1.5" />
 									<div className="flex-1 flex flex-col gap-2">
 										<div className="flex flex-wrap gap-1.5 min-h-[28px] px-2 py-1.5 bg-surface rounded border border-border">
 											{selectedModels.length === 0 ? (
@@ -376,7 +371,7 @@ export default function CopilotToolCard({
 															}}
 															className="ml-0.5 hover:text-red-500"
 														>
-															<span className="material-symbols-outlined text-[12px]">close</span>
+															<Icon name="close" size={12} />
 														</button>
 													</span>
 												))
@@ -399,9 +394,7 @@ export default function CopilotToolCard({
 								<div
 									className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs ${message.type === "success" ? "bg-green-500/10 text-green-600" : "bg-red-500/10 text-red-600"}`}
 								>
-									<span className="material-symbols-outlined text-[14px]">
-										{message.type === "success" ? "check_circle" : "error"}
-									</span>
+									<Icon name={message.type === "success" ? "check_circle" : "error"} size={14} />
 									<span>{message.text}</span>
 								</div>
 							)}
@@ -414,7 +407,8 @@ export default function CopilotToolCard({
 									disabled={selectedModels.length === 0}
 									loading={applying}
 								>
-									<span className="material-symbols-outlined text-[14px] mr-1">save</span>Apply
+									<Icon name="save" size={14} className="mr-1" />
+									Apply
 								</Button>
 								<Button
 									variant="outline"
@@ -423,7 +417,8 @@ export default function CopilotToolCard({
 									disabled={!status?.has9Router}
 									loading={restoring}
 								>
-									<span className="material-symbols-outlined text-[14px] mr-1">restore</span>Reset
+									<Icon name="restore" size={14} className="mr-1" />
+									Reset
 								</Button>
 								<Button
 									variant="ghost"
@@ -431,8 +426,8 @@ export default function CopilotToolCard({
 									onClick={() => setShowManualConfigModal(true)}
 									disabled={selectedModels.length === 0}
 								>
-									<span className="material-symbols-outlined text-[14px] mr-1">content_copy</span>Manual
-									Config
+									<Icon name="content_copy" size={14} className="mr-1" />
+									Manual Config
 								</Button>
 							</div>
 						</>

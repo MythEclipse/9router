@@ -6,6 +6,7 @@ import { useEffect, useState } from "react"
 import { Badge, Button, Card } from "@/shared/components"
 import ProviderIcon from "@/shared/components/ProviderIcon"
 import { AI_PROVIDERS, getProvidersByKind } from "@/shared/constants/providers"
+import Icon from "../../../../../shared/components/Icon"
 
 function getEffectiveStatus(conn: Record<string, unknown>): string | undefined {
 	const isCooldown = Object.entries(conn).some(
@@ -111,7 +112,7 @@ function ComboList({ combos }) {
 						className="hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors cursor-pointer"
 					>
 						<div className="flex min-w-0 items-center gap-3">
-							<span className="material-symbols-outlined text-primary text-[18px]">layers</span>
+							<Icon name="layers" size={18} className="text-primary" />
 							<code className="text-sm font-mono font-medium flex-1 truncate">{combo.name}</code>
 							{/* Provider icons preview */}
 							<div className="flex flex-wrap items-center gap-1 sm:shrink-0">
@@ -141,7 +142,7 @@ function ComboList({ combos }) {
 								)}
 							</div>
 							<span className="text-[11px] text-text-muted shrink-0">{combo.models.length}</span>
-							<span className="material-symbols-outlined text-text-muted text-[16px]">chevron_right</span>
+							<Icon name="chevron_right" size={16} className="text-text-muted" />
 						</div>
 					</Card>
 				</Link>
@@ -156,7 +157,7 @@ function Section({ title, icon, kind, providers, connections, combos, onCreateCo
 			{/* Header - title left, Create Combo right */}
 			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3">
 				<div className="flex flex-wrap items-center gap-2">
-					<span className="material-symbols-outlined text-primary">{icon}</span>
+					<Icon name={icon} className="text-primary" />
 					<h2 className="text-base font-semibold">{title}</h2>
 					<span className="text-xs text-text-muted">
 						({providers.length} providers · {combos.length} combos)

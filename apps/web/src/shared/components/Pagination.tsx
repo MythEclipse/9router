@@ -2,6 +2,7 @@
 
 import { cn } from "@/shared/utils/cn"
 import Button from "./Button.tsx"
+import Icon from "./Icon"
 
 export interface PaginationProps {
 	currentPage: number
@@ -100,7 +101,7 @@ export default function Pagination({
 							className="w-9 px-0"
 							aria-label="Previous page"
 						>
-							<span className="material-symbols-outlined text-[18px]">chevron_left</span>
+							<Icon name="chevron_left" size={18} />
 						</Button>
 
 						{pageNumbers[0] > 1 && (
@@ -166,7 +167,7 @@ export default function Pagination({
 							className="w-9 px-0"
 							aria-label="Next page"
 						>
-							<span className="material-symbols-outlined text-[18px]">chevron_right</span>
+							<Icon name="chevron_right" size={18} />
 						</Button>
 					</nav>
 				)}

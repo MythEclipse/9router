@@ -23,6 +23,7 @@ import { useNow } from "@/shared/hooks/useNow"
 import { cn } from "@/shared/utils/cn"
 import { formatDuration, nextResetAt } from "@/shared/utils/interval"
 import useSettingsStore from "@/store/settingsStore"
+import Icon from "../../../../shared/components/Icon"
 import AllowedEndpointControls from "./components/AllowedEndpointControls.tsx"
 import BulkEditKeys from "./components/BulkEditKeys.tsx"
 import EndpointRow from "./components/EndpointRow.tsx"
@@ -124,7 +125,7 @@ function LimitKindPicker({ value, onChange }: LimitKindPickerProps) {
 									selected ? "opacity-100" : "opacity-70",
 								)}
 							>
-								<span className="material-symbols-outlined text-[19px] leading-none">{opt.icon}</span>
+								<Icon name={opt.icon} size={19} className="leading-none" />
 							</span>
 							<span className="min-w-0 flex-1">
 								<span className={cn("block text-sm font-semibold", selected ? opt.tone : "text-text-main")}>
@@ -174,7 +175,7 @@ function FormSection({ icon, title, description, children }) {
 	return (
 		<section className="flex flex-col gap-3">
 			<div className="flex items-start gap-2 pb-2 border-b border-border-subtle">
-				<span className="material-symbols-outlined text-[18px] leading-6 text-text-muted">{icon}</span>
+				<Icon name={icon} size={18} className="leading-6 text-text-muted" />
 				<div className="min-w-0">
 					<h3 className="text-sm font-semibold text-text-main">{title}</h3>
 					{description && <p className="mt-0.5 text-xs text-text-muted">{description}</p>}
@@ -351,7 +352,7 @@ function PermissionsEditor({
 							/>
 							<span className="flex min-w-0 flex-col gap-0.5">
 								<span className="flex items-center gap-1.5 text-sm font-medium text-text-main">
-									<span className="material-symbols-outlined text-[16px] text-primary">{opt.icon}</span>
+									<Icon name={opt.icon} size={16} className="text-primary" />
 									{opt.label}
 								</span>
 								<span className="text-xs text-text-muted">{note}</span>
@@ -973,7 +974,7 @@ export default function APIPageClient({ machineId }: APIPageClientProps) {
 			{/* Endpoint Card */}
 			<Card>
 				<h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-					<span className="material-symbols-outlined text-primary">api</span>
+					<Icon name="api" className="text-primary" />
 					API Endpoint
 				</h2>
 
@@ -1075,7 +1076,7 @@ export default function APIPageClient({ machineId }: APIPageClientProps) {
 			<Card id="require-api-key">
 				<div className="flex flex-wrap items-center justify-between gap-3 mb-4">
 					<h2 className="text-lg font-semibold flex items-center gap-2">
-						<span className="material-symbols-outlined text-primary">vpn_key</span>
+						<Icon name="vpn_key" className="text-primary" />
 						API Keys
 					</h2>
 					<Button icon="add" onClick={() => setShowAddModal(true)}>
@@ -1126,7 +1127,7 @@ export default function APIPageClient({ machineId }: APIPageClientProps) {
 				{keys.length === 0 ? (
 					<div className="text-center py-12">
 						<div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 text-primary mb-4">
-							<span className="material-symbols-outlined text-[32px]">vpn_key</span>
+							<Icon name="vpn_key" size={32} />
 						</div>
 						<p className="text-text-main font-medium mb-1">No API keys yet</p>
 						<p className="text-sm text-text-muted mb-4">Create your first API key to get started</p>
@@ -1172,17 +1173,13 @@ export default function APIPageClient({ machineId }: APIPageClientProps) {
 												className="p-1 hover:bg-black/5 dark:hover:bg-white/5 rounded text-text-muted hover:text-primary transition-all"
 												title={visibleKeys.has(key.id) ? "Hide key" : "Show key"}
 											>
-												<span className="material-symbols-outlined text-[14px]">
-													{visibleKeys.has(key.id) ? "visibility_off" : "visibility"}
-												</span>
+												<Icon name={visibleKeys.has(key.id) ? "visibility_off" : "visibility"} size={14} />
 											</button>
 											<button
 												onClick={() => copy(key.key, key.id)}
 												className="p-1 hover:bg-black/5 dark:hover:bg-white/5 rounded text-text-muted hover:text-primary transition-all"
 											>
-												<span className="material-symbols-outlined text-[14px]">
-													{copied === key.id ? "check" : "content_copy"}
-												</span>
+												<Icon name={copied === key.id ? "check" : "content_copy"} size={14} />
 											</button>
 										</div>
 									</div>
@@ -1226,9 +1223,7 @@ export default function APIPageClient({ machineId }: APIPageClientProps) {
 																: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
 														}`}
 													>
-														<span className="material-symbols-outlined text-[13px] leading-none">
-															{isExpired ? "event_busy" : "timer"}
-														</span>
+														<Icon name={isExpired ? "event_busy" : "timer"} size={13} className="leading-none" />
 														{isExpired ? "Expired: " : "Expires: "}
 														{expDate.toLocaleDateString()}{" "}
 														{expDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
@@ -1278,7 +1273,7 @@ export default function APIPageClient({ machineId }: APIPageClientProps) {
 										)}
 										title="Edit key settings & quota"
 									>
-										<span className="material-symbols-outlined text-[18px]">edit</span>
+										<Icon name="edit" size={18} />
 									</button>
 									<button
 										onClick={() => handleDuplicateKey(key)}
@@ -1288,7 +1283,7 @@ export default function APIPageClient({ machineId }: APIPageClientProps) {
 										)}
 										title="Duplicate key (copy settings)"
 									>
-										<span className="material-symbols-outlined text-[18px]">library_add</span>
+										<Icon name="library_add" size={18} />
 									</button>
 									<button
 										onClick={() => handleManualResetUsage(key)}
@@ -1299,7 +1294,7 @@ export default function APIPageClient({ machineId }: APIPageClientProps) {
 										)}
 										title="Reset used tokens to 0"
 									>
-										<span className="material-symbols-outlined text-[18px]">restart_alt</span>
+										<Icon name="restart_alt" size={18} />
 									</button>
 									<button
 										onClick={() => {
@@ -1309,7 +1304,7 @@ export default function APIPageClient({ machineId }: APIPageClientProps) {
 										className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded text-text-muted hover:text-primary transition-all"
 										title="Code snippet"
 									>
-										<span className="material-symbols-outlined text-[18px]">code</span>
+										<Icon name="code" size={18} />
 									</button>
 									<button
 										onClick={() => handleDeleteKey(key.id)}
@@ -1319,7 +1314,7 @@ export default function APIPageClient({ machineId }: APIPageClientProps) {
 											isOwnKey(key) && "opacity-30 cursor-not-allowed",
 										)}
 									>
-										<span className="material-symbols-outlined text-[18px]">delete</span>
+										<Icon name="delete" size={18} />
 									</button>
 								</div>
 							</div>
@@ -1473,7 +1468,7 @@ export default function APIPageClient({ machineId }: APIPageClientProps) {
 												onClick={() => removeAllowedModel("create", m)}
 												className="hover:text-red-500 transition-colors"
 											>
-												<span className="material-symbols-outlined text-[14px]">close</span>
+												<Icon name="close" size={14} />
 											</button>
 										</span>
 									))}
@@ -1636,7 +1631,7 @@ export default function APIPageClient({ machineId }: APIPageClientProps) {
 												onClick={() => removeAllowedModel("edit", m)}
 												className="hover:text-red-500 transition-colors"
 											>
-												<span className="material-symbols-outlined text-[14px]">close</span>
+												<Icon name="close" size={14} />
 											</button>
 										</span>
 									))}
@@ -1715,7 +1710,7 @@ export default function APIPageClient({ machineId }: APIPageClientProps) {
 				<div className="flex flex-col gap-4">
 					<div className="bg-surface-2 border border-border-subtle rounded-lg p-4">
 						<div className="flex items-start gap-3">
-							<span className="material-symbols-outlined text-primary">cloud_upload</span>
+							<Icon name="cloud_upload" className="text-primary" />
 							<div>
 								<p className="text-sm text-text-main font-medium mb-1">Cloudflare Tunnel</p>
 								<p className="text-sm text-text-muted">
@@ -1732,7 +1727,7 @@ export default function APIPageClient({ machineId }: APIPageClientProps) {
 								key={benefit.title}
 								className="flex flex-col items-center text-center p-3 rounded-lg bg-sidebar/50"
 							>
-								<span className="material-symbols-outlined text-xl text-primary mb-1">{benefit.icon}</span>
+								<Icon name={benefit.icon} size={20} className="text-primary mb-1" />
 								<p className="text-xs font-semibold">{benefit.title}</p>
 								<p className="text-xs text-text-muted">{benefit.desc}</p>
 							</div>
@@ -1796,7 +1791,7 @@ export default function APIPageClient({ machineId }: APIPageClientProps) {
 					{/* Checking state */}
 					{tsInstalled === null && (
 						<p className="text-sm text-text-muted flex items-center gap-2">
-							<span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+							<Icon name="progress_activity" size={14} className="animate-spin" />
 							Checking...
 						</p>
 					)}
@@ -1820,7 +1815,7 @@ export default function APIPageClient({ machineId }: APIPageClientProps) {
 					{tsInstalling && (
 						<div className="flex flex-col gap-2">
 							<div className="flex items-center gap-2 text-sm text-text-muted">
-								<span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+								<Icon name="progress_activity" size={14} className="animate-spin" />
 								Installing Tailscale...
 							</div>
 							{tsInstallLog.length > 0 && (
@@ -1840,7 +1835,7 @@ export default function APIPageClient({ machineId }: APIPageClientProps) {
 					{tsInstalled === true && !tsInstalling && (
 						<div className="flex flex-col gap-3">
 							<div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
-								<span className="material-symbols-outlined text-[16px]">check_circle</span>
+								<Icon name="check_circle" size={16} />
 								Tailscale installed
 							</div>
 							<div className="flex gap-2">

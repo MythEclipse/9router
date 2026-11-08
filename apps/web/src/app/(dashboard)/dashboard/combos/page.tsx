@@ -17,6 +17,7 @@ import {
 	verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
+import { GripVertical } from "lucide-react"
 import Link from "next/link"
 import { aggregateComboCapabilities } from "open-sse/providers/capabilities"
 import { useEffect, useMemo, useState } from "react"
@@ -38,6 +39,7 @@ import {
 import { AI_PROVIDERS, resolveProviderId } from "@/shared/constants/providers"
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard"
 import { invalidateModelCaps, useModelCaps } from "@/shared/hooks/useModelCaps"
+import Icon from "../../../../shared/components/Icon"
 import {
 	addCapModel,
 	CAPACITY_ADAPTER_CAPS,
@@ -476,9 +478,11 @@ export default function CombosPage() {
 				</div>
 				<div className="flex w-full flex-col gap-2 sm:w-auto sm:items-stretch">
 					<div className="relative w-full sm:w-64">
-						<span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-text-muted">
-							search
-						</span>
+						<Icon
+							name="search"
+							size={18}
+							className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
+						/>
 						<input
 							type="text"
 							value={searchQuery}
@@ -494,7 +498,7 @@ export default function CombosPage() {
 								aria-label="Clear search"
 								className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-text-muted transition-colors hover:text-text-main"
 							>
-								<span className="material-symbols-outlined text-[16px]">close</span>
+								<Icon name="close" size={16} />
 							</button>
 						)}
 					</div>
@@ -537,7 +541,7 @@ export default function CombosPage() {
 				<Card>
 					<div className="text-center py-12">
 						<div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 text-primary mb-4">
-							<span className="material-symbols-outlined text-[32px]">layers</span>
+							<Icon name="layers" size={32} />
 						</div>
 						<p className="text-text-main font-medium mb-1">No combos yet</p>
 						<p className="text-sm text-text-muted mb-4">Create model combos with fallback support</p>
@@ -757,7 +761,7 @@ function ComboCard({
 						/>
 					</label>
 					<div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-						<span className="material-symbols-outlined text-primary text-[18px]">layers</span>
+						<Icon name="layers" size={18} className="text-primary" />
 					</div>
 					<div className="min-w-0 flex-1">
 						<code className="block truncate font-mono text-sm font-medium">{combo.name}</code>
@@ -813,7 +817,7 @@ function ComboCard({
 									className="inline-flex max-w-full items-center gap-1 rounded border border-dashed border-primary/40 px-1.5 py-0.5 font-mono text-[11px] text-primary hover:border-primary hover:bg-primary/5 transition-colors"
 									title="Pick the model that fuses panel answers"
 								>
-									<span className="material-symbols-outlined text-[13px]">gavel</span>
+									<Icon name="gavel" size={13} />
 									<span className="truncate">{judge || `Auto - ${combo.models[0] || "first model"}`}</span>
 								</button>
 								{judge && (
@@ -822,7 +826,7 @@ function ComboCard({
 										className="p-0.5 rounded text-text-muted hover:text-red-500 hover:bg-red-500/10 transition-colors"
 										title="Reset judge to Auto"
 									>
-										<span className="material-symbols-outlined text-[13px]">close</span>
+										<Icon name="close" size={13} />
 									</button>
 								)}
 							</div>
@@ -840,7 +844,7 @@ function ComboCard({
 											className="inline-flex max-w-full items-center gap-1 rounded border border-dashed border-primary/40 px-1.5 py-0.5 font-mono text-[11px] text-primary hover:border-primary hover:bg-primary/5 transition-colors"
 											title="Pick the System One model that decides model routing"
 										>
-											<span className="material-symbols-outlined text-[13px]">psychology</span>
+											<Icon name="psychology" size={13} />
 											<span className="truncate">{routerModel || "Auto — oc/jev-1.13-free"}</span>
 										</button>
 										{routerStatus.ready ? (
@@ -866,7 +870,7 @@ function ComboCard({
 											className="inline-flex items-center gap-1 rounded border border-border/70 bg-black/[0.02] dark:bg-white/[0.02] px-2 py-0.5 text-[11px] text-text-main hover:border-primary/50 hover:bg-primary/5 transition-colors"
 											title="Configure routing policy and prompt cache retention"
 										>
-											<span className="material-symbols-outlined text-[13px] text-text-muted">tune</span>
+											<Icon name="tune" size={13} className="text-text-muted" />
 											<span className="font-medium">{policyLabel}</span>
 										</button>
 										{routerModel && (
@@ -875,7 +879,7 @@ function ComboCard({
 												className="p-0.5 rounded text-text-muted hover:text-red-500 hover:bg-red-500/10 transition-colors"
 												title="Reset router to Auto"
 											>
-												<span className="material-symbols-outlined text-[13px]">close</span>
+												<Icon name="close" size={13} />
 											</button>
 										)}
 									</div>
@@ -905,9 +909,7 @@ function ComboCard({
 							className="flex flex-col items-center rounded px-2 py-1 text-text-muted transition-colors hover:bg-black/5 hover:text-primary dark:hover:bg-white/5"
 							title="Copy combo name"
 						>
-							<span className="material-symbols-outlined text-[18px]">
-								{copied === `combo-${combo.id}` ? "check" : "content_copy"}
-							</span>
+							<Icon name={copied === `combo-${combo.id}` ? "check" : "content_copy"} size={18} />
 							<span className="text-[10px] leading-tight">Copy</span>
 						</button>
 						<button
@@ -918,7 +920,7 @@ function ComboCard({
 							className="flex flex-col items-center rounded px-2 py-1 text-text-muted transition-colors hover:bg-black/5 hover:text-primary dark:hover:bg-white/5"
 							title={`Copy full combo (same models and strategy) as ${combo.name}-1`}
 						>
-							<span className="material-symbols-outlined text-[18px]">library_add</span>
+							<Icon name="library_add" size={18} />
 							<span className="text-[10px] leading-tight">Copy Full</span>
 						</button>
 						<button
@@ -926,7 +928,7 @@ function ComboCard({
 							className="flex flex-col items-center rounded px-2 py-1 text-text-muted transition-colors hover:bg-black/5 hover:text-primary dark:hover:bg-white/5"
 							title="Edit"
 						>
-							<span className="material-symbols-outlined text-[18px]">edit</span>
+							<Icon name="edit" size={18} />
 							<span className="text-[10px] leading-tight">Edit</span>
 						</button>
 						<button
@@ -934,7 +936,7 @@ function ComboCard({
 							className="flex flex-col items-center rounded px-2 py-1 text-red-500 transition-colors hover:bg-red-500/10"
 							title="Delete"
 						>
-							<span className="material-symbols-outlined text-[18px]">delete</span>
+							<Icon name="delete" size={18} />
 							<span className="text-[10px] leading-tight">Delete</span>
 						</button>
 					</div>
@@ -1052,7 +1054,7 @@ function CapacityAdapterCap({ cap, entry, onChange, activeProviders, getCaps }) 
 						aria-label={`Enable ${cap.label} adapter`}
 					/>
 					<div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-						<span className="material-symbols-outlined text-primary text-[18px]">{cap.icon}</span>
+						<Icon name={cap.icon} size={18} className="text-primary" />
 					</div>
 					<div className="min-w-0 flex-1">
 						<div className="flex items-center gap-1.5">
@@ -1135,7 +1137,7 @@ function CapacityAdapterCap({ cap, entry, onChange, activeProviders, getCaps }) 
 												}`}
 												title="Move up"
 											>
-												<span className="material-symbols-outlined text-[16px] leading-none">arrow_upward</span>
+												<Icon name="arrow_upward" size={16} className="leading-none" />
 											</button>
 											<button
 												type="button"
@@ -1148,9 +1150,7 @@ function CapacityAdapterCap({ cap, entry, onChange, activeProviders, getCaps }) 
 												}`}
 												title="Move down"
 											>
-												<span className="material-symbols-outlined text-[16px] leading-none">
-													arrow_downward
-												</span>
+												<Icon name="arrow_downward" size={16} className="leading-none" />
 											</button>
 										</div>
 									</td>
@@ -1166,7 +1166,7 @@ function CapacityAdapterCap({ cap, entry, onChange, activeProviders, getCaps }) 
 											}`}
 											title="Remove model"
 										>
-											<span className="material-symbols-outlined text-[16px] leading-none">close</span>
+											<Icon name="close" size={16} className="leading-none" />
 										</button>
 									</td>
 								</tr>
@@ -1243,14 +1243,7 @@ function ModelItem({
 				className="cursor-grab touch-none p-0.5 rounded text-text-muted hover:text-primary active:cursor-grabbing shrink-0"
 				title="Drag to reorder"
 			>
-				<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-					<circle cx="9" cy="4" r="2" />
-					<circle cx="15" cy="4" r="2" />
-					<circle cx="9" cy="12" r="2" />
-					<circle cx="15" cy="12" r="2" />
-					<circle cx="9" cy="20" r="2" />
-					<circle cx="15" cy="20" r="2" />
-				</svg>
+				<GripVertical size={16} className="fill-current" aria-hidden="true" />
 			</button>
 
 			{/* Index badge */}
@@ -1291,7 +1284,7 @@ function ModelItem({
 					className={`p-0.5 rounded ${isFirst ? "text-text-muted/20 cursor-not-allowed" : "text-text-muted hover:text-primary hover:bg-black/5 dark:hover:bg-white/5"}`}
 					title="Move up"
 				>
-					<span className="material-symbols-outlined text-[12px]">arrow_upward</span>
+					<Icon name="arrow_upward" size={12} />
 				</button>
 				<button
 					onClick={onMoveDown}
@@ -1299,7 +1292,7 @@ function ModelItem({
 					className={`p-0.5 rounded ${isLast ? "text-text-muted/20 cursor-not-allowed" : "text-text-muted hover:text-primary hover:bg-black/5 dark:hover:bg-white/5"}`}
 					title="Move down"
 				>
-					<span className="material-symbols-outlined text-[12px]">arrow_downward</span>
+					<Icon name="arrow_downward" size={12} />
 				</button>
 			</div>
 
@@ -1309,7 +1302,7 @@ function ModelItem({
 				className="p-0.5 hover:bg-red-500/10 rounded text-text-muted hover:text-red-500 transition-all"
 				title="Remove"
 			>
-				<span className="material-symbols-outlined text-[12px]">close</span>
+				<Icon name="close" size={12} />
 			</button>
 		</div>
 	)
@@ -1473,7 +1466,7 @@ function ComboFormModal({
 
 						{models.length === 0 ? (
 							<div className="text-center py-4 border border-dashed border-black/10 dark:border-white/10 rounded-lg bg-black/[0.01] dark:bg-white/[0.01]">
-								<span className="material-symbols-outlined text-text-muted text-xl mb-1">layers</span>
+								<Icon name="layers" size={20} className="text-text-muted mb-1" />
 								<p className="text-xs text-text-muted">No models added yet</p>
 							</div>
 						) : (
@@ -1517,7 +1510,7 @@ function ComboFormModal({
 							onClick={() => setShowModelSelect(true)}
 							className="w-full mt-2 py-2 border border-dashed border-black/10 dark:border-white/10 rounded-lg text-xs text-primary font-medium hover:text-primary hover:border-primary/50 transition-colors flex items-center justify-center gap-1"
 						>
-							<span className="material-symbols-outlined text-[16px]">add</span>
+							<Icon name="add" size={16} />
 							Add Model
 						</button>
 					</div>

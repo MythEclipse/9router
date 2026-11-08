@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
 import { cn } from "@/shared/utils/cn"
 import useThemeStore, { THEME_IDS } from "@/store/themeStore"
+import Icon from "./Icon"
 
 const MODES = [
 	{
@@ -83,14 +84,14 @@ export default function ThemeModal({ isOpen, onClose }: ThemeModalProps) {
 						aria-label="Close"
 						className="p-1 rounded-lg text-text-muted hover:text-text-main hover:bg-surface-2 transition-all"
 					>
-						<span className="material-symbols-outlined text-[20px]">close</span>
+						<Icon name="close" size={20} />
 					</button>
 				</div>
 
 				{!canChangeTheme && (
 					<div className="p-4 text-sm text-text-muted leading-relaxed">
 						<span className="flex items-center gap-2 text-text-main font-medium mb-1">
-							<span className="material-symbols-outlined text-[18px]">lock</span>
+							<Icon name="lock" size={18} />
 							Administrator setting
 						</span>
 						The theme applies to the whole site and can only be changed from a password sign-in. This
@@ -128,18 +129,14 @@ export default function ThemeModal({ isOpen, onClose }: ThemeModalProps) {
 											active ? "text-primary" : "text-text-main",
 										)}
 									>
-										<span className="material-symbols-outlined text-[18px]">{mode.icon}</span>
+										<Icon name={mode.icon} size={18} />
 										{mode.label}
 									</span>
 									<span className="block mt-0.5 text-xs text-text-muted">{mode.desc}</span>
 								</span>
-								{active && (
-									<span className="material-symbols-outlined text-[20px] text-primary shrink-0">check</span>
-								)}
+								{active && <Icon name="check" size={20} className="text-primary shrink-0" />}
 								{!canChangeTheme && !active && (
-									<span className="material-symbols-outlined text-[18px] text-text-muted shrink-0">
-										lock
-									</span>
+									<Icon name="lock" size={18} className="text-text-muted shrink-0" />
 								)}
 							</button>
 						)

@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import Icon from "../../../../../shared/components/Icon"
 import {
 	deleteKeyPreset,
 	readKeyPresets,
@@ -120,7 +121,7 @@ export default function ApiKeySelect({
 						className="p-1 text-text-muted hover:text-red-500 rounded transition-colors shrink-0"
 						title="Delete saved key"
 					>
-						<span className="material-symbols-outlined text-[14px]">delete</span>
+						<Icon name="delete" size={14} />
 					</button>
 				)}
 			</div>

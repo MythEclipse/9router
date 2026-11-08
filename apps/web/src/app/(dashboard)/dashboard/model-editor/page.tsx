@@ -5,6 +5,7 @@ import { Button, Card, Input, Modal, ModelSelectModal, Toggle } from "@/shared/c
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard"
 import { useModelCaps } from "@/shared/hooks/useModelCaps"
 import { describeStudioCycle, findStudioCycle } from "@/shared/utils/studioComboGuard"
+import Icon from "../../../../shared/components/Icon"
 
 const NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/
 
@@ -152,9 +153,7 @@ export default function ModelStudioPage() {
 				<div className="mt-2 flex items-start justify-between gap-3 rounded-xl border border-border bg-black/[0.02] dark:bg-white/[0.03] px-3 py-2">
 					<div className="min-w-0">
 						<span className="flex items-center gap-1.5 text-xs font-semibold text-text-main">
-							<span className="material-symbols-outlined text-[16px] leading-none text-primary">
-								shield_person
-							</span>
+							<Icon name="shield_person" size={16} className="leading-none text-primary" />
 							Anti-probe metadata
 						</span>
 						<p className="text-[11px] text-text-muted mt-0.5">
@@ -264,7 +263,7 @@ function ModelStudioContent({ antiProbe = true }) {
 				</Card>
 			) : models.length === 0 ? (
 				<Card padding="lg" className="flex flex-col items-center gap-3 text-center py-10">
-					<span className="material-symbols-outlined text-[34px] text-text-muted/50">auto_awesome</span>
+					<Icon name="auto_awesome" size={34} className="text-text-muted/50" />
 					<div>
 						<p className="text-sm font-medium text-text-main">No models yet</p>
 						<p className="text-xs text-text-muted mt-1 max-w-md">
@@ -292,13 +291,15 @@ function ModelStudioContent({ antiProbe = true }) {
 										</code>
 										{copiedName === model.callName ? (
 											<span className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-green-500">
-												<span className="material-symbols-outlined text-[14px]">check</span>
+												<Icon name="check" size={14} />
 												Copied
 											</span>
 										) : (
-											<span className="material-symbols-outlined text-[14px] shrink-0 text-text-muted opacity-0 transition-opacity group-hover:opacity-100">
-												content_copy
-											</span>
+											<Icon
+												name="content_copy"
+												size={14}
+												className="shrink-0 text-text-muted opacity-0 transition-opacity group-hover:opacity-100"
+											/>
 										)}
 									</button>
 									{model.displayName && model.displayName !== model.callName && (
@@ -311,7 +312,7 @@ function ModelStudioContent({ antiProbe = true }) {
 										title="Edit"
 										className="p-1.5 rounded-lg text-text-muted hover:text-primary hover:bg-primary/10 transition-colors"
 									>
-										<span className="material-symbols-outlined text-[16px]">edit</span>
+										<Icon name="edit" size={16} />
 									</button>
 									<button
 										onClick={() => handleDelete(model)}
@@ -319,9 +320,7 @@ function ModelStudioContent({ antiProbe = true }) {
 										title="Delete"
 										className="p-1.5 rounded-lg text-text-muted hover:text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-50"
 									>
-										<span className="material-symbols-outlined text-[16px]">
-											{removing === model.callName ? "progress_activity" : "delete"}
-										</span>
+										<Icon name={removing === model.callName ? "progress_activity" : "delete"} size={16} />
 									</button>
 								</div>
 							</div>
@@ -574,9 +573,11 @@ function StudioFormModal({
 									<span className="text-sm text-text-muted">Pick a model to route to</span>
 								)}
 							</span>
-							<span className="material-symbols-outlined text-[18px] text-primary shrink-0">
-								{targetModel ? "swap_horiz" : "search"}
-							</span>
+							<Icon
+								name={targetModel ? "swap_horiz" : "search"}
+								size={18}
+								className="text-primary shrink-0"
+							/>
 						</button>
 						<p className="text-[11px] text-text-muted">
 							Any model you have connected - built-in, custom provider or combo.
@@ -633,9 +634,7 @@ function StudioFormModal({
 						<div className="rounded-xl border border-border bg-black/[0.02] dark:bg-white/[0.03] p-3 flex flex-col gap-2.5">
 							<div className="flex items-center justify-between gap-2">
 								<span className="flex items-center gap-1.5 text-xs font-semibold text-text-main">
-									<span className="material-symbols-outlined text-[16px] leading-none text-primary">
-										shield_person
-									</span>
+									<Icon name="shield_person" size={16} className="leading-none text-primary" />
 									Anti-mask check
 								</span>
 								<a
@@ -645,15 +644,13 @@ function StudioFormModal({
 									className="flex items-center gap-1 text-[11px] text-primary hover:underline whitespace-nowrap"
 								>
 									Run BazaarLink Probe
-									<span className="material-symbols-outlined text-[12px] leading-none">open_in_new</span>
+									<Icon name="open_in_new" size={12} className="leading-none" />
 								</a>
 							</div>
 
 							{maskWarns.length === 0 ? (
 								<p className="text-[11px] text-text-muted flex items-start gap-1.5">
-									<span className="material-symbols-outlined text-[13px] leading-none mt-px text-emerald-500">
-										check_circle
-									</span>
+									<Icon name="check_circle" size={13} className="leading-none mt-px text-emerald-500" />
 									No contradiction between this model&apos;s name and its target&apos;s vendor.
 								</p>
 							) : (
@@ -665,9 +662,11 @@ function StudioFormModal({
 												f.level === "warn" ? "text-amber-500" : "text-text-muted"
 											}`}
 										>
-											<span className="material-symbols-outlined text-[13px] leading-none mt-px shrink-0">
-												{f.level === "warn" ? "warning" : "info"}
-											</span>
+											<Icon
+												name={f.level === "warn" ? "warning" : "info"}
+												size={13}
+												className="leading-none mt-px shrink-0"
+											/>
 											<span>{f.text}</span>
 										</li>
 									))}
@@ -873,7 +872,7 @@ function PrefixCard({ nodes, onSaved }) {
 								title="Edit prefix"
 								className="p-1.5 rounded-lg text-text-muted hover:text-primary hover:bg-primary/10 transition-colors shrink-0"
 							>
-								<span className="material-symbols-outlined text-[16px]">edit</span>
+								<Icon name="edit" size={16} />
 							</button>
 						</div>
 					))}

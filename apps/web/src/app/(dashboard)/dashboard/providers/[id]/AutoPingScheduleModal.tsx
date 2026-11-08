@@ -10,6 +10,7 @@ import {
 	parseAnchor,
 } from "@/shared/services/quotaPingSchedule"
 import { cn } from "@/shared/utils/cn"
+import Icon from "../../../../../shared/components/Icon"
 
 const MODE_OPTIONS = [
 	{ value: "off", label: "Off", icon: "block" },
@@ -135,7 +136,7 @@ export default function AutoPingScheduleModal({
 										: "text-text-muted hover:text-text-main",
 								)}
 							>
-								<span className="material-symbols-outlined text-[15px] leading-none">{option.icon}</span>
+								<Icon name={option.icon} size={15} className="leading-none" />
 								<span>{option.label}</span>
 							</button>
 						)

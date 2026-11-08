@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { getCurrentLocale, onLocaleChange } from "@/i18n/runtime"
 import { Button, Card, ConfirmModal, Input, Modal, Toggle } from "@/shared/components"
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard"
+import Icon from "../../../../shared/components/Icon"
 import {
 	CAVEMAN_LEVELS,
 	PONYTAIL_LEVELS,
@@ -586,7 +587,7 @@ export default function TokenSaverClient() {
 			<Card id="rtk">
 				<div className="flex items-center justify-between mb-2">
 					<h2 className="text-lg font-semibold flex items-center gap-2">
-						<span className="material-symbols-outlined text-primary">bolt</span>
+						<Icon name="bolt" className="text-primary" />
 						Token Saver
 					</h2>
 				</div>

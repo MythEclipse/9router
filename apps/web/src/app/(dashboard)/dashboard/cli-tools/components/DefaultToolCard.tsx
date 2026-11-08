@@ -6,6 +6,7 @@ import { Card, ModelSelectModal } from "@/shared/components"
 import { DEFAULT_LOCAL_API_KEY } from "@/shared/constants/config"
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard"
 import { getProviderIconSrc, markProviderIconMissing } from "@/shared/utils/providerIcon"
+import Icon from "../../../../../shared/components/Icon"
 import ApiKeySelect from "./ApiKeySelect.tsx"
 
 export default function DefaultToolCard({
@@ -101,16 +102,14 @@ export default function DefaultToolCard({
 							onClick={() => handleCopy(modelValue, "model")}
 							className="shrink-0 px-3 py-2 bg-bg-secondary hover:bg-bg-tertiary rounded-lg border border-border transition-colors"
 						>
-							<span className="material-symbols-outlined text-lg">
-								{copiedField === "model" ? "check" : "content_copy"}
-							</span>
+							<Icon name={copiedField === "model" ? "check" : "content_copy"} size={18} />
 						</button>
 						<button
 							onClick={() => setModelValue("")}
 							className="p-2 text-text-muted hover:text-red-500 rounded transition-colors"
 							title="Clear"
 						>
-							<span className="material-symbols-outlined text-lg">close</span>
+							<Icon name="close" size={18} />
 						</button>
 					</>
 				)}
@@ -149,7 +148,7 @@ export default function DefaultToolCard({
 
 					return (
 						<div key={index} className={`flex items-start gap-3 p-3 rounded-lg border ${bgClass}`}>
-							<span className={`material-symbols-outlined text-lg ${iconClass}`}>{icon}</span>
+							<Icon name={icon} size={18} className={`${iconClass}`} />
 							<p className={`text-sm ${textClass}`}>{note.text}</p>
 						</div>
 					)
@@ -194,9 +193,10 @@ export default function DefaultToolCard({
 												onClick={() => handleCopy(item.value, `${item.step}-${item.title}`)}
 												className="shrink-0 px-3 py-2 bg-bg-secondary hover:bg-bg-tertiary rounded-lg border border-border transition-colors"
 											>
-												<span className="material-symbols-outlined text-lg">
-													{copiedField === `${item.step}-${item.title}` ? "check" : "content_copy"}
-												</span>
+												<Icon
+													name={copiedField === `${item.step}-${item.title}` ? "check" : "content_copy"}
+													size={18}
+												/>
 											</button>
 										)}
 									</div>
@@ -215,9 +215,7 @@ export default function DefaultToolCard({
 								onClick={() => handleCopy(tool.codeBlock.code, "codeblock")}
 								className="flex items-center gap-1 px-2 py-1 text-xs bg-bg-secondary hover:bg-bg-tertiary rounded border border-border transition-colors"
 							>
-								<span className="material-symbols-outlined text-sm">
-									{copiedField === "codeblock" ? "check" : "content_copy"}
-								</span>
+								<Icon name={copiedField === "codeblock" ? "check" : "content_copy"} size={14} />
 								{copiedField === "codeblock" ? "Copied!" : "Copy"}
 							</button>
 						</div>
@@ -249,11 +247,7 @@ export default function DefaultToolCard({
 			)
 		}
 		if (tool.icon) {
-			return (
-				<span className="material-symbols-outlined text-xl" style={{ color: tool.color }}>
-					{tool.icon}
-				</span>
-			)
+			return <Icon name={tool.icon} size={20} style={{ color: tool.color }} />
 		}
 		const iconSrc = getProviderIconSrc(toolId)
 		if (!iconSrc) {
@@ -293,11 +287,11 @@ export default function DefaultToolCard({
 						<p className="text-xs text-text-muted truncate">{tool.description}</p>
 					</div>
 				</div>
-				<span
-					className={`material-symbols-outlined text-text-muted text-[20px] transition-transform ${isExpanded ? "rotate-180" : ""}`}
-				>
-					expand_more
-				</span>
+				<Icon
+					name="expand_more"
+					size={20}
+					className={`text-text-muted transition-transform ${isExpanded ? "rotate-180" : ""}`}
+				/>
 			</div>
 
 			{isExpanded && <div className="mt-6 pt-6 border-t border-border">{renderGuideSteps()}</div>}

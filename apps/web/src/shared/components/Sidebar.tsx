@@ -8,6 +8,7 @@ import { MEDIA_PROVIDER_KINDS } from "@/shared/constants/providers"
 import { cn } from "@/shared/utils/cn"
 import { useSessionStore } from "@/store/sessionStore"
 import useSettingsStore from "@/store/settingsStore"
+import Icon from "./Icon"
 
 // const VISIBLE_MEDIA_KINDS = ["embedding", "image", "imageToText", "tts", "stt", "webSearch", "webFetch", "video", "music"];
 const VISIBLE_MEDIA_KINDS = ["embedding", "image", "video", "tts", "stt", "systemone"]
@@ -81,15 +82,15 @@ function NavLink({ href, icon, label, active, onClick, sub = false }) {
 			{active && (
 				<span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-primary" />
 			)}
-			<span
+			<Icon
+				name={icon}
+				filled
 				className={cn(
-					"material-symbols-outlined shrink-0 leading-none",
+					"shrink-0 leading-none",
 					sub ? "size-4 text-[16px]" : "size-[18px] text-[18px]",
 					active ? "fill-1 text-primary" : "group-hover:text-primary transition-colors",
 				)}
-			>
-				{icon}
-			</span>
+			/>
 			<span className="text-[13px] font-medium leading-none min-w-0 truncate" title={label}>
 				{label}
 			</span>
@@ -207,7 +208,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
 			<div className="px-6 py-4 flex flex-col gap-2">
 				<Link href="/dashboard" className="flex items-center gap-3">
 					<div className="flex items-center justify-center size-9 rounded-[10px] bg-gradient-to-br from-brand-500 to-brand-700 shadow-[var(--shadow-warm)]">
-						<span className="material-symbols-outlined text-white text-[20px]">hub</span>
+						<Icon name="hub" size={20} className="text-white" />
 					</div>
 					<div className="flex flex-col">
 						<h1 className="text-lg font-semibold tracking-tight text-text-main">{APP_CONFIG.name}</h1>
@@ -219,7 +220,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
 				</Link>
 				{sessionReady && isApiKeyUser && (
 					<div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-primary/10 border border-primary/20 text-xs text-primary font-medium">
-						<span className="material-symbols-outlined text-[15px]">key</span>
+						<Icon name="key" size={15} />
 						<span className="truncate">{authStatus?.displayName || "API Key User"}</span>
 					</div>
 				)}
@@ -281,9 +282,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
 								{pathname.startsWith("/dashboard/media-providers") && (
 									<span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-primary" />
 								)}
-								<span className="material-symbols-outlined size-[18px] text-[18px] leading-none shrink-0">
-									perm_media
-								</span>
+								<Icon name="perm_media" size={18} className="size-[18px] leading-none shrink-0" />
 								<span
 									className="text-[13px] font-medium leading-none flex-1 text-left min-w-0 truncate"
 									title="Media Providers"
@@ -295,12 +294,12 @@ export default function Sidebar({ onClose }: SidebarProps) {
 										NEW
 									</span>
 								)}
-								<span
-									className="material-symbols-outlined text-[14px] transition-transform"
+								<Icon
+									name="expand_more"
+									size={14}
 									style={{ transform: mediaOpen ? "rotate(180deg)" : "rotate(0deg)" }}
-								>
-									expand_more
-								</span>
+									className="transition-transform"
+								/>
 							</button>
 						)}
 						{canOpenMedia && mediaOpen && (

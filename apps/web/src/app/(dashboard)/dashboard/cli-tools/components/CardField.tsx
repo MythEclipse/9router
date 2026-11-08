@@ -1,5 +1,6 @@
 "use client"
 
+import Icon from "../../../../../shared/components/Icon"
 import BaseUrlSelect from "./BaseUrlSelect.tsx"
 
 /**
@@ -22,9 +23,7 @@ export function CardFieldRow({ label, details = "fill", children }) {
 	return (
 		<div className={`grid grid-cols-1 gap-1.5 ${GRID_TRACKS[details]}`}>
 			<span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">{label}</span>
-			<span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">
-				arrow_forward
-			</span>
+			<Icon name="arrow_forward" size={14} className="hidden text-text-muted sm:inline" />
 			{children}
 		</div>
 	)

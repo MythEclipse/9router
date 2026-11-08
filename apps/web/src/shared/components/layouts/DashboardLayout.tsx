@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
 import { useNotificationStore } from "@/store/notificationStore"
 import Header from "../Header.tsx"
+import Icon from "../Icon"
 import Sidebar from "../Sidebar.tsx"
 import WelcomeModal from "../WelcomeModal.tsx"
 
@@ -67,9 +68,7 @@ export default function DashboardLayout({ children }) {
 							className={`slide-in-right rounded-[12px] border px-3.5 py-2.5 shadow-[var(--shadow-elev)] backdrop-blur-md ${style.wrapper}`}
 						>
 							<div className="flex items-start gap-2">
-								<span className="material-symbols-outlined text-[18px] leading-5 shrink-0 mt-0.5">
-									{style.icon}
-								</span>
+								<Icon name={style.icon} size={18} className="leading-5 shrink-0 mt-0.5" />
 								<div className="min-w-0 flex-1">
 									{n.title ? <p className="text-xs font-semibold mb-0.5">{n.title}</p> : null}
 									<p className="text-xs whitespace-pre-wrap break-words">{n.message}</p>
@@ -81,7 +80,7 @@ export default function DashboardLayout({ children }) {
 										className="text-current/70 hover:text-current"
 										aria-label="Dismiss notification"
 									>
-										<span className="material-symbols-outlined text-[16px]">close</span>
+										<Icon name="close" size={16} />
 									</button>
 								) : null}
 							</div>

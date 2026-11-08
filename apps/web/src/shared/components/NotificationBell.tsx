@@ -5,6 +5,7 @@ import { useSessionStore } from "@/store/sessionStore"
 import { useTaskStore } from "@/store/taskStore"
 import BellMenu from "./BellMenu.tsx"
 import ChangelogModal from "./ChangelogModal.tsx"
+import Icon from "./Icon"
 import NotifToast, { mergeLiveTasks } from "./NotifToast.tsx"
 
 const POLL_MS = 60000
@@ -237,7 +238,7 @@ export default function NotificationBell() {
 				}`}
 				aria-expanded={open}
 			>
-				<span className="material-symbols-outlined text-[20px]">notifications</span>
+				<Icon name="notifications" size={20} />
 				{running > 0 && (
 					// Sits clear of the badge's circle (outside it by ~1.5px) rather than
 					// under it, so the count is never half-covered.
@@ -308,9 +309,7 @@ export default function NotificationBell() {
 											n.read ? "opacity-65" : ""
 										}`}
 									>
-										<span className={`material-symbols-outlined text-[16px] mt-0.5 shrink-0 ${style.text}`}>
-											{style.icon}
-										</span>
+										<Icon name={style.icon} size={16} className={`mt-0.5 shrink-0 ${style.text}`} />
 										<span className="min-w-0 flex-1">
 											<span className="block text-xs font-medium text-text-main">{n.title}</span>
 											{n.body && (
@@ -332,7 +331,7 @@ export default function NotificationBell() {
 											aria-label={`Mark ${n.title} as read`}
 											className="flex size-6 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-2 hover:text-text-main"
 										>
-											<span className="material-symbols-outlined text-[15px]">check</span>
+											<Icon name="check" size={15} />
 										</button>
 									)}
 									<button
@@ -342,7 +341,7 @@ export default function NotificationBell() {
 										aria-label={`Remove ${n.title}`}
 										className="flex size-6 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-2 hover:text-text-main"
 									>
-										<span className="material-symbols-outlined text-[15px]">delete</span>
+										<Icon name="delete" size={15} />
 									</button>
 								</div>
 							</div>

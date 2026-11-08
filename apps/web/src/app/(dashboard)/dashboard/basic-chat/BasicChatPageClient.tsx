@@ -8,6 +8,7 @@ import {
 	isAnthropicCompatibleProvider,
 	isOpenAICompatibleProvider,
 } from "@/shared/constants/providers"
+import Icon from "../../../../shared/components/Icon"
 
 /** No-op store subscription: hydration is read straight off the store. */
 const subscribeNoop = () => () => {}
@@ -846,7 +847,7 @@ export default function BasicChatPageClient() {
 							<div className="min-w-0">
 								<div className="flex items-center gap-2">
 									<span className="text-sm font-semibold text-text-main">{modelLabel}</span>
-									<span className="material-symbols-outlined text-[18px] text-text-muted">expand_more</span>
+									<Icon name="expand_more" size={18} className="text-text-muted" />
 								</div>
 								<p className="truncate text-xs text-text-muted">{modelSubLabel}</p>
 							</div>
@@ -885,11 +886,7 @@ export default function BasicChatPageClient() {
 																	<p className="truncate text-sm font-medium text-text-main">{model.name}</p>
 																	<p className="truncate text-[11px] text-text-muted">{model.requestModel}</p>
 																</div>
-																{isActive ? (
-																	<span className="material-symbols-outlined text-[18px] text-blue-300">
-																		check_circle
-																	</span>
-																) : null}
+																{isActive ? <Icon name="check_circle" size={18} className="text-blue-300" /> : null}
 															</div>
 														</button>
 													)
@@ -970,7 +967,7 @@ export default function BasicChatPageClient() {
 				{loadError ? (
 					<div className="mt-4 rounded-[18px] border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-rose-100">
 						<div className="flex items-start gap-3">
-							<span className="material-symbols-outlined text-[20px]">error</span>
+							<Icon name="error" size={20} />
 							<p className="text-sm leading-6">{loadError}</p>
 						</div>
 					</div>
@@ -982,7 +979,7 @@ export default function BasicChatPageClient() {
 							<div className="flex min-h-[50vh] items-center justify-center px-4 text-center">
 								<div className="max-w-xl space-y-4">
 									<div className="mx-auto flex size-16 items-center justify-center rounded-[20px] border border-border bg-surface-2 text-primary">
-										<span className="material-symbols-outlined text-[30px]">chat</span>
+										<Icon name="chat" size={30} />
 									</div>
 									<div className="space-y-2">
 										<h2 className="text-2xl font-semibold text-text-main">Start a conversation</h2>
@@ -1067,7 +1064,7 @@ export default function BasicChatPageClient() {
 											className="text-white/55 hover:text-white"
 											aria-label="Remove attachment"
 										>
-											<span className="material-symbols-outlined text-[18px]">close</span>
+											<Icon name="close" size={18} />
 										</button>
 									</div>
 								))}
@@ -1093,7 +1090,7 @@ export default function BasicChatPageClient() {
 											disabled={!activeModel || loadingData}
 											className="p-2 text-white/50 hover:text-white transition rounded-full hover:bg-surface-2"
 										>
-											<span className="material-symbols-outlined text-[20px]">attach_file</span>
+											<Icon name="attach_file" size={20} />
 										</button>
 										<input
 											ref={fileInputRef}
@@ -1115,7 +1112,7 @@ export default function BasicChatPageClient() {
 												onClick={handleStop}
 												className="p-2 text-white bg-surface-2 hover:bg-surface-3 transition rounded-full h-8 w-8 flex items-center justify-center"
 											>
-												<span className="material-symbols-outlined text-[16px]">stop</span>
+												<Icon name="stop" size={16} />
 											</button>
 										) : null}
 										<button
@@ -1123,7 +1120,7 @@ export default function BasicChatPageClient() {
 											disabled={!canSend}
 											className={`h-8 w-8 rounded-full flex items-center justify-center transition ${canSend ? "bg-primary text-white hover:opacity-90" : "bg-surface-2 text-white/30 cursor-not-allowed"}`}
 										>
-											<span className="material-symbols-outlined text-[16px]">arrow_upward</span>
+											<Icon name="arrow_upward" size={16} />
 										</button>
 									</div>
 								</div>

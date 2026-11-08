@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Button } from "@/shared/components"
 import { useNotificationStore } from "@/store/notificationStore"
+import Icon from "../../../../../shared/components/Icon"
 
 const STATUS_CONFIG = {
 	available: { icon: "check_circle", color: "#22c55e", label: "Available" },
@@ -110,9 +111,7 @@ export default function ModelAvailabilityBadge() {
             : "bg-amber-500/10 border-amber-500/20 text-amber-500 hover:bg-amber-500/15"
         }`}
       >
-        <span className="material-symbols-outlined text-[14px]">
-          {isHealthy ? "verified" : "warning"}
-        </span>
+        <Icon name={isHealthy ? "verified" : "warning"} size={14} />
         {isHealthy
           ? "All models operational"
           : `${unavailableCount} model${unavailableCount !== 1 ? "s" : ""} with issues`}
@@ -122,12 +121,11 @@ export default function ModelAvailabilityBadge() {
 				<div className="absolute top-full right-0 mt-2 w-80 bg-surface border border-border rounded-xl shadow-2xl z-50 overflow-hidden">
 					<div className="flex items-center justify-between px-4 py-3 border-b border-border bg-bg">
 						<div className="flex items-center gap-2">
-							<span
-								className="material-symbols-outlined text-[16px]"
+							<Icon
+								name={isHealthy ? "verified" : "warning"}
+								size={16}
 								style={{ color: isHealthy ? "var(--color-success)" : "var(--color-warning)" }}
-							>
-								{isHealthy ? "verified" : "warning"}
-							</span>
+							/>
 							<span className="text-sm font-semibold text-text-main">Model Status</span>
 						</div>
 						<button
@@ -135,7 +133,7 @@ export default function ModelAvailabilityBadge() {
 							className="p-1 rounded-lg hover:bg-surface text-text-muted hover:text-text-main transition-colors"
 							title="Refresh"
 						>
-							<span className="material-symbols-outlined text-[14px]">refresh</span>
+							<Icon name="refresh" size={14} />
 						</button>
 					</div>
 
@@ -159,12 +157,12 @@ export default function ModelAvailabilityBadge() {
 														className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-surface/30"
 													>
 														<div className="flex items-center gap-1.5 min-w-0">
-															<span
-																className="material-symbols-outlined text-[14px] shrink-0"
+															<Icon
+																name={status.icon}
+																size={14}
 																style={{ color: status.color }}
-															>
-																{status.icon}
-															</span>
+																className="shrink-0"
+															/>
 															<span className="font-mono text-xs text-text-main truncate">{m.model}</span>
 														</div>
 														{m.status === "cooldown" && (

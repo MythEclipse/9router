@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { Button, Card, PageShell } from "@/shared/components"
 import { CONSOLE_LOG_CONFIG } from "@/shared/constants/config"
+import Icon from "../../../../shared/components/Icon"
 
 function colorLine(line, index) {
 	// Detect log level from tags like [LOG], [INFO], [WARN], [ERROR], [DEBUG]
@@ -79,7 +80,7 @@ export default function ConsoleLogClient() {
 			<Card>
 				<div className="flex items-center justify-between px-4 pt-3 pb-2">
 					<div className="flex items-center gap-2">
-						<span className="material-symbols-outlined text-[18px] text-text-muted">receipt_long</span>
+						<Icon name="receipt_long" size={18} className="text-text-muted" />
 						<span className="text-sm font-medium text-text-main">Console Logs</span>
 						<span className="text-xs text-text-muted">({logs.length} lines)</span>
 					</div>

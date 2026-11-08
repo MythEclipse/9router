@@ -11,6 +11,7 @@ import {
 	MEDIA_PROVIDER_KINDS,
 } from "@/shared/constants/providers"
 import { getCustomLogo } from "@/shared/utils/providerLogo"
+import Icon from "../../../../../shared/components/Icon"
 
 // Kinds that support combos.
 // webSearch/webFetch handled by /web page.
@@ -150,7 +151,7 @@ function ComboList({ combos }) {
 						className="hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors cursor-pointer"
 					>
 						<div className="flex min-w-0 items-center gap-3">
-							<span className="material-symbols-outlined text-primary text-[18px]">layers</span>
+							<Icon name="layers" size={18} className="text-primary" />
 							<code className="text-sm font-mono font-medium flex-1 truncate">{combo.name}</code>
 							<div className="flex flex-wrap items-center gap-1 sm:shrink-0">
 								{combo.models.slice(0, 6).map((entry, i) => {
@@ -179,7 +180,7 @@ function ComboList({ combos }) {
 								)}
 							</div>
 							<span className="text-[11px] text-text-muted shrink-0">{combo.models.length}</span>
-							<span className="material-symbols-outlined text-text-muted text-[16px]">chevron_right</span>
+							<Icon name="chevron_right" size={16} className="text-text-muted" />
 						</div>
 					</Card>
 				</Link>

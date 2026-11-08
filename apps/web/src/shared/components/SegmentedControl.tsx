@@ -3,6 +3,7 @@
 import type { ReactNode } from "react"
 import { useCallback, useLayoutEffect, useRef, useState } from "react"
 import { cn } from "@/shared/utils/cn"
+import Icon from "./Icon"
 
 // Signature detail: the selection is shown by one indicator element that
 // physically slides to the newly selected option, instead of two options
@@ -130,9 +131,7 @@ export default function SegmentedControl<T extends string = string>({
 							selected ? "text-text-main" : "text-text-muted chrome-row hover:text-text-main",
 						)}
 					>
-						{option.icon && (
-							<span className="material-symbols-outlined text-[16px] mr-1.5">{option.icon}</span>
-						)}
+						{option.icon && <Icon name={option.icon} size={16} className="mr-1.5" />}
 						{option.label}
 					</button>
 				)

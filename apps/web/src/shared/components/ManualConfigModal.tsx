@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard"
 import Button from "./Button.tsx"
+import Icon from "./Icon"
 import Modal from "./Modal.tsx"
 
 export default function ManualConfigModal({
@@ -28,9 +29,7 @@ export default function ManualConfigModal({
 						<div className="flex items-center justify-between">
 							<span className="text-sm font-medium text-text-main">{config.filename}</span>
 							<Button variant="ghost" size="sm" onClick={() => copyConfig(config.content, index)}>
-								<span className="material-symbols-outlined text-[14px] mr-1">
-									{copiedIndex === index ? "check" : "content_copy"}
-								</span>
+								<Icon name={copiedIndex === index ? "check" : "content_copy"} size={14} className="mr-1" />
 								{copiedIndex === index ? "Copied!" : "Copy"}
 							</Button>
 						</div>

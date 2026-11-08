@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Card from "@/shared/components/Card"
+import Icon from "../../../../../shared/components/Icon"
 
 // Compact token counts, matching the formatter the API key page already uses so
 // the same number reads the same way in both places.
@@ -75,7 +76,7 @@ export default function KeyQuotaCard({ quota }: KeyQuotaCardProps) {
 		<Card padding="sm" className="flex flex-col gap-3">
 			<div className="flex flex-wrap items-center justify-between gap-2">
 				<div className="flex min-w-0 items-center gap-2">
-					<span className="material-symbols-outlined text-[18px] text-primary">key</span>
+					<Icon name="key" size={18} className="text-primary" />
 					<span className="truncate text-sm font-semibold text-text-main">
 						{quota?.name || "This key"}
 					</span>
@@ -129,9 +130,7 @@ export default function KeyQuotaCard({ quota }: KeyQuotaCardProps) {
 										: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
 								}`}
 							>
-								<span className="material-symbols-outlined text-[13px] leading-none">
-									{isExpired ? "event_busy" : "timer"}
-								</span>
+								<Icon name={isExpired ? "event_busy" : "timer"} size={13} className="leading-none" />
 								{isExpired ? "Key Expired: " : "Key Expires: "}
 								{expDate.toLocaleDateString()}{" "}
 								{expDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}

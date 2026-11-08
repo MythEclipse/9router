@@ -16,6 +16,7 @@ import Modal, { ConfirmModal } from "@/shared/components/Modal"
 import SettingsHistory from "@/shared/components/SettingsHistory"
 import { useSessionStore } from "@/store/sessionStore"
 import { useTaskStore } from "@/store/taskStore"
+import Icon from "../../../../shared/components/Icon"
 import { formatCountdown, getLocaleFromCookie } from "./profileHelpers.ts"
 import SsoCard from "./SsoCard.tsx"
 import { useSso } from "./useSso.ts"
@@ -902,7 +903,7 @@ export default function ProfilePage() {
 				<Card>
 					<div className="flex items-center gap-3 mb-4">
 						<div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
-							<span className="material-symbols-outlined text-[20px]">shield</span>
+							<Icon name="shield" size={20} />
 						</div>
 						<h3 className="text-base sm:text-lg font-semibold">Security</h3>
 					</div>
@@ -985,7 +986,7 @@ export default function ProfilePage() {
 				<Card>
 					<div className="flex items-center gap-3 mb-4">
 						<div className="p-2 rounded-lg bg-blue-500/10 text-blue-500 shrink-0">
-							<span className="material-symbols-outlined text-[20px]">route</span>
+							<Icon name="route" size={20} />
 						</div>
 						<h3 className="text-base sm:text-lg font-semibold">Routing Strategy</h3>
 					</div>
@@ -1078,7 +1079,7 @@ export default function ProfilePage() {
 				<Card>
 					<div className="flex items-center gap-3 mb-4">
 						<div className="p-2 rounded-lg bg-purple-500/10 text-purple-500 shrink-0">
-							<span className="material-symbols-outlined text-[20px]">wifi</span>
+							<Icon name="wifi" size={20} />
 						</div>
 						<h3 className="text-base sm:text-lg font-semibold">Network</h3>
 					</div>
@@ -1166,7 +1167,7 @@ export default function ProfilePage() {
 				<Card>
 					<div className="flex items-center gap-3 mb-4">
 						<div className="p-2 rounded-lg bg-orange-500/10 text-orange-500 shrink-0">
-							<span className="material-symbols-outlined text-[20px]">monitoring</span>
+							<Icon name="monitoring" size={20} />
 						</div>
 						<h3 className="text-base sm:text-lg font-semibold">Observability</h3>
 					</div>

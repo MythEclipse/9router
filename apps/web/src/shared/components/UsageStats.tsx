@@ -68,6 +68,7 @@ import {
 import UsageTable, { fmt, fmtTime } from "@/app/(dashboard)/dashboard/usage/components/UsageTable"
 import Badge from "./Badge.tsx"
 import Card from "./Card.tsx"
+import Icon from "./Icon"
 
 // Lazy-load: keeps @xyflow/react and recharts out of the initial bundle
 const ProviderTopology = dynamic(
@@ -136,7 +137,7 @@ function RecentRequests({ requests = [] }) {
           "N logged" past the card's right edge. */}
 			<div className="px-3.5 sm:px-4 py-2.5 border-b border-border-subtle shrink-0 flex items-center justify-between gap-2 bg-surface-2/40">
 				<div className="flex min-w-0 items-center gap-2">
-					<span className="material-symbols-outlined text-[15px] text-text-muted">stream</span>
+					<Icon name="stream" size={15} className="text-text-muted" />
 					<span className="truncate text-xs font-semibold text-text-muted uppercase tracking-wider">
 						Live Requests Stream
 					</span>
@@ -160,9 +161,11 @@ function RecentRequests({ requests = [] }) {
 						<thead className="sticky top-0 bg-surface/95 backdrop-blur-xs border-b border-border-subtle z-10">
 							<tr>
 								<th className="py-2 pl-3 pr-1 text-center font-semibold text-text-muted w-6" title="Status">
-									<span className="material-symbols-outlined text-[11px] leading-none select-none text-text-muted/60">
-										radio_button_checked
-									</span>
+									<Icon
+										name="radio_button_checked"
+										size={11}
+										className="leading-none select-none text-text-muted/60"
+									/>
 								</th>
 								<th className="py-2 px-2 text-left font-semibold text-text-muted">
 									<span className="hidden xl:inline">Model &amp; Channel</span>
@@ -824,7 +827,7 @@ export default function UsageStats({
 
 	const spinner = (
 		<div className="flex items-center justify-center py-12 text-text-muted">
-			<span className="material-symbols-outlined text-[32px] animate-spin">progress_activity</span>
+			<Icon name="progress_activity" size={32} className="animate-spin" />
 		</div>
 	)
 
@@ -846,9 +849,7 @@ export default function UsageStats({
 						))}
 					</div>
 					{fetching && (
-						<span className="material-symbols-outlined text-[16px] text-text-muted animate-spin">
-							progress_activity
-						</span>
+						<Icon name="progress_activity" size={16} className="text-text-muted animate-spin" />
 					)}
 				</div>
 			)}

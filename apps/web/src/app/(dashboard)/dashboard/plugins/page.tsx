@@ -6,6 +6,7 @@ import { Badge, Button, CapacityBadges, Card, ModelSelectModal, Toggle } from "@
 import PluginMark from "@/shared/components/PluginMark"
 import { useModelCaps } from "@/shared/hooks/useModelCaps"
 import { useNotificationStore } from "@/store/notificationStore"
+import Icon from "../../../../shared/components/Icon"
 
 const PLUGINS = [
 	{
@@ -235,7 +236,7 @@ export default function PluginsPage() {
 														className="text-text-muted hover:text-red-500 transition-colors cursor-pointer leading-none ml-0.5"
 														title="Remove model"
 													>
-														<span className="material-symbols-outlined text-[14px]">close</span>
+														<Icon name="close" size={14} />
 													</button>
 												</Badge>
 											))}

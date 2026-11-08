@@ -5,6 +5,7 @@ import { Card } from "@/shared/components"
 import { getModelKind, getModelsByProviderId } from "@/shared/constants/models"
 import { getProviderAlias, isCustomEmbeddingProvider } from "@/shared/constants/providers"
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard"
+import Icon from "../../../../../../../shared/components/Icon"
 import { fetchFirstActiveApiKey, fetchTunnelPublicUrl, Row } from "./exampleShared.tsx"
 
 const DEFAULT_RESPONSE_EXAMPLE = `{
@@ -166,7 +167,7 @@ export function EmbeddingExampleCard({ providerId, customAlias }) {
 										: "border-border text-text-muted hover:text-primary"
 								}`}
 							>
-								<span className="material-symbols-outlined text-[14px]">wifi_tethering</span>
+								<Icon name="wifi_tethering" size={14} />
 								Tunnel
 							</button>
 						)}
@@ -198,7 +199,7 @@ export function EmbeddingExampleCard({ providerId, customAlias }) {
 								onClick={() => setInput("")}
 								className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-primary transition-colors"
 							>
-								<span className="material-symbols-outlined text-[14px]">close</span>
+								<Icon name="close" size={14} />
 							</button>
 						)}
 					</div>
@@ -227,9 +228,7 @@ export function EmbeddingExampleCard({ providerId, customAlias }) {
 								onClick={() => copyCurl(curlSnippet)}
 								className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-primary transition-colors"
 							>
-								<span className="material-symbols-outlined text-[14px]">
-									{copiedCurl ? "check" : "content_copy"}
-								</span>
+								<Icon name={copiedCurl ? "check" : "content_copy"} size={14} />
 								{copiedCurl ? "Copied" : "Copy"}
 							</button>
 							<button
@@ -237,12 +236,11 @@ export function EmbeddingExampleCard({ providerId, customAlias }) {
 								disabled={running || !input.trim() || !modelFull}
 								className="flex w-full sm:w-auto items-center justify-center gap-1.5 px-3 py-1 rounded-lg bg-primary text-white text-xs font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 							>
-								<span
-									className="material-symbols-outlined text-[14px]"
+								<Icon
+									name="play_arrow"
+									size={14}
 									style={running ? { animation: "spin 1s linear infinite" } : undefined}
-								>
-									play_arrow
-								</span>
+								/>
 								{running ? "Running..." : "Run"}
 							</button>
 						</div>
@@ -267,9 +265,7 @@ export function EmbeddingExampleCard({ providerId, customAlias }) {
 								onClick={() => copyRes(resultJson)}
 								className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-primary transition-colors"
 							>
-								<span className="material-symbols-outlined text-[14px]">
-									{copiedRes ? "check" : "content_copy"}
-								</span>
+								<Icon name={copiedRes ? "check" : "content_copy"} size={14} />
 								{copiedRes ? "Copied" : "Copy"}
 							</button>
 						)}

@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react"
 import { Button, Input } from "@/shared/components"
+import Icon from "../../../../../shared/components/Icon"
 
 /**
  * The status line for one exposure option (Cloudflare Tunnel or Tailscale).
@@ -83,7 +84,7 @@ function StopButton({ title, onClick }: { title: string; onClick: () => void }) 
 			className="p-2 hover:bg-red-500/10 rounded text-red-500 transition-colors shrink-0"
 			title={title}
 		>
-			<span className="material-symbols-outlined text-[18px]">power_settings_new</span>
+			<Icon name="power_settings_new" size={18} />
 		</button>
 	)
 }
@@ -106,9 +107,7 @@ function StatusStrip({
 		<div
 			className={`min-w-0 flex-1 flex items-center gap-2 px-3 py-1.5 rounded border text-sm ${tones[tone]}`}
 		>
-			<span className={`material-symbols-outlined text-sm ${tone === "error" ? "" : "animate-spin"}`}>
-				{icon}
-			</span>
+			<Icon name={icon} size={14} className={`${tone === "error" ? "" : "animate-spin"}`} />
 			{children}
 		</div>
 	)
@@ -169,9 +168,7 @@ export default function ExposureControl(props: ExposureControlProps) {
 						onClick={() => onCopy(`${url}/v1`, copyId)}
 						className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded text-text-muted hover:text-primary transition-colors shrink-0"
 					>
-						<span className="material-symbols-outlined text-[18px]">
-							{copied === copyId ? "check" : "content_copy"}
-						</span>
+						<Icon name={copied === copyId ? "check" : "content_copy"} size={18} />
 					</button>
 					<StopButton title={`Disable ${label}`} onClick={onDisable} />
 				</>

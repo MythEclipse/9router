@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { Card, PageShell, Toggle } from "@/shared/components"
 import { useNotificationStore } from "@/store/notificationStore"
+import Icon from "../../../../shared/components/Icon"
 
 export default function ExperimentsClient() {
 	const [hideError, setHideError] = useState(false)
@@ -71,7 +72,7 @@ export default function ExperimentsClient() {
 			<div className="flex flex-col gap-4 max-w-4xl">
 				<div>
 					<h1 className="text-xl font-bold text-text-main flex items-center gap-2">
-						<span className="material-symbols-outlined text-[24px] text-amber-500">science</span>
+						<Icon name="science" size={24} className="text-amber-500" />
 						Experiment Features
 					</h1>
 					<p className="text-xs text-text-muted mt-1">
@@ -83,7 +84,7 @@ export default function ExperimentsClient() {
 					<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/40 pb-4">
 						<div className="flex items-start gap-3">
 							<div className="p-2 rounded-xl bg-amber-500/10 text-amber-500 shrink-0 mt-0.5">
-								<span className="material-symbols-outlined text-[22px]">visibility_off</span>
+								<Icon name="visibility_off" size={22} />
 							</div>
 							<div className="flex flex-col">
 								<span className="text-sm font-semibold text-text-main flex items-center gap-2">

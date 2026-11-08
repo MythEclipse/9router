@@ -3,6 +3,7 @@
 import { Badge, Card } from "@/shared/components"
 import { getSkillBlobUrl, getSkillRawUrl, SKILLS, SKILLS_REPO_URL } from "@/shared/constants/skills"
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard"
+import Icon from "../../../../shared/components/Icon"
 
 function CopyButton({ value, label = "Copy link" }) {
 	const { copied, copy } = useCopyToClipboard(2000)
@@ -12,9 +13,7 @@ function CopyButton({ value, label = "Copy link" }) {
 			className="px-2 py-1 rounded-md bg-primary text-white text-[11px] font-medium hover:bg-primary/90 transition-colors cursor-pointer shrink-0 inline-flex items-center gap-1"
 			title={value}
 		>
-			<span className="material-symbols-outlined text-[12px]">
-				{copied ? "check" : "content_copy"}
-			</span>
+			<Icon name={copied ? "check" : "content_copy"} size={12} />
 			{copied ? "Copied!" : label}
 		</button>
 	)
@@ -35,7 +34,7 @@ function SkillRow({ skill }) {
 					skill.isEntry ? "bg-primary text-white" : "bg-primary/10 text-primary"
 				}`}
 			>
-				<span className="material-symbols-outlined text-[18px]">{skill.icon}</span>
+				<Icon name={skill.icon} size={18} />
 			</div>
 
 			<div className="min-w-0 flex-1">
@@ -60,7 +59,7 @@ function SkillRow({ skill }) {
 					className="text-[11px] text-text-muted hover:text-primary mt-1 inline-flex items-center gap-1 break-all"
 				>
 					{url}
-					<span className="material-symbols-outlined text-[12px]">open_in_new</span>
+					<Icon name="open_in_new" size={12} />
 				</a>
 			</div>
 
@@ -97,7 +96,7 @@ export default function SkillsPage() {
 						rel="noreferrer"
 						className="text-sm text-primary hover:underline inline-flex items-center gap-1"
 					>
-						<span className="material-symbols-outlined text-[16px]">open_in_new</span>
+						<Icon name="open_in_new" size={16} />
 						View on GitHub
 					</a>
 				</div>

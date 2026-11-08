@@ -1,6 +1,7 @@
 "use client"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
+import Icon from "../../../shared/components/Icon"
 
 export default function Navigation() {
 	const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -17,7 +18,7 @@ export default function Navigation() {
 					aria-label="Navigate to home"
 				>
 					<div className="size-8 rounded bg-linear-to-br from-[#f97815] to-orange-700 flex items-center justify-center text-white">
-						<span className="material-symbols-outlined text-[20px]">hub</span>
+						<Icon name="hub" size={20} />
 					</div>
 					<h2 className="text-white text-xl font-bold tracking-tight">9Router</h2>
 				</button>
@@ -50,7 +51,7 @@ export default function Navigation() {
 						target="_blank"
 						rel="noopener noreferrer"
 					>
-						GitHub <span className="material-symbols-outlined text-[14px]">open_in_new</span>
+						GitHub <Icon name="open_in_new" size={14} />
 					</a>
 				</div>
 
@@ -63,7 +64,7 @@ export default function Navigation() {
 						Get Started
 					</button>
 					<button className="md:hidden text-white" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-						<span className="material-symbols-outlined">{mobileMenuOpen ? "close" : "menu"}</span>
+						<Icon name={mobileMenuOpen ? "close" : "menu"} />
 					</button>
 				</div>
 			</div>

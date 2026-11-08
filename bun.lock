@@ -15,7 +15,7 @@
     },
     "apps/api": {
       "name": "9router-api",
-      "version": "13.7.1",
+      "version": "14.2.0",
       "dependencies": {
         "@9router/auth": "workspace:*",
         "@9router/db": "workspace:*",
@@ -36,7 +36,7 @@
     },
     "apps/web": {
       "name": "9router-web",
-      "version": "13.7.1",
+      "version": "14.2.0",
       "dependencies": {
         "9router-api": "workspace:*",
         "@9router/auth": "workspace:*",
@@ -59,6 +59,7 @@
         "diff": "^7.0.0",
         "enquirer": "^2.4.1",
         "jose": "^5.9.6",
+        "lucide-react": "^1.70.0",
         "marked": "^15.0.7",
         "next": "16.4.3",
         "node-forge": "^1.3.3",
@@ -85,7 +86,6 @@
         "@types/react": "19.3.0",
         "@types/react-dom": "19.3.0",
         "cross-env": "^10.1.0",
-        "material-symbols": "^0.44.6",
         "postcss": "^8.5.6",
       },
       "optionalDependencies": {
@@ -95,7 +95,7 @@
     },
     "cli": {
       "name": "9router",
-      "version": "13.7.1",
+      "version": "14.2.0",
       "bin": {
         "9router": "./cli.js",
       },
@@ -111,7 +111,7 @@
     },
     "packages/auth": {
       "name": "@9router/auth",
-      "version": "13.7.1",
+      "version": "14.2.0",
       "dependencies": {
         "@9router/db": "workspace:*",
         "@node-saml/node-saml": "^5.1.0",
@@ -122,7 +122,7 @@
     },
     "packages/db": {
       "name": "@9router/db",
-      "version": "13.7.1",
+      "version": "14.2.0",
       "dependencies": {
         "@9router/pricing": "workspace:*",
         "better-sqlite3": "^11.5.0",
@@ -133,7 +133,7 @@
     },
     "packages/pricing": {
       "name": "@9router/pricing",
-      "version": "13.7.1",
+      "version": "14.2.0",
     },
   },
   "packages": {
@@ -907,11 +907,11 @@
 
     "loupe": ["loupe@3.2.1", "", {}, "sha512-CdzqowRJCeLU72bHvWqwRBBlLcMEtIvGrlvef74kMnV2AolS9Y8xUv1I0U/MNAWMhBlKIoyuEgoJ0t/bbwHbLQ=="],
 
+    "lucide-react": ["lucide-react@1.70.0", "", { "peerDependencies": { "@types/react": "*", "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0" }, "optionalPeers": ["@types/react"] }, "sha512-gCTPPN1MlQUBtUgdsUv+0CAUj+X8hifRUiRBw4E5v7lvDIOIpx0EZezdGQMSimS8pKA6esvullJub4GYr0mCHA=="],
+
     "magic-string": ["magic-string@0.30.21", "", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.5.5" } }, "sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ=="],
 
     "marked": ["marked@15.0.12", "", { "bin": { "marked": "bin/marked.js" } }, "sha512-8dD6FusOQSrpv9Z1rdNMdlSgQOIP880DHqnohobOmYLElGEqAL/JvxvuxZO16r4HtjTlfPRDC1hbvxC9dPN2nA=="],
-
-    "material-symbols": ["material-symbols@0.44.12", "", {}, "sha512-lZkS9BwISNU2Jbup+IlwZrr9z1oAK6zx38qPpe7mNzkXwiIEnQaxPz1Sf3bNZ0MX15LNlJQNjKI3MWLgmo83+Q=="],
 
     "mimic-function": ["mimic-function@5.0.1", "", {}, "sha512-VP79XUPxV2CigYP3jWwAUFSku2aKqBH7uTAapFWCBqutsbmDo96KY5o8uh6U+/YSIn5OxJnXp73beVkpqMIGhA=="],
 

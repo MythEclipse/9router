@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react"
 import { useTaskStore } from "@/store/taskStore"
+import Icon from "./Icon"
 
 /**
  * Merge the two live-task sources into one queue for the bell.
@@ -137,13 +138,11 @@ export default function NotifToast({ jobs = [], onPick = null }: NotifToastProps
 									className="block min-w-0 flex-1 text-left"
 								>
 									<span className="flex items-start gap-2 px-3.5 py-2.5 transition-colors group-hover:bg-surface-2">
-										<span
-											className={`material-symbols-outlined text-[16px] mt-0.5 shrink-0 ${
-												finished ? "text-success" : "text-primary"
-											}`}
-										>
-											{finished ? "check_circle" : "progress_activity"}
-										</span>
+										<Icon
+											name={finished ? "check_circle" : "progress_activity"}
+											size={16}
+											className={`mt-0.5 shrink-0 ${finished ? "text-success" : "text-primary"}`}
+										/>
 										<span className="min-w-0 flex-1">
 											<span className="flex items-baseline gap-2">
 												<span className="truncate text-xs font-medium text-text-main">
@@ -192,7 +191,7 @@ export default function NotifToast({ jobs = [], onPick = null }: NotifToastProps
 										aria-label={`Remove ${task.title || "task"}`}
 										className="flex size-6 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-2 hover:text-text-main"
 									>
-										<span className="material-symbols-outlined text-[15px]">close</span>
+										<Icon name="close" size={15} />
 									</button>
 								</div>
 							</div>

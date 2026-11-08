@@ -9,6 +9,7 @@ import { base64PngDataUrl } from "@/app/(dashboard)/dashboard/media-providers/[k
 import { Button, Card, Input, ModelSelectModal, Toggle } from "@/shared/components"
 import ProviderIcon from "@/shared/components/ProviderIcon"
 import { AI_PROVIDERS, MEDIA_PROVIDER_KINDS } from "@/shared/constants/providers"
+import Icon from "../../../../../../shared/components/Icon"
 
 // Parse "providerId/model" or just "providerId" → { providerId, model }
 function parseModelEntry(entry) {
@@ -359,10 +360,10 @@ export default function ComboDetailPage() {
 			<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 				<div className="flex items-center gap-3 min-w-0">
 					<Link href={backHref} className="text-text-muted hover:text-primary">
-						<span className="material-symbols-outlined">arrow_back</span>
+						<Icon name="arrow_back" />
 					</Link>
 					<div className="size-10 rounded-lg bg-primary/10 flex items-center justify-center">
-						<span className="material-symbols-outlined text-primary">layers</span>
+						<Icon name="layers" className="text-primary" />
 					</div>
 					<div className="min-w-0">
 						<p className="text-xs text-text-muted">{kindLabel} Combo</p>
@@ -458,7 +459,7 @@ export default function ComboDetailPage() {
 											className={`p-1 rounded ${idx === 0 ? "text-text-muted/20" : "text-text-muted hover:text-primary hover:bg-black/5"}`}
 											title="Move up"
 										>
-											<span className="material-symbols-outlined text-[16px]">arrow_upward</span>
+											<Icon name="arrow_upward" size={16} />
 										</button>
 										<button
 											type="button"
@@ -467,7 +468,7 @@ export default function ComboDetailPage() {
 											className={`p-1 rounded ${idx === providers.length - 1 ? "text-text-muted/20" : "text-text-muted hover:text-primary hover:bg-black/5"}`}
 											title="Move down"
 										>
-											<span className="material-symbols-outlined text-[16px]">arrow_downward</span>
+											<Icon name="arrow_downward" size={16} />
 										</button>
 										<button
 											type="button"
@@ -475,7 +476,7 @@ export default function ComboDetailPage() {
 											className="p-1 rounded text-text-muted hover:text-red-500 hover:bg-red-500/10"
 											title="Remove"
 										>
-											<span className="material-symbols-outlined text-[16px]">close</span>
+											<Icon name="close" size={16} />
 										</button>
 									</div>
 								</div>
@@ -502,7 +503,7 @@ export default function ComboDetailPage() {
 											: "border-border text-text-muted hover:text-primary"
 									}`}
 								>
-									<span className="material-symbols-outlined text-[14px]">wifi_tethering</span>
+									<Icon name="wifi_tethering" size={14} />
 									Tunnel
 								</button>
 							)}
@@ -533,7 +534,7 @@ export default function ComboDetailPage() {
 											download="image.png"
 											className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-primary transition-colors"
 										>
-											<span className="material-symbols-outlined text-[14px]">download</span>
+											<Icon name="download" size={14} />
 											Download
 										</a>
 									</div>
@@ -555,7 +556,7 @@ export default function ComboDetailPage() {
 											download="speech.mp3"
 											className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-primary transition-colors"
 										>
-											<span className="material-symbols-outlined text-[14px]">download</span>
+											<Icon name="download" size={14} />
 											Download
 										</a>
 									</div>
@@ -570,7 +571,7 @@ export default function ComboDetailPage() {
 											download="video.mp4"
 											className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-primary transition-colors"
 										>
-											<span className="material-symbols-outlined text-[14px]">download</span>
+											<Icon name="download" size={14} />
 											Download
 										</a>
 									</div>

@@ -2,6 +2,7 @@
 import Badge from "@/shared/components/Badge"
 import Card from "@/shared/components/Card"
 import { formatCostCents, formatCount } from "@/shared/utils/chartFormat"
+import Icon from "../../../../../shared/components/Icon"
 import { Sparkline } from "./UsageChartsBits.tsx"
 
 const fmt = formatCount
@@ -34,11 +35,7 @@ function TrendCard({ label, value, title, icon, tone = "", footnote, trend }: Tr
 				<span className="text-text-muted text-[11px] font-semibold uppercase tracking-wider truncate">
 					{label}
 				</span>
-				{icon && (
-					<span className="material-symbols-outlined text-[16px] text-text-subtle select-none">
-						{icon}
-					</span>
-				)}
+				{icon && <Icon name={icon} size={16} className="text-text-subtle select-none" />}
 			</div>
 
 			<div className="flex items-baseline justify-between gap-2">

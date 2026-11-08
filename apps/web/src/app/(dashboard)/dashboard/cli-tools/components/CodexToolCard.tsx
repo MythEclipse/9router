@@ -6,6 +6,7 @@ import { Button, Card, ManualConfigModal, ModelSelectModal } from "@/shared/comp
 import ProviderIcon from "@/shared/components/ProviderIcon"
 import { DEFAULT_LOCAL_API_KEY } from "@/shared/constants/config"
 import { useModelAliases } from "@/shared/hooks/useModelAliases"
+import Icon from "../../../../../shared/components/Icon"
 import ApiKeySelect from "./ApiKeySelect.tsx"
 import { EndpointField } from "./CardField.tsx"
 import { matchKnownEndpoint } from "./cliEndpointMatch.ts"
@@ -378,18 +379,18 @@ default_subagent_model = "${effectiveSubagentModel}"
 						<p className="text-xs text-text-muted truncate">{tool.description}</p>
 					</div>
 				</div>
-				<span
-					className={`material-symbols-outlined text-text-muted text-[20px] transition-transform ${isExpanded ? "rotate-180" : ""}`}
-				>
-					expand_more
-				</span>
+				<Icon
+					name="expand_more"
+					size={20}
+					className={`text-text-muted transition-transform ${isExpanded ? "rotate-180" : ""}`}
+				/>
 			</div>
 
 			{isExpanded && (
 				<div className="mt-4 pt-4 border-t border-border flex flex-col gap-4">
 					{checkingCodex && (
 						<div className="flex items-center gap-2 text-text-muted">
-							<span className="material-symbols-outlined animate-spin">progress_activity</span>
+							<Icon name="progress_activity" className="animate-spin" />
 							<span>Checking Codex CLI...</span>
 						</div>
 					)}
@@ -398,7 +399,7 @@ default_subagent_model = "${effectiveSubagentModel}"
 						<div className="flex flex-col gap-4">
 							<div className="flex flex-col gap-3 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
 								<div className="flex items-start gap-3">
-									<span className="material-symbols-outlined text-yellow-500">warning</span>
+									<Icon name="warning" className="text-yellow-500" />
 									<div className="flex-1">
 										<p className="font-medium text-yellow-600 dark:text-yellow-400">
 											Codex CLI not detected locally
@@ -415,13 +416,11 @@ default_subagent_model = "${effectiveSubagentModel}"
 										onClick={() => setShowManualConfigModal(true)}
 										className="!bg-yellow-500/20 !border-yellow-500/40 !text-yellow-700 dark:!text-yellow-300 hover:!bg-yellow-500/30"
 									>
-										<span className="material-symbols-outlined text-[18px] mr-1">content_copy</span>
+										<Icon name="content_copy" size={18} className="mr-1" />
 										Manual Config
 									</Button>
 									<Button variant="outline" size="sm" onClick={() => setShowInstallGuide(!showInstallGuide)}>
-										<span className="material-symbols-outlined text-[18px] mr-1">
-											{showInstallGuide ? "expand_less" : "help"}
-										</span>
+										<Icon name={showInstallGuide ? "expand_less" : "help"} size={18} className="mr-1" />
 										{showInstallGuide ? "Hide" : "How to Install"}
 									</Button>
 								</div>
@@ -481,9 +480,7 @@ default_subagent_model = "${effectiveSubagentModel}"
 												<span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">
 													Current
 												</span>
-												<span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">
-													arrow_forward
-												</span>
+												<Icon name="arrow_forward" size={14} className="hidden text-text-muted sm:inline" />
 												<span className="min-w-0 truncate rounded bg-surface/40 px-2 py-2 text-xs text-text-muted sm:py-1.5">
 													{currentBaseUrl}
 												</span>
@@ -496,9 +493,7 @@ default_subagent_model = "${effectiveSubagentModel}"
 									<span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">
 										API Key
 									</span>
-									<span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">
-										arrow_forward
-									</span>
+									<Icon name="arrow_forward" size={14} className="hidden text-text-muted sm:inline" />
 									<ApiKeySelect
 										value={selectedApiKey}
 										onChange={setSelectedApiKey}
@@ -512,9 +507,7 @@ default_subagent_model = "${effectiveSubagentModel}"
 									<span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">
 										Model
 									</span>
-									<span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">
-										arrow_forward
-									</span>
+									<Icon name="arrow_forward" size={14} className="hidden text-text-muted sm:inline" />
 									<div className="relative w-full min-w-0">
 										<input
 											type="text"
@@ -529,7 +522,7 @@ default_subagent_model = "${effectiveSubagentModel}"
 												className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-red-500 rounded transition-colors"
 												title="Clear"
 											>
-												<span className="material-symbols-outlined text-[14px]">close</span>
+												<Icon name="close" size={14} />
 											</button>
 										)}
 									</div>
@@ -547,9 +540,7 @@ default_subagent_model = "${effectiveSubagentModel}"
 									<span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">
 										Subagent Model
 									</span>
-									<span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">
-										arrow_forward
-									</span>
+									<Icon name="arrow_forward" size={14} className="hidden text-text-muted sm:inline" />
 									<div className="relative w-full min-w-0">
 										<input
 											type="text"
@@ -564,7 +555,7 @@ default_subagent_model = "${effectiveSubagentModel}"
 												className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-red-500 rounded transition-colors"
 												title="Clear (will use main model)"
 											>
-												<span className="material-symbols-outlined text-[14px]">close</span>
+												<Icon name="close" size={14} />
 											</button>
 										)}
 									</div>
@@ -582,9 +573,7 @@ default_subagent_model = "${effectiveSubagentModel}"
 								<div
 									className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs ${message.type === "success" ? "bg-green-500/10 text-green-600" : "bg-red-500/10 text-red-600"}`}
 								>
-									<span className="material-symbols-outlined text-[14px]">
-										{message.type === "success" ? "check_circle" : "error"}
-									</span>
+									<Icon name={message.type === "success" ? "check_circle" : "error"} size={14} />
 									<span>{message.text}</span>
 								</div>
 							)}
@@ -597,7 +586,8 @@ default_subagent_model = "${effectiveSubagentModel}"
 									disabled={(!selectedApiKey && cloudEnabled && apiKeys.length > 0) || !selectedModel}
 									loading={applying}
 								>
-									<span className="material-symbols-outlined text-[14px] mr-1">save</span>Apply
+									<Icon name="save" size={14} className="mr-1" />
+									Apply
 								</Button>
 								<Button
 									variant="outline"
@@ -606,11 +596,12 @@ default_subagent_model = "${effectiveSubagentModel}"
 									disabled={restoring}
 									loading={restoring}
 								>
-									<span className="material-symbols-outlined text-[14px] mr-1">restore</span>Reset
+									<Icon name="restore" size={14} className="mr-1" />
+									Reset
 								</Button>
 								<Button variant="ghost" size="sm" onClick={() => setShowManualConfigModal(true)}>
-									<span className="material-symbols-outlined text-[14px] mr-1">content_copy</span>Manual
-									Config
+									<Icon name="content_copy" size={14} className="mr-1" />
+									Manual Config
 								</Button>
 							</div>
 
@@ -619,7 +610,7 @@ default_subagent_model = "${effectiveSubagentModel}"
 								<div className="flex items-center justify-between">
 									<div className="flex items-center gap-2">
 										<span className="text-xs font-semibold text-text-main flex items-center gap-1.5">
-											<span className="material-symbols-outlined text-[16px] text-primary">layers</span>
+											<Icon name="layers" size={16} className="text-primary" />
 											Additional Models
 										</span>
 										{profiles.length > 0 && (
@@ -666,7 +657,7 @@ default_subagent_model = "${effectiveSubagentModel}"
 													className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-red-500 rounded transition-colors"
 													title="Clear"
 												>
-													<span className="material-symbols-outlined text-[14px]">close</span>
+													<Icon name="close" size={14} />
 												</button>
 											)}
 										</div>
@@ -689,7 +680,7 @@ default_subagent_model = "${effectiveSubagentModel}"
 											loading={creatingProfile}
 											className="!h-7.5 whitespace-nowrap"
 										>
-											<span className="material-symbols-outlined text-[15px] mr-1">add</span>
+											<Icon name="add" size={15} className="mr-1" />
 											Add
 										</Button>
 									</div>
@@ -697,9 +688,7 @@ default_subagent_model = "${effectiveSubagentModel}"
 
 								{profiles.length === 0 ? (
 									<div className="flex flex-col items-center justify-center p-4 border border-dashed border-border rounded-lg text-center bg-surface/30">
-										<span className="material-symbols-outlined text-[20px] text-text-muted mb-1 opacity-60">
-											terminal
-										</span>
+										<Icon name="terminal" size={20} className="text-text-muted mb-1 opacity-60" />
 										<p className="text-xs text-text-muted">
 											Only the main model is active. Add an alias above to configure more models for Codex CLI.
 										</p>
@@ -738,9 +727,7 @@ default_subagent_model = "${effectiveSubagentModel}"
 															}`}
 															title="Click to copy command"
 														>
-															<span className="material-symbols-outlined text-[13px]">
-																{isCopied ? "check" : "terminal"}
-															</span>
+															<Icon name={isCopied ? "check" : "terminal"} size={13} />
 															<span className="hidden md:inline">{p.command}</span>
 															<span className="md:hidden">copy</span>
 														</button>
@@ -751,7 +738,7 @@ default_subagent_model = "${effectiveSubagentModel}"
 															className="p-1 text-text-muted hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity rounded"
 															title="Delete model"
 														>
-															<span className="material-symbols-outlined text-[15px]">close</span>
+															<Icon name="close" size={15} />
 														</button>
 													</div>
 												</div>

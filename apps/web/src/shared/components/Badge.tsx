@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react"
 import { cn } from "@/shared/utils/cn"
+import Icon from "./Icon"
 
 // Radius is the only thing the contract changes here. A badge was a pill
 // (rounded-full), which put it in the same shape family as the Toggle track -
@@ -68,7 +69,7 @@ export default function Badge({
 					)}
 				/>
 			)}
-			{icon && <span className="material-symbols-outlined text-[14px]">{icon}</span>}
+			{icon && <Icon name={icon} size={14} />}
 			{children}
 		</span>
 	)

@@ -2,6 +2,7 @@
 
 import type { ButtonHTMLAttributes, ReactNode } from "react"
 import { cn } from "@/shared/utils/cn"
+import Icon from "./Icon"
 
 const variants = {
 	primary:
@@ -66,28 +67,16 @@ export default function Button({
 			{...props}
 		>
 			{loading ? (
-				<span
-					className={cn(
-						"material-symbols-outlined animate-spin",
-						size === "xs" ? "text-[14px]" : "text-[18px]",
-					)}
-				>
-					progress_activity
-				</span>
+				<Icon
+					name="progress_activity"
+					className={cn("animate-spin", size === "xs" ? "text-[14px]" : "text-[18px]")}
+				/>
 			) : icon ? (
-				<span
-					className={cn("material-symbols-outlined", size === "xs" ? "text-[14px]" : "text-[18px]")}
-				>
-					{icon}
-				</span>
+				<Icon name={icon} className={cn(size === "xs" ? "text-[14px]" : "text-[18px]")} />
 			) : null}
 			{children}
 			{iconRight && !loading && (
-				<span
-					className={cn("material-symbols-outlined", size === "xs" ? "text-[14px]" : "text-[18px]")}
-				>
-					{iconRight}
-				</span>
+				<Icon name={iconRight} className={cn(size === "xs" ? "text-[14px]" : "text-[18px]")} />
 			)}
 		</button>
 	)

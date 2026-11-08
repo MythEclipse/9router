@@ -4,6 +4,7 @@ import Image from "next/image"
 import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { GITHUB_CONFIG } from "@/shared/constants/config"
+import Icon from "./Icon"
 
 interface DonateModalProps {
 	isOpen: boolean
@@ -64,7 +65,7 @@ export default function DonateModal({ isOpen, onClose }: DonateModalProps) {
 			>
 				<div className="flex items-center justify-between p-3 border-b border-black/5 dark:border-white/5">
 					<h2 className="text-lg font-semibold text-text-main flex items-center gap-2">
-						<span className="material-symbols-outlined text-pink-500">volunteer_activism</span>
+						<Icon name="volunteer_activism" className="text-pink-500" />
 						{data?.title || "Support 9Router"}
 					</h2>
 					<button
@@ -72,14 +73,14 @@ export default function DonateModal({ isOpen, onClose }: DonateModalProps) {
 						className="p-1.5 rounded-lg text-text-muted hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
 						aria-label="Close"
 					>
-						<span className="material-symbols-outlined text-[20px]">close</span>
+						<Icon name="close" size={20} />
 					</button>
 				</div>
 
 				<div className="p-6 overflow-y-auto flex-1">
 					{loading && (
 						<div className="flex items-center justify-center py-10 text-text-muted">
-							<span className="material-symbols-outlined animate-spin mr-2">progress_activity</span>
+							<Icon name="progress_activity" className="animate-spin mr-2" />
 							Loading...
 						</div>
 					)}
@@ -109,7 +110,7 @@ function DonateChannelCard({ channel }) {
 				className="w-12 h-12 rounded-full flex items-center justify-center mb-3"
 				style={{ backgroundColor: `${color}20`, color }}
 			>
-				<span className="material-symbols-outlined text-[26px]">{icon}</span>
+				<Icon name={icon} size={26} />
 			</div>
 			<div className="font-semibold text-text-main mb-1">{label}</div>
 			{description && <div className="text-xs text-text-muted mb-3 text-center">{description}</div>}
@@ -138,7 +139,7 @@ function DonateChannelCard({ channel }) {
 					style={{ backgroundColor: color }}
 				>
 					Open
-					<span className="material-symbols-outlined text-[16px]">open_in_new</span>
+					<Icon name="open_in_new" size={16} />
 				</a>
 			)}
 		</div>

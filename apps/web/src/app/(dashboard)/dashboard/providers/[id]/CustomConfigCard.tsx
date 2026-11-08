@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { Badge, Card } from "@/shared/components"
 import { useNotificationStore } from "@/store/notificationStore"
+import Icon from "../../../../../shared/components/Icon"
 
 // Mirrors the server-side gate in /api/providers/[id]/overrides - client check is UX only
 const BLOCKED_HEADERS = [
@@ -110,7 +111,7 @@ export default function CustomConfigCard({ providerId }: CustomConfigCardProps) 
 				className="flex w-full items-center justify-between text-left"
 			>
 				<div className="flex items-center gap-2">
-					<span className="material-symbols-outlined text-primary text-[20px]">tune</span>
+					<Icon name="tune" size={20} className="text-primary" />
 					<span className="text-sm font-semibold">Custom Headers</span>
 					{hasOverride && (
 						<Badge variant="success" size="sm">
@@ -118,9 +119,7 @@ export default function CustomConfigCard({ providerId }: CustomConfigCardProps) 
 						</Badge>
 					)}
 				</div>
-				<span className="material-symbols-outlined text-text-muted">
-					{expanded ? "expand_less" : "expand_more"}
-				</span>
+				<Icon name={expanded ? "expand_less" : "expand_more"} className="text-text-muted" />
 			</button>
 
 			{expanded && (
@@ -157,7 +156,7 @@ export default function CustomConfigCard({ providerId }: CustomConfigCardProps) 
 										}
 										className="shrink-0 text-text-muted hover:text-red-500"
 									>
-										<span className="material-symbols-outlined text-[18px]">delete</span>
+										<Icon name="delete" size={18} />
 									</button>
 								</div>
 							)
@@ -170,7 +169,7 @@ export default function CustomConfigCard({ providerId }: CustomConfigCardProps) 
 							onClick={() => setRows((prev) => [...prev, { name: "", value: "" }])}
 							className="flex items-center gap-1 text-xs text-primary hover:underline"
 						>
-							<span className="material-symbols-outlined text-[16px]">add</span>
+							<Icon name="add" size={16} />
 							Add header
 						</button>
 						<div className="flex gap-2">

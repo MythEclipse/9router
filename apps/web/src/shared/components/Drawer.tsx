@@ -4,6 +4,7 @@ import type { ReactNode } from "react"
 import { useEffect } from "react"
 import { cn } from "@/shared/utils/cn"
 import { lockBodyScroll, unlockBodyScroll } from "@/shared/utils/scrollLock"
+import Icon from "./Icon"
 
 const DRAWER_WIDTHS = {
 	sm: "w-[400px]",
@@ -91,7 +92,7 @@ export default function Drawer({
 						aria-label="Close"
 						className="chrome-focus p-1.5 rounded-[var(--r-control)] text-text-muted chrome-row hover:text-text-main"
 					>
-						<span className="material-symbols-outlined text-[20px]">close</span>
+						<Icon name="close" size={20} />
 					</button>
 				</div>
 

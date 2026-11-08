@@ -1,6 +1,7 @@
 "use client"
 
 import { Input } from "@/shared/components"
+import Icon from "../../../../../shared/components/Icon"
 
 /** Reusable endpoint row component */
 interface EndpointRowProps {
@@ -44,9 +45,7 @@ export default function EndpointRow({
 				onClick={() => onCopy(url, copyId)}
 				className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded text-text-muted hover:text-primary transition-colors shrink-0"
 			>
-				<span className="material-symbols-outlined text-[18px]">
-					{copied === copyId ? "check" : "content_copy"}
-				</span>
+				<Icon name={copied === copyId ? "check" : "content_copy"} size={18} />
 			</button>
 			{actions}
 		</div>

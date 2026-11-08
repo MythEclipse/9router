@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
+import Icon from "../../../../../shared/components/Icon"
 
 const STORAGE_KEY = "9router.cliToolEndpointPresets"
 
@@ -104,7 +105,7 @@ export default function EndpointPresetControl({
 	return (
 		<div className="flex items-center gap-2">
 			<span className="w-32 shrink-0 text-sm font-semibold text-text-main text-right">Preset</span>
-			<span className="material-symbols-outlined text-text-muted text-[14px]">arrow_forward</span>
+			<Icon name="arrow_forward" size={14} className="text-text-muted" />
 			<select
 				value={selectedName}
 				onChange={(event) => handleSelect(event.target.value)}
@@ -133,7 +134,7 @@ export default function EndpointPresetControl({
 					className="p-1 text-text-muted hover:text-red-500 rounded transition-colors"
 					title="Delete selected preset"
 				>
-					<span className="material-symbols-outlined text-[14px]">delete</span>
+					<Icon name="delete" size={14} />
 				</button>
 			)}
 		</div>

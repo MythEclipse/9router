@@ -2,6 +2,7 @@
 
 import type { HTMLAttributes, ReactNode } from "react"
 import { cn } from "@/shared/utils/cn"
+import Icon from "./Icon"
 
 // Loading surfaces that stay inside their own container: a spinner, a full-page block, a
 // skeleton. Long-running work does NOT live here - it reports through the task store into the
@@ -28,11 +29,10 @@ export function Spinner({ size = "md", className }: SpinnerProps) {
 	const sizes = SPINNER_SIZES
 
 	return (
-		<span
-			className={cn("material-symbols-outlined animate-spin text-brand-500", sizes[size], className)}
-		>
-			progress_activity
-		</span>
+		<Icon
+			name="progress_activity"
+			className={cn("animate-spin text-brand-500", sizes[size], className)}
+		/>
 	)
 }
 

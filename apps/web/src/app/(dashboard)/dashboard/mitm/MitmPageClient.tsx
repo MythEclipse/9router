@@ -8,6 +8,7 @@ import {
 	isAnthropicCompatibleProvider,
 	isOpenAICompatibleProvider,
 } from "@/shared/constants/providers"
+import Icon from "../../../../shared/components/Icon"
 
 export default function MitmPageClient() {
 	const [connections, setConnections] = useState([])
@@ -102,9 +103,7 @@ export default function MitmPageClient() {
 	return (
 		<div className="flex w-full flex-col gap-6">
 			<div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
-				<span className="material-symbols-outlined text-[16px] text-yellow-500 mt-0.5 shrink-0">
-					warning
-				</span>
+				<Icon name="warning" size={16} className="text-yellow-500 mt-0.5 shrink-0" />
 				<p className="text-xs text-red-600 dark:text-yellow-400 leading-relaxed">
 					⚠️ MITM redirects HTTPS traffic from IDE tools (Antigravity, GitHub Copilot, Kiro) through a
 					local CA to your providers, which may violate ToS and get your account banned, so use it at

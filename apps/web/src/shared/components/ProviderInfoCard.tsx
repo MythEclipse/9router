@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react"
 import Card from "./Card.tsx"
+import Icon from "./Icon"
 
 // Only show fields user actually cares about
 type ProviderInfoValue = string | number | readonly string[]
@@ -73,7 +74,7 @@ export default function ProviderInfoCard({ config, provider, title = "Provider I
 						rel="noopener noreferrer"
 						className="text-xs text-primary hover:underline inline-flex items-center gap-1"
 					>
-						<span className="material-symbols-outlined text-sm">open_in_new</span>
+						<Icon name="open_in_new" size={14} />
 						Get API Key
 					</a>
 				)}

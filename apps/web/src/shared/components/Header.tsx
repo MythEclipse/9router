@@ -11,6 +11,7 @@ import { APIKEY_PROVIDERS, OAUTH_PROVIDERS } from "@/shared/constants/config"
 import { AI_PROVIDERS, MEDIA_PROVIDER_KINDS } from "@/shared/constants/providers"
 import { getProviderIconSrc } from "@/shared/utils/providerIcon"
 import { useHeaderSearchStore } from "@/store/headerSearchStore"
+import Icon from "./Icon"
 
 const getPageInfo = (pathname) => {
 	if (!pathname) return { title: "", description: "", breadcrumbs: [] }
@@ -261,7 +262,7 @@ export default function Header({ onMenuClick, showMenuButton = true }: HeaderPro
 						onClick={onMenuClick}
 						className="flex items-center justify-center p-1.5 rounded-[10px] text-text-main hover:text-primary hover:bg-surface-2 transition-colors"
 					>
-						<span className="material-symbols-outlined">menu</span>
+						<Icon name="menu" />
 					</button>
 				)}
 			</div>
@@ -278,9 +279,7 @@ export default function Header({ onMenuClick, showMenuButton = true }: HeaderPro
 								}`}
 							>
 								{index > 0 && (
-									<span className="material-symbols-outlined text-text-muted text-base hidden sm:inline">
-										chevron_right
-									</span>
+									<Icon name="chevron_right" size={16} className="text-text-muted hidden sm:inline" />
 								)}
 								{crumb.href ? (
 									<Link
@@ -313,7 +312,7 @@ export default function Header({ onMenuClick, showMenuButton = true }: HeaderPro
 						<div className="flex items-center gap-2.5">
 							{icon && (
 								<div className="hidden sm:flex items-center justify-center size-8 rounded-[10px] bg-brand-500/10 border border-brand-500/20">
-									<span className="material-symbols-outlined text-primary text-lg">{icon}</span>
+									<Icon name={icon} size={18} className="text-primary" />
 								</div>
 							)}
 							<div className="min-w-0">
@@ -338,7 +337,7 @@ export default function Header({ onMenuClick, showMenuButton = true }: HeaderPro
 						className="hidden sm:flex items-center min-w-0 max-w-[220px] px-3 py-1.5 rounded-full border border-border bg-surface/70 text-xs text-text-muted truncate"
 						title={displayName}
 					>
-						<span className="material-symbols-outlined text-[14px] mr-1.5 text-primary">person</span>
+						<Icon name="person" size={14} className="mr-1.5 text-primary" />
 						<span className="truncate">{displayName}</span>
 						<span className="ml-2 shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
 							{loginMethod}
@@ -376,9 +375,11 @@ function HeaderSearch() {
 
 	return (
 		<div className="relative min-w-0 w-[160px] sm:w-[220px]">
-			<span className="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-text-muted text-[16px] pointer-events-none">
-				search
-			</span>
+			<Icon
+				name="search"
+				size={16}
+				className="absolute left-2 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
+			/>
 			<input
 				type="text"
 				value={query}
@@ -393,7 +394,7 @@ function HeaderSearch() {
 					className="absolute right-1 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-main p-0.5 rounded"
 					aria-label="Clear search"
 				>
-					<span className="material-symbols-outlined text-[16px]">close</span>
+					<Icon name="close" size={16} />
 				</button>
 			)}
 		</div>

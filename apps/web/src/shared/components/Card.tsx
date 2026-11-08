@@ -2,6 +2,7 @@
 
 import type { HTMLAttributes, ReactNode } from "react"
 import { cn } from "@/shared/utils/cn"
+import Icon from "./Icon"
 
 // Elevation is a three-tier ladder defined in the chrome contract
 // (src/shared/styles/chrome.css): 1 = resting surface, 2 = raised, 3 = floating
@@ -63,7 +64,7 @@ export default function Card({
 					<div className="flex items-center gap-3">
 						{icon && (
 							<div className="p-2 rounded-[var(--r-control)] bg-brand-500/10 border border-brand-500/20">
-								<span className="material-symbols-outlined text-[20px] text-primary">{icon}</span>
+								<Icon name={icon} size={20} className="text-primary" />
 							</div>
 						)}
 						<div>

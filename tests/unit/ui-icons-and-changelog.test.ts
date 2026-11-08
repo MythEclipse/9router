@@ -49,85 +49,85 @@ describe("changelog: every release card shows a commit count", () => {
 	})
 })
 
-describe("icon subset: 114 KB instead of the 3.96 MB package font", () => {
-	const subset = resolve(root, "apps/web/public/fonts/material-symbols-subset.woff2")
-	const list = resolve(root, "apps/web/public/fonts/material-symbols-glyphs.txt")
+describe("icons are Lucide components, not an icon font", () => {
+	const srcDir = resolve(root, "apps/web/src")
+	const iconComponent = readFileSync(resolve(srcDir, "shared/components/Icon.tsx"), "utf8")
+	const iconRegistry = readFileSync(resolve(srcDir, "shared/components/iconRegistry.ts"), "utf8")
+	const iconSheet = readFileSync(resolve(srcDir, "shared/components/iconSheet.ts"), "utf8")
 
-	it("ships a subset well under a quarter MB", () => {
-		expect(existsSync(subset)).toBe(true)
-		expect(statSync(subset).size).toBeLessThan(250_000)
-		expect(statSync(subset).size).toBeGreaterThan(10_000)
-	})
-
-	it("covers the icons the menu depends on", () => {
-		const names = new Set(
-			readFileSync(list, "utf8")
-				.split("\n")
-				.map((s) => s.trim())
-				.filter(Boolean),
-		)
-		expect(names.size).toBeGreaterThanOrEqual(140)
-		for (const icon of ["grid_view", "palette", "history", "power_settings_new", "logout"]) {
-			expect(names.has(icon)).toBe(true)
+	const sourceFiles: string[] = []
+	const visit = (dir: string) => {
+		for (const entry of readdirSync(dir, { withFileTypes: true })) {
+			const full = join(dir, entry.name)
+			if (entry.isDirectory()) visit(full)
+			else if (/\.(tsx?|jsx?)$/.test(entry.name)) sourceFiles.push(full)
 		}
+	}
+	visit(srcDir)
+	const sources = sourceFiles.map((file) => [file, readFileSync(file, "utf8")] as const)
+
+	it("declares lucide-react as a dependency", () => {
+		const pkg = JSON.parse(readFileSync(resolve(root, "apps/web/package.json"), "utf8"))
+		expect(pkg.dependencies["lucide-react"]).toBeTruthy()
 	})
 
-	it("serves exactly one face, the subset, and never the 3.96 MB package font", () => {
-		expect(globals).toContain('url("/fonts/material-symbols-subset.woff2")')
-		const faces = globals.split("@font-face").slice(1)
-		// A second face pointing into node_modules is what made every build emit the
-		// full font into .next/static/media. The coverage test below is the safety
-		// net that fallback used to be, so the face count is pinned at one.
-		expect(faces).toHaveLength(1)
-		expect(faces[0]).toContain("material-symbols-subset.woff2")
-		expect(globals).not.toContain("node_modules/material-symbols")
+	it("no longer ships the material-symbols font", () => {
+		const pkg = JSON.parse(readFileSync(resolve(root, "apps/web/package.json"), "utf8"))
+		expect(pkg.dependencies["material-symbols"]).toBeUndefined()
+		expect(pkg.devDependencies?.["material-symbols"]).toBeUndefined()
+		expect(existsSync(resolve(root, "apps/web/public/fonts/material-symbols-subset.woff2"))).toBe(false)
+		expect(existsSync(resolve(root, "apps/web/scripts/build_icon_subset.py"))).toBe(false)
 	})
 
-	it("covers every icon src/ actually renders", () => {
-		// The subset is only safe to serve alone while it is exhaustive. Scanning the
-		// same three shapes the generator scans keeps the two in step: adding an icon
-		// to a component fails here until build_icon_subset.py is re-run.
-		const shipped = new Set(
-			readFileSync(list, "utf8")
-				.split("\n")
-				.map((s) => s.trim())
-				.filter(Boolean),
+	it("leaves no material-symbols markup or CSS behind", () => {
+		const offenders = sources
+			.filter(([, text]) => text.includes("material-symbols-outlined"))
+			.map(([file]) => file.replace(srcDir, ""))
+		expect(offenders, "convert these to <Icon />").toEqual([])
+		const globals = readFileSync(resolve(srcDir, "app/globals.css"), "utf8")
+		expect(globals).not.toContain("Material Symbols")
+		expect(globals).not.toContain("material-symbols")
+	})
+
+	it("keeps the page from waiting on a font that no longer exists", () => {
+		const layout = readFileSync(resolve(srcDir, "app/layout.tsx"), "utf8")
+		expect(layout).not.toContain("fonts-loading")
+		expect(layout).not.toContain("fonts-loaded")
+		expect(layout).not.toContain("document.fonts.ready")
+	})
+
+	it("every icon name used in src/ resolves in the Icon registry", () => {
+		// The registry is the single source of truth: a name that is not a key
+		// renders nothing, which is a silent hole in the UI rather than an error.
+		const registry = new Set(
+			[...iconRegistry.matchAll(/^\t([a-z_0-9]+): LucideRaw\.[A-Za-z0-9]+,$/gm)].map((m) => m[1]),
 		)
-		const patterns = [
-			/icon:\s*"([a-z_0-9]+)"/g,
-			/icon="([a-z_0-9]+)"/g,
-			/material-symbols-outlined[^>]*>\s*([a-z_0-9]+)\s*</g,
-		]
+		expect(registry.size).toBeGreaterThan(100)
 		const used = new Set<string>()
-		const visit = (dir: string) => {
-			for (const entry of readdirSync(dir, { withFileTypes: true })) {
-				const full = join(dir, entry.name)
-				if (entry.isDirectory()) visit(full)
-				else if (/\.(tsx?|jsx?)$/.test(entry.name)) {
-					const text = readFileSync(full, "utf8")
-					for (const pattern of patterns) {
-						for (const match of text.matchAll(pattern)) used.add(match[1])
-					}
-				}
-			}
+		for (const [, text] of sources) {
+			for (const m of text.matchAll(/<Icon\b[^>]*?\bname="([^"]+)"/g)) used.add(m[1])
+			for (const m of text.matchAll(/icon:\s*"([a-z_0-9]+)"/g)) used.add(m[1])
+			for (const m of text.matchAll(/icon="([a-z_0-9]+)"/g)) used.add(m[1])
 		}
-		visit(resolve(root, "apps/web/src"))
-		const missing = [...used].filter((icon) => !shipped.has(icon)).sort()
-		expect(missing, "re-run apps/web/scripts/build_icon_subset.py").toEqual([])
+		const missing = [...used].filter((name) => !registry.has(name)).sort()
+		expect(missing, "add these to apps/web/src/shared/components/Icon.tsx").toEqual([])
 	})
 
-	it("enables the rlig feature the font actually ships", () => {
-		// Quote style and line wrapping are formatting; the two features are the
-		// property under test.
-		expect(globals.replace(/["']/g, "'").replace(/\s+/g, " ")).toMatch(
-			/font-feature-settings: 'liga' 1,\s*'rlig' 1/,
+	it("the changelog icon sheet covers every name the modal can draw", () => {
+		const sheetNames = new Set(
+			[...iconSheet.matchAll(/^\t([a-z_0-9]+): "\d+",$/gm)].map((m) => m[1]),
 		)
+		expect(sheetNames.size).toBeGreaterThan(100)
+		for (const icon of ["add", "check_circle", "cancel", "star", "help"]) {
+			expect(sheetNames.has(icon), icon).toBe(true)
+		}
+		// The sheet is a data: URI so raw-HTML markdown needs no network fetch.
+		expect(iconSheet).toContain("data:image/svg+xml")
+		// Same 2-unit round-cap stroke as <Icon />, so both surfaces match.
+		expect(iconSheet).toMatch(/stroke-width=.{0,2}2/)
 	})
 
-	it("reveals icons from fonts.ready with a hard fallback, never hanging at 0", () => {
-		expect(layout).toContain("document.fonts.ready")
-		expect(layout).toMatch(/setTimeout\(f,\s*1500\)/)
-		// the gate class is always added: ready, catch, and the timer all call f
-		expect(layout).toMatch(/r\.classList\.remove\('fonts-loading'\)/)
+	it("renders an unknown icon as nothing rather than a literal word", () => {
+		expect(iconComponent).toMatch(/if \(!Glyph\) return null/)
 	})
 })

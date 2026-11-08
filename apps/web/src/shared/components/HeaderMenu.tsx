@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useSessionStore } from "@/store/sessionStore"
 import ChangelogModal from "./ChangelogModal.tsx"
+import Icon from "./Icon"
 import { ConfirmModal } from "./Modal.tsx"
 import ThemeModal from "./ThemeModal.tsx"
 
@@ -22,9 +23,7 @@ function MenuItem({ icon, label, onClick, trailing, danger }: MenuItemProps) {
 				danger ? "text-red-500 hover:bg-red-500/10" : "text-text-main hover:bg-surface-2"
 			}`}
 		>
-			<span className={`material-symbols-outlined text-[20px] ${danger ? "" : "text-text-muted"}`}>
-				{icon}
-			</span>
+			<Icon name={icon} size={20} className={`${danger ? "" : "text-text-muted"}`} />
 			<span className="flex-1 text-left">{label}</span>
 			{trailing && <span className="text-base">{trailing}</span>}
 		</button>
@@ -83,7 +82,7 @@ export default function HeaderMenu({ onLogout }: HeaderMenuProps) {
 					className="flex items-center justify-center p-2 rounded-[10px] text-text-muted hover:text-text-main hover:bg-surface-2 transition-all"
 					title="Menu"
 				>
-					<span className="material-symbols-outlined">grid_view</span>
+					<Icon name="grid_view" />
 				</button>
 
 				{isOpen && (

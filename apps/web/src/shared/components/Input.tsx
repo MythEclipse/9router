@@ -2,6 +2,7 @@
 
 import type { InputHTMLAttributes, ReactNode } from "react"
 import { cn } from "@/shared/utils/cn"
+import Icon from "./Icon"
 
 export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "className"> {
 	label?: ReactNode
@@ -40,7 +41,7 @@ export default function Input({
 			<div className="relative">
 				{icon && (
 					<div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-text-muted">
-						<span className="material-symbols-outlined text-[20px]">{icon}</span>
+						<Icon name={icon} size={20} />
 					</div>
 				)}
 				<input
@@ -66,7 +67,7 @@ export default function Input({
 			</div>
 			{error && (
 				<p className="text-xs text-danger flex items-center gap-1">
-					<span className="material-symbols-outlined text-[14px]">error</span>
+					<Icon name="error" size={14} />
 					{error}
 				</p>
 			)}

@@ -1,5 +1,6 @@
 import { CapacityBadges, ModelTierBadge } from "@/shared/components"
 import PluginMark from "@/shared/components/PluginMark"
+import Icon from "../../../../../shared/components/Icon"
 import { useModelPluginMarks } from "./useModelPluginMarks.tsx"
 
 interface ModelRowProps {
@@ -57,12 +58,12 @@ export default function ModelRow({
 			className={`group w-full sm:w-auto min-w-0 max-w-full rounded-lg border px-3 py-2 ${borderColor} hover:bg-sidebar/50`}
 		>
 			<div className="flex min-w-0 items-center gap-2">
-				<span
-					className="material-symbols-outlined shrink-0 text-base leading-none select-none"
+				<Icon
+					name={testStatus === "ok" ? "check_circle" : testStatus === "error" ? "cancel" : "smart_toy"}
+					size={16}
 					style={iconColor ? { color: iconColor } : undefined}
-				>
-					{testStatus === "ok" ? "check_circle" : testStatus === "error" ? "cancel" : "smart_toy"}
-				</span>
+					className="shrink-0 leading-none select-none"
+				/>
 				<div className="flex min-w-0 flex-1 flex-col gap-1">
 					<code className="w-fit max-w-full break-all rounded bg-sidebar px-1.5 py-0.5 font-mono text-xs text-text-muted sm:max-w-[360px] sm:truncate leading-normal">
 						{displayModel}
@@ -94,12 +95,12 @@ export default function ModelRow({
 								disabled={isTesting}
 								className={`rounded p-1 text-text-muted transition-opacity hover:bg-sidebar hover:text-primary inline-flex items-center justify-center ${isTesting ? "opacity-100" : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100"}`}
 							>
-								<span
-									className="material-symbols-outlined text-sm leading-none"
+								<Icon
+									name={isTesting ? "progress_activity" : "science"}
+									size={14}
 									style={isTesting ? { animation: "spin 1s linear infinite" } : undefined}
-								>
-									{isTesting ? "progress_activity" : "science"}
-								</span>
+									className="leading-none"
+								/>
 							</button>
 							<span className="pointer-events-none absolute mt-1 top-5 left-1/2 -translate-x-1/2 text-[10px] text-text-muted whitespace-nowrap opacity-0 group-hover/btn:opacity-100 transition-opacity">
 								{isTesting ? "Testing..." : "Test"}
@@ -111,9 +112,11 @@ export default function ModelRow({
 							onClick={() => onCopy(displayModel, `model-${model.id}`)}
 							className="rounded p-1 text-text-muted hover:bg-sidebar hover:text-primary inline-flex items-center justify-center"
 						>
-							<span className="material-symbols-outlined text-sm leading-none">
-								{copied === `model-${model.id}` ? "check" : "content_copy"}
-							</span>
+							<Icon
+								name={copied === `model-${model.id}` ? "check" : "content_copy"}
+								size={14}
+								className="leading-none"
+							/>
 						</button>
 						<span className="pointer-events-none absolute mt-1 top-5 left-1/2 -translate-x-1/2 text-[10px] text-text-muted whitespace-nowrap opacity-0 group-hover/btn:opacity-100 transition-opacity">
 							{copied === `model-${model.id}` ? "Copied!" : "Copy"}
@@ -125,7 +128,7 @@ export default function ModelRow({
 							className="rounded p-1 text-text-muted opacity-100 transition-opacity hover:bg-red-500/10 hover:text-red-500 sm:opacity-0 sm:group-hover:opacity-100 inline-flex items-center justify-center"
 							title="Remove custom model"
 						>
-							<span className="material-symbols-outlined text-sm leading-none">close</span>
+							<Icon name="close" size={14} className="leading-none" />
 						</button>
 					) : onDisable ? (
 						<button
@@ -133,7 +136,7 @@ export default function ModelRow({
 							className="rounded p-1 text-text-muted opacity-100 transition-opacity hover:bg-red-500/10 hover:text-red-500 sm:opacity-0 sm:group-hover:opacity-100 inline-flex items-center justify-center"
 							title="Disable this model"
 						>
-							<span className="material-symbols-outlined text-sm leading-none">close</span>
+							<Icon name="close" size={14} className="leading-none" />
 						</button>
 					) : null}
 				</div>

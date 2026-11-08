@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react"
 import { Button, Card, ManualConfigModal, ModelSelectModal } from "@/shared/components"
 import { DEFAULT_LOCAL_API_KEY } from "@/shared/constants/config"
 import { useModelAliases } from "@/shared/hooks/useModelAliases"
+import Icon from "../../../../../shared/components/Icon"
 import ApiKeySelect from "./ApiKeySelect.tsx"
 import { CardFieldRow, EndpointField } from "./CardField.tsx"
 import { matchKnownEndpoint } from "./cliEndpointMatch.ts"
@@ -245,18 +246,18 @@ model = "${selectedModel || "provider/model-id"}"
 						<p className="text-xs text-text-muted truncate">{tool.description}</p>
 					</div>
 				</div>
-				<span
-					className={`material-symbols-outlined text-text-muted text-[20px] transition-transform ${isExpanded ? "rotate-180" : ""}`}
-				>
-					expand_more
-				</span>
+				<Icon
+					name="expand_more"
+					size={20}
+					className={`text-text-muted transition-transform ${isExpanded ? "rotate-180" : ""}`}
+				/>
 			</div>
 
 			{isExpanded && (
 				<div className="mt-4 pt-4 border-t border-border flex flex-col gap-4">
 					{checking && (
 						<div className="flex items-center gap-2 text-text-muted">
-							<span className="material-symbols-outlined animate-spin">progress_activity</span>
+							<Icon name="progress_activity" className="animate-spin" />
 							<span>Checking DeepSeek TUI...</span>
 						</div>
 					)}
@@ -265,7 +266,7 @@ model = "${selectedModel || "provider/model-id"}"
 						<div className="flex flex-col gap-4">
 							<div className="flex flex-col gap-3 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
 								<div className="flex items-start gap-3">
-									<span className="material-symbols-outlined text-yellow-500">warning</span>
+									<Icon name="warning" className="text-yellow-500" />
 									<div className="flex-1">
 										<p className="font-medium text-yellow-600 dark:text-yellow-400">
 											DeepSeek TUI not detected locally
@@ -286,7 +287,7 @@ model = "${selectedModel || "provider/model-id"}"
 										onClick={() => setShowManualConfigModal(true)}
 										className="!bg-yellow-500/20 !border-yellow-500/40 !text-yellow-700 dark:!text-yellow-300 hover:!bg-yellow-500/30"
 									>
-										<span className="material-symbols-outlined text-[18px] mr-1">content_copy</span>
+										<Icon name="content_copy" size={18} className="mr-1" />
 										Manual Config
 									</Button>
 								</div>
@@ -310,9 +311,11 @@ model = "${selectedModel || "provider/model-id"}"
 															: "bg-blue-500/10 text-blue-600 dark:text-blue-400"
 												}`}
 											>
-												<span className="material-symbols-outlined text-[14px] mt-0.5">
-													{note.type === "warning" ? "warning" : note.type === "error" ? "error" : "info"}
-												</span>
+												<Icon
+													name={note.type === "warning" ? "warning" : note.type === "error" ? "error" : "info"}
+													size={14}
+													className="mt-0.5"
+												/>
 												<span>{note.text}</span>
 											</div>
 										))}
@@ -362,7 +365,7 @@ model = "${selectedModel || "provider/model-id"}"
 												className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-red-500 rounded transition-colors"
 												title="Clear"
 											>
-												<span className="material-symbols-outlined text-[14px]">close</span>
+												<Icon name="close" size={14} />
 											</button>
 										)}
 									</div>
@@ -380,9 +383,7 @@ model = "${selectedModel || "provider/model-id"}"
 								<div
 									className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs ${message.type === "success" ? "bg-green-500/10 text-green-600" : "bg-red-500/10 text-red-600"}`}
 								>
-									<span className="material-symbols-outlined text-[14px]">
-										{message.type === "success" ? "check_circle" : "error"}
-									</span>
+									<Icon name={message.type === "success" ? "check_circle" : "error"} size={14} />
 									<span>{message.text}</span>
 								</div>
 							)}
@@ -395,7 +396,8 @@ model = "${selectedModel || "provider/model-id"}"
 									disabled={!selectedModel}
 									loading={applying}
 								>
-									<span className="material-symbols-outlined text-[14px] mr-1">save</span>Apply
+									<Icon name="save" size={14} className="mr-1" />
+									Apply
 								</Button>
 								<Button
 									variant="outline"
@@ -404,11 +406,12 @@ model = "${selectedModel || "provider/model-id"}"
 									disabled={!deepseekStatus?.has9Router}
 									loading={restoring}
 								>
-									<span className="material-symbols-outlined text-[14px] mr-1">restore</span>Reset
+									<Icon name="restore" size={14} className="mr-1" />
+									Reset
 								</Button>
 								<Button variant="ghost" size="sm" onClick={() => setShowManualConfigModal(true)}>
-									<span className="material-symbols-outlined text-[14px] mr-1">content_copy</span>Manual
-									Config
+									<Icon name="content_copy" size={14} className="mr-1" />
+									Manual Config
 								</Button>
 							</div>
 						</>

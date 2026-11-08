@@ -6,6 +6,7 @@
 // shared ModelSelectModal the combo editor uses (combos first, then models).
 import { useState } from "react"
 import { ModelSelectModal, Toggle } from "@/shared/components"
+import Icon from "../../../../../shared/components/Icon"
 
 interface KeyAccessControlsProps {
 	apiKey: {
@@ -82,9 +83,7 @@ export default function KeyAccessControls({
 								title={`Remove ${entry}`}
 								aria-label={`Remove ${entry}`}
 							>
-								<span className="material-symbols-outlined leading-none" style={{ fontSize: "12px" }}>
-									close
-								</span>
+								<Icon name="close" style={{ fontSize: "12px" }} className="leading-none" />
 							</button>
 						</span>
 					))}
@@ -92,9 +91,7 @@ export default function KeyAccessControls({
 						onClick={openPicker}
 						className="flex items-center gap-0.5 rounded-xl border border-dashed border-black/10 px-2 py-0.5 text-xs font-medium text-primary hover:border-primary/50 dark:border-white/10"
 					>
-						<span className="material-symbols-outlined leading-none" style={{ fontSize: "14px" }}>
-							add
-						</span>
+						<Icon name="add" style={{ fontSize: "14px" }} className="leading-none" />
 						Add combo or model
 					</button>
 				</div>

@@ -10,6 +10,7 @@ import {
 	parseLogLine,
 	SYSTEM_GROUP_ID,
 } from "@/shared/utils/consoleLogGroups"
+import Icon from "../../../../shared/components/Icon"
 
 type BadgeVariant = "default" | "error" | "primary" | "success" | "warning" | "info"
 
@@ -335,7 +336,7 @@ export default function LogsClient({ initialTab = "errors" }) {
 				<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border-subtle pb-4">
 					<div>
 						<h1 className="text-xl font-bold text-text-main flex items-center gap-2">
-							<span className="material-symbols-outlined text-[22px] text-primary">receipt_long</span>
+							<Icon name="receipt_long" size={22} className="text-primary" />
 							Error &amp; Console Logs
 						</h1>
 						<p className="text-xs text-text-muted mt-0.5">System output and exception logs</p>
@@ -394,9 +395,11 @@ export default function LogsClient({ initialTab = "errors" }) {
 						{/* Standard 9Router Search & Filter Row */}
 						<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
 							<div className="relative flex-1 sm:max-w-sm">
-								<span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-text-muted">
-									search
-								</span>
+								<Icon
+									name="search"
+									size={18}
+									className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
+								/>
 								<input
 									type="text"
 									value={errorSearch}
@@ -410,7 +413,7 @@ export default function LogsClient({ initialTab = "errors" }) {
 										onClick={() => setErrorSearch("")}
 										className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-main p-0.5"
 									>
-										<span className="material-symbols-outlined text-[15px]">close</span>
+										<Icon name="close" size={15} />
 									</button>
 								)}
 							</div>
@@ -502,9 +505,7 @@ export default function LogsClient({ initialTab = "errors" }) {
 														className="p-1 rounded text-text-muted hover:text-text-main transition-colors"
 														title="Copy error"
 													>
-														<span className="material-symbols-outlined text-[16px]">
-															{errorCopiedId === log.id ? "check" : "content_copy"}
-														</span>
+														<Icon name={errorCopiedId === log.id ? "check" : "content_copy"} size={16} />
 													</button>
 
 													{log.stack && (
@@ -514,9 +515,7 @@ export default function LogsClient({ initialTab = "errors" }) {
 															className="p-1 rounded text-text-muted hover:text-text-main transition-colors"
 															title={isExpanded ? "Hide stack" : "View stack"}
 														>
-															<span className="material-symbols-outlined text-[16px]">
-																{isExpanded ? "expand_less" : "expand_more"}
-															</span>
+															<Icon name={isExpanded ? "expand_less" : "expand_more"} size={16} />
 														</button>
 													)}
 												</div>
@@ -581,9 +580,11 @@ export default function LogsClient({ initialTab = "errors" }) {
 						{/* Standard Search & Filter Row (Identical layout to Error Records) */}
 						<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
 							<div className="relative flex-1 sm:max-w-sm">
-								<span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-text-muted">
-									search
-								</span>
+								<Icon
+									name="search"
+									size={18}
+									className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
+								/>
 								<input
 									type="text"
 									value={consoleFilter}
@@ -597,7 +598,7 @@ export default function LogsClient({ initialTab = "errors" }) {
 										onClick={() => setConsoleFilter("")}
 										className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-main p-0.5"
 									>
-										<span className="material-symbols-outlined text-[15px]">close</span>
+										<Icon name="close" size={15} />
 									</button>
 								)}
 							</div>
@@ -740,9 +741,10 @@ export default function LogsClient({ initialTab = "errors" }) {
 														className="p-1 rounded text-text-muted hover:text-text-main transition-colors"
 														title="Copy line"
 													>
-														<span className="material-symbols-outlined text-[16px]">
-															{consoleCopiedId === `line-${item.index}` ? "check" : "content_copy"}
-														</span>
+														<Icon
+															name={consoleCopiedId === `line-${item.index}` ? "check" : "content_copy"}
+															size={16}
+														/>
 													</button>
 												</div>
 											</div>

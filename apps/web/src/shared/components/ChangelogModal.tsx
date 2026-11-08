@@ -10,6 +10,8 @@ import {
 	LOCAL_SOURCE,
 	pickChangelogSource,
 } from "./changelogSources.ts"
+import Icon from "./Icon"
+import { sheetIconHtml } from "./iconSheet.ts"
 
 marked.setOptions({ gfm: true, breaks: true })
 
@@ -398,7 +400,7 @@ function renderBody(bodyMd) {
 		return (
 			`<h${level}${attrs} class="cl-cat" data-cat="${escapeHtml(name)}" style="display:flex;align-items:center;gap:8px;margin:18px 0 10px;padding:7px 11px;border-radius:10px;border-left:3px solid ${st.color};` +
 			`background:${st.tint};border:1px solid ${st.color}33;font-size:inherit;font-weight:inherit;">` +
-			`<span class="material-symbols-outlined" style="font-size:16px;color:${st.color};line-height:1;">${st.icon}</span>` +
+			`${sheetIconHtml(st.icon, 16, st.color)}` +
 			`<span style="font-size:12.5px;font-weight:800;letter-spacing:.06em;color:${st.color};">${escapeHtml(st.question || (st.verb || name).toUpperCase())}</span>` +
 			`</h${level}>`
 		)
@@ -412,7 +414,7 @@ function renderBody(bodyMd) {
 		if (!v) return m
 		return (
 			`<li style="position:relative;list-style:none;margin:0 0 6px;padding-left:24px;">` +
-			`<span class="material-symbols-outlined" style="position:absolute;left:2px;top:1px;font-size:15px;color:${v.color};line-height:1.4;">${v.icon}</span>` +
+			`${sheetIconHtml(v.icon, 15, v.color, "position:absolute;left:2px;top:1px;")}` +
 			inner +
 			`</li>`
 		)
@@ -584,7 +586,7 @@ function renderVersionCards(md, accent) {
 					: renderBody(mergeBodiesByCategory(group.items.map((section) => section.body)))
 			return `<div style="${cardStyle}">
  <h3 style="${titleStyle}${headRule}">
- <span class="material-symbols-outlined" style="font-size:18px;">${accent.icon}</span>
+ ${sheetIconHtml(accent.icon, 18)}
  ${escapeHtml(head)}
  </h3>
  <div class="changelog-body">${inner}</div>
@@ -598,7 +600,7 @@ function buildSection(md, source) {
 	if (!cards) return ""
 	const headStyle = `display:flex;align-items:center;gap:8px;margin:0 0 14px;font-size:17px;font-weight:600;color:${source.accent.color};`
 	return `<div style="${headStyle}">
-  <span class="material-symbols-outlined" style="font-size:20px;">${source.accent.icon}</span>
+  ${sheetIconHtml(source.accent.icon, 20)}
   ${escapeHtml(source.heading)}
 </div>
 ${cards}`
@@ -704,7 +706,7 @@ export default function ChangelogModal({ isOpen, onClose }: ChangelogModalProps)
 							onClick={onClose}
 							className="p-1 rounded-lg text-text-muted hover:text-text-main hover:bg-surface-2 transition-all"
 						>
-							<span className="material-symbols-outlined text-[20px]">close</span>
+							<Icon name="close" size={20} />
 						</button>
 					</div>
 				</div>
@@ -712,9 +714,7 @@ export default function ChangelogModal({ isOpen, onClose }: ChangelogModalProps)
 				<div className="p-6 overflow-y-auto flex-1 prose dark:prose-invert max-w-none text-sm">
 					{loading ? (
 						<div className="flex items-center justify-center py-12">
-							<span className="material-symbols-outlined text-3xl animate-spin text-primary">
-								progress_activity
-							</span>
+							<Icon name="progress_activity" size={30} className="animate-spin text-primary" />
 						</div>
 					) : error ? (
 						<p className="text-red-500">{error}</p>

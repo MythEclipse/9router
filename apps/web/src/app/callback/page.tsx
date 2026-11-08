@@ -2,6 +2,7 @@
 
 import { useSearchParams } from "next/navigation"
 import { Suspense, useEffect, useState } from "react"
+import Icon from "../../shared/components/Icon"
 
 /**
  * OAuth Callback Page Content
@@ -96,9 +97,7 @@ function CallbackContent() {
 				{status === "processing" && (
 					<>
 						<div className="size-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
-							<span className="material-symbols-outlined text-3xl text-primary animate-spin">
-								progress_activity
-							</span>
+							<Icon name="progress_activity" size={30} className="text-primary animate-spin" />
 						</div>
 						<h1 className="text-xl font-semibold mb-2">Processing...</h1>
 						<p className="text-text-muted">Please wait while we complete the authorization.</p>
@@ -108,7 +107,7 @@ function CallbackContent() {
 				{(status === "success" || status === "done") && (
 					<>
 						<div className="size-16 mx-auto mb-4 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-							<span className="material-symbols-outlined text-3xl text-green-600">check_circle</span>
+							<Icon name="check_circle" size={30} className="text-green-600" />
 						</div>
 						<h1 className="text-xl font-semibold mb-2">Authorization Successful!</h1>
 						<p className="text-text-muted">
@@ -122,7 +121,7 @@ function CallbackContent() {
 				{status === "manual" && (
 					<>
 						<div className="size-16 mx-auto mb-4 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
-							<span className="material-symbols-outlined text-3xl text-yellow-600">info</span>
+							<Icon name="info" size={30} className="text-yellow-600" />
 						</div>
 						<h1 className="text-xl font-semibold mb-2">Copy This URL</h1>
 						<p className="text-text-muted mb-4">
@@ -151,9 +150,7 @@ export default function CallbackPage() {
 				<div className="min-h-screen flex items-center justify-center bg-bg">
 					<div className="text-center p-8">
 						<div className="size-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
-							<span className="material-symbols-outlined text-3xl text-primary animate-spin">
-								progress_activity
-							</span>
+							<Icon name="progress_activity" size={30} className="text-primary animate-spin" />
 						</div>
 						<p className="text-text-muted">Loading...</p>
 					</div>

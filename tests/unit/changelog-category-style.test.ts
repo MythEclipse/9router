@@ -8,8 +8,10 @@ const modal = readFileSync(
 	"utf8",
 )
 const changelog = readFileSync(resolve(root, "CHANGELOG.md"), "utf8")
-const glyphs = readFileSync(
-	resolve(root, "apps/web/public/fonts/material-symbols-glyphs.txt"),
+// The icon sheet is generated from Lucide path data. It is the only thing that
+// decides whether a changelog icon draws, so the coverage tests read it.
+const iconSheet = readFileSync(
+	resolve(root, "apps/web/src/shared/components/iconSheet.ts"),
 	"utf8",
 )
 
@@ -57,10 +59,7 @@ const styleIconSlice = modal.slice(
 const FALLBACK_ICON = /icon:\s*"([a-z_0-9]+)"/.exec(styleIconSlice)?.[1]
 
 const shipped = new Set(
-	glyphs
-		.split("\n")
-		.map((s) => s.trim())
-		.filter(Boolean),
+	[...iconSheet.matchAll(/^\t([a-z_0-9]+): "\d+",$/gm)].map((m) => m[1]),
 )
 
 const h2 = [...changelog.matchAll(/^## (.+?)\s*$/gm)].map((m) => m[1].trim())
@@ -105,7 +104,7 @@ describe("changelog: every category is recognised and drawn", () => {
 	})
 })
 
-describe("changelog icons are carried by the shipped subset font", () => {
+describe("changelog icons are carried by the generated icon sheet", () => {
 	const used = new Set(
 		[
 			...[...styleSlice.matchAll(/icon:\s*"([a-z_0-9]+)"/g)].map((m) => m[1]),
@@ -118,7 +117,7 @@ describe("changelog icons are carried by the shipped subset font", () => {
 		expect(used.size).toBeGreaterThanOrEqual(10)
 	})
 
-	it("has no icon missing from material-symbols-glyphs.txt", () => {
+	it("has no icon missing from the generated sheet", () => {
 		const missing = [...used].filter((i) => !shipped.has(i)).sort()
 		expect(missing).toEqual([])
 	})

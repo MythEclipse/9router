@@ -7,6 +7,7 @@ import { PROVIDER_ID_TO_ALIAS } from "@/shared/constants/models"
 import { streamChatCompletion } from "@/shared/utils/chatStream"
 import { describeEmptyResponse } from "@/shared/utils/modelResponse"
 import type { ProviderConnection } from "@/store/providerStore"
+import Icon from "../../../../shared/components/Icon"
 
 const MAX_MODELS = 4
 const MIN_MODELS = 1
@@ -347,9 +348,7 @@ function ArenaContent() {
 		<div className="flex min-w-0 flex-col gap-6 px-1 sm:px-0">
 			<div className="flex flex-col gap-2">
 				<h1 className="text-xl font-bold leading-none flex items-center gap-2">
-					<span className="material-symbols-outlined size-[22px] text-[22px] leading-none shrink-0 text-primary">
-						swords
-					</span>
+					<Icon name="swords" size={22} className="size-[22px] leading-none shrink-0 text-primary" />
 					Compare Models
 				</h1>
 				<p className="text-sm text-text-muted">
@@ -397,7 +396,7 @@ function ArenaContent() {
 						onClick={addSlot}
 						className="self-start flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-primary hover:bg-primary/5 transition-colors"
 					>
-						<span className="material-symbols-outlined text-[16px]">add</span>
+						<Icon name="add" size={16} />
 						Add contender
 					</button>
 				)}
@@ -471,9 +470,7 @@ function ArenaContent() {
 										</pre>
 									) : loading ? (
 										<div className="flex flex-col items-center justify-center h-40 gap-3 text-text-muted">
-											<span className="material-symbols-outlined text-3xl animate-spin">
-												progress_activity
-											</span>
+											<Icon name="progress_activity" size={30} className="animate-spin" />
 											<span className="text-sm">Waiting for the first token...</span>
 										</div>
 									) : result ? (
@@ -741,7 +738,7 @@ function FinalResult({ ranked, pick, setPick, runId }) {
 		<Card padding="md" className="flex flex-col gap-4">
 			<div className="flex flex-wrap items-center justify-between gap-2">
 				<div className="flex items-center gap-2 min-w-0">
-					<span className="material-symbols-outlined text-amber-500 text-[20px]">trophy</span>
+					<Icon name="trophy" size={20} className="text-amber-500" />
 					<div className="min-w-0">
 						<h3 className="text-sm font-semibold text-text-main">Final Result</h3>
 						<p className="text-[11px] text-text-muted">
@@ -782,12 +779,7 @@ function FinalResult({ ranked, pick, setPick, runId }) {
 								}`}
 							>
 								<span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
-									<span
-										className="material-symbols-outlined text-[13px] leading-none"
-										style={{ color: def.color }}
-									>
-										{def.icon}
-									</span>
+									<Icon name={def.icon} size={13} style={{ color: def.color }} className="leading-none" />
 									{def.label}
 								</span>
 								<span
@@ -803,7 +795,7 @@ function FinalResult({ ranked, pick, setPick, runId }) {
 			)}
 
 			<div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-text-muted">
-				<span className="material-symbols-outlined text-[12px] leading-none">info</span>
+				<Icon name="info" size={12} className="leading-none" />
 				<span>
 					Ranked automatically on speed and spend only - bars compare the same metric across contenders.
 					Answer quality is yours to judge, so use “My pick”.
@@ -913,11 +905,7 @@ function MetricCell({ entry, metric, format }) {
 				style={isWinner ? { color: metric.def.color } : undefined}
 			>
 				{format(v)}
-				{isWinner ? (
-					<span className="material-symbols-outlined align-middle ml-0.5 text-[11px] leading-none">
-						star
-					</span>
-				) : null}
+				{isWinner ? <Icon name="star" size={11} className="align-middle ml-0.5 leading-none" /> : null}
 			</span>
 			<span className="block w-full min-w-[42px] max-w-[90px] h-1 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
 				<span
@@ -966,7 +954,7 @@ function Badge({ icon, text, accent = false }: BadgeProps) {
 					: "bg-surface-2 text-text-muted border border-border-subtle"
 			}`}
 		>
-			<span className="material-symbols-outlined text-[11px]">{icon}</span>
+			<Icon name={icon} size={11} />
 			{text}
 		</span>
 	)

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Card from "@/shared/components/Card"
+import Icon from "../../../../../shared/components/Icon"
 
 // Context window, in the compact form the model lists use elsewhere. A model
 // the capability table does not know renders nothing rather than a guess.
@@ -121,7 +122,7 @@ export default function AvailableModelsCard({ visible }: AvailableModelsCardProp
 		<Card padding="sm" className="flex min-w-0 flex-col gap-3">
 			<div className="flex flex-wrap items-center justify-between gap-2">
 				<div className="flex min-w-0 items-center gap-2">
-					<span className="material-symbols-outlined text-[18px] text-primary">model_training</span>
+					<Icon name="model_training" size={18} className="text-primary" />
 					<span className="truncate text-sm font-semibold text-text-main">Available Models</span>
 				</div>
 				<span className="text-xs text-text-muted">{subtitle}</span>
@@ -129,7 +130,7 @@ export default function AvailableModelsCard({ visible }: AvailableModelsCardProp
 
 			{!models ? (
 				<div className="flex items-center justify-center py-6 text-text-muted">
-					<span className="material-symbols-outlined text-[24px] animate-spin">progress_activity</span>
+					<Icon name="progress_activity" size={24} className="animate-spin" />
 				</div>
 			) : models.length === 0 ? (
 				<div className="text-sm text-text-muted">No models are available to this key yet.</div>
