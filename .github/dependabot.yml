@@ -20,3 +20,18 @@ updates:
      update-types:
       - "minor"
       - "patch"
+
+ # The docs site is its own Next.js app with no bun.lock of its own, so the
+ # lane above never sees it — every Next.js advisory it carried (16.4.1 and
+ # older) sat unfixed for months while the root lane stayed green.
+ - package-ecosystem: "npm"
+   directory: "/gitbook"
+   schedule:
+    interval: "daily"
+   open-pull-requests-limit: 5
+   groups:
+    production:
+     dependency-type: "production"
+     update-types:
+      - "minor"
+      - "patch"
