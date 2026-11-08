@@ -251,15 +251,54 @@ describe("global bridge export", () => {
 			intervals.push(callback)
 			return 1 as unknown as ReturnType<typeof setInterval>
 		}) as typeof setInterval
+
+		// The keepalive only exists to prove the stream is alive *while* the reply is
+		// held back waiting for the envelope to close. So the upstream has to stall
+		// mid-envelope: a body that delivers everything at once closes the buffering
+		// window before the timer can fire, and the tick is then correctly a no-op.
+		let releaseUpstream: () => void = () => {}
+		const stalled = new Promise<void>((resolve) => {
+			releaseUpstream = resolve
+		})
+		const upstream = new Response(
+			new ReadableStream({
+				async start(controller) {
+					const enc = new TextEncoder()
+					controller.enqueue(enc.encode(`${deltaFrame(`<${F} calls>\n<${F} invoke name="Bash">`)}\n\n`))
+					await stalled
+					controller.enqueue(
+						enc.encode(
+							`${deltaFrame(
+								`<${F} parameter name="command" string="true">free -h</${F} parameter>\n</${F} invoke>\n</${F} calls>`,
+							)}\n\ndata: [DONE]\n\n`,
+						),
+					)
+					controller.close()
+				},
+			}),
+			{ status: 200, headers: { "Content-Type": "text/event-stream" } },
+		)
+
 		try {
 			const result = await bridgeTextToolCalls(
-				{ response: sseResponse([deltaFrame(`<${F} calls>`)]), url: "u" },
+				{ response: upstream, url: "u" },
 				{ tools: [BASH_TOOL] },
 				"kiro",
 			)
+			expect(intervals).toHaveLength(1)
+
+			// Let the marker frame be absorbed so buffering is on, then let the timer
+			// tick - this is the state the keepalive is for.
+			await new Promise((resolve) => setTimeout(resolve, 20))
 			intervals[0]()
+			releaseUpstream()
+
 			const output = await result.response.text()
 			expect(output).toContain(": 9router-stream-active")
+			// The comment must not disturb the reply: the call still arrives intact.
+			expect(callsOf(output)).toHaveLength(1)
+			expect(callsOf(output)[0].function.name).toBe("Bash")
+			expect(finishOf(output)).toBe("tool_calls")
 		} finally {
 			globalThis.setInterval = original
 		}
