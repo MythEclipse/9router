@@ -178,6 +178,7 @@ export class BaseExecutor {
 		let lastError: (Error & { name?: string }) | null = null
 		let lastStatus = 0
 		const retryAttemptsByUrl: RetryAttempts = {}
+		const forceFreshSocketByUrl: Record<number, boolean> = {}
 
 		// Merge default retry config with provider-specific config
 		const retryConfig: Record<string, RetryEntry> = {
@@ -240,6 +241,9 @@ export class BaseExecutor {
 					"FETCH",
 					`${this.provider.toUpperCase()} → ${url} | body=${bodyStr.length}B | connectTimeout=${timeoutMs}ms`,
 				)
+				const effectiveProxyOptions = forceFreshSocketByUrl[urlIndex]
+					? { ...(proxyOptions || {}), forceFreshSocket: true }
+					: proxyOptions
 				const response = await proxyAwareFetch(
 					url,
 					{
@@ -248,7 +252,7 @@ export class BaseExecutor {
 						body: bodyStr,
 						signal: mergedSignal,
 					},
-					proxyOptions,
+					effectiveProxyOptions,
 					directFetch,
 				)
 				clearTimeout(connectTimer)
@@ -260,6 +264,8 @@ export class BaseExecutor {
 				)
 
 				if (await tryRetry(urlIndex, String(response.status), `status ${response.status}`, response)) {
+					// A 502 from an edge is typically a poisoned keep-alive socket — retry fresh.
+					if (response.status === HTTP_STATUS.BAD_GATEWAY) forceFreshSocketByUrl[urlIndex] = true
 					urlIndex--
 					continue
 				}
@@ -283,8 +289,10 @@ export class BaseExecutor {
 				// Connect timeout is internal - convert to retryable network error, don't propagate AbortError
 				if (error.name === "AbortError" && !isConnectTimeout) throw error
 
-				// Map network/fetch exceptions to 502 retry config
+				// Map network/fetch exceptions to 502 retry config; force a fresh socket on retry
+				// so a silently-dropped keep-alive socket is never reused from the pool.
 				if (await tryRetry(urlIndex, String(HTTP_STATUS.BAD_GATEWAY), `network "${error.message}"`)) {
+					forceFreshSocketByUrl[urlIndex] = true
 					urlIndex--
 					continue
 				}

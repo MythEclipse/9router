@@ -43,8 +43,19 @@ describe("proxyAwareFetch directFetch (TLS transport) routing", () => {
 		expect(plainFetch).not.toHaveBeenCalled()
 	})
 
-	it("still uses native fetch when no directFetch transport is supplied", async () => {
-		const { proxyAwareFetch } = await loadProxyFetch()
+	it("dials the direct path through undici with a capped keep-alive dispatcher", async () => {
+		// The direct path no longer uses the global fetch: idle sockets get dropped by
+		// edge networks without a TCP RST, so the request has to carry the capped agent
+		// built in proxyFetch (see getDirectDispatcher). Relay hops keep global fetch.
+		const fetchMock = vi.fn(async () => new Response("plain", { status: 200 }))
+		vi.doMock("undici", async () => {
+			const actual = await vi.importActual("undici")
+			return { ...actual, fetch: fetchMock }
+		})
+
+		const { proxyAwareFetch, getDirectDispatcher, resetDirectDispatchersForTests } =
+			await loadProxyFetch()
+		resetDirectDispatchersForTests()
 
 		const response = await proxyAwareFetch(
 			"https://opencode.ai/inference/v1/chat/completions",
@@ -54,7 +65,12 @@ describe("proxyAwareFetch directFetch (TLS transport) routing", () => {
 		)
 
 		expect(await response.text()).toBe("plain")
-		expect(plainFetch).toHaveBeenCalledOnce()
+		expect(fetchMock).toHaveBeenCalledOnce()
+		expect((fetchMock.mock.calls[0][1] as { dispatcher?: unknown }).dispatcher).toBe(
+			await getDirectDispatcher(false),
+		)
+		expect(plainFetch).not.toHaveBeenCalled()
+		vi.doUnmock("undici")
 	})
 
 	it("prefers the directFetch argument over a stale options.directFetch", async () => {
