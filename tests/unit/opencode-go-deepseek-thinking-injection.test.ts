@@ -43,13 +43,25 @@ function firstBlock(body) {
 }
 
 describe("prepareClaudeRequest — opencode-go DeepSeek thinking pass-back", () => {
-	it("injects an unsigned thinking placeholder on tool_use turns missing one", () => {
-		const out = prepareClaudeRequest(makeBody("opencode-go/deepseek-v4-pro(max)"), "opencode-go")
+	it.each(["enabled", "adaptive"])(
+		"injects an unsigned thinking placeholder when thinking is %s",
+		(type) => {
+			const body = makeBody("opencode-go/deepseek-v4.1-flash")
+			body.thinking = type === "adaptive" ? { type } : body.thinking
+			const out = prepareClaudeRequest(body, "opencode-go")
 
-		const block = firstBlock(out)
-		expect(block.type).toBe("thinking")
-		expect(block.signature).toBeUndefined()
-		expect(out.messages[0].content).toHaveLength(2) // placeholder + tool_use
+			const block = firstBlock(out)
+			expect(block.type).toBe("thinking")
+			expect(block.signature).toBeUndefined()
+			expect(out.messages[0].content).toHaveLength(2) // placeholder + tool_use
+		},
+	)
+
+	it("does not inject a thinking placeholder when thinking is disabled", () => {
+		const body = makeBody("opencode-go/deepseek-v4.1-flash")
+		body.thinking = { type: "disabled" }
+		const out = prepareClaudeRequest(body, "opencode-go")
+		expect(firstBlock(out).type).toBe("tool_use")
 	})
 
 	it("keeps an existing thinking block verbatim (no re-sign, no duplicate)", () => {

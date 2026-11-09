@@ -33,10 +33,13 @@ const OpencodeGo = {
 			baseUrl: "https://opencode.ai/inference/go/openai/v1/chat/completions",
 			auth: { combined: true, header: "Authorization", scheme: "bearer" },
 		},
+		// /messages uses adaptive thinking and output_config.effort for DeepSeek.
+		// Its reasoning_effort extension requires a native Anthropic target.
 		{
 			format: "claude",
 			baseUrl: "https://opencode.ai/inference/go/anthropic/v1/messages",
 			auth: { combined: true, header: "x-api-key", scheme: "raw", anthropicVersion: true },
+			thinkingFormat: "claude-adaptive",
 		},
 		// /responses rejects the Chat-shaped thinking fields (reasoning_effort, thinking:{type}) with
 		// 503 "Endpoint is unavailable" (probed live on deepseek-v4.1-flash); it accepts the nested

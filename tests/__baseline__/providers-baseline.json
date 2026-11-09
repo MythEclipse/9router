@@ -1052,7 +1052,8 @@
           "header": "x-api-key",
           "scheme": "raw",
           "anthropicVersion": true
-        }
+        },
+        "thinkingFormat": "claude-adaptive"
       },
       {
         "format": "openai-responses",
