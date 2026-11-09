@@ -17,19 +17,41 @@ import { dbg } from "./debugLog.ts"
 // mechanism the running engine actually honours.
 const isBunRuntime = typeof (globalThis as { Bun?: unknown }).Bun !== "undefined"
 
-const originalFetch = globalThis.fetch
+const HOST_FETCH_KEY = "__9routerHostFetch"
+
+// The host fetch this module wraps. Cached on globalThis because tests call
+// vi.resetModules: a re-evaluated module would otherwise capture the previous
+// instance's patchedFetch as "original" and then, in the install guard below,
+// compare a caller's stub against it, decide "not installed yet", and overwrite
+// the stub — turning mocked transports into live network calls.
+const hostStore = globalThis as unknown as Record<string, unknown>
+if (typeof hostStore[HOST_FETCH_KEY] !== "function") {
+	hostStore[HOST_FETCH_KEY] = globalThis.fetch
+}
+const originalFetch = (hostStore[HOST_FETCH_KEY] || globalThis.fetch) as typeof fetch
+
+// True when globalThis.fetch is still the host fetch this module wrapped, i.e.
+// nobody has taken over the transport. A caller-owned fetch always wins.
+function isHostFetchCurrent() {
+	return globalThis.fetch === originalFetch
+}
+
 const proxyDispatchers = new Map()
 
-// Direct egress fetches through the package's own undici so a request can carry
+// Direct egress dials through the package's own undici so the request can carry
 // the capped/handshake-safe dispatcher built below. Bun's fetch ignores undici
-// dispatchers entirely (it uses its native `proxy` option), so there the global
-// fetch stays in charge. Resolved lazily: a dynamic import keeps a test's
-// `vi.doMock("undici")` effective.
+// dispatchers entirely (it uses its native `proxy` option), so there the fetch in
+// hand stays in charge.
+//
+// When a caller has replaced globalThis.fetch, that fetch wins: replacing it is
+// how a caller (or a test) takes over the transport, and dialling our own undici
+// around such a stub silently sent real network requests from code under test.
 async function directEgressFetch(url: string | URL, init?: RequestInit) {
-	if (isBunRuntime) return originalFetch(url, init)
+	if (isBunRuntime || !isHostFetchCurrent()) return globalThis.fetch(url, init)
 	const { fetch } = await import("undici")
 	return fetch(url, init as Parameters<typeof fetch>[1])
 }
+
 const directDispatchers = new Map()
 
 export function resetDirectDispatchersForTests() {
@@ -740,7 +762,11 @@ async function patchedFetch(url, options = {}) {
 // The cast is required off Next: `bun-types` types `globalThis.fetch` as
 // `typeof fetch` plus a `preconnect` member, which this wrapper does not carry.
 // Bun's own docs prescribe exactly this cast for the same reason.
-if (globalThis.fetch !== patchedFetch) {
+//
+// Only install over the platform fetch. A caller (or a test) that replaced
+// globalThis.fetch has taken over the transport on purpose; overwriting that
+// stub sent real network requests from code under test.
+if (isHostFetchCurrent()) {
 	globalThis.fetch = patchedFetch as typeof fetch
 }
 
