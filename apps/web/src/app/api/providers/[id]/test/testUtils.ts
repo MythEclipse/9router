@@ -338,7 +338,10 @@ async function refreshOAuthToken(connection: {
 		}
 
 		if (provider === "claude") {
-			const response = await fetch(CLAUDE_CONFIG.tokenUrl, {
+			// proxyAwareFetch, not bare fetch: the curved dispatcher is required to
+			// survive the DPI that RSTs Node's default ClientHello.
+			const { proxyAwareFetch } = await import("open-sse/utils/proxyFetch")
+			const response = await proxyAwareFetch(CLAUDE_CONFIG.tokenUrl, {
 				method: "POST",
 				headers: { "Content-Type": "application/json", Accept: "application/json" },
 				body: JSON.stringify({
