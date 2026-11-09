@@ -1,4 +1,9 @@
 import { createHash, randomBytes } from "node:crypto"
+import {
+	isAgentIdentityPrompt,
+	NEUTRAL_SYSTEM_PROMPT,
+	systemPromptText,
+} from "../shared/cliAgentPrompt.ts"
 import { DefaultExecutor } from "./default.ts"
 
 function findHeaderKey(headers, name) {
@@ -190,7 +195,22 @@ export class CodeBuddyIntlExecutor extends DefaultExecutor {
 		// CodeBuddy rejects plain OpenAI shape (11101 invalid request): needs a
 		// leading system prompt + user content as typed blocks, not a bare string.
 		const source = Array.isArray(transformed.messages) ? transformed.messages : []
-		transformed.messages = [{ role: "system", content: "You are CodeBuddy Code." }]
+		// Forward what the client actually asked for. The filter is only interested in
+		// third-party agent identities (see shared/cliAgentPrompt.ts), so a real user
+		// system prompt now reaches the model instead of being replaced wholesale by
+		// the CLI's own default.
+		const clientSystemPrompts = source
+			.filter((m) => m && ["system", "developer"].includes(m.role))
+			.map((m) => systemPromptText(m.content))
+			.map((text) => (isAgentIdentityPrompt(text) ? NEUTRAL_SYSTEM_PROMPT : text))
+			.filter(Boolean)
+		transformed.messages = [
+			{
+				role: "system",
+				content:
+					clientSystemPrompts.length > 0 ? clientSystemPrompts.join("\n\n") : "You are CodeBuddy Code.",
+			},
+		]
 		for (const message of source) {
 			if (!message || typeof message !== "object" || ["system", "developer"].includes(message.role))
 				continue
