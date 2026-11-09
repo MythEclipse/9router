@@ -3,10 +3,44 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
 
-const installer = fileURLToPath(new URL("../../cli/hooks/sqliteRuntime.js", import.meta.url))
+const source = fileURLToPath(new URL("../../cli/hooks/sqliteRuntime.ts", import.meta.url))
 const roots: string[] = []
+let buildDir: string
+let installer: string
+
+/**
+ * `cli/hooks/*.js` is build output: it is gitignored and only produced by the
+ * CLI's own esbuild pass (`bun --filter 9router build`, or the postinstall
+ * runner, which deletes what it generated). A clean checkout therefore has no
+ * `sqliteRuntime.js`, and requiring it made this test fail on the very first
+ * CI run after it landed — green only on a machine that had built the CLI by
+ * hand. Compiling the source here keeps the assertion on the real module
+ * boundary (a child process calling `runNpmInstall`) without depending on
+ * whether something else happened to emit the artefact first.
+ */
+beforeAll(async () => {
+	const { build } = await import("esbuild")
+	buildDir = fs.mkdtempSync(path.join(os.tmpdir(), "9router-hook-build-"))
+	// `.mjs` so Node reads it as ESM regardless of the temp directory's
+	// package.json (there is none, which would otherwise mean CommonJS).
+	installer = path.join(buildDir, "sqliteRuntime.mjs")
+	await build({
+		entryPoints: [source],
+		outfile: installer,
+		bundle: true,
+		format: "esm",
+		platform: "node",
+		target: "node18",
+		packages: "external",
+		logLevel: "silent",
+	})
+})
+
+afterAll(() => {
+	if (buildDir) fs.rmSync(buildDir, { recursive: true, force: true })
+})
 
 afterEach(() => {
 	for (const root of roots.splice(0)) {

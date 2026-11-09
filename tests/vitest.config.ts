@@ -39,7 +39,14 @@ function bunSqliteStub(): Plugin {
 			// handle immediately; resolving the whole file for a test that only
 			// reaches a use-case would drag the native binding in. Substitute the
 			// module instead of its import.
-			if (source.endsWith("infrastructure/db/client.ts")) return clientStub
+			//
+			// Match on the tail, not the full path: the only runtime importer is
+			// `use-cases-factory.ts`, which reaches it as `./db/client.ts` from
+			// inside `infrastructure/`, so a rule anchored at
+			// `infrastructure/db/client.ts` never fires and the real module (plus
+			// `drizzle-orm/bun-sqlite`, which Node loads natively and which itself
+			// imports `bun:sqlite`) ends up in the graph.
+			if (source.endsWith("db/client.ts")) return clientStub
 			return null
 		},
 		load(id) {
