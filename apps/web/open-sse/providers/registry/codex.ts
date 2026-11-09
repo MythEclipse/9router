@@ -157,6 +157,20 @@ const Codex = {
 			kind: "image",
 		},
 		{
+			id: "gpt-image-2.6-flare",
+			name: "GPT Image 2.6 Flare",
+			capabilities: ["text2img", "edit", "multiImage"],
+			params: ["size", "quality", "background", "image_detail", "output_format"],
+			kind: "image",
+		},
+		{
+			id: "gpt-image-2.6-sunburst",
+			name: "GPT Image 2.6 Sunburst",
+			capabilities: ["text2img", "edit", "multiImage"],
+			params: ["size", "quality", "background", "image_detail", "output_format"],
+			kind: "image",
+		},
+		{
 			id: "gpt-image-2",
 			name: "GPT Image 2",
 			capabilities: ["text2img", "edit", "multiImage"],
