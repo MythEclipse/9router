@@ -117,4 +117,63 @@ describe("toolDeduper — DeepSeek same-name dedup (new)", () => {
 		expect(tools.map((t) => t.name)).toEqual(["mcp__exa__web_search_exa", "Bash"])
 		expect(stripped.sort()).toEqual(["Bash", "WebSearch"])
 	})
+	describe("toolDeduper — tool_reference cleanup for stripped tools", () => {
+		const toolResultMsg = (...blocks) => ({
+			role: "user",
+			content: [{ type: "tool_result", tool_use_id: "t1", content: blocks }],
+		})
+
+		it("drops a tool_reference naming a stripped tool, keeps the others", () => {
+			const messages = [
+				toolResultMsg(
+					{ type: "tool_reference", tool_name: "WebSearch" },
+					{ type: "tool_reference", tool_name: "mcp__exa__web_search_exa" },
+				),
+			]
+			const { stripped } = dedupeTools([MCP_EXA, { name: "WebSearch", description: "web" }, BASH()], {
+				clientTool: "claude",
+				messages,
+			})
+			expect(stripped).toEqual(["WebSearch"])
+			expect(messages[0].content[0].content).toEqual([
+				{ type: "tool_reference", tool_name: "mcp__exa__web_search_exa" },
+			])
+		})
+
+		it("leaves a text note when every reference is stripped (empty content is invalid)", () => {
+			const messages = [toolResultMsg({ type: "tool_reference", tool_name: "WebFetch" })]
+			dedupeTools([MCP_EXA, { name: "WebFetch", description: "web" }], {
+				clientTool: "claude",
+				messages,
+			})
+			expect(messages[0].content[0].content).toEqual([
+				{ type: "text", text: "[Tool WebFetch is unavailable]" },
+			])
+		})
+
+		it("only cleans blocks under tool_result; stray tool_reference blocks are untouched", () => {
+			const stray = { type: "tool_reference", tool_name: "WebSearch" }
+			const messages = [{ role: "user", content: [stray] }]
+			dedupeTools([MCP_EXA, { name: "WebSearch", description: "web" }], {
+				clientTool: "claude",
+				messages,
+			})
+			expect(messages[0].content).toEqual([stray])
+		})
+
+		it("does nothing when no tool was stripped", () => {
+			const messages = [toolResultMsg({ type: "tool_reference", tool_name: "WebSearch" })]
+			const snapshot = structuredClone(messages)
+			dedupeTools([BASH()], { clientTool: "claude", messages })
+			expect(messages).toEqual(snapshot)
+		})
+
+		it("does nothing without a messages argument (back-compat)", () => {
+			const { tools, stripped } = dedupeTools([MCP_EXA, { name: "WebSearch", description: "web" }], {
+				clientTool: "claude",
+			})
+			expect(tools.map((t) => t.name)).toEqual(["mcp__exa__web_search_exa"])
+			expect(stripped).toEqual(["WebSearch"])
+		})
+	})
 })
