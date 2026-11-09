@@ -155,6 +155,13 @@ export function translateRequest(
 	// Expose to downstream translators (gemini-cli/antigravity envelopes) that run after envelope is stripped
 	if (credentials) credentials._clientSessionId = clientSessionId
 
+	// Provider capability threaded into source-to-OpenAI translation, so cache-aware
+	// OpenAI targets (DashScope) keep the client's explicit cache_control markers.
+	const translationOptions = {
+		preserveCacheControl:
+			targetFormat === FORMATS.OPENAI && !!PROVIDERS[provider]?.quirks?.preserveCacheControl,
+	}
+
 	// If same format, skip translation steps
 	if (sourceFormat !== targetFormat) {
 		// Direct route: if a translator is registered for this exact source:target
@@ -162,13 +169,13 @@ export function translateRequest(
 		// pairs like claude:kiro (avoids the claude->openai->kiro double-hop).
 		const directFn = requestRegistryMap().get(`${sourceFormat}:${targetFormat}`)
 		if (directFn) {
-			result = directFn(model, result, stream, credentials)
+			result = directFn(model, result, stream, credentials, translationOptions)
 		} else {
 			// Step 1: source -> openai (if source is not openai)
 			if (sourceFormat !== FORMATS.OPENAI) {
 				const toOpenAI = requestRegistryMap().get(`${sourceFormat}:${FORMATS.OPENAI}`)
 				if (toOpenAI) {
-					result = toOpenAI(model, result, stream, credentials)
+					result = toOpenAI(model, result, stream, credentials, translationOptions)
 					// Log OpenAI intermediate format
 					reqLogger?.logOpenAIRequest?.(result)
 				}
@@ -198,9 +205,7 @@ export function translateRequest(
 	// Always normalize to clean OpenAI format when target is OpenAI
 	// This handles hybrid requests (e.g., OpenAI messages + Claude tools)
 	if (targetFormat === FORMATS.OPENAI) {
-		result = filterToOpenAIFormat(result, {
-			preserveCacheControl: !!PROVIDERS[provider]?.quirks?.preserveCacheControl,
-		})
+		result = filterToOpenAIFormat(result, translationOptions)
 	}
 
 	// Final step: prepare request for Claude format endpoints
