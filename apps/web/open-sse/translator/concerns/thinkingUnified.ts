@@ -146,6 +146,11 @@ const NATIVE_ONLY_FORMATS = new Set([
 	"kiro",
 ])
 
+// Self-hosted gateways (vLLM/SGLang) validate thinking.budget_tokens; first-party
+// DeepSeek ignores it. Only dynamic compat nodes opt into the passthrough.
+const isOpenAICompatibleNode = (provider: unknown) =>
+	String(provider || "").startsWith("openai-compatible-")
+
 /** Transport entry as declared by the registry, including its thinking shape. */
 type ProviderTransport = TransportConfig & { thinkingFormat?: string }
 
@@ -304,7 +309,17 @@ function stripAll(body) {
 }
 
 // Apply unified thinking config to body in the resolved provider-native format.
-function applyFormat(fmt, body, cfg, caps, supportedLevels, display, model, targetFormat) {
+function applyFormat(
+	fmt,
+	body,
+	cfg,
+	caps,
+	supportedLevels,
+	display,
+	model,
+	targetFormat,
+	budgetPassthrough = false,
+) {
 	const none = cfg.mode === "none"
 	const canDisable = caps.thinkingCanDisable !== false
 	const maxAsXhigh = targetFormat === "openai-responses" && isMuseSparkModel(model)
@@ -444,7 +459,12 @@ function applyFormat(fmt, body, cfg, caps, supportedLevels, display, model, targ
 				body.thinking = { type: "disabled" }
 				break
 			}
-			body.thinking = { type: "enabled" }
+			// Keep an explicit budget captured before translation/stripAll; strict
+			// DeepSeek-compatible hosts validate it when thinking is enabled.
+			body.thinking =
+				budgetPassthrough && cfg.mode === "budget" && Number.isFinite(cfg.budget) && cfg.budget > 0
+					? { type: "enabled", budget_tokens: cfg.budget }
+					: { type: "enabled" }
 			// DeepSeek: low/medium→high, xhigh/max→max. Some backends (mimo v2.5-pro/v2.6
 			// on opencode-go, probed live) 400 on "max" - clamp to high when the declared
 			// levels exclude it.
@@ -560,6 +580,16 @@ export function applyThinking(targetFormat, model, body, provider = null, intent
 	const display =
 		typeof body.thinking?.display === "string" ? body.thinking.display : intent?.display
 	stripAll(body)
-	applyFormat(fmt, body, cfg, caps, supportedLevels, display, cleanModel, targetFormat)
+	applyFormat(
+		fmt,
+		body,
+		cfg,
+		caps,
+		supportedLevels,
+		display,
+		cleanModel,
+		targetFormat,
+		isOpenAICompatibleNode(provider),
+	)
 	return body
 }

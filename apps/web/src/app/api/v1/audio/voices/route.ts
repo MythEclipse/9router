@@ -1,9 +1,10 @@
 import { buildErrorBody } from "open-sse/utils/error"
+import { getUseCases } from "@/lib/useCases"
 import { AI_PROVIDERS } from "@/shared/constants/providers"
 
 export const dynamic = "force-dynamic"
 
-/** A voice entry as returned by the internal media-providers voices API. */
+/** A voice entry as the voice catalogue returns it. */
 interface VoiceItem {
 	id: string
 	name?: string
@@ -12,15 +13,32 @@ interface VoiceItem {
 	gender?: string
 }
 
+/** The catalogue shape for the providers that have their own dashboard endpoint. */
+interface CataloguePayload {
+	voices?: VoiceItem[]
+	byLang?: Record<string, { voices?: VoiceItem[] }>
+}
+
 const CORS = { "Access-Control-Allow-Origin": "*" }
 
-// Provider → internal voices API. Edge/local-device share the generic endpoint.
-const PROVIDER_API = {
-	elevenlabs: (origin) => `${origin}/api/media-providers/tts/elevenlabs/voices`,
-	deepgram: (origin) => `${origin}/api/media-providers/tts/deepgram/voices`,
-	inworld: (origin) => `${origin}/api/media-providers/tts/inworld/voices`,
-	"edge-tts": (origin) => `${origin}/api/media-providers/tts/voices?provider=edge-tts`,
-	"local-device": (origin) => `${origin}/api/media-providers/tts/voices?provider=local-device`,
+// Providers whose catalogue is built by the shared voice use-case. edge-tts and
+// local-device read a public catalogue; elevenlabs reads the stored connection.
+const CATALOGUE_PROVIDERS = new Set([
+	"elevenlabs",
+	"deepgram",
+	"inworld",
+	"edge-tts",
+	"local-device",
+])
+
+async function readCatalogue(provider: string, lang: string | null): Promise<CataloguePayload> {
+	const voices = getUseCases().ttsVoices
+	if (provider === "deepgram")
+		return (await voices.deepgram({ lang: lang ?? undefined })) as CataloguePayload
+	if (provider === "inworld")
+		return (await voices.inworld({ lang: lang ?? undefined })) as CataloguePayload
+	// The generic listing: edge-tts and local-device by name, elevenlabs from its connection.
+	return (await voices.listing({ provider, lang: lang ?? undefined })) as CataloguePayload
 }
 
 export async function OPTIONS() {
@@ -31,40 +49,32 @@ export async function OPTIONS() {
 
 // GET /v1/audio/voices?provider={p}[&lang=xx]
 // Returns OpenAI-style list with each voice's full model id ready for /v1/audio/speech
+//
+// The catalogue is read in-process. It used to be fetched over HTTP from the
+// dashboard route at /api/media-providers/tts/voices, which sits behind the
+// dashboard session: when login was enabled, an external API-key client reached
+// this route, passed its own gate, and then got an internal 401 from a request it
+// had no cookie for. Reading the same use-case the dashboard route reads removes
+// the hop without putting the dashboard route on the public surface.
 export async function GET(request) {
 	try {
-		const { searchParams, origin } = new URL(request.url)
+		const { searchParams } = new URL(request.url)
 		const provider = searchParams.get("provider")
 		const lang = searchParams.get("lang")
 
-		if (!provider || !PROVIDER_API[provider]) {
+		if (!provider || !CATALOGUE_PROVIDERS.has(provider)) {
 			return Response.json(
-				buildErrorBody(400, `provider must be one of: ${Object.keys(PROVIDER_API).join(", ")}`),
+				buildErrorBody(400, `provider must be one of: ${[...CATALOGUE_PROVIDERS].join(", ")}`),
 				{ status: 400, headers: CORS },
 			)
 		}
 
-		const baseUrl = PROVIDER_API[provider](origin)
-		const url = lang
-			? `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}lang=${encodeURIComponent(lang)}`
-			: baseUrl
-		const res = await fetch(url, { cache: "no-store" })
-		const data = await res.json()
-		if (!res.ok || data.error) {
-			return Response.json(buildErrorBody(res.status, data.error || `Upstream ${res.status}`), {
-				status: res.status,
-				headers: CORS,
-			})
-		}
+		const data = await readCatalogue(provider, lang)
 
-		// Internal API shape: { voices } when lang filter, else { byLang, languages }
-		const voicePayload = data as {
-			voices?: VoiceItem[]
-			byLang?: Record<string, { voices?: VoiceItem[] }>
-		}
+		// Catalogue shape: { voices } when lang filter, else { byLang, languages }
 		const rawVoices = lang
-			? voicePayload.voices || []
-			: Object.values(voicePayload.byLang || {}).flatMap((l) => l.voices || [])
+			? data.voices || []
+			: Object.values(data.byLang || {}).flatMap((l) => l.voices || [])
 
 		// Use provider alias for /v1/audio/speech model param (matches skill convention e.g. el/, dg/, edge-tts/)
 		const alias = AI_PROVIDERS[provider]?.alias || provider
@@ -76,13 +86,9 @@ export async function GET(request) {
 			model: `${alias}/${v.id}`,
 		}))
 
-		return Response.json(
-			{ object: "list", data: data_out },
-			{
-				headers: { "Access-Control-Allow-Origin": "*" },
-			},
-		)
+		return Response.json({ object: "list", data: data_out }, { headers: CORS })
 	} catch (err) {
-		return Response.json(buildErrorBody(502, err.message || "Failed"), { status: 502, headers: CORS })
+		const status = typeof err?.status === "number" ? err.status : 502
+		return Response.json(buildErrorBody(status, err.message || "Failed"), { status, headers: CORS })
 	}
 }
