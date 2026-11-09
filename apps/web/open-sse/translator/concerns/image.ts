@@ -157,6 +157,11 @@ export async function fetchImageAsBase64(
 		return null
 	} finally {
 		if (timeout) clearTimeout(timeout)
-		dispatcher.close().catch(() => {})
+		// close() is fire-and-forget; a test stub replacing Agent need not implement it.
+		try {
+			dispatcher.close?.()?.catch?.(() => {})
+		} catch {
+			/* already closing */
+		}
 	}
 }
