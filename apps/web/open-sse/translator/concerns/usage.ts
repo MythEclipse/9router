@@ -26,7 +26,7 @@ interface UsageParts {
  */
 interface RawUsage {
 	[key: string]: unknown
-	inputTokenDetails?: { cacheReadTokens?: number }
+	inputTokenDetails?: { cacheReadTokens?: number; cacheWriteTokens?: number }
 }
 
 export function buildUsage({
@@ -128,10 +128,19 @@ const USAGE_EXTRACTORS: Record<string, (raw: RawUsage) => UsageParts> = {
 			output = n(raw.outputTokens)
 		const total = typeof raw.totalTokens === "number" ? raw.totalTokens : input + output
 		// AI SDK v5 usage carries the cache read as `cachedInputTokens` (nested
-		// `inputTokenDetails.cacheReadTokens` in some builds). Without this the
-		// upstream cache hit is recorded as 0 and billed at the full input rate.
-		const cached = n(raw.cachedInputTokens ?? raw.inputTokenDetails?.cacheReadTokens)
-		return { promptTokens: input, completionTokens: output, totalTokens: total, cachedTokens: cached }
+		// `inputTokenDetails.cacheReadTokens` in some builds), and the cache write
+		// as `inputTokenDetails.cacheWriteTokens`. Without these the upstream cache
+		// hit is recorded as 0 and billed at the full input rate. `||`, not `??`:
+		// every build ships both keys, so the unused one is a present `0`.
+		const cached = n(raw.cachedInputTokens || raw.inputTokenDetails?.cacheReadTokens)
+		const cacheCreate = n(raw.inputTokenDetails?.cacheWriteTokens)
+		return {
+			promptTokens: input,
+			completionTokens: output,
+			totalTokens: total,
+			cachedTokens: cached,
+			cacheCreationTokens: cacheCreate,
+		}
 	},
 }
 

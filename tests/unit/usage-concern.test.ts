@@ -85,6 +85,44 @@ describe("toOpenAIUsage", () => {
 		expect(u.total_tokens).toBe(99)
 	})
 
+	it("commandcode: reads cache read/write from inputTokenDetails", () => {
+		const u = toOpenAIUsage(
+			{
+				inputTokens: 100,
+				outputTokens: 20,
+				totalTokens: 120,
+				inputTokenDetails: { cacheReadTokens: 30, cacheWriteTokens: 12 },
+			},
+			"commandcode",
+		)
+		expect(u.prompt_tokens_details).toEqual({ cached_tokens: 30, cache_creation_tokens: 12 })
+	})
+
+	it("commandcode: prefers a non-zero cachedInputTokens over the nested detail", () => {
+		const u = toOpenAIUsage(
+			{
+				inputTokens: 10,
+				outputTokens: 1,
+				cachedInputTokens: 4,
+				inputTokenDetails: { cacheReadTokens: 0 },
+			},
+			"commandcode",
+		)
+		expect(u.prompt_tokens_details).toEqual({ cached_tokens: 4 })
+	})
+
+	it("commandcode: omits prompt_tokens_details when no cache counters are present", () => {
+		const u = toOpenAIUsage(
+			{
+				inputTokens: 10,
+				outputTokens: 1,
+				inputTokenDetails: { cacheReadTokens: 0, cacheWriteTokens: 0 },
+			},
+			"commandcode",
+		)
+		expect(u.prompt_tokens_details).toBeUndefined()
+	})
+
 	it("unknown kind / null raw -> null", () => {
 		expect(toOpenAIUsage({}, "nope")).toBeNull()
 		expect(toOpenAIUsage(null, "claude")).toBeNull()
