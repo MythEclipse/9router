@@ -4,7 +4,11 @@ import Image from "next/image"
 import { useEffect, useState } from "react"
 import { Button, Card, ManualConfigModal, ModelSelectModal } from "@/shared/components"
 import { DEFAULT_LOCAL_API_KEY } from "@/shared/constants/config"
-import { getModelsByProviderId, PROVIDER_ID_TO_ALIAS } from "@/shared/constants/models"
+import {
+	buildModelGroups,
+	collectModelValues,
+	LIVE_CATALOG_PROVIDERS,
+} from "@/shared/utils/selectableModels"
 import Icon from "../../../../../shared/components/Icon"
 import ApiKeySelect from "./ApiKeySelect.tsx"
 import { EndpointField } from "./CardField.tsx"
@@ -60,6 +64,7 @@ export default function GenericCliToolCard({
 	const [applying, setApplying] = useState(false)
 	const [restoring, setRestoring] = useState(false)
 	const [message, setMessage] = useState(null)
+	const [addingAll, setAddingAll] = useState(false)
 	const [showInstallGuide, setShowInstallGuide] = useState(false)
 	const [selectedApiKey, setSelectedApiKey] = useState(() => apiKeys?.[0]?.key || "")
 	const [selectedModel, setSelectedModel] = useState(() => {
@@ -272,24 +277,82 @@ export default function GenericCliToolCard({
 		setModalOpen(false)
 	}
 
-	const handleAddAllActiveModels = () => {
-		const allModels = []
-		activeProviders.forEach((conn) => {
-			const alias = PROVIDER_ID_TO_ALIAS[conn.provider] || conn.provider
-			const providerModels = getModelsByProviderId(conn.provider)
-			providerModels.forEach((m) => {
-				const val = `${alias}/${m.id}`
-				if (!allModels.includes(val)) allModels.push(val)
-			})
-		})
-		if (allModels.length > 0) {
+	/**
+	 * Resolve every model the user can currently route to, using the picker's rules.
+	 *
+	 * Walking the static registry over connection rows (what this used to do) misses
+	 * everything the picker knows from runtime data: no-auth free providers never own a
+	 * connection row (OpenCode Free), models registered through /api/models/custom live
+	 * outside the registry, user aliases and per-account live catalogues are runtime data,
+	 * and disabled models must not be re-added.
+	 */
+	const loadActiveModelValues = async () => {
+		const readJson = async (url) => {
+			try {
+				const res = await fetch(url, { cache: "no-store" })
+				return res.ok ? await res.json() : null
+			} catch {
+				return null
+			}
+		}
+
+		const [providersData, aliasData, customData, disabledData] = await Promise.all([
+			readJson("/api/providers"),
+			readJson("/api/models/alias"),
+			readJson("/api/models/custom"),
+			readJson("/api/models/disabled"),
+		])
+
+		const allConnections = providersData?.connections ?? activeProviders ?? []
+		const connections = allConnections.filter((conn) => conn && conn.isActive !== false)
+
+		// Per-account catalogues (cursor/cline/clinepass/zed/nous) are not in the registry.
+		const liveModels = {}
+		await Promise.all(
+			LIVE_CATALOG_PROVIDERS.map(async (providerId) => {
+				const connectionIds = connections
+					.filter((conn) => conn.provider === providerId)
+					.map((conn) => conn.id)
+				if (connectionIds.length === 0) return
+				const lists = await Promise.all(
+					connectionIds.map((id) => readJson(`/api/providers/${id}/models`)),
+				)
+				liveModels[providerId] = lists.flatMap((data) =>
+					Array.isArray(data?.models) ? data.models : [],
+				)
+			}),
+		)
+
+		return collectModelValues(
+			buildModelGroups({
+				connections,
+				allConnections,
+				modelAliases: aliasData?.aliases || {},
+				customModels: customData?.models || [],
+				disabledModels: disabledData?.disabled || {},
+				liveModels,
+			}),
+		)
+	}
+
+	const handleAddAllActiveModels = async () => {
+		setAddingAll(true)
+		setMessage(null)
+		try {
+			const allModels = await loadActiveModelValues()
+			if (allModels.length === 0) {
+				setMessage({ type: "error", text: "No active models found to add." })
+				return
+			}
 			setSelectedModels((prev) => Array.from(new Set([...prev, ...allModels])))
-			setSelectedModelCaps((prev) =>
-				Object.fromEntries([
-					...Object.entries(readPiModelCaps(allModels.map((id) => ({ id })))),
-					...Object.entries(prev),
-				]),
-			)
+			setSelectedModelCaps((prev) => ({
+				...Object.fromEntries(Object.entries(readPiModelCaps(allModels.map((id) => ({ id }))))),
+				...prev,
+			}))
+		} catch (error) {
+			setMessage({ type: "error", text: error.message })
+		} finally {
+			setAddingAll(false)
 		}
 	}
 
@@ -650,17 +713,17 @@ export default function GenericCliToolCard({
 													<Icon name="add" size={14} className="mr-1" />
 													Add Model
 												</Button>
-												{activeProviders?.length > 0 && (
-													<Button
-														type="button"
-														size="sm"
-														variant="ghost"
-														onClick={handleAddAllActiveModels}
-														className="text-xs text-primary hover:text-primary-hover"
-													>
-														+ Add All Active Models
-													</Button>
-												)}
+												{/* Always offered now: no-auth providers have no connection row to gate on. */}
+												<Button
+													type="button"
+													size="sm"
+													variant="ghost"
+													onClick={handleAddAllActiveModels}
+													disabled={addingAll}
+													className="text-xs text-primary hover:text-primary-hover"
+												>
+													{addingAll ? "Adding..." : "+ Add All Active Models"}
+												</Button>
 												{selectedModels.length > 0 && (
 													<button
 														type="button"
