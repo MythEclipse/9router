@@ -545,8 +545,15 @@ function applyFormat(
 				delete body.params.reasoning_effort
 				break
 			}
-			const level = toLevel(eff)
-			if (level) body.params.reasoning_effort = level
+			// The CLI accepts a fixed level set; "auto"/"minimal" are not members and
+			// would be sent verbatim. Clamp them the way the CLI itself does, and drop
+			// anything still outside the set rather than emit an invalid value.
+			const rawLevel = toLevel(eff)
+			const level = rawLevel === "auto" ? "high" : rawLevel === "minimal" ? "low" : rawLevel
+			const validLevels = ["off", "low", "medium", "high", "xhigh", "max"]
+			if (level && validLevels.includes(level)) {
+				body.params.reasoning_effort = level
+			}
 			break
 		}
 		default:
