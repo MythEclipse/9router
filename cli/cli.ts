@@ -658,7 +658,7 @@ Commands:
 		})
 
 		// Initialize tray icon (runs alongside TUI)
-		const initTrayIcon = () => {
+		const initTrayIcon = (callbacks = {}) => {
 			try {
 				initTray({
 					port,
@@ -669,9 +669,11 @@ Commands:
 						setTimeout(() => process.exit(0), 100)
 					},
 					onOpenDashboard: () => openBrowser(url),
+					...callbacks,
 				})
-			} catch (_err) {
+			} catch (err) {
 				// Tray not available - continue without it
+				if (typeof callbacks.onError === "function") callbacks.onError(err)
 			}
 		}
 
@@ -684,10 +686,21 @@ Commands:
 			console.log(`\n🚀 ${pkg.name} v${pkg.version}`)
 			console.log(`Server: http://${displayHost}:${port}`)
 
+			// Only claim the tray is running once it actually became ready. Reporting
+			// it up front hid every failure (missing libappindicator, EACCES, wrong
+			// architecture) behind a success message.
 			waitServerReady(port).then(() => {
-				initTrayIcon()
-				console.log("\n💡 Router is now running in system tray. Close this terminal if you want.")
-				console.log("   Right-click tray icon to open dashboard or quit.\n")
+				initTrayIcon({
+					onReady: () => {
+						console.log("\n💡 Router is now running in system tray. Close this terminal if you want.")
+						console.log("   Right-click tray icon to open dashboard or quit.\n")
+					},
+					onError: (err) => {
+						console.log("\n⚠️  No tray icon — the server keeps running.")
+						if (err?.message) console.log(`   ${err.message.split("\n").join("\n   ")}`)
+						console.log(`   Dashboard: http://${displayHost}:${port}\n`)
+					},
+				})
 			})
 
 			return
