@@ -1,159 +1,37 @@
-/**
- * Validate an API key by asking the provider.
- *
- * Called from:
- *   - `apps/api/src/application/use-cases.ts` (`makeValidateCredential`, registered
- *     as `validateCredential`)
- *   - `apps/web/src/app/api/providers/validate/route.ts` via
- *     `getUseCases().validateCredential.run(...)`
- *   - `tests/unit/use-case-validate-credential.test.ts`
- *
- * No existing file serves this purpose: `probe-models.ts` probes every model on a
- * stored connection, and `web-login.ts` probes a freshly harvested cookie. This
- * probes a key the operator just typed, before any connection exists.
- *
- * Reads: a compatible/custom-embedding node's base URL and default model. Writes
- * nothing — validation never stores a connection.
- *
- * User instruction, verbatim: "lanjut kenapa malah berhenti".
- */
-
+/** Validate credential. (Types in `validate-credential-types.ts`, static/generic plans in
+ * `validate-credential-plans.ts`.) */
+import { invalid, notFound } from "../../domain/errors.ts"
+import type {
+	ProbePlan,
+	ProbeRequest,
+	ProbeResponse,
+	ValidateCredentialDependencies,
+	ValidationResult,
+} from "./validate-credential-types.ts"
 import {
 	anthropicCompatibleVerdict,
-	blackboxVerdict,
 	cloudflareVerdict,
 	mediaProbeVerdict,
 	notRefused,
-	readerFor,
 	readServiceAccount,
 	refusalMessage,
-	toCookieHeader,
-	unwrapCredential,
 	webProbeVerdict,
-} from "../../domain/credential-verdict.ts"
-import { invalid, notFound } from "../../domain/errors.ts"
+} from "./validate-credential-types.ts"
 
-/** What a probe request needs: where to go and what to send. */
-export interface ProbeRequest {
-	readonly url: string
-	readonly method?: "GET" | "POST"
-	readonly headers?: Record<string, string>
-	readonly body?: string
-	readonly timeoutMs?: number
-}
+export type {
+	AiProviderEntry,
+	ProbeConfig,
+	ProbeRequest,
+	ProbeResponse,
+	RegistryEntry,
+	ValidateCredentialDependencies,
+	ValidationResult,
+} from "./validate-credential-types.ts"
 
-/** A probe's outcome, as the transport reports it. */
-export interface ProbeResponse {
-	readonly status: number
-	readonly ok: boolean
-	readonly text?: string
-}
-
-/** The verdict the panel shows. */
-export interface ValidationResult {
-	readonly valid: boolean
-	readonly error: string | null
-}
-
-export interface ValidateCredentialDependencies {
-	/** Sends one probe. Throws only on a network failure. */
-	readonly send: (request: ProbeRequest) => Promise<ProbeResponse>
-	/** A compatible or custom-embedding node, for its base URL and default model. */
-	readonly findNode: (
-		provider: string,
-	) => Promise<{ readonly baseUrl?: string; readonly defaultModel?: string } | null>
-	/** The provider's default model, for probes that need one. */
-	readonly defaultModel: (provider: string) => string
-	/** The provider's registry entry: base URL, format, headers, auth header. */
-	readonly providerConfig: (provider: string) => RegistryEntry | undefined
-	/** The provider's AI entry: noAuth, service kinds, apiKeyOptionalWith, credentialForm, probe configs. */
-	readonly aiProvider: (provider: string) => AiProviderEntry | undefined
-	readonly isOpenAICompatible: (provider: string) => boolean
-	readonly isAnthropicCompatible: (provider: string) => boolean
-	readonly isCustomEmbedding: (provider: string) => boolean
-	/** Probes AWS credentials, which have no bearer key to test. */
-	readonly probeAws: (input: {
-		readonly apiKey: string
-		readonly providerSpecificData?: Record<string, unknown>
-	}) => Promise<ValidationResult>
-	/** Probes a Qoder PAT, which needs a token exchange first. */
-	readonly probeQoder: (input: {
-		readonly provider: string
-		readonly apiKey: string
-		readonly providerSpecificData?: Record<string, unknown>
-	}) => Promise<ValidationResult>
-	/** Probes Nous, whose /models is public and proves nothing. */
-	readonly probeNous: (apiKey: string) => Promise<ValidationResult>
-	/** The dynamic base URLs two providers compute from the operator's own data. */
-	readonly ollamaLocalHost: (input: { providerSpecificData?: Record<string, unknown> }) => string
-	readonly tokenplanBaseUrl: (input: { providerSpecificData?: Record<string, unknown> }) => string
-	/** Builds a CommandCode request body, which is not OpenAI-shaped. */
-	readonly commandCodeBody: (model: string) => unknown
-	/** The header set a CommandCode probe must send to pass for the CLI. */
-	readonly commandCodeHeaders: (input: {
-		readonly apiKey: string
-		readonly sessionId?: string
-	}) => Record<string, string>
-	readonly randomId: () => string
-}
-
-/** A provider's registry entry, as the validator reads it. */
-export interface RegistryEntry {
-	readonly baseUrl?: string
-	readonly format?: string
-	readonly headers?: Record<string, string>
-	readonly authHeader?: string
-	readonly noAuth?: boolean
-	readonly validateUrl?: string
-}
-
-/** A provider's AI entry, as the validator reads it. */
-export interface AiProviderEntry {
-	readonly noAuth?: boolean
-	readonly name?: string
-	readonly apiKeyOptionalWith?: string
-	readonly credentialForm?: string
-	readonly serviceKinds?: readonly string[]
-	readonly searchConfig?: ProbeConfig
-	readonly fetchConfig?: ProbeConfig
-	readonly ttsConfig?: ProbeConfig
-	readonly sttConfig?: ProbeConfig
-	readonly embeddingConfig?: ProbeConfig
-	readonly imageConfig?: ProbeConfig
-	readonly videoConfig?: ProbeConfig
-	readonly musicConfig?: ProbeConfig
-}
-
-/** The config block a media or search provider is probed through. */
-export interface ProbeConfig {
-	readonly authType?: string
-	readonly authHeader?: string
-	readonly baseUrl?: string
-	readonly validateUrl?: string
-	readonly method?: "GET" | "POST"
-	readonly extraHeaders?: Record<string, string>
-}
-
-/** One provider's probe, as a value rather than a branch. */
-interface ProbePlan {
-	readonly request: ProbeRequest
-	readonly verdict: (response: ProbeResponse) => boolean
-	readonly errorMessage?: string
-}
-
-/**
- * A domain status reader as a plan verdict.
- *
- * The domain reads a bare status; a plan is handed the whole response because a
- * few providers decide on the body (gemini-web's chat shell markers) — so the
- * status readers are widened once here rather than each plan unwrapping by hand.
- */
-const byStatus =
-	(reader: (status: number) => boolean) =>
-	(response: ProbeResponse): boolean =>
-		reader(response.status)
-
-const PROBE_TIMEOUT_MS = 8000
+import { genericPlan, staticPlan } from "./validate-credential-plans.ts"
+import { probeConfigDriven } from "./validate-credential-probe-config.ts"
+import type { ProbeConfig } from "./validate-credential-types.ts"
+import { bearer, byStatus, json } from "./validate-credential-types.ts"
 
 export function makeValidateCredential(dependencies: ValidateCredentialDependencies) {
 	const {
@@ -174,10 +52,6 @@ export function makeValidateCredential(dependencies: ValidateCredentialDependenc
 		commandCodeHeaders,
 		randomId,
 	} = dependencies
-
-	/** The auth header a bearer-style provider wants. */
-	const bearer = (apiKey: string) => ({ Authorization: `Bearer ${apiKey}` })
-	const json = { "Content-Type": "application/json" }
 
 	/** A minimal chat probe: enough to prove a key, cheap enough to fire often. */
 	function chatProbe(
@@ -305,205 +179,6 @@ export function makeValidateCredential(dependencies: ValidateCredentialDependenc
 		return null
 	}
 
-	/**
-	 * The plan for a provider whose probe is a fixed request and a status reading.
-	 *
-	 * Each entry is data, not a branch: the same three-line shape repeated for
-	 * fifteen providers is what made the route 700 lines long.
-	 */
-	function staticPlan(provider: string, apiKey: string): ProbePlan | null {
-		const cfg = providerConfig(provider)
-		const ai = aiProvider(provider)
-
-		switch (provider) {
-			case "openai":
-				return {
-					request: { url: "https://api.openai.com/v1/models", headers: bearer(apiKey) },
-					verdict: (r) => r.ok,
-				}
-			case "vercel-ai-gateway":
-				return {
-					request: { url: "https://ai-gateway.vercel.sh/v1/models", headers: bearer(apiKey) },
-					verdict: (r) => r.ok,
-				}
-			case "anthropic":
-				return {
-					request: {
-						url: "https://api.anthropic.com/v1/messages",
-						method: "POST",
-						headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", ...json },
-						body: JSON.stringify({
-							model: "claude-3-haiku-20240307",
-							max_tokens: 1,
-							messages: [{ role: "user", content: "test" }],
-						}),
-					},
-					verdict: byStatus(readerFor("anthropic")),
-				}
-			case "gemini":
-				return {
-					request: {
-						url: `https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`,
-					},
-					verdict: (r) => r.ok,
-				}
-			case "openrouter":
-				return {
-					request: { url: "https://openrouter.ai/api/v1/models", headers: bearer(apiKey) },
-					verdict: (r) => r.ok,
-				}
-			case "deepgram":
-				return {
-					request: { url: "https://api.deepgram.com/v1/projects", headers: bearer(apiKey) },
-					verdict: (r) => r.ok,
-				}
-			case "blackbox":
-				return {
-					request: {
-						url: "https://api.blackbox.ai/chat/completions",
-						method: "POST",
-						headers: { ...bearer(apiKey), ...json },
-						body: JSON.stringify({
-							model: "gpt-4o",
-							messages: [{ role: "user", content: "test" }],
-							max_tokens: 10,
-						}),
-					},
-					verdict: byStatus(blackboxVerdict),
-				}
-			case "opencode-go":
-				return {
-					request: {
-						url: "https://opencode.ai/inference/go/openai/v1/chat/completions",
-						method: "POST",
-						headers: { ...json, ...bearer(apiKey) },
-						body: JSON.stringify({
-							model: defaultModel("opencode-go"),
-							messages: [{ role: "user", content: "ping" }],
-							max_tokens: 1,
-							stream: false,
-						}),
-					},
-					verdict: byStatus(notRefused),
-				}
-			case "commandcode": {
-				const payload = commandCodeBody(defaultModel("commandcode")) as {
-					threadId?: string
-				} | null
-				return {
-					request: {
-						url: String(cfg?.baseUrl ?? ""),
-						method: "POST",
-						headers: commandCodeHeaders({
-							apiKey,
-							sessionId: payload?.threadId,
-						}),
-						body: JSON.stringify(payload),
-					},
-					verdict: byStatus(notRefused),
-				}
-			}
-			case "vertex":
-			case "vertex-partner": {
-				const serviceAccount = readServiceAccount(apiKey)
-				if (serviceAccount.isServiceAccount) {
-					return null
-				}
-				return {
-					request: {
-						url: `https://aiplatform.googleapis.com/v1/publishers/google/models/__probe__:generateContent?key=${apiKey}`,
-						method: "POST",
-						headers: json,
-						body: "{}",
-					},
-					verdict: byStatus(notRefused),
-				}
-			}
-			case "deepseek-web":
-				return {
-					request: {
-						url: "https://chat.deepseek.com/api/v0/users/current",
-						method: "GET",
-						headers: {
-							...bearer(unwrapCredential(apiKey)),
-							"User-Agent":
-								"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-							Origin: "https://chat.deepseek.com",
-							Referer: "https://chat.deepseek.com/",
-							"x-app-version": "20241129.0",
-							"x-client-platform": "web",
-						},
-					},
-					verdict: (r) => r.ok,
-					errorMessage:
-						"Invalid token - copy userToken from chat.deepseek.com DevTools -> Application -> Local Storage/Cookies",
-				}
-			case "gemini-web":
-				return {
-					request: {
-						url: "https://gemini.google.com/app",
-						method: "GET",
-						headers: {
-							Cookie: toCookieHeader(apiKey),
-							"User-Agent":
-								"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-							Accept: "text/html",
-						},
-					},
-					// A logged-out redirect answers 200 with a login page, so the body is
-					// what decides: these two markers only appear in the chat shell.
-					verdict: (r) => r.ok && (!!r.text?.includes("SNlM0e") || !!r.text?.includes("BardChatUi")),
-					errorMessage:
-						"Invalid cookie - copy __Secure-1PSID from gemini.google.com DevTools -> Application -> Cookies",
-				}
-			case "azure":
-				// Handled by the caller: it needs providerSpecificData, and its message
-				// names Azure configuration rather than the key alone.
-				return null
-			case "xai":
-			case "ollama":
-			case "ollama-local":
-			case "xiaomi-tokenplan": {
-				const url =
-					provider === "ollama-local"
-						? `${ollamaLocalHost({ providerSpecificData: {} })}/api/tags`
-						: provider === "xiaomi-tokenplan"
-							? `${tokenplanBaseUrl({ providerSpecificData: {} })}/models`
-							: (cfg?.validateUrl ?? String(cfg?.baseUrl ?? ""))
-				return {
-					request: { url, headers: bearer(apiKey) },
-					verdict: byStatus(readerFor(provider)),
-				}
-			}
-			default:
-				break
-		}
-
-		if (ai?.credentialForm === "aws") return null
-
-		// A provider the registry marks no-auth needs no probe at all.
-		if (cfg?.noAuth || ai?.noAuth) return null
-
-		return null
-	}
-
-	/** The generic OpenAI-compatible probe: /models first, a chat probe as fallback. */
-	function genericPlan(provider: string, apiKey: string): ProbePlan | null {
-		const cfg = providerConfig(provider)
-		if (!cfg || cfg.format !== "openai" || !cfg.baseUrl) return null
-		const headers: Record<string, string> = { ...json, ...(cfg.headers ?? {}) }
-		if (cfg.authHeader === "x-api-key") headers["X-API-Key"] = apiKey
-		else headers.Authorization = `Bearer ${apiKey}`
-		const modelsUrl = cfg.baseUrl
-			.replace(/\/chat\/completions$/, "/models")
-			.replace(/\/chatbot$/, "/models")
-		return {
-			request: { url: modelsUrl, headers },
-			verdict: (r) => (r.status === 401 || r.status === 403 ? false : r.ok),
-			errorMessage: refusalMessage(provider),
-		}
-	}
-
 	return {
 		/**
 		 * Validate a pasted key.
@@ -557,151 +232,58 @@ export function makeValidateCredential(dependencies: ValidateCredentialDependenc
 				}
 			}
 
-			const webProbe = await probeConfigDriven(provider, apiKey, "web")
+			const webProbe = await probeConfigDriven(
+				{ send, aiProvider, defaultModel },
+				provider,
+				apiKey,
+				"web",
+			)
 			if (webProbe) return webProbe
-			const mediaProbe = await probeConfigDriven(provider, apiKey, "media")
+			const mediaProbe = await probeConfigDriven(
+				{ send, aiProvider, defaultModel },
+				provider,
+				apiKey,
+				"media",
+			)
 			if (mediaProbe) return mediaProbe
 
 			// `early` is either an answer already reached (the custom-embedding probe
 			// answers during planning) or a plan; a plan is the only shape with
 			// `request`, so the field decides which.
 			const earlyPlan = early && "request" in early ? early : null
-			const plan = earlyPlan ?? staticPlan(provider, apiKey) ?? genericPlan(provider, apiKey)
+			const plan =
+				earlyPlan ??
+				staticPlan(
+					{
+						providerConfig,
+						aiProvider,
+						defaultModel,
+						commandCodeBody,
+						commandCodeHeaders,
+						ollamaLocalHost,
+						tokenplanBaseUrl,
+					},
+					provider,
+					apiKey,
+				) ??
+				genericPlan(
+					{
+						providerConfig,
+						aiProvider,
+						defaultModel,
+						commandCodeBody,
+						commandCodeHeaders,
+						ollamaLocalHost,
+						tokenplanBaseUrl,
+					},
+					provider,
+					apiKey,
+				)
 			if (!plan) throw invalid("Provider validation not supported")
 
 			const response = await send(plan.request)
 			const valid = plan.verdict(response)
 			return { valid, error: valid ? null : (plan.errorMessage ?? refusalMessage(provider)) }
 		},
-	}
-
-	/**
-	 * Probe a web or media provider through its own config block.
-	 *
-	 * Returns null when the provider is not that kind, so the caller falls through:
-	 * a provider that serves both chat and search is validated on the chat lane,
-	 * which is the lane its key is actually used on.
-	 */
-	async function probeConfigDriven(
-		provider: string,
-		apiKey: string,
-		kind: "web" | "media",
-	): Promise<ValidationResult | null> {
-		const ai = aiProvider(provider)
-		if (!ai) return null
-		const kinds = ai.serviceKinds ?? ["llm"]
-		const mediaKinds = new Set(["tts", "embedding", "stt", "image", "video", "music", "imageToText"])
-
-		if (kind === "web") {
-			const isWebOnly = kinds.every((k) => k === "webSearch" || k === "webFetch")
-			if (!isWebOnly) return null
-			const cfg = ai.searchConfig ?? ai.fetchConfig
-			if (!cfg) return null
-			if (cfg.authType === "none") return { valid: true, error: null }
-			const request = authRequest(provider, cfg, apiKey, "web")
-			if (!request) return { valid: true, error: null }
-			const response = await send(request)
-			const valid = webProbeVerdict(response.status)
-			return { valid, error: valid ? null : refusalMessage(provider) }
-		}
-
-		const isMediaOnly = kinds.every((k) => mediaKinds.has(k))
-		if (!isMediaOnly) return null
-		const cfg =
-			ai.ttsConfig ??
-			ai.sttConfig ??
-			ai.embeddingConfig ??
-			ai.imageConfig ??
-			ai.videoConfig ??
-			ai.musicConfig
-		// No probe config: accept best-effort and let the first real call decide.
-		if (!cfg) return { valid: true, error: null }
-		if (ai.noAuth || cfg.authType === "none") return { valid: true, error: null }
-		const request = authRequest(provider, cfg, apiKey, "media")
-		// A scheme needing data this endpoint does not carry cannot be probed; saying
-		// so beats falling through to "not supported", which reads as a dashboard bug.
-		if (!request) return { valid: true, error: null }
-		const response = await send(request)
-		const valid = mediaProbeVerdict(response.status)
-		return { valid, error: valid ? null : refusalMessage(provider) }
-	}
-
-	/**
-	 * The request a config block describes.
-	 *
-	 * The auth schemes that need provider-specific data — PlayHT's two-header form,
-	 * AWS sigv4 — return null, which the caller reads as "cannot probe": reporting
-	 * them invalid would refuse a key that is fine.
-	 */
-	function authRequest(
-		provider: string,
-		cfg: ProbeConfig,
-		apiKey: string,
-		kind: "web" | "media",
-	): ProbeRequest | null {
-		const headers: Record<string, string> = { ...json, ...(cfg.extraHeaders ?? {}) }
-		let url = cfg.validateUrl ?? cfg.baseUrl ?? ""
-		let body: string | undefined
-
-		if (kind === "web") {
-			switch (cfg.authHeader) {
-				case "bearer":
-					headers.Authorization = `Bearer ${apiKey}`
-					break
-				case "x-api-key":
-					headers["x-api-key"] = apiKey
-					break
-				case "x-subscription-token":
-					headers["x-subscription-token"] = apiKey
-					break
-				case "key":
-					url += `?key=${encodeURIComponent(apiKey)}&q=ping&cx=test`
-					break
-				case "api_key":
-					url += `?api_key=${encodeURIComponent(apiKey)}&q=ping&engine=google`
-					break
-			}
-			if (cfg.method === "POST") {
-				body = JSON.stringify({ query: "ping", q: "ping", url: "https://example.com" })
-			}
-			return { url, method: cfg.method ?? "GET", headers, ...(body ? { body } : {}) }
-		}
-
-		if (cfg.authHeader === "playht" || cfg.authHeader === "aws-sigv4") return null
-		switch (cfg.authHeader) {
-			case "bearer":
-				headers.Authorization = `Bearer ${apiKey}`
-				break
-			case "key":
-				headers.Authorization = `Key ${apiKey}`
-				break
-			case "x-api-key":
-				headers["x-api-key"] = apiKey
-				break
-			case "x-key":
-				headers["x-key"] = apiKey
-				break
-			case "xi-api-key":
-				headers["xi-api-key"] = apiKey
-				break
-			case "token":
-				headers.Authorization = `Token ${apiKey}`
-				break
-			case "basic":
-				headers.Authorization = `Basic ${apiKey}`
-				break
-			default:
-				return null
-		}
-		const method = cfg.method ?? "POST"
-		if (method !== "GET") {
-			body = JSON.stringify({
-				input: "ping",
-				text: "ping",
-				prompt: "ping",
-				model: defaultModel(provider) || "test",
-			})
-		}
-		return { url, method, headers, ...(body ? { body } : {}) }
 	}
 }

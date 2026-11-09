@@ -5,24 +5,24 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 // Source paths are repo-relative; vitest runs from tests/, so resolve from the repo root.
 const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url))
+const readUsageSource = () =>
+	fs
+		.readdirSync(path.resolve(REPO_ROOT, "packages/db/src/repos"))
+		.filter((f) => f.startsWith("usage") && f.endsWith(".ts"))
+		.map((f) => fs.readFileSync(path.resolve(REPO_ROOT, "packages/db/src/repos", f), "utf-8"))
+		.join("\n")
 
 // ============================================================
 // AUDIT-002 (#1962): API key masking in usage stats
 // ============================================================
 describe("AUDIT-002: API key masking", () => {
 	it("source should contain maskApiKey function", () => {
-		const source = fs.readFileSync(
-			path.resolve(REPO_ROOT, "packages/db/src/repos/usageRepo.ts"),
-			"utf-8",
-		)
+		const source = readUsageSource()
 		expect(source).toContain("function maskApiKey")
 	})
 
 	it("getUsageHistory should use apiKeyMasked instead of apiKey", () => {
-		const source = fs.readFileSync(
-			path.resolve(REPO_ROOT, "packages/db/src/repos/usageRepo.ts"),
-			"utf-8",
-		)
+		const source = readUsageSource()
 		// The REST response should use apiKeyMasked
 		expect(source).toContain("apiKeyMasked: maskApiKey(r.apiKey)")
 		// The return mapping in getUsageHistory should not have raw apiKey
@@ -37,10 +37,7 @@ describe("AUDIT-002: API key masking", () => {
 	})
 
 	it("getUsageStats should use apiKeyMasked in byApiKey entries", () => {
-		const source = fs.readFileSync(
-			path.resolve(REPO_ROOT, "packages/db/src/repos/usageRepo.ts"),
-			"utf-8",
-		)
+		const source = readUsageSource()
 		// Both the daily-rollup path and the history path feed one accumulator, so the
 		// check is that the shared bucket builder labels every entry with the mask.
 		const bucketBuilders = source.match(/apiKeyMasked[^;]*keyName/g) || []
@@ -52,10 +49,7 @@ describe("AUDIT-002: API key masking", () => {
 	})
 
 	it("byApiKey object keys should use masked key, not raw key", () => {
-		const source = fs.readFileSync(
-			path.resolve(REPO_ROOT, "packages/db/src/repos/usageRepo.ts"),
-			"utf-8",
-		)
+		const source = readUsageSource()
 		// The bucket key is built from the masked key — the raw key must never appear as a
 		// JSON object key, since /api/usage/stats returns byApiKey verbatim (AUDIT-002).
 		// The key may be built inline or through a template helper, so assert on the

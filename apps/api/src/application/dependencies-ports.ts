@@ -1,0 +1,176 @@
+/** Dependencies: small port interfaces. */
+import type { IApiKeyRepository } from "../domain/api-key.ts"
+import type { GateLimits } from "../domain/backpressure.ts"
+import type { CacheEntry, FreeModel, KiloModel } from "../domain/free-model-cache.ts"
+import type { ProbeTarget } from "../domain/model-probe.ts"
+import type { PricingResetTarget, PricingUpdate } from "../domain/pricing.ts"
+import type { ProviderOverride } from "../domain/provider-override.ts"
+import type { BulkEditPort } from "./api-keys/bulk-edit-api-keys.ts"
+import type { ApiKeyManagementPort } from "./api-keys/manage-api-keys-dashboard.ts"
+import type { SingleKeyAuditPort, SingleKeyPort } from "./api-keys/manage-single-key.ts"
+import type { BatchFiles, BatchStore } from "./batches/batches.ts"
+import type { ChangelogSource } from "./changelog.ts"
+import type { FileStore } from "./files/files.ts"
+import type {
+	AllowedModelReconciler,
+	CatalogueSyncPort,
+	ComboReaderPort,
+	CustomModelPort,
+	DisabledModelPort,
+	ModelAliasPort,
+	ModelCataloguePort,
+	ModelProbePort,
+	NodePrefixPort,
+	ProviderConnectionPort,
+	ProviderNodePort,
+	StudioModelPort,
+} from "./models/ports.ts"
+import type { AlertPorts } from "./notifications/dispatch-alerts.ts"
+import type { BulkImportDeps } from "./oauth/import-credentials.ts"
+import type { PluginCache, PluginCatalogue, PluginSettingsPort } from "./plugins/manage-plugins.ts"
+import type {
+	ConnectionNodeStore,
+	ConnectionStore,
+	ProviderCatalogue,
+	ProxyPoolStore,
+	StoredConnection,
+} from "./providers/ports.ts"
+import type { DeployDeps } from "./proxy-pools/deploy-relay.ts"
+import type { ImportJobDeps } from "./proxy-pools/import-proxy-pools.ts"
+import type { PxpipePort, PxpipeSettings } from "./pxpipe/manage-pxpipe.ts"
+import type { ReplayPorts } from "./requests/replay.ts"
+import type { ConfigExportSources } from "./settings/config-export.ts"
+import type { SettingsPort } from "./settings/login-gate.ts"
+import type { SemanticCachePort } from "./system/cache-stats.ts"
+import type { DashboardJobEnvironment, DashboardJobRegistry } from "./system/dashboard-jobs.ts"
+import type { ShutdownEnvironment, ShutdownPorts } from "./system/shutdown.ts"
+import type {
+	TailscaleCheckDeps,
+	TailscaleInstallDeps,
+	TunnelProbeDeps,
+	TunnelToggleDeps,
+} from "./tunnel/manage-tunnel.ts"
+import type { BudgetPoolStore } from "./usage/budget-pools.ts"
+import type { CeilingPorts } from "./usage/cost-ceiling.ts"
+import type { UsageReportPort } from "./usage/report-usage.ts"
+
+/** Where the override map lives, and how a URL id becomes a canonical one. */
+export interface OverrideStore {
+	read(): Promise<Record<string, ProviderOverride>>
+	write(overrides: Record<string, ProviderOverride>): Promise<void>
+	resolveAlias(id: string): string
+	builtinHeaders(canonical: string): Record<string, string>
+}
+
+export interface IActivityRepository {
+	record(entry: {
+		action: string
+		subject: string
+		payload?: Record<string, unknown>
+		at: Date
+	}): Promise<void>
+	/** Newest-first page of recorded mutations, for the audit log. */
+	list(limit: number): Promise<readonly import("./audit/read-audit-log.ts").AuditRow[]>
+}
+
+/** A combo as the dashboard sees it — the row, with `models` parsed. */
+export interface ComboView {
+	readonly id: string
+	readonly name: string
+	readonly models: string[]
+	readonly kind: string | null
+	/** 0 means auto: the window follows the largest member. */
+	readonly contextWindow: number
+	readonly createdAt: string
+	readonly updatedAt: string
+}
+
+export interface ComboInput {
+	readonly name: string
+	readonly models: string[]
+	readonly kind?: string | null
+	readonly contextWindow?: number
+	readonly [key: string]: unknown
+}
+
+export interface ComboPort {
+	list(): Promise<ComboView[]>
+	findById(id: string): Promise<ComboView | null>
+	findByName(name: string): Promise<ComboView | null>
+	create(input: ComboInput): Promise<ComboView>
+	update(id: string, input: Partial<ComboInput>): Promise<ComboView | null>
+	remove(id: string): Promise<boolean>
+}
+
+/**
+ * Per-combo routing strategies, stored in settings keyed by combo name. A combo
+ * rename or copy has to move the entry, or the copy silently runs on defaults.
+ */
+export interface ComboStrategyPort {
+	read(comboName: string): Promise<unknown | null>
+	write(comboName: string, strategy: unknown): Promise<void>
+}
+
+/** One combo a preset source proposes, and whether it already exists. */
+export interface ComboPresetItem {
+	readonly name: string
+	readonly models: string[]
+	readonly exists: boolean
+}
+
+/**
+ * A source of combo presets — Cursor's live catalog, Claude's CLI aliases. The
+ * catalogs live in `apps/web` beside the constants they read, so the use-case
+ * asks for items instead of importing them.
+ */
+export interface ComboPresetPort {
+	/** `existingNames` lets the adapter mark items already present. */
+	list(source: string, existingNames: readonly string[]): Promise<ComboPresetItem[]>
+	isSource(value: unknown): boolean
+}
+
+/** A studio (custom) model and the single model it targets. */
+export interface StudioTarget {
+	readonly callName: string
+	readonly targetModel: string
+}
+
+export interface StudioTargetPort {
+	list(): Promise<StudioTarget[]>
+}
+
+/**
+ * Combo rotation state lives in the gateway's runtime, not the database. The
+ * use-case only needs to invalidate it; how is not its concern.
+ */
+export interface ComboRotationPort {
+	reset(comboName: string): void
+}
+
+/** One stored diagnostic entry, as the dashboard renders it. */
+export interface ErrorLogEntry {
+	readonly id: number
+	readonly [key: string]: unknown
+}
+
+export interface ErrorLogPort {
+	/** Newest first, capped by the caller. */
+	list(limit: number): Promise<ErrorLogEntry[]>
+	/**
+	 * Returns false when the delete did not happen. The handler used to report
+	 * success regardless, so a failed clear looked like a successful one.
+	 */
+	clear(): Promise<boolean>
+}
+
+/** provider → model → field → rate, as the repo returns it. */
+export type PricingMap = Record<string, Record<string, Record<string, number>>>
+
+export interface PricingPort {
+	/** The catalog merged with the operator's overrides. */
+	read(): Promise<PricingMap>
+	/** Applies a validated update and returns the merged result. */
+	update(update: PricingUpdate): Promise<PricingMap>
+	/** Resets one model, one provider, or everything, per the target. */
+	reset(target: PricingResetTarget): Promise<PricingMap>
+}

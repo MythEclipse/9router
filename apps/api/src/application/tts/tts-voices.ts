@@ -15,12 +15,21 @@
  *   verdict, so checking only `res.ok` hands the picker an empty list and no reason why.
  */
 
+import { genericCatalogue, readKey } from "./tts-voice-catalogues.ts"
+import {
+	answer,
+	LANGUAGE_NAMES,
+	MINIMAX_VOICE_ENDPOINTS,
+	normalizeMiniMaxVoices,
+	upstreamFailed,
+} from "./tts-voice-normalize.ts"
+import type { TtsVoiceDeps, TtsVoiceQuery, TtsVoices, VoiceConnection } from "./tts-voice-types.ts"
+
+export type { TtsVoiceDeps, TtsVoiceQuery, TtsVoices, VoiceConnection } from "./tts-voice-types.ts"
+
 import { AppError } from "../../domain/errors.ts"
 import {
-	addVoice,
-	CUSTOM_LANGUAGE_CODE,
 	groupByListedLanguages,
-	type languageBucket,
 	languageLabel,
 	listedLanguages,
 	sortedLanguages,
@@ -29,285 +38,15 @@ import {
 	type VoiceLanguage,
 	voiceId,
 	voiceName,
-	voicesForLanguage,
 } from "../../domain/voice-catalogue.ts"
-
-/** A voice as returned by the local-device (OS speech synth) fetcher. */
-interface LocalDeviceVoice {
-	id: string
-	name: string
-	locale: string
-	lang: string
-	country: string
-	gender: string
-}
-
-/** A voice in the ElevenLabs/Gemini shape (`voice_id` + `labels`). */
-interface ElevenShapeVoice {
-	voice_id: string
-	name?: string
-	category?: string
-	labels?: { gender?: string; language?: string }
-}
-
-/** A voice as returned by the edge-tts fetcher. */
-interface EdgeTtsVoice {
-	ShortName: string
-	FriendlyName?: string
-	Locale: string
-	Gender: string
-}
-
-/** An ElevenLabs voice, including the languages it was verified for. */
-interface ElevenLabsVoice {
-	voice_id: string
-	name?: string
-	category?: string
-	is_owner?: boolean
-	labels?: { gender?: string; language?: string }
-	verified_languages?: { language?: string }[]
-}
-
-interface DeepgramTtsModel {
-	canonical_name?: string
-	name?: string
-	languages?: string[]
-	metadata?: { tags?: string[] }
-}
-
-interface InworldVoice {
-	voiceId: string
-	displayName?: string
-	gender?: string
-	languages?: string[]
-}
-
-interface MiniMaxVoiceItem {
-	voice_id?: string
-	voiceId?: string
-	voice_name?: string
-	voiceName?: string
-}
-
-interface MiniMaxVoicesPayload {
-	[groupKey: string]: MiniMaxVoiceItem[] | undefined
-}
-
-/** The normalized voice shape returned to clients by the generic endpoint. */
-interface NormalizedVoice {
-	id: string
-	name: string
-	locale: string
-	lang: string
-	country: string
-	countryName: string
-	langName: string
-	gender: string
-	category?: string
-}
+import type {
+	DeepgramTtsModel,
+	ElevenLabsVoice,
+	InworldVoice,
+	MiniMaxVoicesPayload,
+} from "./tts-voice-types.ts"
 
 /** A connection as this layer needs it: an active provider's API key. */
-export interface VoiceConnection {
-	apiKey?: string
-}
-
-export interface TtsVoiceDeps {
-	/** The active connection for a provider, or none when the caller has not set one up. */
-	readonly connectionOf: (provider: string) => Promise<VoiceConnection | undefined>
-	/** Every provider's fetcher, keyed by the `?provider=` value the picker sends. */
-	readonly fetchVoices: (
-		provider: string,
-		apiKey?: string,
-	) => Promise<LocalDeviceVoice[] | ElevenShapeVoice[] | EdgeTtsVoice[]>
-	/** ElevenLabs' fetcher, which needs the key as a positional argument. */
-	readonly fetchElevenLabs: (apiKey: string) => Promise<ElevenLabsVoice[]>
-	readonly fetchImpl: typeof fetch
-	/** The providers the generic endpoint serves, so a typo is refused by name. */
-	readonly providers: readonly string[]
-}
-
-export interface TtsVoiceQuery {
-	/** Nothing means edge-tts, which needs no connection. */
-	readonly provider?: string
-	/** Keep only voices in this language code. */
-	readonly lang?: string
-	/** The generic endpoint takes the key from the query; the per-provider ones use the store. */
-	readonly apiKey?: string
-}
-
-/** The three shapes of provider payload whose language/country live in different places. */
-type RawVoices = LocalDeviceVoice[] | ElevenShapeVoice[] | EdgeTtsVoice[]
-
-const MINIMAX_VOICE_ENDPOINTS: Record<string, string> = {
-	minimax: "https://api.minimax.io/v1/get_voice",
-	"minimax-cn": "https://api.minimaxi.com/v1/get_voice",
-}
-
-const MINIMAX_VOICE_GROUPS = [
-	{ key: "system_voice", label: "System" },
-	{ key: "voice_cloning", label: "Cloned" },
-	{ key: "voice_generation", label: "Generated" },
-	{ key: "music_generation", label: "Music" },
-]
-
-const REGION_NAMES = new Intl.DisplayNames(["en"], { type: "region" })
-const LANGUAGE_NAMES = new Intl.DisplayNames(["en"], { type: "language" })
-
-function regionName(code: string): string {
-	try {
-		return REGION_NAMES.of(code) ?? code
-	} catch {
-		return code
-	}
-}
-
-/** `Microsoft X Online (Natural) - ...` → `X (...)`, dropping the vendor prefix and suffix. */
-function edgeTtsName(voice: EdgeTtsVoice): string {
-	return (voice.FriendlyName || voice.ShortName)
-		.replace("Microsoft ", "")
-		.replace(/ Online \(Natural\) - /g, " (")
-}
-
-/**
- * MiniMax encodes a system voice's language as the prefix of its id (`English_Graceful_Lady`).
- * Every other group — cloned, generated, music — has no language at all, so those voices go to
- * the `Custom` bucket rather than being guessed at.
- */
-function inferLanguage(id: string): string {
-	const value = typeof id === "string" ? id.trim() : ""
-	if (!value.includes("_")) return CUSTOM_LANGUAGE_CODE
-	return value.split("_")[0] || CUSTOM_LANGUAGE_CODE
-}
-
-function normalizeMiniMaxVoices(payload: MiniMaxVoicesPayload): VoiceCatalogue {
-	const byLang: Record<string, ReturnType<typeof languageBucket>> = {}
-
-	for (const group of MINIMAX_VOICE_GROUPS) {
-		const voices = Array.isArray(payload?.[group.key]) ? payload[group.key] : []
-		for (const item of voices ?? []) {
-			const id = voiceId([item?.voice_id, item?.voiceId])
-			// A group entry with no id is not a voice; there is nothing to select.
-			if (id === "") continue
-
-			const name = voiceName(item?.voice_name ?? item?.voiceName, id)
-			const lang = group.key === "system_voice" ? inferLanguage(id) : CUSTOM_LANGUAGE_CODE
-			addVoice(
-				byLang,
-				lang,
-				{
-					id,
-					// Only system voices carry their own name; the rest need the group, because
-					// cloned and generated voices are often named after the same person.
-					name: group.key === "system_voice" ? name : `${name} · ${group.label}`,
-					lang,
-					gender: "",
-					category: group.key,
-				},
-				LANGUAGE_NAMES,
-			)
-		}
-	}
-
-	const languages = sortedLanguages(byLang)
-	for (const language of languages) {
-		language.voices.sort((left, right) => left.name.localeCompare(right.name))
-	}
-
-	return { languages, byLang }
-}
-
-/** Group by language and answer either the whole catalogue or one language's voices. */
-function answer(catalogue: VoiceCatalogue, langFilter?: string) {
-	if (langFilter) return { voices: voicesForLanguage(catalogue.byLang, langFilter) }
-	return catalogue
-}
-
-/** The upstream refused; 502 because the caller's request was fine. */
-function upstreamFailed(label: string, status: number, detail: string): never {
-	throw new AppError("UPSTREAM", `${label} API ${status}: ${detail || "Failed"}`, { status: 502 })
-}
-
-async function readKey(deps: TtsVoiceDeps, provider: string, fromQuery?: string): Promise<string> {
-	// The generic endpoint takes the key from the query (the picker types it before saving);
-	// the per-provider ones read the stored connection. Both end up at the same 400 when absent.
-	const key = fromQuery || (await deps.connectionOf(provider))?.apiKey
-	if (!key) throw new AppError("VALIDATION", `No ${provider} connection found`, { status: 400 })
-	return key
-}
-
-/** Build the catalogue for one of the four providers the generic endpoint serves. */
-async function genericCatalogue(
-	deps: TtsVoiceDeps,
-	provider: string,
-	apiKey: string,
-): Promise<NormalizedVoice[]> {
-	// ElevenLabs takes its key positionally; every other fetcher takes none.
-	const raw = (
-		provider === "elevenlabs"
-			? await deps.fetchVoices(provider, apiKey)
-			: await deps.fetchVoices(provider)
-	) as RawVoices
-	const useElevenShape = provider === "elevenlabs" || provider === "gemini"
-
-	if (provider === "local-device") {
-		return (raw as LocalDeviceVoice[]).map((v) => ({
-			id: v.id,
-			name: v.name,
-			locale: v.locale.replace("_", "-"),
-			lang: v.lang,
-			country: v.country,
-			countryName: regionName(v.country),
-			langName: languageLabel(v.lang, LANGUAGE_NAMES),
-			gender: v.gender,
-		}))
-	}
-
-	if (useElevenShape) {
-		return (raw as ElevenShapeVoice[]).map((v) => {
-			const locale = v.labels?.language || "en"
-			const lang = locale.split("-")[0]
-			return {
-				id: v.voice_id,
-				name: v.name ?? v.voice_id,
-				locale,
-				lang,
-				country: "",
-				countryName: "",
-				langName: languageLabel(lang, LANGUAGE_NAMES),
-				gender: v.labels?.gender || "",
-				category: v.category,
-			}
-		})
-	}
-
-	return (raw as EdgeTtsVoice[]).map((v) => {
-		const [lang, country] = v.Locale.split("-")
-		return {
-			id: v.ShortName,
-			name: edgeTtsName(v),
-			locale: v.Locale,
-			lang,
-			country: country || "",
-			countryName: regionName(country || lang),
-			langName: languageLabel(lang, LANGUAGE_NAMES),
-			gender: v.Gender,
-		}
-	})
-}
-
-export interface TtsVoices {
-	/** The generic endpoint: edge-tts, local-device, elevenlabs and gemini behind one query. */
-	readonly listing: (query: TtsVoiceQuery) => Promise<unknown>
-	readonly deepgram: (query: { lang?: string }) => Promise<unknown>
-	readonly elevenlabs: (query: { lang?: string }) => Promise<unknown>
-	readonly inworld: (query: { lang?: string }) => Promise<unknown>
-	readonly minimax: (query: {
-		provider?: string
-		voiceType?: string
-		lang?: string
-	}) => Promise<unknown>
-}
-
 export function makeTtsVoices(deps: TtsVoiceDeps): TtsVoices {
 	const listing = async (query: TtsVoiceQuery) => {
 		const provider = query.provider || "edge-tts"

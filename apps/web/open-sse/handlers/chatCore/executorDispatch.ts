@@ -14,6 +14,11 @@ import {
 import { createErrorResult, formatProviderError, parseUpstreamError } from "../../utils/error.ts"
 import { takeRenamedToolNames } from "../../utils/opencodeFingerprint.ts"
 import { upstreamResponseHeaders } from "../../utils/upstreamHeaders.ts"
+import { tryToolFallback } from "./executorDispatchFallback.ts"
+import { recordUpstreamError } from "./executorDispatchRecord.ts"
+import { tryRefreshRetry } from "./executorDispatchRefresh.ts"
+import { retryMalformedResponse } from "./executorDispatchRetry.ts"
+import { executorThrowResult } from "./executorDispatchThrow.ts"
 import type { LogSink } from "./options.ts"
 import { buildRequestDetail, extractRequestConfig, saveFailedUsage } from "./requestDetail.ts"
 
@@ -175,187 +180,121 @@ export async function dispatchExecutor(
 		}
 		reqLogger.logTargetRequest(providerUrl, providerHeaders, finalBody)
 	} catch (error) {
-		trackPendingRequest(trackedModel, provider, connectionId, false, true)
-		appendRequestLog({
-			model: trackedModel,
-			provider,
-			connectionId,
-			status: `FAILED ${error.name === "AbortError" ? 499 : HTTP_STATUS.BAD_GATEWAY}`,
-			requestedModel: model,
-		}).catch(() => {})
-		saveRequestDetail(
-			buildRequestDetail({
-				provider,
-				model,
-				connectionId,
-				requestedModel,
-				latency: { ttft: 0, total: Date.now() - requestStartTime },
-				tokens: { prompt_tokens: 0, completion_tokens: 0 },
-				request: extractRequestConfig(body, stream),
-				providerRequest: translatedBody || null,
-				response: {
-					error: error.message || String(error),
-					status: error.name === "AbortError" ? 499 : 502,
-					thinking: null,
-				},
-				pxpipe: pxpipeSummary,
-				status: "error",
-			}),
-		).catch(() => {})
-		saveFailedUsage({
+		return await executorThrowResult(ctx, error as Error)
+	}
+
+	{
+		const _refreshState = {
+			ctx,
+			executor,
+			providerResponse,
+			credentials,
+			log,
+			reqTag,
 			provider,
 			model,
-			requestedModel,
-			connectionId,
-			apiKey,
-			endpoint: clientRawRequest?.endpoint,
-			statusCode: error.name === "AbortError" ? 499 : 502,
-		})
-
-		if (error.name === "AbortError") {
-			streamController.handleError(error)
-			return { kind: "return", result: createErrorResult(499, "Request aborted") }
+			translatedBody,
+			stream,
+			sessionSeed,
+			clientTool,
+			streamController,
+			proxyOptions,
+			providerOverrides,
+			targetFormat,
+			providerUrl,
+			providerResponseFormat,
 		}
-		const errMsg = formatProviderError(error, provider, model, HTTP_STATUS.BAD_GATEWAY)
-		if (log?.errorLine) {
-			log.errorLine(
-				reqTag,
-				"✗",
-				`ERROR 502 · ${provider}/${model} · ${Date.now() - requestStartTime}ms\n    ${errMsg}${error.stack ? `\n    ${error.stack}` : ""}`,
-			)
-		}
-		try {
-			const { recordErrorLog } = await import("@/lib/localDb")
-			recordErrorLog({
-				provider,
-				model,
-				endpoint: clientRawRequest?.endpoint || "chat",
-				statusCode: 502,
-				errorMessage: errMsg,
-				errorType: "executor_error",
-				stack: error.stack || "",
-			})
-		} catch {
-			/* fail open */
-		}
-		const isHideError = Boolean(hideError)
-		return {
-			kind: "return",
-			result: createErrorResult(HTTP_STATUS.BAD_GATEWAY, errMsg, undefined, null, isHideError),
-		}
+		const _refreshed = await tryRefreshRetry(_refreshState)
+		providerResponse = _refreshed.providerResponse
+		providerUrl = _refreshed.providerUrl
+		providerResponseFormat = _refreshed.providerResponseFormat
 	}
-
-	// Handle 401/403 - try token refresh (skip for noAuth providers)
-	if (
-		!executor.noAuth &&
-		(providerResponse.status === HTTP_STATUS.UNAUTHORIZED ||
-			providerResponse.status === HTTP_STATUS.FORBIDDEN)
-	) {
-		try {
-			// Mutate credentials after each successful refresh: rotating refresh_token
-			// providers (xAI/grok-cli) issue a new RT on every refresh; without this,
-			// refreshWithRetry's 2nd/3rd attempt reuses the already-consumed RT →
-			// invalid_grant → auth_failed retryable=false.
-			const newCredentials = await refreshWithRetry(
-				async () => {
-					const result = await executor.refreshCredentials(credentials, log)
-					if (result?.refreshToken && result.refreshToken !== credentials.refreshToken) {
-						if (result.accessToken) credentials.accessToken = result.accessToken
-						credentials.refreshToken = result.refreshToken
-					}
-					return result
-				},
-				3,
-				log,
-			)
-			if (newCredentials?.accessToken || newCredentials?.copilotToken) {
-				if (log?.line) log.line(reqTag, "🔑", `TOKEN REFRESHED · ${provider}/${model}`)
-				Object.assign(credentials, newCredentials)
-				if (ctx.onCredentialsRefreshed) {
-					try {
-						await ctx.onCredentialsRefreshed(newCredentials)
-					} catch (e) {
-						log?.warn?.("TOKEN", `onCredentialsRefreshed failed: ${e.message}`)
-					}
-				}
-				try {
-					// The refresh retry legitimately passes no reqTag; keep it that way.
-					const retryResult = await executor.execute({
-						model,
-						body: translatedBody,
-						stream,
-						credentials,
-						providerSessionId: sessionSeed,
-						clientTool,
-						signal: streamController.signal,
-						log,
-						proxyOptions,
-						providerOverrides,
-					})
-					if (retryResult.response.ok) {
-						providerResponse = retryResult.response
-						providerUrl = retryResult.url
-						providerResponseFormat = retryResult.responseFormat || targetFormat
-					}
-				} catch {
-					log?.warn?.("TOKEN", `${provider.toUpperCase()} | retry after refresh failed`)
-				}
-			} else {
-				log?.warn?.("TOKEN", `${provider.toUpperCase()} | refresh failed`)
-			}
-		} catch (e) {
-			log?.warn?.("TOKEN", `${provider.toUpperCase()} | refresh threw: ${e.message}`)
-		}
+	const _retryState = {
+		providerResponse,
+		providerUrl,
+		providerHeaders,
+		finalBody,
+		providerResponseFormat,
 	}
-
-	let parseRetryCount = 0
-	const retryMalformedResponse = async () => {
-		while (
-			providerResponse?.ok &&
-			parseRetryCount < RESPONSE_PARSE_RETRY_ATTEMPTS &&
-			(await responseBodyNeedsParseRetry(providerResponse))
-		) {
-			parseRetryCount += 1
-			try {
-				const retryResult = await executor.execute({
-					model,
-					body: translatedBody,
-					stream,
-					credentials,
-					providerSessionId: sessionSeed,
-					clientTool,
-					signal: streamController.signal,
-					log,
-					// The refresh retry never carried the request tag; keep it that way.
-					proxyOptions,
-					providerOverrides,
-				})
-				providerResponse = retryResult.response
-				providerUrl = retryResult.url
-				providerHeaders = retryResult.headers
-				finalBody = retryResult.transformedBody
-				providerResponseFormat = retryResult.responseFormat || targetFormat
-				reqLogger.logTargetRequest(providerUrl, providerHeaders, finalBody)
-				log?.warn?.(
-					"RETRY",
-					`${provider.toUpperCase()} | ${model} | retried malformed response (${parseRetryCount}/${RESPONSE_PARSE_RETRY_ATTEMPTS})`,
-				)
-			} catch (error) {
-				log?.warn?.(
-					"RETRY",
-					`${provider.toUpperCase()} | ${model} | parse retry failed: ${error?.message || error}`,
-				)
-				return false
-			}
-		}
-		return parseRetryCount > 0
-	}
+	await retryMalformedResponse({
+		..._retryState,
+		executor,
+		model,
+		translatedBody,
+		stream,
+		credentials,
+		sessionSeed,
+		clientTool,
+		streamController,
+		log,
+		proxyOptions,
+		providerOverrides,
+		reqLogger,
+		provider,
+		targetFormat,
+		set providerResponse(v) {
+			_retryState.providerResponse = v
+		},
+		set providerUrl(v) {
+			_retryState.providerUrl = v
+		},
+		set providerHeaders(v) {
+			_retryState.providerHeaders = v
+		},
+		set finalBody(v) {
+			_retryState.finalBody = v
+		},
+		set providerResponseFormat(v) {
+			_retryState.providerResponseFormat = v
+		},
+	})
+	providerResponse = _retryState.providerResponse
+	providerUrl = _retryState.providerUrl
+	providerHeaders = _retryState.providerHeaders
+	finalBody = _retryState.finalBody
+	providerResponseFormat = _retryState.providerResponseFormat
 
 	// Non-streaming responses are fully buffered before reaching the caller, so
 	// an invalid document can be retried safely. For a streaming client, only
 	// retry a non-SSE response before its first byte is forwarded.
 	if (providerResponse?.ok && !ctx.clientRequestedStreaming) {
-		await retryMalformedResponse()
+		await retryMalformedResponse({
+			..._retryState,
+			executor,
+			model,
+			translatedBody,
+			stream,
+			credentials,
+			sessionSeed,
+			clientTool,
+			streamController,
+			log,
+			proxyOptions,
+			providerOverrides,
+			reqLogger,
+			provider,
+			targetFormat,
+			set providerResponse(v) {
+				_retryState.providerResponse = v
+			},
+			set providerUrl(v) {
+				_retryState.providerUrl = v
+			},
+			set providerHeaders(v) {
+				_retryState.providerHeaders = v
+			},
+			set finalBody(v) {
+				_retryState.finalBody = v
+			},
+			set providerResponseFormat(v) {
+				_retryState.providerResponseFormat = v
+			},
+		})
+		providerResponse = _retryState.providerResponse
+		providerUrl = _retryState.providerUrl
+		providerHeaders = _retryState.providerHeaders
+		finalBody = _retryState.finalBody
+		providerResponseFormat = _retryState.providerResponseFormat
 	} else if (providerResponse?.ok && stream) {
 		const initialText =
 			typeof providerResponse.clone === "function"
@@ -365,7 +304,43 @@ export async function dispatchExecutor(
 						.catch(() => "")
 				: ""
 		if (!isEventStreamResponse(providerResponse) && !looksLikeSseText(initialText)) {
-			await retryMalformedResponse()
+			await retryMalformedResponse({
+				..._retryState,
+				executor,
+				model,
+				translatedBody,
+				stream,
+				credentials,
+				sessionSeed,
+				clientTool,
+				streamController,
+				log,
+				proxyOptions,
+				providerOverrides,
+				reqLogger,
+				provider,
+				targetFormat,
+				set providerResponse(v) {
+					_retryState.providerResponse = v
+				},
+				set providerUrl(v) {
+					_retryState.providerUrl = v
+				},
+				set providerHeaders(v) {
+					_retryState.providerHeaders = v
+				},
+				set finalBody(v) {
+					_retryState.finalBody = v
+				},
+				set providerResponseFormat(v) {
+					_retryState.providerResponseFormat = v
+				},
+			})
+			providerResponse = _retryState.providerResponse
+			providerUrl = _retryState.providerUrl
+			providerHeaders = _retryState.providerHeaders
+			finalBody = _retryState.finalBody
+			providerResponseFormat = _retryState.providerResponseFormat
 		}
 	}
 
@@ -373,131 +348,65 @@ export async function dispatchExecutor(
 	if (!providerResponse.ok) {
 		const firstFailure = await parseUpstreamError(providerResponse, executor)
 		let toolFallbackRecovered = false
-
-		// Tool fallback: a provider that refuses the tool payload outright would
-		// otherwise hand the caller a tool error, and inside a combo it would spend
-		// the whole chain on the same malformed shape. Re-dispatch with the tool
-		// machinery relaxed one step at a time, stopping at the first level the
-		// provider accepts. Only for rejections that actually name tools - a context
-		// overflow or a policy refusal must still reach the caller untouched.
 		if (
 			toolCallFallbackEnabled &&
 			Array.isArray(translatedBody.tools) &&
 			translatedBody.tools.length > 0 &&
 			isToolCallRejection(firstFailure.statusCode, firstFailure.message)
 		) {
-			for (let level = 1; level <= TOOL_FALLBACK_MAX_LEVEL; level++) {
-				const fallbackBody = degradeToolPayload(translatedBody, level)
-				if (!fallbackBody) break
-				try {
-					// No reqTag here - the original loop omitted it, and adding it would
-					// change the tag the degraded retry logs under.
-					const attempt = await executor.execute({
-						model,
-						body: fallbackBody,
-						stream,
-						credentials,
-						providerSessionId: sessionSeed,
-						clientTool,
-						signal: streamController.signal,
-						log,
-						proxyOptions,
-					})
-					if (attempt.response.ok) {
-						providerResponse = attempt.response
-						providerUrl = attempt.url
-						finalBody = attempt.transformedBody
-						providerResponseFormat = attempt.responseFormat || targetFormat
-						const renamed = takeRenamedToolNames(fallbackBody)
-						if (renamed?.size) toolNameMap = new Map([...(toolNameMap || []), ...renamed])
-						reqLogger.logTargetRequest(providerUrl, attempt.headers, finalBody)
-						toolFallbackRecovered = true
-						log?.info?.(
-							"TOOLFALLBACK",
-							`recovered at level ${level} · ${provider}/${model} · after ${firstFailure.statusCode}`,
-						)
-						break
-					}
-					log?.debug?.(
-						"TOOLFALLBACK",
-						`level ${level} rejected · ${provider}/${model} · ${attempt.response.status}`,
-					)
-				} catch (e) {
-					log?.debug?.("TOOLFALLBACK", `level ${level} threw · ${provider}/${model} · ${e.message}`)
-				}
-			}
-		}
-
-		if (!toolFallbackRecovered) {
-			trackPendingRequest(trackedModel, provider, connectionId, false, true)
-			const { statusCode, message, resetsAtMs } = firstFailure
-			appendRequestLog({
-				model: trackedModel,
-				provider,
-				connectionId,
-				status: `FAILED ${statusCode}`,
-				requestedModel: model,
-			}).catch(() => {})
-			saveRequestDetail(
-				buildRequestDetail({
-					provider,
-					model,
-					connectionId,
-					requestedModel,
-					latency: { ttft: 0, total: Date.now() - requestStartTime },
-					tokens: { prompt_tokens: 0, completion_tokens: 0 },
-					request: extractRequestConfig(body, stream),
-					providerRequest: finalBody || translatedBody || null,
-					response: { error: message, status: statusCode, thinking: null },
-					pxpipe: pxpipeSummary,
-					status: "error",
-				}),
-			).catch(() => {})
-			saveFailedUsage({
-				provider,
+			const _fb = {
+				providerResponse,
+				providerUrl,
+				finalBody,
+				providerResponseFormat,
+				toolNameMap,
+				executor,
 				model,
-				requestedModel,
-				connectionId,
-				apiKey,
-				endpoint: clientRawRequest?.endpoint,
-				statusCode,
-			})
-
-			const errMsg = formatProviderError(new Error(message), provider, model, statusCode)
-			if (log?.errorLine) {
-				const urlStr = providerUrl ? `\n    URL: ${providerUrl}` : ""
-				log.errorLine(
-					reqTag,
-					"✗",
-					`ERROR ${statusCode} · ${provider}/${model} · ${Date.now() - requestStartTime}ms${urlStr}\n    ${errMsg}`,
-				)
+				translatedBody,
+				stream,
+				credentials,
+				sessionSeed,
+				clientTool,
+				streamController,
+				log,
+				proxyOptions,
+				provider,
+				targetFormat,
+				reqLogger,
+				toolCallFallbackEnabled,
+				firstFailure,
 			}
-			reqLogger.logError(new Error(message), finalBody || translatedBody)
-			try {
-				const { recordErrorLog } = await import("@/lib/localDb")
-				recordErrorLog({
-					provider,
-					model,
-					endpoint: clientRawRequest?.endpoint || "chat",
-					statusCode,
-					errorMessage: errMsg,
-					errorType: "upstream_error",
-				})
-			} catch {
-				/* fail open */
-			}
-			const isHideError = Boolean(hideError)
-			return {
-				kind: "return",
-				result: createErrorResult(
-					statusCode,
-					errMsg,
-					resetsAtMs,
-					upstreamResponseHeaders(providerResponse.headers),
-					isHideError,
-				),
-			}
+			const fbResult = await tryToolFallback(_fb)
+			providerResponse = _fb.providerResponse
+			providerUrl = _fb.providerUrl
+			finalBody = _fb.finalBody
+			providerResponseFormat = _fb.providerResponseFormat
+			toolNameMap = _fb.toolNameMap
+			toolFallbackRecovered = fbResult.toolFallbackRecovered
 		}
+		const _rec = await recordUpstreamError({
+			firstFailure,
+			providerResponse,
+			provider,
+			connectionId,
+			trackedModel,
+			model,
+			requestedModel,
+			requestStartTime,
+			body,
+			stream,
+			finalBody,
+			translatedBody,
+			pxpipeSummary,
+			apiKey,
+			clientRawRequest,
+			log,
+			reqTag,
+			providerUrl,
+			reqLogger,
+			hideError,
+		})
+		if (_rec) return _rec
 	}
 
 	return {

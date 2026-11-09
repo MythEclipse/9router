@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs"
+import { readdirSync, readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
@@ -22,7 +22,10 @@ import { describe, expect, it } from "vitest"
  */
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..")
-const repo = readFileSync(join(REPO_ROOT, "packages/db/src/repos/usageRepo.ts"), "utf8")
+const repo = readdirSync(join(REPO_ROOT, "packages/db/src/repos"))
+	.filter((f) => f.startsWith("usage") && f.endsWith(".ts"))
+	.map((f) => readFileSync(join(REPO_ROOT, "packages/db/src/repos", f), "utf8"))
+	.join("\n")
 
 describe("modelLabel", () => {
 	it("reads the real model out of the meta blob", () => {

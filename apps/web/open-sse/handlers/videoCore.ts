@@ -14,179 +14,25 @@ import { getVideoAdapter } from "./videoProviders/index.ts"
 // async upstream - this only bounds the HTTP round-trip, not video rendering).
 const VIDEO_FETCH_TIMEOUT_MS = Number(process.env.VIDEO_FETCH_TIMEOUT_MS || 120000)
 
+import { buildHeaders, buildUpstreamUrl, combineSignals, sanitizeSecrets } from "./videoHelpers.ts"
 // POST /videos/* creates a billable upstream job. A network error after the
 // request left the socket may still have created the job, so creation is NEVER
 // auto-retried (the only re-send is the auth retry after a 401/403 refresh,
 // which upstream rejects before job creation).
+import {
+	executeExecutorDrivenVideo,
+	getVideoConfig,
+	isExecutorDrivenVideo,
+} from "./videoProviders.ts"
+
+export { sanitizeSecrets } from "./videoHelpers.ts"
+export {
+	executeExecutorDrivenVideo,
+	getVideoConfig,
+	isExecutorDrivenVideo,
+} from "./videoProviders.ts"
 export const VIDEO_ACTIONS = new Set(["generations", "edits", "extensions"])
 
-export function getVideoConfig(provider: string) {
-	return PROVIDER_MEDIA[provider]?.videoConfig || null
-}
-
-function isExecutorDrivenVideo(provider) {
-	return PROVIDER_MEDIA[provider]?.videoConfig?.executorDriven === true
-}
-
-/** Anything an upstream call in this module may throw: fetch/abort errors carry
- * a `name`, refreshed-provider errors carry an HTTP `status`. */
-interface VideoFailure {
-	name?: string
-	message?: string
-	status?: number
-}
-
-/** Executor-driven generation: the browser executor returns base64 mp4. */
-async function executeExecutorDrivenVideo({
-	provider,
-	rawBody,
-	credentials,
-	signal,
-	log,
-	onCredentialsRefreshed,
-}: {
-	provider: string
-	rawBody: unknown
-	credentials: Credentials
-	signal?: AbortSignal | null
-	log?: EngineLogger
-	onCredentialsRefreshed?: CredentialsRefreshedCallback
-}) {
-	let parsed: Record<string, unknown> = {}
-	try {
-		parsed = JSON.parse(typeof rawBody === "string" ? rawBody : String(rawBody || "{}"))
-	} catch {
-		return createErrorResult(HTTP_STATUS.BAD_REQUEST, `[${provider}] invalid video request body`)
-	}
-	if (!parsed.prompt) {
-		return createErrorResult(HTTP_STATUS.BAD_REQUEST, `[${provider}] video request requires a prompt`)
-	}
-
-	// Image-to-video: accept `image`/`image_url` (string) or `images`/`image_urls` (array)
-	const imageRefs = []
-		.concat(parsed.image ?? parsed.image_url ?? [])
-		.concat(Array.isArray(parsed.images) ? parsed.images : [])
-		.concat(Array.isArray(parsed.image_urls) ? parsed.image_urls : [])
-		.filter((ref) => typeof ref === "string" && ref)
-
-	const { getExecutor } = await import("../executors/index.ts")
-	const executor = getExecutor(provider)
-	if (!executor?.generateMedia) {
-		return createErrorResult(HTTP_STATUS.BAD_REQUEST, `[${provider}] has no executor video support`)
-	}
-
-	try {
-		const apiKeyBefore = credentials?.apiKey
-		const [media] = await executor.generateMedia({
-			prompt: parsed.prompt,
-			kind: "video",
-			size: parsed.size,
-			model: parsed.model,
-			duration: parsed.seconds ?? parsed.duration,
-			resolution: parsed.resolution,
-			n: 1,
-			images: imageRefs,
-			credentials,
-			signal,
-			log,
-		})
-		const dataUrl = `data:${media.mime || "video/mp4"};base64,${media.b64}`
-		// Cookies that rotate on use (Clerk `__client`) are mutated in place by the
-		// executor — persist the new value so the chain does not drift.
-		if (onCredentialsRefreshed && credentials?.apiKey && credentials.apiKey !== apiKeyBefore) {
-			await onCredentialsRefreshed({ apiKey: credentials.apiKey })
-		}
-		return {
-			success: true as const,
-			response: new Response(
-				JSON.stringify({
-					id: `video-${provider}-${Date.now()}`,
-					object: "video.generation",
-					created: Math.floor(Date.now() / 1000),
-					model: parsed.model || provider,
-					status: "completed",
-					video: {
-						url: dataUrl,
-						...(media.width ? { width: media.width } : {}),
-						...(media.height ? { height: media.height } : {}),
-					},
-				}),
-				{
-					status: 200,
-					headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
-				},
-			),
-		}
-	} catch (error) {
-		const message = sanitizeSecrets(
-			(error as VideoFailure)?.message || "video generation failed",
-			credentials,
-		)
-		const status =
-			(error as VideoFailure)?.status && Number.isInteger((error as VideoFailure).status)
-				? (error as VideoFailure).status
-				: 502
-		return createErrorResult(status, `[${provider}] ${message}`)
-	}
-}
-
-/** Strip bearer tokens / obvious secrets from text destined for clients or logs. */
-export function sanitizeSecrets(text, credentials = null) {
-	if (!text) return text
-	let out = String(text).replace(/Bearer\s+[A-Za-z0-9._~+/=-]{8,}/gi, "Bearer [redacted]")
-	for (const key of ["accessToken", "refreshToken", "apiKey"]) {
-		const secret = credentials?.[key]
-		if (typeof secret === "string" && secret.length >= 8) {
-			out = out.split(secret).join("[redacted]")
-		}
-	}
-	return out
-}
-
-function buildUpstreamUrl(config, action, requestId) {
-	const base = config.baseUrl.replace(/\/$/, "")
-	return requestId ? `${base}/${encodeURIComponent(requestId)}` : `${base}/${action}`
-}
-
-function buildHeaders({ token, contentType, idempotencyKey }): Record<string, string> {
-	const headers: Record<string, string> = { Accept: "application/json" }
-	if (token) headers.Authorization = `Bearer ${token}`
-	if (contentType) headers["Content-Type"] = contentType
-	if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey
-	return headers
-}
-
-function combineSignals(signal, timeoutMs) {
-	const timeoutSignal =
-		typeof AbortSignal?.timeout === "function" ? AbortSignal.timeout(timeoutMs) : null
-	if (signal && timeoutSignal && typeof AbortSignal.any === "function") {
-		return AbortSignal.any([signal, timeoutSignal])
-	}
-	return signal || timeoutSignal || undefined
-}
-
-/**
- * Transparent proxy for async video jobs (xAI Grok Imagine shape).
- *
- * - Forwards the raw body byte-for-byte (JSON or multipart) - no reshaping.
- * - Passes upstream JSON (request_id, status, video.url, error) back verbatim.
- * - 401/403 with a refresh token: refresh ONCE, retry ONCE. No other retry.
- * - Upstream error text is sanitized before it reaches the client.
- *
- * @param {object} options
- * @param {string} options.provider - Provider id (must have registry videoConfig)
- * @param {"generations"|"edits"|"extensions"|null} options.action - Creation action (POST)
- * @param {string|null} [options.requestId] - Poll target (GET /videos/{id})
- * @param {Buffer|string|null} [options.rawBody] - Exact body to forward
- * @param {string|null} [options.contentType] - Original Content-Type header
- * @param {string|null} [options.idempotencyKey] - Forwarded Idempotency-Key
- * @param {object} options.credentials - { accessToken?, apiKey?, refreshToken?, authType? }
- * @param {AbortSignal} [options.signal] - Client cancellation signal
- * @param {number} [options.timeoutMs]
- * @param {object} [options.log]
- * @param {function} [options.onCredentialsRefreshed]
- * @returns {Promise<{ success: boolean, response: Response, status?: number, error?: string }>}
- */
 export interface VideoProxyOptions {
 	/** Provider id (must have registry videoConfig). */
 	provider: string

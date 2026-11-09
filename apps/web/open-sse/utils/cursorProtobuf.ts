@@ -10,11 +10,11 @@ const DEBUG = process.env.CURSOR_PROTOBUF_DEBUG === "1"
 const log = (tag, ...args) => DEBUG && console.log(`[PROTOBUF:${tag}]`, ...args)
 const _textDecoder = new TextDecoder()
 
-const PROTOBUF_SCHEMA_VERSION = "1.1.3"
+export const PROTOBUF_SCHEMA_VERSION = "1.1.3"
 
 // ==================== SCHEMAS ====================
 
-const WIRE_TYPE = { VARINT: 0, FIXED64: 1, LEN: 2, FIXED32: 5 }
+export const WIRE_TYPE = { VARINT: 0, FIXED64: 1, LEN: 2, FIXED32: 5 }
 
 const ROLE = { USER: 1, ASSISTANT: 2 }
 
@@ -24,7 +24,7 @@ const THINKING_LEVEL = { UNSPECIFIED: 0, MEDIUM: 1, HIGH: 2 }
 const _CLIENT_SIDE_TOOL_V2 = { MCP: 19 }
 const CLIENT_SIDE_TOOL_V2_MCP = 19
 
-const FIELD = {
+export const FIELD = {
 	// StreamUnifiedChatRequestWithTools (top level)
 	REQUEST: 1,
 
@@ -174,7 +174,7 @@ const FIELD = {
 }
 
 // Known response field numbers - used to detect unknown fields from protocol updates
-const KNOWN_RESPONSE_FIELDS = new Set([
+export const KNOWN_RESPONSE_FIELDS = new Set([
 	FIELD.TOOL_CALL,
 	FIELD.RESPONSE,
 	FIELD.TOOL_ID,
@@ -230,7 +230,7 @@ export function encodeField(fieldNum, wireType, value) {
 	return new Uint8Array(0)
 }
 
-function concatArrays(...arrays) {
+export function concatArrays(...arrays) {
 	const totalLength = arrays.reduce((sum, arr) => sum + arr.length, 0)
 	const result = new Uint8Array(totalLength)
 	let offset = 0
@@ -760,440 +760,52 @@ export function generateToolResultBody(toolResult) {
 
 // ==================== PRIMITIVE DECODING ====================
 
-export function decodeVarint(buffer, offset) {
-	let result = 0
-	let shift = 0
-	let pos = offset
-
-	while (pos < buffer.length) {
-		const b = buffer[pos]
-		result |= (b & 0x7f) << shift
-		pos++
-		if (!(b & 0x80)) break
-		shift += 7
-	}
-
-	return [result, pos]
-}
-
-export function decodeField(buffer, offset) {
-	if (offset >= buffer.length) return [null, null, null, offset]
-
-	const [tag, pos1] = decodeVarint(buffer, offset)
-	const fieldNum = tag >> 3
-	const wireType = tag & 0x07
-
-	let value
-	let pos = pos1
-
-	if (wireType === WIRE_TYPE.VARINT) {
-		;[value, pos] = decodeVarint(buffer, pos)
-	} else if (wireType === WIRE_TYPE.LEN) {
-		const [length, pos2] = decodeVarint(buffer, pos)
-		value = buffer.slice(pos2, pos2 + length)
-		pos = pos2 + length
-	} else if (wireType === WIRE_TYPE.FIXED64) {
-		value = buffer.slice(pos, pos + 8)
-		pos += 8
-	} else if (wireType === WIRE_TYPE.FIXED32) {
-		value = buffer.slice(pos, pos + 4)
-		pos += 4
-	} else {
-		value = null
-	}
-
-	return [fieldNum, wireType, value, pos]
-}
-
-export function decodeMessage(data) {
-	const fields = new Map()
-	let pos = 0
-
-	while (pos < data.length) {
-		const [fieldNum, wireType, value, newPos] = decodeField(data, pos)
-		if (fieldNum === null) break
-
-		if (!fields.has(fieldNum)) fields.set(fieldNum, [])
-		fields.get(fieldNum).push({ wireType, value })
-		pos = newPos
-	}
-
-	return fields
-}
-
-// ==================== RESPONSE PARSING ====================
-
-export function parseConnectRPCFrame(buffer) {
-	if (buffer.length < 5) return null
-
-	const flags = buffer[0]
-	const length = (buffer[1] << 24) | (buffer[2] << 16) | (buffer[3] << 8) | buffer[4]
-
-	if (buffer.length < 5 + length) return null
-
-	let payload = buffer.slice(5, 5 + length)
-
-	// Decompress if gzip
-	if (flags === 0x01) {
-		try {
-			payload = new Uint8Array(zlib.gunzipSync(Buffer.from(payload)))
-		} catch (err) {
-			log("PARSE", `Decompression failed: ${err.message}`)
-		}
-	}
-
-	return { flags, length, payload, consumed: 5 + length }
-}
-
-function extractToolCall(toolCallData) {
-	const toolCall = decodeMessage(toolCallData)
-	let toolCallId = ""
-	let toolName = ""
-	let rawArgs = ""
-	let isLast = false
-
-	// Extract tool call ID
-	if (toolCall.has(FIELD.TOOL_ID)) {
-		const fullId = new TextDecoder().decode(toolCall.get(FIELD.TOOL_ID)[0].value)
-		toolCallId = fullId.split("\n")[0] // Cursor returns multi-line ID, take first line
-	}
-
-	// Extract tool name
-	if (toolCall.has(FIELD.TOOL_NAME)) {
-		toolName = new TextDecoder().decode(toolCall.get(FIELD.TOOL_NAME)[0].value)
-	}
-
-	// Extract is_last flag
-	if (toolCall.has(FIELD.TOOL_IS_LAST)) {
-		isLast = toolCall.get(FIELD.TOOL_IS_LAST)[0].value !== 0
-	}
-
-	// Extract MCP params - nested real tool info
-	if (toolCall.has(FIELD.TOOL_MCP_PARAMS)) {
-		try {
-			const mcpParams = decodeMessage(toolCall.get(FIELD.TOOL_MCP_PARAMS)[0].value)
-
-			if (mcpParams.has(FIELD.MCP_TOOLS_LIST)) {
-				const tool = decodeMessage(mcpParams.get(FIELD.MCP_TOOLS_LIST)[0].value)
-
-				if (tool.has(FIELD.MCP_NESTED_NAME)) {
-					toolName = new TextDecoder().decode(tool.get(FIELD.MCP_NESTED_NAME)[0].value)
-				}
-
-				if (tool.has(FIELD.MCP_NESTED_PARAMS)) {
-					rawArgs = new TextDecoder().decode(tool.get(FIELD.MCP_NESTED_PARAMS)[0].value)
-				}
-			}
-		} catch (err) {
-			log("EXTRACT", `MCP parse error: ${err.message}`)
-		}
-	}
-
-	// Fallback to raw_args
-	if (!rawArgs && toolCall.has(FIELD.TOOL_RAW_ARGS)) {
-		rawArgs = new TextDecoder().decode(toolCall.get(FIELD.TOOL_RAW_ARGS)[0].value)
-	}
-
-	if (toolCallId && toolName) {
-		return {
-			id: toolCallId,
-			type: "function",
-			function: {
-				name: toolName,
-				arguments: rawArgs || "{}",
-			},
-			isLast,
-		}
-	}
-
-	return null
-}
-
-function extractTextAndThinking(responseData) {
-	const nested = decodeMessage(responseData)
-	let text = null
-	let thinking = null
-
-	// Extract text
-	if (nested.has(FIELD.RESPONSE_TEXT)) {
-		text = new TextDecoder().decode(nested.get(FIELD.RESPONSE_TEXT)[0].value)
-	}
-
-	// Extract thinking
-	if (nested.has(FIELD.THINKING)) {
-		try {
-			const thinkingMsg = decodeMessage(nested.get(FIELD.THINKING)[0].value)
-			if (thinkingMsg.has(FIELD.THINKING_TEXT)) {
-				thinking = new TextDecoder().decode(thinkingMsg.get(FIELD.THINKING_TEXT)[0].value)
-			}
-		} catch (err) {
-			log("EXTRACT", `Thinking parse error: ${err.message}`)
-		}
-	}
-
-	return { text, thinking }
-}
-
-export function extractTextFromResponse(payload) {
-	try {
-		const fields = decodeMessage(payload)
-
-		// Warn about unknown field numbers - may indicate a Cursor protocol update
-		for (const fieldNum of fields.keys()) {
-			if (!KNOWN_RESPONSE_FIELDS.has(fieldNum)) {
-				log(
-					"SCHEMA",
-					`Unknown response field #${fieldNum} detected. Schema v${PROTOBUF_SCHEMA_VERSION} may be outdated.`,
-				)
-			}
-		}
-
-		// Field 1: ClientSideToolV2Call
-		if (fields.has(FIELD.TOOL_CALL)) {
-			const toolCall = extractToolCall(fields.get(FIELD.TOOL_CALL)[0].value)
-			if (toolCall) {
-				log("EXTRACT", `Tool call: ${toolCall.function.name}`)
-				return { text: null, error: null, toolCall, thinking: null }
-			}
-		}
-
-		// Field 2: StreamUnifiedChatResponse
-		if (fields.has(FIELD.RESPONSE)) {
-			const { text, thinking } = extractTextAndThinking(fields.get(FIELD.RESPONSE)[0].value)
-
-			if (text || thinking) {
-				return { text, error: null, toolCall: null, thinking }
-			}
-		}
-
-		return { text: null, error: null, toolCall: null, thinking: null }
-	} catch (err) {
-		log("EXTRACT", `Decode failed (schema v${PROTOBUF_SCHEMA_VERSION}): ${err.message}`)
-		return {
-			text: null,
-			error: null,
-			toolCall: null,
-			thinking: null,
-			raw: Buffer.from(payload).toString("base64"),
-			decodeError: err.message,
-		}
-	}
-}
-
-// ==================== AGENT SERVICE (google.protobuf.Value + MCP) ====================
-
-const PB_VALUE = { NULL: 1, NUMBER: 2, STRING: 3, BOOL: 4, STRUCT: 5, LIST: 6 }
-const PB_STRUCT_FIELDS = 1
-const PB_MAP_KEY = 1
-const PB_MAP_VALUE = 2
-const PB_LIST_VALUES = 1
-
-const MTD_NAME = 1
-const MTD_DESCRIPTION = 2
-const MTD_INPUT_SCHEMA = 3
-const MTD_PROVIDER = 4
-const MTD_TOOL_NAME = 5
-
-const MCP_TOOLS_TOOL = 1
-
-const MCP_ARGS_NAME = 1
-const MCP_ARGS_ENTRY = 2
-const MCP_ARGS_CALL_ID = 3
-const MCP_ARGS_TOOL_NAME = 5
-
-const MCR_SUCCESS = 1
-const MCR_ERROR = 2
-const MCR_TOOL_NOT_FOUND = 5
-const MCS_CONTENT = 1
-const MCS_IS_ERROR = 2
-const MCC_TEXT = 1
-const MCC_IMAGE = 2
-const MTC_TEXT = 1
-const MIC_DATA = 1
-const MIC_MIME = 2
-const MER_MESSAGE = 1
-const TNF_NAME = 1
-
-function asBytes(value) {
-	if (!value) return Buffer.alloc(0)
-	return Buffer.isBuffer(value) ? value : Buffer.from(value)
-}
-
-/**
- * Encode a JS value as google.protobuf.Value (oneof body, no outer tag).
- */
-export function encodeAgentValue(value) {
-	if (value === null || value === undefined) {
-		return encodeField(PB_VALUE.NULL, WIRE_TYPE.VARINT, 0)
-	}
-	if (typeof value === "boolean") {
-		return encodeField(PB_VALUE.BOOL, WIRE_TYPE.VARINT, value ? 1 : 0)
-	}
-	if (typeof value === "number") {
-		return encodeField(PB_VALUE.NUMBER, WIRE_TYPE.FIXED64, value)
-	}
-	if (typeof value === "string") {
-		return encodeField(PB_VALUE.STRING, WIRE_TYPE.LEN, value)
-	}
-	if (Array.isArray(value)) {
-		const items = value.map((item) =>
-			encodeField(PB_LIST_VALUES, WIRE_TYPE.LEN, encodeAgentValue(item)),
-		)
-		return encodeField(PB_VALUE.LIST, WIRE_TYPE.LEN, concatArrays(...items))
-	}
-	if (typeof value === "object") {
-		const entries = Object.entries(value).map(([key, val]) =>
-			encodeField(
-				PB_STRUCT_FIELDS,
-				WIRE_TYPE.LEN,
-				concatArrays(
-					encodeField(PB_MAP_KEY, WIRE_TYPE.LEN, key),
-					encodeField(PB_MAP_VALUE, WIRE_TYPE.LEN, encodeAgentValue(val)),
-				),
-			),
-		)
-		return encodeField(PB_VALUE.STRUCT, WIRE_TYPE.LEN, concatArrays(...entries))
-	}
-	return encodeField(PB_VALUE.STRING, WIRE_TYPE.LEN, String(value))
-}
-
-/**
- * Decode google.protobuf.Value bytes back to a JS value.
- */
-export function decodeAgentValue(bytes) {
-	const fields = decodeMessage(asBytes(bytes))
-	if (fields.has(PB_VALUE.NULL)) return null
-	if (fields.has(PB_VALUE.BOOL)) return fields.get(PB_VALUE.BOOL)[0].value !== 0
-	if (fields.has(PB_VALUE.NUMBER)) {
-		return asBytes(fields.get(PB_VALUE.NUMBER)[0].value).readDoubleLE(0)
-	}
-	if (fields.has(PB_VALUE.STRING)) {
-		return asBytes(fields.get(PB_VALUE.STRING)[0].value).toString("utf8")
-	}
-	if (fields.has(PB_VALUE.STRUCT)) {
-		const result = {}
-		for (const entry of decodeMessage(asBytes(fields.get(PB_VALUE.STRUCT)[0].value)).get(
-			PB_STRUCT_FIELDS,
-		) || []) {
-			const pair = decodeMessage(asBytes(entry.value))
-			const key = asBytes(pair.get(PB_MAP_KEY)?.[0]?.value).toString("utf8")
-			if (key) result[key] = decodeAgentValue(pair.get(PB_MAP_VALUE)?.[0]?.value)
-		}
-		return result
-	}
-	if (fields.has(PB_VALUE.LIST)) {
-		return (decodeMessage(asBytes(fields.get(PB_VALUE.LIST)[0].value)).get(PB_LIST_VALUES) || []).map(
-			(item) => decodeAgentValue(item.value),
-		)
-	}
-	return null
-}
-
-function toolNameAndSchema(tool) {
-	const fn = tool?.function || tool || {}
-	return {
-		name: fn.name || tool?.name || "",
-		description: fn.description || tool?.description || "",
-		schema: fn.parameters || tool?.parameters || tool?.inputSchema || tool?.input_schema || {},
-	}
-}
-
-/**
- * Encode agent.v1.McpToolDefinition body (name, description, Value schema, provider, tool_name).
- */
-export function encodeMcpToolDefinition(tool) {
-	const { name, description, schema } = toolNameAndSchema(tool)
-	return concatArrays(
-		encodeField(MTD_NAME, WIRE_TYPE.LEN, name),
-		encodeField(MTD_DESCRIPTION, WIRE_TYPE.LEN, description),
-		encodeField(MTD_INPUT_SCHEMA, WIRE_TYPE.LEN, encodeAgentValue(schema)),
-		encodeField(MTD_PROVIDER, WIRE_TYPE.LEN, "9router"),
-		encodeField(MTD_TOOL_NAME, WIRE_TYPE.LEN, name),
-	)
-}
-
-/**
- * Encode AgentRunRequest.mcp_tools: repeated McpToolDefinition under field 1.
- */
-export function encodeMcpTools(tools = []) {
-	if (!tools?.length) return new Uint8Array()
-	return concatArrays(
-		...tools.map((tool) => encodeField(MCP_TOOLS_TOOL, WIRE_TYPE.LEN, encodeMcpToolDefinition(tool))),
-	)
-}
-
-/**
- * Decode agent.v1.McpArgs (name, typed args map, toolCallId, toolName).
- */
-export function decodeMcpArgs(bytes) {
-	const msg = decodeMessage(asBytes(bytes))
-	const args = {}
-	for (const entry of msg.get(MCP_ARGS_ENTRY) || []) {
-		const pair = decodeMessage(asBytes(entry.value))
-		const key = asBytes(pair.get(PB_MAP_KEY)?.[0]?.value).toString("utf8")
-		if (key) args[key] = decodeAgentValue(pair.get(PB_MAP_VALUE)?.[0]?.value)
-	}
-	const read = (field) => asBytes(msg.get(field)?.[0]?.value).toString("utf8")
-	return {
-		name: read(MCP_ARGS_NAME),
-		toolCallId: read(MCP_ARGS_CALL_ID),
-		toolName: read(MCP_ARGS_TOOL_NAME),
-		args,
-	}
-}
-
-function encodeMcpTextItem(text) {
-	return encodeField(
-		MCS_CONTENT,
-		WIRE_TYPE.LEN,
-		encodeField(MCC_TEXT, WIRE_TYPE.LEN, encodeField(MTC_TEXT, WIRE_TYPE.LEN, text)),
-	)
-}
-
-function encodeMcpImageItem(image) {
-	const data = image?.data || image || new Uint8Array()
-	const mimeType = image?.mimeType || "application/octet-stream"
-	return encodeField(
-		MCS_CONTENT,
-		WIRE_TYPE.LEN,
-		encodeField(
-			MCC_IMAGE,
-			WIRE_TYPE.LEN,
-			concatArrays(
-				encodeField(MIC_DATA, WIRE_TYPE.LEN, data),
-				encodeField(MIC_MIME, WIRE_TYPE.LEN, mimeType),
-			),
-		),
-	)
-}
-
-export function encodeMcpResultSuccess({ textItems = [], imageItems = [], isError = false } = {}) {
-	const success = concatArrays(
-		...textItems.map(encodeMcpTextItem),
-		...imageItems.map(encodeMcpImageItem),
-		encodeField(MCS_IS_ERROR, WIRE_TYPE.VARINT, isError ? 1 : 0),
-	)
-	return encodeField(MCR_SUCCESS, WIRE_TYPE.LEN, success)
-}
-
-export function encodeMcpResultError(message) {
-	return encodeField(
-		MCR_ERROR,
-		WIRE_TYPE.LEN,
-		encodeField(MER_MESSAGE, WIRE_TYPE.LEN, String(message || "")),
-	)
-}
-
-export function encodeMcpResultToolNotFound(name) {
-	return encodeField(
-		MCR_TOOL_NOT_FOUND,
-		WIRE_TYPE.LEN,
-		encodeField(TNF_NAME, WIRE_TYPE.LEN, String(name || "")),
-	)
-}
-
 // ==================== EXPORTS ====================
 
+export {
+	decodeAgentValue,
+	decodeMcpArgs,
+	encodeAgentValue,
+	encodeMcpResultError,
+	encodeMcpResultSuccess,
+	encodeMcpResultToolNotFound,
+	encodeMcpToolDefinition,
+	encodeMcpTools,
+} from "./cursorProtobufAgent.ts"
+export {
+	decodeField,
+	decodeMessage,
+	decodeVarint,
+	extractTextFromResponse,
+	parseConnectRPCFrame,
+} from "./cursorProtobufDecode.ts"
+
+import {
+	decodeAgentValue as _decodeAgentValue,
+	decodeMcpArgs as _decodeMcpArgs,
+	encodeAgentValue as _encodeAgentValue,
+	encodeMcpResultError as _encodeMcpResultError,
+	encodeMcpResultSuccess as _encodeMcpResultSuccess,
+	encodeMcpResultToolNotFound as _encodeMcpResultToolNotFound,
+	encodeMcpToolDefinition as _encodeMcpToolDefinition,
+	encodeMcpTools as _encodeMcpTools,
+} from "./cursorProtobufAgent.ts"
+import {
+	decodeField,
+	decodeMessage,
+	decodeVarint,
+	extractTextFromResponse,
+	parseConnectRPCFrame,
+} from "./cursorProtobufDecode.ts"
+
+const encodeAgentValue = _encodeAgentValue
+const decodeAgentValue = _decodeAgentValue
+const encodeMcpToolDefinition = _encodeMcpToolDefinition
+const encodeMcpTools = _encodeMcpTools
+const decodeMcpArgs = _decodeMcpArgs
+const encodeMcpResultSuccess = _encodeMcpResultSuccess
+const encodeMcpResultError = _encodeMcpResultError
+const encodeMcpResultToolNotFound = _encodeMcpResultToolNotFound
 const CursorProtobuf = {
 	encodeVarint,
 	encodeField,
