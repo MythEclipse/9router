@@ -4,6 +4,7 @@ import { execSync } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import * as esbuild from "esbuild"
 import { pruneStandaloneTree } from "../../apps/web/scripts/prune-standalone-tree.mjs"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -212,7 +213,7 @@ function assertRequiredApiArtifacts(cliAppDir) {
 	}
 }
 
-function buildCliPackage() {
+async function buildCliPackage() {
 	console.log("📦 Building 9Router CLI package with Next.js...\n")
 
 	fs.mkdirSync(buildHomeDir, { recursive: true })
@@ -289,11 +290,17 @@ function buildCliPackage() {
 		process.exit(1)
 	}
 
-	// Step 3b: Ensure sql.js (pure JS fallback) bundled in app/cli/app/node_modules.
+	// Step 3b: DeepSeek PoW worker + its hash dependency (runtime-loaded, not traced).
+	console.log("3️⃣ b Copying DeepSeek PoW worker files...")
+	await copyDeepSeekPowFiles(appDir, cliAppDir)
+	assertDeepSeekPowFiles(cliAppDir)
+	console.log("✅ Copied DeepSeek PoW worker files\n")
+
+	// Step 3c: Ensure sql.js (pure JS fallback) bundled in app/cli/app/node_modules.
 	// Strip better-sqlite3 (native) - it lives in ~/.9router/runtime to avoid
 	// Windows EBUSY during global CLI updates. node:sqlite (Node ≥22.5) is also
 	// available as a no-install middle tier.
-	console.log("3️⃣ b Configuring SQLite drivers...")
+	console.log("3️⃣ c Configuring SQLite drivers...")
 	function ensureModuleInBundle(pkg) {
 		const dest = path.join(cliAppDir, "node_modules", pkg)
 		if (fs.existsSync(dest)) {
@@ -417,7 +424,81 @@ function buildCliPackage() {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-	buildCliPackage()
+	buildCliPackage().catch((error) => {
+		console.error(`❌ CLI build failed: ${error?.message || error}`)
+		process.exitCode = 1
+	})
 }
 
-export { assertRequiredApiArtifacts, buildCliPackage, copyStandaloneBuild, mergeServerArtifacts }
+/**
+ * The PoW worker loads its hash dependency from the filesystem at run time.
+ *
+ * deepseek-pow.ts spawns open-sse/lib/deepseek-pow-worker.mjs through
+ * worker_threads and resolves it from process.cwd(). Next standalone file tracing
+ * follows that fs reference and ships the worker, but it does not follow the
+ * worker's own relative import, so the published tarball shipped the worker
+ * without its dependency and every DeepSeek web request died with
+ * "Cannot find module" (9router issue 5460).
+ *
+ * This fork stores the algorithm as deepseek-pow-hash.ts, but the worker imports
+ * "./deepseek-pow-hash.js" — a Worker is plain Node ESM and cannot import .ts. The
+ * source is therefore emitted under the name the worker asks for. Shipping the .ts
+ * file alone would satisfy a naive "does the file exist" check while leaving the
+ * worker just as broken.
+ */
+const DEEPSEEK_POW_SOURCES = [
+	{ source: "deepseek-pow-worker.mjs", artifact: "deepseek-pow-worker.mjs" },
+	{ source: "deepseek-pow-hash.ts", artifact: "deepseek-pow-hash.js" },
+]
+
+/** Artifact names that must exist in the packaged app/open-sse/lib. */
+const DEEPSEEK_POW_ARTIFACTS = DEEPSEEK_POW_SOURCES.map((entry) => entry.artifact)
+
+async function copyDeepSeekPowFiles(appDir: string, cliAppDir: string): Promise<void> {
+	const srcDir = path.join(appDir, "open-sse", "lib")
+	const destDir = path.join(cliAppDir, "open-sse", "lib")
+	fs.mkdirSync(destDir, { recursive: true })
+	for (const { source, artifact } of DEEPSEEK_POW_SOURCES) {
+		const src = path.join(srcDir, source)
+		if (!fs.existsSync(src)) {
+			throw new Error(`DeepSeek PoW source file not found: ${src}`)
+		}
+		const dest = path.join(destDir, artifact)
+		if (source.endsWith(".ts")) {
+			// The worker is plain Node ESM and cannot load TypeScript, so the source
+			// has to be emitted, not copied: a verbatim copy would ship type
+			// annotations to a Worker and fail on the first "function f(x: number)".
+			await esbuild.build({
+				entryPoints: [src],
+				outfile: dest,
+				bundle: false,
+				format: "esm",
+				platform: "node",
+				target: "node18",
+			})
+		} else {
+			fs.copyFileSync(src, dest)
+		}
+	}
+}
+
+function assertDeepSeekPowFiles(cliAppDir: string): void {
+	const missing = DEEPSEEK_POW_ARTIFACTS.map((file) =>
+		path.join(cliAppDir, "open-sse", "lib", file),
+	).filter((filePath) => !fs.existsSync(filePath))
+	if (missing.length > 0) {
+		throw new Error(
+			`Required DeepSeek PoW worker file${missing.length === 1 ? " is" : "s are"} missing:\n` +
+				missing.join("\n"),
+		)
+	}
+}
+
+export {
+	assertDeepSeekPowFiles,
+	assertRequiredApiArtifacts,
+	buildCliPackage,
+	copyDeepSeekPowFiles,
+	copyStandaloneBuild,
+	mergeServerArtifacts,
+}

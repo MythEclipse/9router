@@ -13,7 +13,9 @@ try {
 const { afterEach, describe, it } = testApi
 
 import {
+	assertDeepSeekPowFiles,
 	assertRequiredApiArtifacts,
+	copyDeepSeekPowFiles,
 	copyStandaloneBuild,
 	mergeServerArtifacts,
 } from "../../cli/scripts/build-cli.ts"
@@ -132,6 +134,89 @@ describe("CLI build server artifacts", () => {
 				error.message.includes(
 					path.join(cliAppDir, ".next-cli-build/server/app/api/v1/messages/route.js"),
 				),
+		)
+	})
+})
+
+describe("CLI build DeepSeek PoW worker files", () => {
+	function createPoWSource(appDir: string) {
+		writeFixture(path.join(appDir, "open-sse/lib"), "deepseek-pow-worker.mjs", "worker")
+		writeFixture(path.join(appDir, "open-sse/lib"), "deepseek-pow-hash.ts", "hash")
+	}
+
+	it("copies worker and hash next to each other (standalone tracing drops the worker's import)", async () => {
+		const root = createTempDir()
+		const appDir = path.join(root, "9router")
+		const cliAppDir = path.join(root, "cli-app")
+		createPoWSource(appDir)
+		// What standalone tracing ships: the worker, followed from the fs reference,
+		// but not the module that worker imports.
+		writeFixture(path.join(cliAppDir, "open-sse/lib"), "deepseek-pow-worker.mjs", "worker")
+
+		await copyDeepSeekPowFiles(appDir, cliAppDir)
+		assertDeepSeekPowFiles(cliAppDir)
+
+		// Emitted, not copied: esbuild strips types, so the content is the source
+		// with the bare expression preserved.
+		const emitted = fs.readFileSync(path.join(cliAppDir, "open-sse/lib/deepseek-pow-hash.js"), "utf8")
+		assert.equal(emitted.includes("hash"), true)
+	})
+
+	it("ships the hash under the .js name the worker imports, not its .ts source name", async () => {
+		const root = createTempDir()
+		const appDir = path.join(root, "9router")
+		const cliAppDir = path.join(root, "cli-app")
+		createPoWSource(appDir)
+
+		await copyDeepSeekPowFiles(appDir, cliAppDir)
+
+		// A Worker is plain Node ESM: "./deepseek-pow-hash.js" is the only name that
+		// resolves. Copying the .ts under its own name would pass a file-exists check
+		// and still leave the worker dead.
+		assert.equal(fs.existsSync(path.join(cliAppDir, "open-sse/lib/deepseek-pow-hash.js")), true)
+		assert.equal(fs.existsSync(path.join(cliAppDir, "open-sse/lib/deepseek-pow-hash.ts")), false)
+	})
+
+	it("emits the hash as JavaScript, stripping the type annotations a Worker cannot parse", async () => {
+		const root = createTempDir()
+		const appDir = path.join(root, "9router")
+		const cliAppDir = path.join(root, "cli-app")
+		// Shaped like the real source: a typed export the worker imports.
+		writeFixture(path.join(appDir, "open-sse/lib"), "deepseek-pow-worker.mjs", "worker")
+		writeFixture(
+			path.join(appDir, "open-sse/lib"),
+			"deepseek-pow-hash.ts",
+			"export function solve(prefix: string, n: number): string { return prefix + String(n) }\n",
+		)
+
+		await copyDeepSeekPowFiles(appDir, cliAppDir)
+
+		const emitted = fs.readFileSync(path.join(cliAppDir, "open-sse/lib/deepseek-pow-hash.js"), "utf8")
+		assert.equal(emitted.includes(": string"), false)
+		assert.equal(emitted.includes(": number"), false)
+		// And it is real ESM the worker can import, exporting the same name.
+		assert.equal(emitted.includes("export"), true)
+		assert.equal(emitted.includes("solve"), true)
+	})
+
+	it("fails loudly when a PoW source file is missing", async () => {
+		const root = createTempDir()
+		const appDir = path.join(root, "9router")
+		const cliAppDir = path.join(root, "cli-app")
+		writeFixture(path.join(appDir, "open-sse/lib"), "deepseek-pow-worker.mjs", "worker")
+
+		await assert.rejects(() => copyDeepSeekPowFiles(appDir, cliAppDir), /deepseek-pow-hash\.ts/)
+	})
+
+	it("reports the missing PoW artifact path", () => {
+		const root = createTempDir()
+		const cliAppDir = path.join(root, "cli-app")
+		writeFixture(path.join(cliAppDir, "open-sse/lib"), "deepseek-pow-worker.mjs", "worker")
+
+		assert.throws(
+			() => assertDeepSeekPowFiles(cliAppDir),
+			(error: Error) =>
+				error.message.includes(path.join(cliAppDir, "open-sse/lib/deepseek-pow-hash.js")),
 		)
 	})
 })
