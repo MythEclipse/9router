@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs"
+import { readdirSync, readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { MODEL_PRICING } from "@9router/pricing"
@@ -132,7 +132,17 @@ describe("Gemini 3.8 MITM tools and catalog", () => {
 	})
 
 	it("keeps the standalone CLI Antigravity catalog synchronized", () => {
-		const source = readFileSync(join(here, "../../cli/src/cli/menus/providers.ts"), "utf8")
+		// The menu was split into providers/ modules; scan the whole set so the
+		// catalog check survives the next move instead of pinning one path.
+		const providersDir = join(here, "../../cli/src/cli/menus/providers")
+		const source = [
+			join(here, "../../cli/src/cli/menus/providers.ts"),
+			...readdirSync(providersDir)
+				.filter((f) => f.endsWith(".ts"))
+				.map((f) => join(providersDir, f)),
+		]
+			.map((file) => readFileSync(file, "utf8"))
+			.join("\n")
 		const agCatalog = source.match(/\n\s*ag: \[([\s\S]*?)\n\s*\],/)?.[1] || ""
 
 		expect(agCatalog).toContain("gemini-3.8-flash-high")

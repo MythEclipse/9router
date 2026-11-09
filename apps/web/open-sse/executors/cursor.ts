@@ -191,7 +191,11 @@ export class CursorExecutor extends BaseExecutor {
 	}
 
 	async executeAgent(args) {
-		return executeAgent({ ...args, buildHeaders: (c) => this.buildHeaders(c) })
+		return executeAgent({
+			...args,
+			buildHeaders: (c) => this.buildHeaders(c),
+			openStream: (url, headers, signal) => this.openAgentHttp2Stream(url, headers, signal),
+		})
 	}
 
 	async execute({ model, body, stream, credentials, signal, log, proxyOptions = null }) {

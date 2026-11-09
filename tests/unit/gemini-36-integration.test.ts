@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs"
+import { readdirSync, readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { MODEL_PRICING } from "@9router/pricing"
@@ -142,7 +142,17 @@ describe("Gemini 3.6 catalogs and pricing", () => {
 	})
 
 	it("keeps the standalone CLI Gemini catalog synchronized", () => {
-		const source = readFileSync(join(here, "../../cli/src/cli/menus/providers.ts"), "utf8")
+		// The menu was split into providers/ modules; scan the whole set so the
+		// catalog check survives the next move instead of pinning one path.
+		const providersDir = join(here, "../../cli/src/cli/menus/providers")
+		const source = [
+			join(here, "../../cli/src/cli/menus/providers.ts"),
+			...readdirSync(providersDir)
+				.filter((f) => f.endsWith(".ts"))
+				.map((f) => join(providersDir, f)),
+		]
+			.map((file) => readFileSync(file, "utf8"))
+			.join("\n")
 		// The catalog is indented with tabs, so pinning two spaces matched nothing
 		// and the assertion compared "" against the expected ids. Match any
 		// leading whitespace so the check survives reformatting.

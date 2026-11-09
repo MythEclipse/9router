@@ -275,7 +275,20 @@ describe("waitForPidsExit", () => {
 })
 
 describe("cli.ts actually uses the fast path", () => {
-	const src = fs.readFileSync(new URL("../../cli/cli.ts", import.meta.url), "utf-8")
+	// The launcher was split into cli/src/cli/launcher/*.ts; scan the entry point
+	// plus every module under cli/src/cli so these invariants survive the next move.
+	const cliSourceFiles = (dir) =>
+		fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+			const child = new URL(`${entry.name}${entry.isDirectory() ? "/" : ""}`, dir)
+			if (entry.isDirectory()) return cliSourceFiles(child)
+			return entry.name.endsWith(".ts") ? [child] : []
+		})
+	const src = [
+		new URL("../../cli/cli.ts", import.meta.url),
+		...cliSourceFiles(new URL("../../cli/src/cli/", import.meta.url)),
+	]
+		.map((u) => fs.readFileSync(u, "utf-8"))
+		.join("\n")
 
 	it("writes a PID record when it spawns the server", () => {
 		expect(src).toContain("writePidRecord(launcherPidFile")
@@ -284,7 +297,7 @@ describe("cli.ts actually uses the fast path", () => {
 
 	it("stops the previous instance by record before falling back to the scan", () => {
 		const stop = src.slice(src.indexOf("async function stopPreviousInstance"))
-		const body = stop.slice(0, stop.indexOf("\n\t}"))
+		const body = stop.slice(0, stop.indexOf("\n}"))
 		// Record first, scan and port kill only after the port check.
 		expect(body.indexOf("stopRecordedInstance")).toBeLessThan(body.indexOf("killAllAppProcesses"))
 		expect(body).toContain("isPortInUse")
@@ -303,7 +316,7 @@ describe("cli.ts actually uses the fast path", () => {
 
 	it("kills the cloudflared it found instead of only returning the PIDs", () => {
 		const fn = src.slice(src.indexOf("function killCloudflaredByAppPort"))
-		const body = fn.slice(0, fn.indexOf("\n\t}"))
+		const body = fn.slice(0, fn.indexOf("\n}"))
 		expect(body).toContain('process.kill(pid, "SIGKILL")')
 		expect(body).toContain("taskkill")
 	})

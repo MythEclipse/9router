@@ -6,6 +6,9 @@
  * emits `name: "WebSearch"` — not Anthropic's `"web_search"`. These tests pin
  * that shape so the bridge cannot silently stop recognising it again.
  */
+import { readdirSync, readFileSync } from "node:fs"
+import { join } from "node:path"
+import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
 import {
 	CLAUDE_CODE_SEARCH_TOOL_NAME,
@@ -312,8 +315,20 @@ describe("forced-SSE to JSON path (Claude Code stream:false)", () => {
 	})
 
 	it("accepts the web search plan and runner", () => {
+		// The signature still carries both, and the wiring lives in the sseJson*
+		// siblings the handler delegates to — scan the set, not one file.
 		const src = handleForcedSSEToJson.toString()
-		expect(src).toContain("attachWebSearchToClaudeBody")
+		expect(src).toContain("webSearchPlan")
+		expect(src).toContain("runSearch")
+
+		const dir = fileURLToPath(new URL("../../apps/web/open-sse/handlers/chatCore", import.meta.url))
+		const wiring = [
+			"sseToJsonHandler.ts",
+			...readdirSync(dir).filter((f) => /^sseJson.*\.ts$/.test(f)),
+		]
+			.map((f) => readFileSync(join(dir, f), "utf8"))
+			.join("\n")
+		expect(wiring).toContain("attachWebSearchToClaudeBody")
 	})
 
 	it("imports the bridge helper", async () => {

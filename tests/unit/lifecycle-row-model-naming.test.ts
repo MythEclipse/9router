@@ -22,7 +22,19 @@ const repo = readdirSync(join(REPO_ROOT, "packages/db/src/repos"))
 	.filter((f) => f.startsWith("usage") && f.endsWith(".ts"))
 	.map((f) => readFileSync(join(REPO_ROOT, "packages/db/src/repos", f), "utf8"))
 	.join("\n")
-const chatCore = readFileSync(join(REPO_ROOT, "apps/web/open-sse/handlers/chatCore.ts"), "utf8")
+// chatCore was split into chatCore.ts + chatCore/*.ts; scan the whole set so the
+// lifecycle invariant holds wherever a call site is moved next.
+const chatCore = [
+	join(REPO_ROOT, "apps/web/open-sse/handlers/chatCore.ts"),
+	...readdirSync(join(REPO_ROOT, "apps/web/open-sse/handlers"))
+		.filter((f) => /^chatCore-.*\.ts$/.test(f))
+		.map((f) => join(REPO_ROOT, "apps/web/open-sse/handlers", f)),
+	...readdirSync(join(REPO_ROOT, "apps/web/open-sse/handlers/chatCore"))
+		.filter((f) => f.endsWith(".ts"))
+		.map((f) => join(REPO_ROOT, "apps/web/open-sse/handlers/chatCore", f)),
+]
+	.map((file) => readFileSync(file, "utf8"))
+	.join("\n")
 
 describe("lifecycle rows keep the resolved model", () => {
 	it("accepts an alias on the lifecycle entry", () => {

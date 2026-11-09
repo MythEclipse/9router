@@ -170,7 +170,20 @@ describe("initTray readiness contract", () => {
 })
 
 describe("cli.ts announces the tray only from onReady", () => {
-	const src = fsSync.readFileSync(new URL("../../cli/cli.ts", import.meta.url), "utf-8")
+	// cli.ts now delegates the tray handshake to cli/src/cli/**; scan the entry
+	// point plus the whole CLI source tree so the invariant holds wherever it lands.
+	const cliSourceFiles = (dir) =>
+		fsSync.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+			const child = new URL(`${entry.name}${entry.isDirectory() ? "/" : ""}`, dir)
+			if (entry.isDirectory()) return cliSourceFiles(child)
+			return entry.name.endsWith(".ts") ? [child] : []
+		})
+	const src = [
+		new URL("../../cli/cli.ts", import.meta.url),
+		...cliSourceFiles(new URL("../../cli/src/cli/", import.meta.url)),
+	]
+		.map((u) => fsSync.readFileSync(u, "utf-8"))
+		.join("\n")
 
 	it("no longer prints the success message straight after initTrayIcon()", () => {
 		expect(src).not.toMatch(

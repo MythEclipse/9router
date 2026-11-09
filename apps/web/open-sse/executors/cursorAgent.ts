@@ -97,6 +97,7 @@ export async function executeAgent({
 	log,
 	proxyOptions = null,
 	buildHeaders,
+	openStream = openAgentHttp2Stream,
 }: any) {
 	const agentEndpoint = PROVIDER_OAUTH.cursor?.agentEndpoint
 	if (!agentEndpoint) throw new Error("Cursor AgentService endpoint is not configured")
@@ -139,7 +140,7 @@ export async function executeAgent({
 	}
 
 	const openAgentSession = (frameMessages) => {
-		const session = openAgentHttp2Stream(url, headers, requestController.signal)
+		const session = openStream(url, headers, requestController.signal)
 		session.write(
 			buildAgentRunFrame(
 				frameMessages,

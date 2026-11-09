@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs"
+import { readdirSync, readFileSync } from "node:fs"
+import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -175,9 +176,16 @@ describe("chatCore provider session forwarding", () => {
 		// The dispatch sites live in chatCore/executorDispatch.ts since chatCore
 		// was split; both files are scanned so the invariant holds wherever the
 		// call is moved next.
-		const sources = ["handlers/chatCore.ts", "handlers/chatCore/executorDispatch.ts"].map((rel) =>
-			readFileSync(fileURLToPath(new URL(`../../apps/web/open-sse/${rel}`, import.meta.url)), "utf8"),
-		)
+		// chatCore was split into chatCore.ts + chatCore/*.ts; scan the whole set so
+		// the invariant holds wherever the dispatch call is moved next.
+		const handlersDir = fileURLToPath(new URL("../../apps/web/open-sse/handlers", import.meta.url))
+		const sources = [
+			"chatCore.ts",
+			...readdirSync(handlersDir).filter((f) => /^chatCore-.*\.ts$/.test(f)),
+			...readdirSync(join(handlersDir, "chatCore"))
+				.filter((f) => f.endsWith(".ts"))
+				.map((f) => `chatCore/${f}`),
+		].map((rel) => readFileSync(join(handlersDir, rel), "utf8"))
 		const calls = sources.flatMap((source) =>
 			[...source.matchAll(/executor\.execute\(\{([\s\S]*?)\}\)/g)].map((match) => match[1]),
 		)

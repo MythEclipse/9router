@@ -29,6 +29,12 @@ export { detectRequiredCapabilities, reorderByCapabilities } from "./combo-capab
 export { handleFusionChat } from "./combo-fusion.ts"
 export { isZeroContentResponse } from "./combo-response.ts"
 export { getComboModelsFromData, getRotatedModels, resetComboRotation } from "./combo-rotation.ts"
+export {
+	clearStickyComboSession,
+	getStickyComboModel,
+	orderModelsByChoice,
+	setStickyComboModel,
+} from "./systemoneRouter.ts"
 
 /** Handle combo chat with fallback. */
 export async function handleComboChat({
