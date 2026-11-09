@@ -10,7 +10,7 @@ const SESSION_HEADER = "x-opencode-session"
 const SESSION_FIELD = "_opencodeGoSession"
 const MAX_SESSION_LENGTH = 256
 
-const RESPONSES_BASE_URL = "https://opencode.ai/zen/go/v1/responses"
+const RESPONSES_BASE_URL = "https://opencode.ai/inference/go/openai/v1/responses"
 const GEMINI_BASE_URL = "https://opencode.ai/inference/go/v1/models"
 
 /** Fields a caller may hand `prepareRequestCredentials` to derive a session. */

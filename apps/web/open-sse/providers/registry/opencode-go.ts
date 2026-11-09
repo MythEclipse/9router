@@ -18,10 +18,10 @@ const OpencodeGo = {
 	},
 	category: "apikey",
 	transport: {
-		baseUrl: "https://opencode.ai/zen/go/v1/chat/completions",
+		baseUrl: "https://opencode.ai/inference/go/openai/v1/chat/completions",
 		headers: {},
 		usage: {
-			url: "https://opencode.ai/zen/go/v1/usage",
+			url: "https://opencode.ai/inference/go/v1/usage",
 		},
 	},
 	// Multi-endpoint: pick the transport matching the client sourceFormat to skip
@@ -30,12 +30,12 @@ const OpencodeGo = {
 	transports: [
 		{
 			format: "openai",
-			baseUrl: "https://opencode.ai/zen/go/v1/chat/completions",
+			baseUrl: "https://opencode.ai/inference/go/openai/v1/chat/completions",
 			auth: { combined: true, header: "Authorization", scheme: "bearer" },
 		},
 		{
 			format: "claude",
-			baseUrl: "https://opencode.ai/zen/go/v1/messages",
+			baseUrl: "https://opencode.ai/inference/go/anthropic/v1/messages",
 			auth: { combined: true, header: "x-api-key", scheme: "raw", anthropicVersion: true },
 		},
 		// /responses rejects the Chat-shaped thinking fields (reasoning_effort, thinking:{type}) with
@@ -43,7 +43,7 @@ const OpencodeGo = {
 		// reasoning:{effort,summary} for every model it serves (deepseek-v4*, gpt-*-luna, grok-4.*).
 		{
 			format: "openai-responses",
-			baseUrl: "https://opencode.ai/zen/go/v1/responses",
+			baseUrl: "https://opencode.ai/inference/go/openai/v1/responses",
 			auth: { combined: true, header: "Authorization", scheme: "bearer" },
 			thinkingFormat: "openai-responses",
 		},
@@ -106,9 +106,9 @@ const OpencodeGo = {
 		{ id: "hy4-preview", name: "Hy4 Preview", supportedFormats: ["openai"] },
 		{ id: "hy3", name: "Hy3", supportedFormats: ["openai"] },
 		{ id: "hy3-preview", name: "Hy3 Preview", supportedFormats: ["openai"] },
-		// In /zen/go/v1/models but absent from the docs endpoint table - chat lane is the fallback guess
+		// In /inference/go/v1/models but absent from the docs endpoint table - chat lane is the fallback guess
 		{ id: "omen-alpha", name: "Omen Alpha", supportedFormats: ["openai"] },
-		// Served by /zen/go/v1/responses only - the responses-only entry forces chatCore
+		// Served by /inference/go/openai/v1/responses only - the responses-only entry forces chatCore
 		// past the sourceFormat-matched transports into translation (see chatCore guard).
 		{
 			id: "grok-4.7",
@@ -152,7 +152,7 @@ const OpencodeGo = {
 			targetFormat: "openai-responses",
 			supportedFormats: ["openai-responses"],
 		},
-		// Served by /zen/go/v1/messages only: /chat/completions answers
+		// Served by /inference/go/anthropic/v1/messages only: /chat/completions answers
 		// "ModelProtocolUnsupported". Declaring targetFormat lets clients on the OpenAI
 		// wire translate to Claude and land on the matched transport (chatCore guard).
 		{
@@ -164,7 +164,7 @@ const OpencodeGo = {
 	],
 	// Live catalogue; ids outside this curated list get their endpoint lane from the
 	// family regex in providers/models/helpers.js (opencodeFamilyFormats).
-	modelsFetcher: { url: "https://opencode.ai/zen/go/v1/models", type: "opencode-go" },
+	modelsFetcher: { url: "https://opencode.ai/inference/go/v1/models", type: "opencode-go" },
 	passthroughModels: true,
 	features: {
 		usage: true,

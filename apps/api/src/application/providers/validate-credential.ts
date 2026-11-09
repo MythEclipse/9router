@@ -374,7 +374,7 @@ export function makeValidateCredential(dependencies: ValidateCredentialDependenc
 			case "opencode-go":
 				return {
 					request: {
-						url: "https://opencode.ai/zen/go/v1/chat/completions",
+						url: "https://opencode.ai/inference/go/openai/v1/chat/completions",
 						method: "POST",
 						headers: { ...json, ...bearer(apiKey) },
 						body: JSON.stringify({
