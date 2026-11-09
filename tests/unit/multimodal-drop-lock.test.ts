@@ -68,4 +68,21 @@ describe("openai→gemini: input_audio is mapped to inlineData (docs 11 §4)", (
 		])
 		expect(parts).toEqual([{ inlineData: { mime_type: "image/png", data: "AAAB" } }])
 	})
+
+	it("uses a concrete MIME type for remote images", () => {
+		const url = "https://files.example.com/reference/photo.jpg?token=abc"
+		const parts = convertOpenAIContentToParts([{ type: "image_url", image_url: { url } }])
+		expect(parts).toEqual([{ fileData: { fileUri: url, mimeType: "image/jpeg" } }])
+	})
+
+	it("falls back to the default image MIME for unknown or unparsable URLs", () => {
+		const webp = "https://cdn.example.com/a/b.webp"
+		expect(convertOpenAIContentToParts([{ type: "image_url", image_url: { url: webp } }])).toEqual([
+			{ fileData: { fileUri: webp, mimeType: "image/webp" } },
+		])
+		const unknown = "https://cdn.example.com/blob"
+		expect(convertOpenAIContentToParts([{ type: "image_url", image_url: { url: unknown } }])).toEqual(
+			[{ fileData: { fileUri: unknown, mimeType: "image/png" } }],
+		)
+	})
 })

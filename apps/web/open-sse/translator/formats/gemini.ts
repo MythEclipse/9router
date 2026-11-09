@@ -2,7 +2,7 @@
 
 import { isGemini4Model } from "../../providers/capabilities.ts"
 import { safeParseJSON } from "../concerns/json.ts"
-import { OPENAI_BLOCK } from "../schema/index.ts"
+import { DEFAULT_IMAGE_MIME, OPENAI_BLOCK } from "../schema/index.ts"
 
 // Unsupported JSON Schema constraints that should be removed for Antigravity
 export const UNSUPPORTED_SCHEMA_CONSTRAINTS = [
@@ -101,6 +101,24 @@ export const DEFAULT_SAFETY_SETTINGS = [
 	{ category: "HARM_CATEGORY_CIVIC_INTEGRITY", threshold: "OFF" },
 ]
 
+// An OpenAI image_url block pointing at a remote URL becomes Gemini fileData. The
+// MIME type is inferred from the URL extension and always picked from this fixed
+// set — never derived from the URL text — so a caller-supplied URL cannot inject
+// into the emitted MIME string. Antigravity rejects the placeholder "image/*".
+function remoteImageMimeType(url: string): string {
+	let pathname: string
+	try {
+		pathname = new URL(url).pathname.toLowerCase()
+	} catch {
+		return DEFAULT_IMAGE_MIME
+	}
+	if (pathname.endsWith(".jpg") || pathname.endsWith(".jpeg")) return "image/jpeg"
+	if (pathname.endsWith(".webp")) return "image/webp"
+	if (pathname.endsWith(".gif")) return "image/gif"
+	if (pathname.endsWith(".bmp")) return "image/bmp"
+	return DEFAULT_IMAGE_MIME
+}
+
 // Convert OpenAI content to Gemini parts
 export function convertOpenAIContentToParts(content) {
 	const parts = []
@@ -129,7 +147,7 @@ export function convertOpenAIContentToParts(content) {
 				(item.image_url.url.startsWith("http://") || item.image_url.url.startsWith("https://"))
 			) {
 				parts.push({
-					fileData: { fileUri: item.image_url.url, mimeType: "image/*" },
+					fileData: { fileUri: item.image_url.url, mimeType: remoteImageMimeType(item.image_url.url) },
 				})
 			} else if (item.type === OPENAI_BLOCK.INPUT_AUDIO && item.input_audio?.data) {
 				const format = item.input_audio.format || "wav"
