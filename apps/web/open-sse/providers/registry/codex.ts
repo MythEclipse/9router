@@ -201,6 +201,7 @@ const Codex = {
 		},
 	],
 	serviceKinds: ["llm", "image", "stt"],
+	imageConfig: { baseUrl: "https://chatgpt.com/backend-api/codex/images/generations" },
 	sttConfig: {
 		baseUrl: "https://chatgpt.com/backend-api/transcribe",
 		authType: "oauth",
