@@ -24,8 +24,17 @@ const HOST_FETCH_KEY = "__9routerHostFetch"
 // instance's patchedFetch as "original" and then, in the install guard below,
 // compare a caller's stub against it, decide "not installed yet", and overwrite
 // the stub — turning mocked transports into live network calls.
+const PATCHED_FETCH_MARK = Symbol.for("9router.patchedFetch")
+
+function isPatchedFetch(fn: unknown) {
+	return !!(fn as unknown as Record<symbol, boolean>)?.[PATCHED_FETCH_MARK]
+}
+
 const hostStore = globalThis as unknown as Record<string, unknown>
-if (typeof hostStore[HOST_FETCH_KEY] !== "function") {
+// Never cache one of our own wrappers as the host fetch. A re-evaluated module
+// (vi.resetModules) would otherwise adopt its predecessor's patchedFetch, and the
+// direct path would then dial itself — recursing until the heap is exhausted.
+if (typeof hostStore[HOST_FETCH_KEY] !== "function" || isPatchedFetch(hostStore[HOST_FETCH_KEY])) {
 	hostStore[HOST_FETCH_KEY] = globalThis.fetch
 }
 const originalFetch = (hostStore[HOST_FETCH_KEY] || globalThis.fetch) as typeof fetch
@@ -47,7 +56,9 @@ const proxyDispatchers = new Map()
 // how a caller (or a test) takes over the transport, and dialling our own undici
 // around such a stub silently sent real network requests from code under test.
 async function directEgressFetch(url: string | URL, init?: RequestInit) {
-	if (isBunRuntime || !isHostFetchCurrent()) return globalThis.fetch(url, init)
+	// Dial the captured host fetch, not globalThis.fetch: that may be our own
+	// wrapper from another instance, and re-entering proxyAwareFetch recurses.
+	if (isBunRuntime || !isHostFetchCurrent()) return originalFetch(url, init)
 	const { fetch } = await import("undici")
 	return fetch(url, init as Parameters<typeof fetch>[1])
 }
@@ -757,6 +768,7 @@ export async function proxyAwareFetch(
 async function patchedFetch(url, options = {}) {
 	return proxyAwareFetch(url, options, null)
 }
+;(patchedFetch as unknown as Record<symbol, unknown>)[PATCHED_FETCH_MARK] = true
 
 // Idempotency guard - only patch once to avoid wrapping multiple times.
 // The cast is required off Next: `bun-types` types `globalThis.fetch` as
