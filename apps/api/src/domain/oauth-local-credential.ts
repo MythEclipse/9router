@@ -55,6 +55,7 @@ export async function firstUsable<Found>(
  * slug are listed; the rest are capitalised, which is right for the single-word ones.
  */
 const PROVIDER_NAMES: Readonly<Record<string, string>> = {
+	commandcode: "Command Code",
 	kiro: "Kiro",
 	"xiaomi-mimo": "MiMoCode",
 	zed: "Zed",

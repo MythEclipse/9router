@@ -140,6 +140,37 @@ function mimoCandidates(): LocalCredentialDeps<Record<string, unknown>> {
  * search only needs to know that there is exactly one place, and that a locked keyring is a
  * miss rather than a server error.
  */
+/**
+ * Command Code's `auth.json`, written by `commandcode login`.
+ *
+ * The CLI stores the key it minted, plus the account that minted it. Only the key is a
+ * credential; the rest names the connection so an imported row is recognisable instead
+ * of a bare key in the list.
+ */
+function commandCodeCandidates(): LocalCredentialDeps<Record<string, unknown>> {
+	const home = homedir()
+	const paths = [join(home, ".commandcode", "auth.json")]
+	if (process.platform === "win32") {
+		const appData = process.env.APPDATA || join(home, "AppData", "Roaming")
+		paths.push(join(appData, "commandcode", "auth.json"))
+	}
+	return {
+		where: "Command Code's auth.json",
+		paths,
+		read: async (path) => {
+			const data = await readJson(path).catch(() => null)
+			if (!data || typeof data.apiKey !== "string" || !data.apiKey.trim()) return null
+			return {
+				apiKey: data.apiKey.trim(),
+				userId: typeof data.userId === "string" ? data.userId : null,
+				userName: typeof data.userName === "string" ? data.userName : null,
+				keyName: typeof data.keyName === "string" ? data.keyName : null,
+				authenticatedAt: typeof data.authenticatedAt === "string" ? data.authenticatedAt : null,
+			}
+		},
+	}
+}
+
 function zedCandidates(): LocalCredentialDeps<Record<string, unknown>> {
 	return {
 		where: "Zed's keyring entry",
@@ -282,6 +313,7 @@ function cursorCandidates(): LocalCredentialDeps<Record<string, unknown>> {
 }
 
 export const AUTO_IMPORT_HOSTS = {
+	commandcode: commandCodeCandidates,
 	kiro: kiroCandidates,
 	"xiaomi-mimo": mimoCandidates,
 	zed: zedCandidates,
