@@ -50,7 +50,7 @@ function applyActiveStrikeBlocks(connectionId, quotas) {
 }
 
 /**
- * Get model family for Antigravity models ("claude_gpt" or "gemini").
+ * Get model family for Antigravity models ("claude_gpt", "gemini_argon" or "gemini").
  */
 export function getAntigravityModelFamily(model) {
 	if (!model || typeof model !== "string") return null
@@ -58,6 +58,9 @@ export function getAntigravityModelFamily(model) {
 	if (clean.startsWith("claude-") || clean.startsWith("gpt-") || clean === "claude") {
 		return "claude_gpt"
 	}
+	// Gemini 4 Argon has its own weekly bucket on paid plans - check before the
+	// broader Gemini family so it never reads the shared Flash/Pro pool.
+	if (clean.includes("argon")) return "gemini_argon"
 	if ((clean.startsWith("gemini-") && !clean.includes("image")) || clean === "gemini") {
 		return "gemini"
 	}
@@ -108,6 +111,15 @@ export function getAntigravityModelQuota(quotas, model) {
 	if (family === "claude_gpt") {
 		if (quotas.claude_gpt_session) candidates.push(quotas.claude_gpt_session)
 		if (quotas.claude_gpt_weekly) candidates.push(quotas.claude_gpt_weekly)
+	} else if (family === "gemini_argon") {
+		if (quotas.gemini_argon_session) candidates.push(quotas.gemini_argon_session)
+		if (quotas.gemini_argon_weekly) candidates.push(quotas.gemini_argon_weekly)
+		// Ultra plans share the main Gemini bucket (no separate argon summary),
+		// fall back to the shared Gemini summary buckets.
+		if (!quotas.gemini_argon_session && !quotas.gemini_argon_weekly) {
+			if (quotas.gemini_session) candidates.push(quotas.gemini_session)
+			if (quotas.gemini_weekly) candidates.push(quotas.gemini_weekly)
+		}
 	} else if (family === "gemini") {
 		if (quotas.gemini_session) candidates.push(quotas.gemini_session)
 		if (quotas.gemini_weekly) candidates.push(quotas.gemini_weekly)
@@ -176,6 +188,8 @@ export function clearAntigravityStrikes(connectionId, model) {
 	const family = getAntigravityModelFamily(model)
 	if (family === "claude_gpt" && cached?.claude_gpt_session?.resetAt === iso) {
 		delete cached.claude_gpt_session
+	} else if (family === "gemini_argon" && cached?.gemini_argon_session?.resetAt === iso) {
+		delete cached.gemini_argon_session
 	} else if (family === "gemini" && cached?.gemini_session?.resetAt === iso) {
 		delete cached.gemini_session
 	}

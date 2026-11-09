@@ -78,13 +78,13 @@ export function parseQuotaData(
 			case "antigravity":
 				if (data.quotas) {
 					const entries = Object.entries(data.quotas)
-					const weeklyKeys = new Set(["gemini_weekly", "claude_gpt_weekly", "argon_weekly"])
-					const sessionKeys = new Set(["gemini_session", "claude_gpt_session", "argon_session"])
+					const weeklyKeys = new Set(["gemini_weekly", "claude_gpt_weekly", "gemini_argon_weekly"])
+					const sessionKeys = new Set(["gemini_session", "claude_gpt_session", "gemini_argon_session"])
 					const summaryKeys = new Set([...weeklyKeys, ...sessionKeys])
 					const geminiModels = entries.filter(
 						([k]) => k.startsWith("gemini-") && !k.includes("image") && !k.includes("argon"),
 					)
-					const argonModels = entries.filter(([k]) => k.includes("argon"))
+					const argonModels = entries.filter(([k]) => k.startsWith("gemini-") && k.includes("argon"))
 					const claudeModels = entries.filter(([k]) => k.startsWith("claude-"))
 					const imageModels = entries.filter(([k]) => k.includes("image"))
 					const summaryModels = entries.filter(([k]) => summaryKeys.has(k))
@@ -99,8 +99,8 @@ export function parseQuotaData(
 					// Summary keys from retrieveUserQuotaSummary
 					const hasGeminiWeekly = Boolean(data.quotas.gemini_weekly)
 					const hasGeminiSession = Boolean(data.quotas.gemini_session)
-					const hasArgonWeekly = Boolean(data.quotas.argon_weekly)
-					const hasArgonSession = Boolean(data.quotas.argon_session)
+					const hasArgonWeekly = Boolean(data.quotas.gemini_argon_weekly)
+					const hasArgonSession = Boolean(data.quotas.gemini_argon_session)
 					const hasClaudeWeekly = Boolean(data.quotas.claude_gpt_weekly)
 					const hasClaudeSession = Boolean(data.quotas.claude_gpt_session)
 
@@ -158,7 +158,7 @@ export function parseQuotaData(
 					// 2. Gemini 4 Argon Family:
 					if (hasArgonSession) {
 						summaryModels
-							.filter(([k]) => k === "argon_session")
+							.filter(([k]) => k === "gemini_argon_session")
 							.forEach(([modelKey, quota]) => {
 								normalizedQuotas.push({
 									name: quota.displayName || modelKey,
@@ -169,18 +169,24 @@ export function parseQuotaData(
 									remainingPercentage: quota.remainingPercentage,
 								})
 							})
-					} else if (argonModels.length > 0) {
+					} else if (!hasArgonWeekly && argonModels.length > 0) {
 						const rep = argonModels.reduce((min, cur) =>
 							(cur[1].remainingPercentage ?? 100) < (min[1].remainingPercentage ?? 100) ? cur : min,
 						)[1]
-						const weeklyResetAt = data.quotas.argon_weekly?.resetAt
-						const isDuplicateOfWeekly =
-							hasArgonWeekly && rep.resetAt === weeklyResetAt && (rep.remainingPercentage ?? 0) === 0
+						const geminiSessionResetAt = data.quotas.gemini_session?.resetAt
+						const geminiWeeklyResetAt = data.quotas.gemini_weekly?.resetAt
+						const sharesMainGeminiPool =
+							(hasGeminiSession &&
+								rep.resetAt === geminiSessionResetAt &&
+								rep.remainingPercentage === data.quotas.gemini_session?.remainingPercentage) ||
+							(hasGeminiWeekly &&
+								rep.resetAt === geminiWeeklyResetAt &&
+								rep.remainingPercentage === data.quotas.gemini_weekly?.remainingPercentage)
 
-						if (!isDuplicateOfWeekly) {
+						if (!sharesMainGeminiPool) {
 							normalizedQuotas.push({
 								name: "Gemini 4 Argon",
-								modelKey: "gemini-4-argon",
+								modelKey: "gemini_argon",
 								used: rep.used || 0,
 								total: rep.total || 0,
 								resetAt: rep.resetAt || null,
@@ -192,7 +198,7 @@ export function parseQuotaData(
 					// Show Argon weekly row if present
 					if (hasArgonWeekly) {
 						summaryModels
-							.filter(([k]) => k === "argon_weekly")
+							.filter(([k]) => k === "gemini_argon_weekly")
 							.forEach(([modelKey, quota]) => {
 								normalizedQuotas.push({
 									name: quota.displayName || modelKey,
@@ -619,8 +625,10 @@ export function parseQuotaData(
 			// Use modelKey for antigravity (mapped to family anchor), otherwise use name
 			let keyA = a.modelKey || a.name
 			let keyB = b.modelKey || b.name
+			if (keyA === "gemini_argon" || keyA === "gemini_argon_session") keyA = "gemini-4-argon-high"
 			if (keyA === "gemini" || keyA === "gemini_session") keyA = "gemini-3.8-flash-high"
 			if (keyA === "claude" || keyA === "claude_gpt_session") keyA = "claude-sonnet-4-6"
+			if (keyB === "gemini_argon" || keyB === "gemini_argon_session") keyB = "gemini-4-argon-high"
 			if (keyB === "gemini" || keyB === "gemini_session") keyB = "gemini-3.8-flash-high"
 			if (keyB === "claude" || keyB === "claude_gpt_session") keyB = "claude-sonnet-4-6"
 			const orderA = orderMap.get(keyA) ?? 999

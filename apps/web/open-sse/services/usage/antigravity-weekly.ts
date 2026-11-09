@@ -29,8 +29,8 @@ export function _clearWeeklyCache() {
 const GROUP_CONFIGS = [
 	{
 		pattern: /argon/i,
-		weekly: { key: "argon_weekly", displayName: "Gemini 4 Argon (Weekly)" },
-		session: { key: "argon_session", displayName: "Gemini 4 Argon (5h)" },
+		weekly: { key: "gemini_argon_weekly", displayName: "Gemini 4 Argon (Weekly)" },
+		session: { key: "gemini_argon_session", displayName: "Gemini 4 Argon (5h)" },
 	},
 	{
 		pattern: /gemini/i,
