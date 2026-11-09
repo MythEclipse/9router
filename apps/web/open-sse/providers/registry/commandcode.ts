@@ -30,11 +30,11 @@ const Commandcode = {
 		reasoningInject: {
 			scope: "all",
 		},
-		// Static identity headers of command-code@1.88.0 buildCommandAuthHeaders().
+		// Static identity headers of command-code@1.88.5 buildCommandAuthHeaders().
 		// x-project-slug and x-session-id are dynamic — see shared/commandCodeHeaders.ts.
 		headers: {
 			"User-Agent": "cli",
-			"x-command-code-version": "1.88.0",
+			"x-command-code-version": "1.88.5",
 			"x-cli-environment": "production",
 			"x-cli-surface": "cli",
 			"x-taste-learning": "false",
@@ -65,6 +65,9 @@ const Commandcode = {
 		{ id: "stepfun/Step-3.5-Flash", name: "Step 3.5 Flash" },
 		{ id: "nvidia/nemotron-3-ultra-550b-a55b", name: "Nemotron 3 Ultra" },
 	],
+	// The list above is the CLI's own default set, not the account's whole
+	// catalogue: a subscriber can route any id the upstream accepts.
+	passthroughModels: true,
 	features: {
 		usage: true,
 		usageApikey: true,

@@ -11,7 +11,6 @@
  *  - tools[*]: Anthropic plain {name, description, input_schema}
  */
 
-import { DEFAULT_MAX_TOKENS } from "../../config/runtimeConfig.ts"
 import { COMMAND_CODE_WORKING_DIR } from "../../shared/commandCodeHeaders.ts"
 import { commandCodeThreadId } from "../../utils/commandCodeSession.ts"
 import { encodeDataUri, parseDataUri } from "../concerns/image.ts"
@@ -96,19 +95,51 @@ function toContentBlocks(content) {
 	return [{ type: OPENAI_BLOCK.TEXT, text: String(content) }]
 }
 
+/**
+ * Parse a tool-call argument string into the object `/alpha/generate` expects.
+ *
+ * A client that streams half a JSON document, or a provider that re-sends an
+ * already-parsed value, used to end up as `{}` and the model then ran the tool
+ * with no arguments at all. Keeping the unparsable text under `raw` at least
+ * lets the model see what was asked for.
+ */
 function safeParseJson(s) {
 	if (s == null) return {}
 	if (typeof s !== "string") return s
+	const trimmed = s.trim()
+	if (!trimmed) return {}
 	try {
-		return JSON.parse(s)
+		const parsed = JSON.parse(trimmed)
+		if (parsed && typeof parsed === "object") return parsed
+		return { value: parsed }
 	} catch {
-		return {}
+		return { raw: s }
 	}
 }
+
+/**
+ * Command Code's own default when the client sends no budget.
+ *
+ * Kept separate from `DEFAULT_MAX_TOKENS` in config/runtimeConfig.ts: this is a
+ * wire contract of the CLI version below, not a policy other providers inherit.
+ */
+const COMMAND_CODE_MAX_TOKENS = 64000
 
 function convertMessages(messages = []) {
 	const out = []
 	const systemTexts = []
+	// toolCallId -> toolName across every assistant turn. A standard OpenAI or
+	// Claude tool-response turn omits the name on role:"tool", so without this the
+	// toolName would be "" and upstream /alpha/generate rejects the request.
+	const toolCallIdToName = new Map()
+	for (const m of messages) {
+		if (m?.role === ROLE.ASSISTANT && Array.isArray(m.tool_calls)) {
+			for (const tc of m.tool_calls) {
+				const name = tc?.function?.name || tc?.name
+				if (tc?.id && name) toolCallIdToName.set(tc.id, name)
+			}
+		}
+	}
 
 	for (const m of messages) {
 		if (!m) continue
@@ -122,14 +153,20 @@ function convertMessages(messages = []) {
 
 		if (role === ROLE.TOOL) {
 			const value = typeof m.content === "string" ? m.content : flattenText(m.content)
+			// A failed execution is its own block type on this wire, not a text
+			// result: the CLI renders error-text differently and the model is told
+			// the call did not succeed.
+			const isError = Boolean(m.is_error || m.status === "error")
+			const toolName =
+				m.name || (m.tool_call_id ? toolCallIdToName.get(m.tool_call_id) : null) || "unknown"
 			out.push({
 				role: ROLE.TOOL,
 				content: [
 					{
 						type: "tool-result",
 						toolCallId: m.tool_call_id || "",
-						toolName: m.name || "",
-						output: { type: "text", value },
+						toolName,
+						output: { type: isError ? "error-text" : "text", value },
 					},
 				],
 			})
@@ -152,8 +189,11 @@ function convertMessages(messages = []) {
 				if (thinkingBlock) rc = thinkingBlock.thinking
 			}
 			const rcStr = typeof rc === "string" ? rc : rc == null ? "" : String(rc)
-			if (rcStr || (Array.isArray(m.tool_calls) && m.tool_calls.length > 0)) {
-				blocks.push({ type: "reasoning", text: rcStr || " " })
+			// Only a real reasoning text earns a block. A tool-call turn with no
+			// reasoning used to get a placeholder " " block, which the CLI echoes
+			// back as bogus reasoning on the next turn.
+			if (rcStr.trim()) {
+				blocks.push({ type: "reasoning", text: rcStr })
 			}
 			const text = flattenText(m.content)
 			if (text) blocks.push({ type: OPENAI_BLOCK.TEXT, text })
@@ -163,8 +203,10 @@ function convertMessages(messages = []) {
 					blocks.push({
 						type: "tool-call",
 						toolCallId: tc.id || "",
-						toolName: fn.name || "",
-						input: safeParseJson(fn.arguments),
+						toolName: fn.name || tc.name || "",
+						// `tc.input` is the already-parsed shape a Claude-format client
+						// re-sends on the way back; arguments wins when both exist.
+						input: safeParseJson(fn.arguments ?? tc.input),
 					})
 				}
 			}
@@ -215,11 +257,12 @@ export function openaiToCommandCodeRequest(model, body, stream /* , credentials 
 		system?: unknown
 		tools?: unknown
 		top_p?: unknown
+		reasoning_effort?: string
 	} = {
 		model,
 		messages,
 		stream: stream !== false,
-		max_tokens: body.max_tokens ?? body.max_output_tokens ?? DEFAULT_MAX_TOKENS,
+		max_tokens: body.max_tokens ?? body.max_output_tokens ?? COMMAND_CODE_MAX_TOKENS,
 		temperature: body.temperature ?? 0.3,
 	}
 
@@ -229,6 +272,16 @@ export function openaiToCommandCodeRequest(model, body, stream /* , credentials 
 	if (tools) params.tools = tools
 	if (body.top_p != null) params.top_p = body.top_p
 
+	// Effort as the client asked for it: OpenAI reasoning_effort, Claude
+	// output_config.effort, or the nested Responses shape. The valid level set and
+	// clamping are the thinking concern's job (applyThinking, targetFormat
+	// "commandcode"); this only forwards the intent it captured.
+	const effort =
+		body.reasoning_effort ??
+		body.output_config?.effort ??
+		(typeof body.reasoning === "object" ? body.reasoning?.effort : null)
+	if (effort && typeof effort === "string") params.reasoning_effort = effort
+
 	const today = new Date().toISOString().slice(0, 10)
 
 	return {
@@ -237,7 +290,12 @@ export function openaiToCommandCodeRequest(model, body, stream /* , credentials 
 		// utils/commandCodeSession.js). A random id here re-caches the whole prefix
 		// on every request.
 		threadId: commandCodeThreadId(body),
-		memory: "",
+		// The CLI reads these as nullable slots; an empty string made it look for a
+		// memory/taste bundle at "" and fail the data path.
+		memory: null,
+		taste: null,
+		skills: null,
+		permissionMode: "standard",
 		config: {
 			workingDir: COMMAND_CODE_WORKING_DIR,
 			date: today,

@@ -107,7 +107,7 @@ describe("getUsageForProvider(commandcode)", () => {
 			urls.some((u) => u.includes("/alpha/billing/subscriptions") && u.includes("orgId=org_1")),
 		).toBe(true)
 		expect(proxyAwareFetch.mock.calls[0][1].headers.Authorization).toBe("Bearer user_test")
-		expect(proxyAwareFetch.mock.calls[0][1].headers["x-command-code-version"]).toBe("1.88.0")
+		expect(proxyAwareFetch.mock.calls[0][1].headers["x-command-code-version"]).toBe("1.88.5")
 		expect(proxyAwareFetch.mock.calls[0][1].headers["User-Agent"]).toBe("cli")
 	})
 

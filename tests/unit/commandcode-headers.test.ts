@@ -1,7 +1,7 @@
 /**
  * Unit tests for open-sse/shared/commandCodeHeaders.ts and its consumers.
  *
- * Target header set = command-code@1.88.0 buildCommandAuthHeaders():
+ * Target header set = command-code@1.88.5 buildCommandAuthHeaders():
  * User-Agent "cli", x-command-code-version, x-cli-environment "production",
  * x-cli-surface "cli", x-taste-learning, x-project-slug = slugify(cwd), x-session-id.
  */
@@ -65,7 +65,7 @@ describe("buildCommandCodeHeaders", () => {
 		expect(headers).toEqual({
 			"Content-Type": "application/json",
 			"User-Agent": "cli",
-			"x-command-code-version": "1.88.0",
+			"x-command-code-version": "1.88.5",
 			"x-cli-environment": "production",
 			"x-cli-surface": "cli",
 			"x-taste-learning": "false",

@@ -29,7 +29,12 @@ export class CommandCodeExecutor extends BaseExecutor {
 	}
 
 	transformRequest(_model, body, _stream, _credentials) {
-		body.stream = true
+		if (!body || typeof body !== "object") return body || {}
+		// The translator emits the /alpha/generate envelope, where "stream" lives
+		// under params; a raw Chat-shaped body carries it at the top level. Setting
+		// both would put a stray "stream" key on the envelope, which the CLI ignores.
+		if (body.params) body.params.stream = true
+		else body.stream = true
 		// CommandCode thinking models (reflection/beam etc.) require reasoning_content
 		// on every earlier assistant message in a multi-turn history (400
 		// "Missing required parameter: 'messages[N].reasoning_content'").

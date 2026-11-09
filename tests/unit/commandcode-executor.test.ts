@@ -20,6 +20,26 @@ function createNdjsonStream(lines) {
 	})
 }
 
+describe("CommandCodeExecutor.transformRequest stream flag", () => {
+	it("sets stream inside the /alpha/generate envelope, not at its top level", () => {
+		const executor = new CommandCodeExecutor()
+		const body = executor.transformRequest(
+			"m",
+			{ params: { messages: [], stream: false } },
+			false,
+			{},
+		)
+		expect(body.params.stream).toBe(true)
+		expect(body.stream).toBeUndefined()
+	})
+
+	it("sets stream at the top level for a raw Chat-shaped body", () => {
+		const executor = new CommandCodeExecutor()
+		const body = executor.transformRequest("m", { messages: [] }, false, {})
+		expect(body.stream).toBe(true)
+	})
+})
+
 describe("parseCommandCodeError", () => {
 	it("parses user exact error payload with statusCode 503 and isRetryable", () => {
 		const event = {
