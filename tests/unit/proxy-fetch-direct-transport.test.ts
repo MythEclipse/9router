@@ -48,13 +48,14 @@ describe("proxyAwareFetch directFetch (TLS transport) routing", () => {
 		// edge networks without a TCP RST, so the request has to carry the capped agent
 		// built in proxyFetch (see getDirectDispatcher). Relay hops keep global fetch.
 		const fetchMock = vi.fn(async () => new Response("plain", { status: 200 }))
-		vi.doMock("undici", async () => {
-			const actual = await vi.importActual("undici")
-			return { ...actual, fetch: fetchMock }
-		})
 
-		const { proxyAwareFetch, getDirectDispatcher, resetDirectDispatchersForTests } =
-			await loadProxyFetch()
+		const {
+			proxyAwareFetch,
+			getDirectDispatcher,
+			resetDirectDispatchersForTests,
+			setDirectDialForTests,
+		} = await loadProxyFetch()
+		setDirectDialForTests(async () => fetchMock)
 		resetDirectDispatchersForTests()
 
 		const response = await proxyAwareFetch(
@@ -70,7 +71,7 @@ describe("proxyAwareFetch directFetch (TLS transport) routing", () => {
 			await getDirectDispatcher(false),
 		)
 		expect(plainFetch).not.toHaveBeenCalled()
-		vi.doUnmock("undici")
+		setDirectDialForTests(null)
 	})
 
 	it("prefers the directFetch argument over a stale options.directFetch", async () => {

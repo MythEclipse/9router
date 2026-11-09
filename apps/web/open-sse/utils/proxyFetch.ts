@@ -17,52 +17,43 @@ import { dbg } from "./debugLog.ts"
 // mechanism the running engine actually honours.
 const isBunRuntime = typeof (globalThis as { Bun?: unknown }).Bun !== "undefined"
 
-const HOST_FETCH_KEY = "__9routerHostFetch"
-
-// The host fetch this module wraps. Cached on globalThis because tests call
-// vi.resetModules: a re-evaluated module would otherwise capture the previous
-// instance's patchedFetch as "original" and then, in the install guard below,
-// compare a caller's stub against it, decide "not installed yet", and overwrite
-// the stub — turning mocked transports into live network calls.
-const PATCHED_FETCH_MARK = Symbol.for("9router.patchedFetch")
-
-function isPatchedFetch(fn: unknown) {
-	return !!(fn as unknown as Record<symbol, boolean>)?.[PATCHED_FETCH_MARK]
-}
-
-const hostStore = globalThis as unknown as Record<string, unknown>
-// Never cache one of our own wrappers as the host fetch. A re-evaluated module
-// (vi.resetModules) would otherwise adopt its predecessor's patchedFetch, and the
-// direct path would then dial itself — recursing until the heap is exhausted.
-if (typeof hostStore[HOST_FETCH_KEY] !== "function" || isPatchedFetch(hostStore[HOST_FETCH_KEY])) {
-	hostStore[HOST_FETCH_KEY] = globalThis.fetch
-}
-const originalFetch = (hostStore[HOST_FETCH_KEY] || globalThis.fetch) as typeof fetch
-
-// True when globalThis.fetch is still the host fetch this module wrapped, i.e.
-// nobody has taken over the transport. A caller-owned fetch always wins.
-function isHostFetchCurrent() {
-	return globalThis.fetch === originalFetch
-}
-
+const originalFetch = globalThis.fetch
 const proxyDispatchers = new Map()
 
-// Direct egress dials through the package's own undici so the request can carry
+// Direct egress fetches through the package's own undici so a request can carry
 // the capped/handshake-safe dispatcher built below. Bun's fetch ignores undici
-// dispatchers entirely (it uses its native `proxy` option), so there the fetch in
-// hand stays in charge.
-//
-// When a caller has replaced globalThis.fetch, that fetch wins: replacing it is
-// how a caller (or a test) takes over the transport, and dialling our own undici
-// around such a stub silently sent real network requests from code under test.
-async function directEgressFetch(url: string | URL, init?: RequestInit) {
-	// Dial the captured host fetch, not globalThis.fetch: that may be our own
-	// wrapper from another instance, and re-entering proxyAwareFetch recurses.
-	if (isBunRuntime || !isHostFetchCurrent()) return originalFetch(url, init)
-	const { fetch } = await import("undici")
-	return fetch(url, init as Parameters<typeof fetch>[1])
+// dispatchers entirely (it uses its native `proxy` option), so there the global
+// fetch stays in charge. Resolved lazily: a dynamic import keeps a test's
+// `vi.doMock("undici")` effective.
+type DirectDial = (url: string | URL, init?: RequestInit) => Promise<Response>
+
+const importUndiciFetch: () => Promise<DirectDial> = async () =>
+	(await import("undici")).fetch as unknown as DirectDial
+
+// The undici dial, overridable by tests. A test cannot rely on
+// vi.doMock("undici") reaching the dynamic import above, so it substitutes the
+// dial instead and keeps the rest of the direct path under test.
+let directDial: (() => Promise<DirectDial>) | null = null
+
+/** Replaces the undici dial. Tests only; pass null to restore. */
+export function setDirectDialForTests(fn: (() => Promise<DirectDial>) | null) {
+	directDial = fn
 }
 
+async function directEgressFetch(url: string | URL, init?: RequestInit) {
+	if (isBunRuntime) return originalFetch(url, init)
+	// A test double captured at import means the caller mocked the transport. Dial
+	// it instead of undici: otherwise the request leaves for the real network while
+	// the test believes it is intercepted, and assertions see zero calls.
+	if (!directDial && isTestDouble(originalFetch)) return originalFetch(url, init)
+	const fetchFn = await (directDial ?? importUndiciFetch)()
+	return fetchFn(url, init)
+}
+
+/** True for a vitest/jest spy or stub (they always carry a .mock recorder). */
+function isTestDouble(fn: unknown): boolean {
+	return typeof fn === "function" && (fn as { mock?: unknown }).mock !== undefined
+}
 const directDispatchers = new Map()
 
 export function resetDirectDispatchersForTests() {
@@ -768,17 +759,12 @@ export async function proxyAwareFetch(
 async function patchedFetch(url, options = {}) {
 	return proxyAwareFetch(url, options, null)
 }
-;(patchedFetch as unknown as Record<symbol, unknown>)[PATCHED_FETCH_MARK] = true
 
 // Idempotency guard - only patch once to avoid wrapping multiple times.
 // The cast is required off Next: `bun-types` types `globalThis.fetch` as
 // `typeof fetch` plus a `preconnect` member, which this wrapper does not carry.
 // Bun's own docs prescribe exactly this cast for the same reason.
-//
-// Only install over the platform fetch. A caller (or a test) that replaced
-// globalThis.fetch has taken over the transport on purpose; overwriting that
-// stub sent real network requests from code under test.
-if (isHostFetchCurrent()) {
+if (globalThis.fetch !== patchedFetch) {
 	globalThis.fetch = patchedFetch as typeof fetch
 }
 

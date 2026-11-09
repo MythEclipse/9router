@@ -112,17 +112,16 @@ describe("undici keep-alive dead-socket protection & fresh-socket retry", () => 
 				Object.assign(new Error("fetch failed"), { cause: { code: "UND_ERR_SOCKET" } }),
 			)
 			.mockResolvedValueOnce({ status: 200, ok: true })
-		vi.doMock("undici", async () => {
-			const actual = await vi.importActual("undici")
-			return { ...actual, fetch: fetchMock }
-		})
-
 		const {
 			proxyAwareFetch,
 			getDirectDispatcher,
 			getFreshRetryDispatcher,
 			resetDirectDispatchersForTests,
+			setDirectDialForTests,
 		} = await import("../../apps/web/open-sse/utils/proxyFetch.js")
+		// Substitute the undici dial: vi.doMock("undici") does not reach the dynamic
+		// import inside proxyFetch, so the request would leave for the real network.
+		setDirectDialForTests(async () => fetchMock)
 		resetDirectDispatchersForTests()
 
 		const res = await proxyAwareFetch("https://integrate.api.nvidia.com/v1/chat/completions", {
@@ -148,14 +147,10 @@ describe("undici keep-alive dead-socket protection & fresh-socket retry", () => 
 			.mockRejectedValue(
 				Object.assign(new Error("fetch failed"), { cause: { code: "UND_ERR_SOCKET" } }),
 			)
-		vi.doMock("undici", async () => {
-			const actual = await vi.importActual("undici")
-			return { ...actual, fetch: fetchMock }
-		})
-
-		const { proxyAwareFetch, resetDirectDispatchersForTests } = await import(
+		const { proxyAwareFetch, resetDirectDispatchersForTests, setDirectDialForTests } = await import(
 			"../../apps/web/open-sse/utils/proxyFetch.js"
 		)
+		setDirectDialForTests(async () => fetchMock)
 		resetDirectDispatchersForTests()
 
 		const controller = new AbortController()
@@ -172,14 +167,10 @@ describe("undici keep-alive dead-socket protection & fresh-socket retry", () => 
 
 	it("does not replay on an ambiguous bare fetch failed (request may have been served)", async () => {
 		const fetchMock = vi.fn().mockRejectedValue(new TypeError("fetch failed"))
-		vi.doMock("undici", async () => {
-			const actual = await vi.importActual("undici")
-			return { ...actual, fetch: fetchMock }
-		})
-
-		const { proxyAwareFetch, resetDirectDispatchersForTests } = await import(
+		const { proxyAwareFetch, resetDirectDispatchersForTests, setDirectDialForTests } = await import(
 			"../../apps/web/open-sse/utils/proxyFetch.js"
 		)
+		setDirectDialForTests(async () => fetchMock)
 		resetDirectDispatchersForTests()
 
 		await expect(
@@ -198,14 +189,10 @@ describe("undici keep-alive dead-socket protection & fresh-socket retry", () => 
 			.mockRejectedValue(
 				Object.assign(new Error("fetch failed"), { cause: { code: "UND_ERR_SOCKET" } }),
 			)
-		vi.doMock("undici", async () => {
-			const actual = await vi.importActual("undici")
-			return { ...actual, fetch: fetchMock }
-		})
-
-		const { proxyAwareFetch, resetDirectDispatchersForTests } = await import(
+		const { proxyAwareFetch, resetDirectDispatchersForTests, setDirectDialForTests } = await import(
 			"../../apps/web/open-sse/utils/proxyFetch.js"
 		)
+		setDirectDialForTests(async () => fetchMock)
 		resetDirectDispatchersForTests()
 
 		await expect(
@@ -219,14 +206,13 @@ describe("undici keep-alive dead-socket protection & fresh-socket retry", () => 
 
 	it("uses the fresh-socket dispatcher immediately when forceFreshSocket is requested", async () => {
 		const fetchMock = vi.fn().mockResolvedValueOnce({ status: 200, ok: true })
-		vi.doMock("undici", async () => {
-			const actual = await vi.importActual("undici")
-			return { ...actual, fetch: fetchMock }
-		})
-
-		const { proxyAwareFetch, getFreshRetryDispatcher, resetDirectDispatchersForTests } = await import(
-			"../../apps/web/open-sse/utils/proxyFetch.js"
-		)
+		const {
+			proxyAwareFetch,
+			getFreshRetryDispatcher,
+			resetDirectDispatchersForTests,
+			setDirectDialForTests,
+		} = await import("../../apps/web/open-sse/utils/proxyFetch.js")
+		setDirectDialForTests(async () => fetchMock)
 		resetDirectDispatchersForTests()
 
 		await proxyAwareFetch(

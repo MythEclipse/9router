@@ -41,6 +41,8 @@ async function loadExecutor(fetchMock, useProxy = true) {
 	// Exercise the real proxyAwareFetch: it captures fetch when imported.
 	vi.stubGlobal("fetch", fetchMock)
 	const { QoderExecutor } = await import("../../apps/web/open-sse/executors/qoder.js")
+	const { setDirectDialForTests } = await import("../../apps/web/open-sse/utils/proxyFetch.js")
+	setDirectDialForTests(async () => fetchMock)
 	return new QoderExecutor()
 }
 
@@ -98,7 +100,10 @@ describe("Qoder signed inference transport", () => {
 		expect(result.response.ok).toBe(true)
 		await result.response.text()
 		expect(fetchMock).toHaveBeenCalledTimes(1)
-		expect(!!fetchMock.mock.calls[0][1].dispatcher).toBe(useProxy)
+		// Every egress path carries a dispatcher now: the proxy agent when a proxy is
+		// configured, the capped direct agent otherwise (getDirectDispatcher — the
+		// direct path needs it for keep-alive and dead-socket replay).
+		expect(fetchMock.mock.calls[0][1].dispatcher).toBeDefined()
 	})
 
 	it("preserves caller cancellation without replaying the request", async () => {
