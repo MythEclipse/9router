@@ -3059,3 +3059,94 @@ the check that should have been run before blaming the port.
 
 Snapshot updates were applied by hand, not with `-u`: the file carries three stale duplicate exports
 from a renamed test, and `-u` prunes them, turning a three-line change into a 1900-line diff.
+
+---
+
+## Upstream v0.5.116 port (43 commits, `3a978a63` → `1339107e`)
+
+Landed as 34 local commits on `master`, one per upstream sha where a sha mapped to a commit, plus
+three fix-ups and a release bump. Version 14.6.0.
+
+### Why a port and not a merge
+
+The fork was at v0.5.112, 43 commits behind. A three-way merge was attempted first and conflicted in
+all 35 touched files: upstream is plain JS in `src/` and `open-sse/` with its own formatting, this
+tree is TypeScript under `apps/web/` after the workspace migration. Every hunk differed for
+formatting reasons alone, so `git merge-file` produced no usable signal. Each upstream change was
+re-applied as a targeted semantic edit instead. The commit body names the upstream sha it answers.
+
+Path mapping used throughout: `open-sse/**/*.js` → `apps/web/open-sse/**/*.ts`,
+`src/**/*.js` → `apps/web/src/**/*.ts(x)`, `cli/**` unchanged. Relative imports inside
+`apps/web/open-sse` carry an explicit `.ts` suffix; tests import with `.js`.
+
+### Two bugs the port exposed that upstream did not have
+
+**The DeepSeek PoW worker could never load its dependency.** `open-sse/utils/deepseek-pow-hash.ts` is
+TypeScript, but the worker that imports it (`deepseek-pow-worker`) is plain Node ESM asking for
+`./deepseek-pow-hash.js`. That file never existed in the shipped tree, so step 3b's PoW failed on
+every packaging. Upstream ships a JS copy. The tempting fix — copy `.ts` to `.js` — ships type
+annotations to a Worker, and passes an exists-check while staying broken. Fixed by emitting the
+compiled module with esbuild, and verified by actually spawning the worker, not by asserting a file
+exists.
+
+**Pooled sockets die silently upstream.** Upstream edges drop idle sockets without a TCP RST, so a
+socket looks healthy to the pool and the retry that trusts it fails. `proxyFetch` now builds a capped
+keep-alive agent, and BaseExecutor asks for a fresh socket on the retry after a 502 or a network
+error. Replay is conditional, and the condition is the safety: only when the body is replay-safe and
+the error is provably a dead socket. A bare `fetch failed` is never replayed, because the request may
+already have been served and a replay would double-charge the upstream.
+
+### The proxy transport fight (three attempts, worth recording)
+
+This is where the most time went, and the earlier attempts were wrong in instructive ways.
+
+`73a02b52` gave the direct path its own undici dial so it could carry the dispatcher. That bypassed
+`globalThis.fetch`, which broke a contract the module has always had — replacing `globalThis.fetch`
+takes the transport over — so `kiro-external-idp` began POSTing to `login.microsoftonline.com` for
+real.
+
+`03414ed5` tried to fix that by caching "the host fetch" on `globalThis` and comparing identity
+before dialling. That recursed: a re-evaluated module (`vi.resetModules`) adopted its predecessor's
+`patchedFetch` as "original", the direct path dialled it, and each request re-entered
+`proxyAwareFetch` until the heap died. `proxy-keepalive-dead-socket` went from a normal failure to
+`FATAL ERROR: Ineffective mark-compacts near heap limit` with zero tests run. `ec501295` added the
+marker that stopped the recursion, but the shape was still wrong.
+
+`23d219ce` replaced the whole approach. Direct egress resolves through an overridable seam; tests
+substitute the dial instead of `vi.doMock("undici")`. That mock never worked — vitest 4 does not
+intercept a dynamic `import()` from inside another module — so three suites had been sending real
+requests (nvidia answered 400, anthropic and the Microsoft token endpoint were POSTed for real)
+while asserting on a mock that saw zero calls. `providers` reported this and was right; I initially
+disbelieved it. **Lesson: a test that passes against a mock while the network is up is not evidence.**
+
+### Deliberately not ported
+
+- **Dockerfile lazy-runtime step.** This image copies all of `node_modules`; `lazyRuntime.ts`
+  installs on demand, so an isolated prefix adds build time for nothing.
+- **Upstream's commandcode session derivation and `deepseek-pow-hash`.** Ours derive sessions from
+  client fields plus the conversation prefix (strictly more inputs) and the hash is a noble-hashes
+  equivalent verified against a FIPS-202 reference.
+- **nvidia reasoning alias, `thinkingUnified` claude-adaptive branch.** Already satisfied upstream-
+  identically before the port.
+
+### Verification
+
+`bun run typecheck` clean (web + api). Full suite 8439 passed / 2 failed, against a pre-port baseline
+of 8214 passed / 0 failed — the +225 are new tests. The two failures are both pre-existing and
+neither is this work: `protocol-openai-error-shapes` cannot load under this runner at all (a
+`bun:` scheme import; identical at the baseline commit), and `mimo-free.live` makes live calls and
+passes in isolation.
+
+Two things that bit the run itself: the pre-commit hook lints the whole staged set, so a peer's lint
+error blocks your commit and its auto-fix can rewrite files you never touched — every commit here was
+cut with an explicit pathspec. And `tests/__baseline__` snapshots must be hand-edited; a stray
+`vitest -u` doubled every export in the golden snapshot (168 → 336) and was reverted.
+
+### Security review
+
+No new secrets, no new outbound endpoints beyond the provider hosts upstream already targets. The
+main-IP guard is intact and was the thing the proxy work kept tripping over: with a proxy configured,
+direct fallback stays blocked with `direct fallback blocked to protect main IP`, and the transport
+suites were adapted to that guard rather than the reverse. The new test seam defaults to the real
+undici fetch and is test-only, so production cannot substitute a dial. SSRF pinning in
+`image.ts`, the `X-Forwarded-For` stripping in `custom-server.js`, and token storage are unchanged.
