@@ -1,6 +1,6 @@
 {
   "name": "9router-api",
-  "version": "14.6.0",
+  "version": "15.0.0",
   "private": true,
   "type": "module",
   "exports": {
