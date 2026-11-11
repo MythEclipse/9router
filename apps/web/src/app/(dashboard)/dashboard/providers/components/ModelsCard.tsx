@@ -5,6 +5,7 @@ import { Button, Card, Modal } from "@/shared/components"
 import { getModelKind, getModelsByProviderId } from "@/shared/constants/models"
 import { getProviderAlias } from "@/shared/constants/providers"
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard"
+import { applyQoderModelNames } from "@/shared/utils/providerCustomModels"
 import Icon from "../../../../../shared/components/Icon"
 
 // ── ModelRow ───────────────────────────────────────────────────
@@ -304,7 +305,8 @@ export default function ModelsCard({
 			!builtInModels.some((b) => b.id === m.id),
 	)
 
-	const displayModels = builtInModels
+	// Qoder imports persist the upstream display name; prefer it over the static label.
+	const displayModels = applyQoderModelNames(builtInModels, customModels, providerAlias)
 
 	return (
 		<>

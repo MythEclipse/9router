@@ -9,7 +9,9 @@ import {
 	capabilitiesFromServiceKind,
 	getCapabilitiesForModel,
 } from "open-sse/providers/capabilities"
+import { getThinkingLevels } from "open-sse/providers/thinkingLevels"
 import { resolveClineModels, resolveClinepassModels } from "open-sse/services/clinepassModels"
+import { resolveCommandCodeModels } from "open-sse/services/commandcodeModels"
 import { resolveCopilotModels } from "open-sse/services/copilotModels"
 import { resolveCursorModels } from "open-sse/services/cursorModels"
 import { resolveGrokCliModels } from "open-sse/services/grokCliModels"
@@ -173,6 +175,13 @@ const LIVE_MODEL_RESOLVERS = {
 				})),
 		}
 	},
+	// CommandCode's catalog is public and account-independent, so no per-connection
+	// credentials are needed — the connection only has to exist and be active.
+	commandcode: async () => {
+		const result = await resolveCommandCodeModels()
+		if (!result?.models?.length) return null
+		return { models: result.models.map(({ id, name }) => ({ id, name })) }
+	},
 }
 
 const parseOpenAIStyleModels = (data) => {
@@ -322,6 +331,7 @@ type ModelEntry = {
 	capabilities?: Record<string, unknown>
 	context_length?: number
 	max_completion_tokens?: number
+	thinking_levels?: string[]
 }
 
 export type BuildModelsListOptions = {
@@ -748,6 +758,12 @@ export async function buildModelsList(kindFilter: string[], options: BuildModels
 					}
 					if (Number.isFinite(contextWindow)) model.context_length = contextWindow
 					if (Number.isFinite(maxOutput)) model.max_completion_tokens = maxOutput
+					// Selectable reasoning levels (the set the dashboard picker shows) so clients
+					// can build their effort selector from the gateway instead of keeping a
+					// per-model table. Omitted when the model has no reasoning.
+					const thinkingLevels = getThinkingLevels(providerId, modelId)
+					if (Array.isArray(thinkingLevels) && thinkingLevels.length > 0)
+						model.thinking_levels = thinkingLevels
 				}
 				models.push(model)
 			}

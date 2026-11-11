@@ -9,6 +9,7 @@ import { getModelsByProviderId } from "open-sse/config/providerModels"
 import { resolveOllamaLocalHost } from "open-sse/config/providers"
 import codexProvider from "open-sse/providers/registry/codex"
 import { resolveClineModels, resolveClinepassModels } from "open-sse/services/clinepassModels"
+import { resolveCommandCodeModels } from "open-sse/services/commandcodeModels"
 import { resolveCursorModels } from "open-sse/services/cursorModels"
 import { resolveGrokCliModels } from "open-sse/services/grokCliModels"
 import { resolveKimchiModels } from "open-sse/services/kimchiModels"
@@ -58,11 +59,20 @@ const FIXED_ENDPOINTS: Record<
 		parse: (data) => (data as { data?: unknown[] })?.data || [],
 	},
 	claude: {
-		url: "https://api.anthropic.com/v1/models",
+		url: "https://api.anthropic.com/v1/models?limit=1000",
 		method: "GET",
-		headers: { "Anthropic-Version": "2023-06-01", "Content-Type": "application/json" },
-		authHeader: "x-api-key",
-		parse: (data) => (data as { data?: unknown[] })?.data || [],
+		headers: {
+			"Anthropic-Version": "2023-06-01",
+			"Anthropic-Beta": "oauth-2025-04-20",
+			"Content-Type": "application/json",
+		},
+		authHeader: "Authorization",
+		authPrefix: "Bearer ",
+		parse: (data) =>
+			((data as { data?: any[] })?.data || []).map((m: any) => ({
+				id: m.id,
+				name: m.display_name || m.id,
+			})),
 	},
 	gemini: {
 		url: "https://generativelanguage.googleapis.com/v1beta/models",
@@ -446,6 +456,21 @@ export async function resolveCustomModels(
 				},
 				"ClinePass",
 			)
+
+		case "commandcode":
+			return directResolver({
+				provider,
+				label: "CommandCode",
+				resolve: async () => {
+					const result = await resolveCommandCodeModels()
+					// An empty answer (vendor endpoint down, non-2xx) is handed to
+					// directResolver rather than pre-filled with the static catalogue:
+					// that is what attaches the "returned no live models; falling back
+					// to static catalog" warning the dashboard shows, which upstream's
+					// route answered with too.
+					return result?.models?.length ? result.models : []
+				},
+			})
 
 		// Zed has no static catalog by design (live /models only): resolve with the
 		// connection's own credentials, return rich metadata, drop disabled entries.

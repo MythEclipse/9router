@@ -32,7 +32,10 @@ import {
 } from "9router-api/domain/omp-models-yml"
 import { parseTOML, stringifyTOML } from "confbox"
 import { getCapabilitiesForModel } from "open-sse/providers/capabilities"
+import { getThinkingLevels } from "open-sse/providers/thinkingLevels"
 import { resolveCliApiKey } from "@/app/api/cli-tools/resolveApiKey"
+import { PROVIDER_ID_TO_ALIAS } from "@/shared/constants/models"
+import { ALIAS_TO_ID } from "@/shared/constants/providers"
 import { resolveModelDisplayName } from "@/shared/utils/modelDisplayName"
 import { readConfigForWrite } from "../cliTools/configWrite"
 
@@ -51,6 +54,26 @@ import { execAsync, readJson } from "./shared.ts"
 const OPENCODE_DIR = () => path.join(os.homedir(), ".config", "opencode")
 const OPENCODE_CONFIG_PATH = () => path.join(OPENCODE_DIR(), "opencode.json")
 const OPENCODE_PREFIX = "9router/"
+
+const ALIAS_TO_PROVIDER_ID = {
+	...Object.fromEntries(Object.entries(PROVIDER_ID_TO_ALIAS).map(([id, alias]) => [alias, id])),
+	...ALIAS_TO_ID,
+}
+
+// opencode "variants" built from the levels 9Router itself offers for a model
+// ("alias/model" → same set as the dashboard picker). Returns null when the
+// model has no reasoning levels, so nothing is written for it.
+const buildEffortVariants = (fullModelId: string) => {
+	const slash = fullModelId.indexOf("/")
+	if (slash <= 0) return null
+	const alias = fullModelId.slice(0, slash)
+	const levels = getThinkingLevels(
+		(ALIAS_TO_PROVIDER_ID as Record<string, string>)[alias] || alias,
+		fullModelId.slice(slash + 1),
+	)
+	if (!Array.isArray(levels) || levels.length === 0) return null
+	return Object.fromEntries(levels.map((level) => [level, { reasoningEffort: level }]))
+}
 
 type OpenCodeProvider = {
 	npm?: string
@@ -122,10 +145,14 @@ export const openCodeSettingsConfig: ToolConfigPort = {
 
 		const models = { ...(entry.models ?? {}) }
 		for (const id of requestedModelsOf(input)) {
-			models[id] = {
+			const modelEntry: Record<string, unknown> = {
 				name: resolveModelDisplayName(id, undefined),
 				modalities: { input: ["text", "image"], output: ["text"] },
 			}
+			// Keep variants the user already tuned; only generate them when absent.
+			const variants = (models[id] as any)?.variants || buildEffortVariants(id)
+			if (variants) modelEntry.variants = variants
+			models[id] = modelEntry
 		}
 
 		provider["9router"] = {

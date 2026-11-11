@@ -15,12 +15,14 @@ import {
 import { useModelCaps } from "@/shared/hooks/useModelCaps"
 import { formatContextWindow } from "@/shared/utils/contextWindow"
 import { isOrphanCompatAlias, matchesModelScope } from "@/shared/utils/modelPickerPredicates"
+import { applyQoderModelNames } from "@/shared/utils/providerCustomModels"
 import {
 	findOwningGroupId,
 	humanizeCompatId,
 	resolveProviderName,
 } from "@/shared/utils/providerDisplay"
 import { fetchSuggestedModels } from "@/shared/utils/providerModelsFetcher"
+import { NO_AUTH_PROVIDER_IDS } from "@/shared/utils/selectableModels"
 import { buildStudioTargetIndex } from "@/shared/utils/studioModelVisibility"
 import CapacityBadges from "./CapacityBadges.tsx"
 import Modal, { type ModalSize } from "./Modal.tsx"
@@ -55,11 +57,10 @@ const PROVIDER_ORDER = [
 ]
 
 // Providers that need no auth - always show in model selector.
-// Hidden entries stay out: their upstream channel is gone, but they keep
-// `noAuth` so the request path still resolves if an old model id is replayed.
-const NO_AUTH_PROVIDER_IDS = Object.keys(FREE_PROVIDERS).filter(
-	(id) => FREE_PROVIDERS[id].noAuth && !FREE_PROVIDERS[id].hidden,
-)
+// Derived from the whole registry (shared with the CLI-tools model picker): a
+// no-auth provider such as SearXNG is not in the "free" billing group, and hidden
+// entries stay out because their upstream channel is gone even though they keep
+// `noAuth` so a replayed model id still resolves.
 
 // Providers with per-account live catalogs via /api/providers/[id]/models.
 // Static registry stays as fallback when live fetch fails or is empty.
@@ -284,9 +285,10 @@ export default function ModelSelectModal({
 	const [freeCatalogModels, setFreeCatalogModels] = useState({})
 	useEffect(() => {
 		if (!isOpen) return undefined
-		const targets = NO_AUTH_PROVIDER_IDS.map((id) => [id, FREE_PROVIDERS[id]?.modelsFetcher]).filter(
-			([, fetcher]) => fetcher,
-		)
+		const targets = NO_AUTH_PROVIDER_IDS.map((id) => [
+			id,
+			AI_PROVIDERS[id]?.modelsFetcher ?? FREE_PROVIDERS[id]?.modelsFetcher,
+		]).filter(([, fetcher]) => fetcher)
 		if (targets.length === 0) return undefined
 		let cancelled = false
 		Promise.all(
@@ -726,7 +728,7 @@ export default function ModelSelectModal({
 					}))
 
 				const merged = [
-					...hardcodedModels.map((m) => ({
+					...applyQoderModelNames(hardcodedModels, customModels, alias).map((m) => ({
 						id: m.id,
 						name: m.name,
 						value: `${alias}/${m.id}`,

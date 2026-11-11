@@ -26,6 +26,7 @@ import {
 	OAUTH_PROVIDERS,
 } from "@/shared/constants/providers"
 import { getDeactivatedProviderIds } from "@/shared/utils/connectionStatus"
+import { applyQoderModelNames } from "@/shared/utils/providerCustomModels"
 
 /** Provider order: OAuth first, then Free Tier, then API Key (as on the providers page). */
 export const PROVIDER_ORDER = [
@@ -39,11 +40,13 @@ export const PROVIDER_ORDER = [
  * Providers that need no auth — always selectable, and they never own a connection
  * row, so any caller that only walks connections misses them entirely.
  *
- * Hidden entries stay out even though they keep `noAuth`: upstream channel is gone,
- * so the picker does not offer them. Mirrors the picker's filter.
+ * Authentication requirement is independent of billing category: a no-auth provider
+ * such as SearXNG can live outside the "free" group, so the list is derived from the
+ * whole registry. Hidden entries stay out even though they keep `noAuth`: upstream
+ * channel is gone, so the picker does not offer them.
  */
-export const NO_AUTH_PROVIDER_IDS = Object.keys(FREE_PROVIDERS).filter(
-	(id) => FREE_PROVIDERS[id].noAuth && !FREE_PROVIDERS[id].hidden,
+export const NO_AUTH_PROVIDER_IDS = Object.keys(AI_PROVIDERS).filter(
+	(id) => AI_PROVIDERS[id].noAuth && !AI_PROVIDERS[id].hidden,
 )
 
 /** Providers with a per-account live catalogue via /api/providers/[id]/models. */
@@ -316,7 +319,11 @@ export function buildModelGroups(input: BuildModelGroupsInput = {}): Record<stri
 		}
 
 		const liveModels = liveFor(providerId)
-		const hardcodedModels = liveModels.length > 0 ? liveModels : getModelsByProviderId(providerId)
+		const hardcodedModels = applyQoderModelNames(
+			liveModels.length > 0 ? liveModels : getModelsByProviderId(providerId),
+			customModelsSafe,
+			alias,
+		)
 		const hardcodedIds = new Set(hardcodedModels.map((m) => m.id))
 
 		// With no hardcoded models (openrouter, say) every alias is a model. Otherwise only

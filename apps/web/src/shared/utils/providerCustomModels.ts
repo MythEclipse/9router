@@ -2,6 +2,29 @@ function modelType(model) {
 	return model?.kind || model?.type || "llm"
 }
 
+/**
+ * Prefer the display name saved with an imported Qoder model over the registry's
+ * static label, so a catalog rename reaches the provider page, ModelsCard and the
+ * model picker without changing ids or routing. Both Qoder regions use it.
+ */
+export function applyQoderModelNames(models, customModels, providerAlias) {
+	if (providerAlias !== "qd" && providerAlias !== "qdcn") return models
+	const names = new Map(
+		customModels
+			.filter(
+				(model) =>
+					model.providerAlias === providerAlias &&
+					modelType(model) === "llm" &&
+					model.name &&
+					model.name !== model.id,
+			)
+			.map((model) => [model.id, model.name]),
+	)
+	return models.map((model) =>
+		names.has(model.id) ? { ...model, name: names.get(model.id) } : model,
+	)
+}
+
 export function getProviderCustomModelRows({
 	customModels = [],
 	modelAliases = {},

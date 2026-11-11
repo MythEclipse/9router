@@ -41,7 +41,10 @@ import {
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard"
 import { useModelCaps } from "@/shared/hooks/useModelCaps"
 import { getScheduleSlotLabels } from "@/shared/services/quotaPingSchedule"
-import { getProviderCustomModelRows } from "@/shared/utils/providerCustomModels"
+import {
+	applyQoderModelNames,
+	getProviderCustomModelRows,
+} from "@/shared/utils/providerCustomModels"
 import { getProviderIconSrc, markProviderIconMissing } from "@/shared/utils/providerIcon"
 import { getCustomLogo } from "@/shared/utils/providerLogo"
 import { fetchSuggestedModels } from "@/shared/utils/providerModelsFetcher"
@@ -72,6 +75,11 @@ const AUTO_PING_SETTINGS_KEYS = {
 	claude: "claudeAutoPing",
 	codex: "codexAutoPing",
 }
+
+// Providers whose registry list is only an offline fallback: the dashboard
+// renders the live per-connection catalog from GET /api/providers/[id]/models
+// when one resolves, and falls back to the static rows otherwise.
+const LIVE_MODEL_CATALOG_PROVIDERS = new Set(["cursor", "zed", "claude", "commandcode"])
 
 function sleep(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms))
@@ -219,11 +227,11 @@ export default function ProviderDetailPage() {
 	const supportsApiKeyAuth = !!APIKEY_PROVIDERS[providerId] || authModes.includes("apikey")
 	const isFreeNoAuth = !!FREE_PROVIDERS[providerId]?.noAuth
 	const staticModels = getModelsByProviderId(providerId)
-	const models =
-		(providerId === "cursor" || providerId === "zed") && liveModels.length > 0
-			? liveModels
-			: staticModels
 	const providerAlias = getProviderAlias(providerId)
+	const models =
+		LIVE_MODEL_CATALOG_PROVIDERS.has(providerId) && liveModels.length > 0
+			? liveModels
+			: applyQoderModelNames(staticModels, customModels, providerAlias)
 
 	const isOpenAICompatible = isOpenAICompatibleProvider(providerId)
 	const isAnthropicCompatible = isAnthropicCompatibleProvider(providerId)
@@ -570,7 +578,7 @@ export default function ProviderDetailPage() {
 	// the provider id or connection list changes - no polling, no loop.
 	// Cursor path is statement-identical to before; zed adds error surfacing.
 	useEffect(() => {
-		const isLiveCatalog = providerId === "cursor" || providerId === "zed"
+		const isLiveCatalog = LIVE_MODEL_CATALOG_PROVIDERS.has(providerId)
 		if (!isLiveCatalog) {
 			// Cleared on the next microtask: the empty-catalog case must not write
 			// state during the commit.
@@ -687,6 +695,9 @@ export default function ProviderDetailPage() {
 		transport?: unknown,
 		ownedBy = "",
 		multipliers: ModelMultipliers = {},
+		// Display name saved alongside the id. Providers whose catalog renames models
+		// (Qoder) keep their upstream label this way; omitted means "use the id".
+		displayName = "",
 	) => {
 		try {
 			const res = await fetch("/api/models/custom", {
@@ -696,6 +707,7 @@ export default function ProviderDetailPage() {
 					providerAlias: providerAliasOverride,
 					id: modelId,
 					type,
+					...(displayName ? { name: displayName } : {}),
 					...(caps ? { caps } : {}),
 					...(transport ? { transport } : {}),
 					...(ownedBy ? { ownedBy } : {}),
@@ -795,18 +807,18 @@ export default function ProviderDetailPage() {
 				// Qoder model ID format may be "qoder/auto", "qoder-cn/auto" or "auto",
 				// need to remove the provider prefix before storing.
 				const cleanModelId = modelId.replace(/^(qoder-cn|qoder)\//, "")
-				const alreadyExists =
-					customModels.some(
-						(entry) =>
-							entry.providerAlias === providerStorageAlias &&
-							entry.id === cleanModelId &&
-							(entry.kind || entry.type || "llm") === "llm",
-					) || Object.values(modelAliases).includes(`${providerStorageAlias}/${cleanModelId}`)
-				if (alreadyExists) {
-					continue
-				}
-
-				await handleAddCustomModel(cleanModelId, "llm", providerStorageAlias)
+				// Upsert rather than skip: a re-import is how an existing record picks up
+				// the catalog's current display name. Ids and routing stay untouched.
+				await handleAddCustomModel(
+					cleanModelId,
+					"llm",
+					providerStorageAlias,
+					undefined,
+					undefined,
+					"",
+					{},
+					model.name || cleanModelId,
+				)
 				importedCount += 1
 			}
 

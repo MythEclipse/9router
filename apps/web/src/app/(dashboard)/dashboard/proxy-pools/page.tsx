@@ -28,6 +28,7 @@ import {
 	startProxyImportJob,
 	writeStoredJob,
 } from "@/shared/utils/proxyImportClient"
+import { updateProxyPoolSelection } from "@/shared/utils/proxyPoolSelection"
 import { useNotificationStore } from "@/store/notificationStore"
 import { useTaskStore } from "@/store/taskStore"
 import Icon from "../../../../shared/components/Icon"
@@ -117,6 +118,7 @@ export default function ProxyPoolsPage() {
 	const [_deployLabel, setDeployLabel] = useState(null)
 	const [testingId, setTestingId] = useState(null)
 	const [selectedIds, setSelectedIds] = useState([])
+	const selectionAnchorRef = useRef<string | null>(null)
 	// The row markup is heavy, so a large import used to render every pool at
 	// once and lock the page up. A page window plus a filter bounds the DOM.
 	const [search, setSearch] = useState("")
@@ -309,8 +311,19 @@ export default function ProxyPoolsPage() {
 		}
 	}
 
-	const toggleSelect = (id) =>
-		setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+	// Shift+click extends the selection across the filtered list, so a range can
+	// span pages. The anchor is the last row clicked without Shift.
+	const toggleSelect = (id: string, checked: boolean, shiftKey = false) => {
+		setSelectedIds((prev) =>
+			updateProxyPoolSelection(filteredPools, prev, {
+				id,
+				anchorId: selectionAnchorRef.current,
+				checked,
+				shiftKey,
+			}),
+		)
+		selectionAnchorRef.current = id
+	}
 	const filteredPools = useMemo(() => {
 		const q = search.trim().toLowerCase()
 		return proxyPools.filter((pool) => {
@@ -372,8 +385,14 @@ export default function ProxyPoolsPage() {
 	// only ever refers to the visible window.
 	const _someVisibleSelected = visiblePools.some((p) => selectedPoolIds.includes(p.id))
 
-	const toggleSelectAll = () => setSelectedIds(allSelected ? [] : filteredPools.map((p) => p.id))
-	const clearSelection = () => setSelectedIds([])
+	const toggleSelectAll = () => {
+		setSelectedIds(allSelected ? [] : filteredPools.map((p) => p.id))
+		selectionAnchorRef.current = null
+	}
+	const clearSelection = () => {
+		setSelectedIds([])
+		selectionAnchorRef.current = null
+	}
 
 	const bulkSetActive = async (isActive) => {
 		const targets = selectedPoolIds.length > 0 ? selectedPoolIds : proxyPools.map((p) => p.id)
@@ -1130,7 +1149,14 @@ export default function ProxyPoolsPage() {
 									<input
 										type="checkbox"
 										checked={selectedPoolIds.includes(pool.id)}
-										onChange={() => toggleSelect(pool.id)}
+										onChange={(event) =>
+											toggleSelect(
+												pool.id,
+												event.target.checked,
+												(event.nativeEvent as MouseEvent).shiftKey === true,
+											)
+										}
+										aria-label={`Select ${pool.name}`}
 										className="mt-1 size-4 shrink-0 rounded border-black/20 dark:border-white/20"
 									/>
 									<div className="min-w-0 flex-1">

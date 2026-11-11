@@ -33,7 +33,7 @@ export default function Input({
 	return (
 		<div className={cn("flex flex-col gap-1.5", className)}>
 			{label && (
-				<label className="text-sm font-medium text-text-main">
+				<label htmlFor={props.id} className="text-sm font-medium text-text-main">
 					{label}
 					{required && <span className="text-danger ml-1">*</span>}
 				</label>
