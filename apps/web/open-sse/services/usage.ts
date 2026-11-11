@@ -16,6 +16,7 @@ export { consumeClaudeResetGrant, consumeCodexRateLimitResetCredit, getCodexRate
 import type { Credentials, ProxyOptions } from "../types.ts"
 import { getMiniMaxCodeUsage } from "./minimaxCodeUsage.ts"
 import { resolveQoderCredentials } from "./qoderModels.ts"
+import { getClinepassUsage } from "./usage/clinepass.ts"
 import { getCodeBuddyCnUsage, getCodeBuddyIntlUsage } from "./usage/codebuddy-cn.ts"
 import { getCommandCodeUsage } from "./usage/commandcode.ts"
 import { getCursorUsage } from "./usage/cursor.ts"
@@ -100,6 +101,8 @@ const USAGE_HANDLERS: Record<string, (c: UsageHandlerContext) => Promise<Provide
 	"xiaomi-mimo": (c) => getXiaomiMimoUsage(c.accessToken, c.providerSpecificData, c.proxyOptions),
 	commandcode: (c) => getCommandCodeUsage(c.apiKey, c.proxyOptions),
 	cursor: (c) => getCursorUsage(c.accessToken, c.providerSpecificData, c.proxyOptions),
+	// OAuth WorkOS JWT (workos: prefix) or plain ClinePass API key — same usage-limits URL.
+	clinepass: (c) => getClinepassUsage(c.accessToken, c.apiKey, c.proxyOptions),
 }
 
 // Qoder intl/CN share one usage path: PATs must be exchanged to a job token

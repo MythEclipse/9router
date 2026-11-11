@@ -303,10 +303,10 @@ async function fetchQoderCatalogRaw(
 		const key = entry.key
 		if (!key) continue
 
-		// Always cache the config - chat needs model_config even for UI-hidden
-		// models (enable:false). Upstream still accepts chat for these keys.
+		// Models with enable:false stay usable in the IDE (e.g. Qwen4-Max-Preview
+		// under qmodel_latest), so keep their config and advertise the upstream
+		// display name instead of hiding them from the catalog.
 		rawConfigs.set(key, entry)
-		if (entry.enable === false) continue
 
 		const display = entry.display_name || key
 		const ctx = Number(entry.max_input_tokens) || 131_072

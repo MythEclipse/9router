@@ -14,6 +14,7 @@
 import { createHash } from "node:crypto"
 import { acquireBrowserContext, releaseBrowserContext } from "../services/browserPool.ts"
 import { SSE_DONE, SSE_HEADERS_NO_BUFFER } from "../utils/sseConstants.ts"
+import { normalizeCookieHeaderInput } from "../utils/webCookieAuth.ts"
 import { BaseExecutor } from "./base.ts"
 import {
 	isMissingBrowserExecutable,
@@ -101,18 +102,20 @@ function errorResponse(status, error, extraHeaders = {}) {
 	})
 }
 
-function resolveMuseCookie(credentials) {
+function resolveMuseCookie(credentials: any) {
 	const direct = String(credentials?.apiKey ?? "").trim() || String(credentials?.cookie ?? "").trim()
-	if (direct) return direct
 	const providerSpecificData = credentials?.providerSpecificData
-	if (
+	const fallback =
 		providerSpecificData &&
 		typeof providerSpecificData === "object" &&
 		!Array.isArray(providerSpecificData)
-	) {
-		return String(providerSpecificData.cookie ?? "").trim()
+			? String(providerSpecificData.cookie ?? "").trim()
+			: ""
+	try {
+		return normalizeCookieHeaderInput(direct || fallback)
+	} catch (error: any) {
+		throw new MuseWebAuthError(error.message)
 	}
-	return ""
 }
 
 /** Map a flow error to the HTTP status the fallback layer should see. */

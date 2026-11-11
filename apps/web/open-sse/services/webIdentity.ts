@@ -7,7 +7,11 @@
 // flaky network never flips a healthy connection to "error".
 import https from "node:https"
 import { normalizeGeminiValidationCookie } from "../utils/geminiCookies.ts"
-import { extractCookieValue, normalizeSessionCookieHeader } from "../utils/webCookieAuth.ts"
+import {
+	extractCookieValue,
+	normalizeCookieHeaderInput,
+	normalizeSessionCookieHeader,
+} from "../utils/webCookieAuth.ts"
 import { GROK_TLS_USER_AGENT, grokTlsFetch } from "./grokTlsClient.ts"
 
 const UA =
@@ -223,6 +227,11 @@ const PROBES = {
 	},
 
 	async "muse-web"(credential) {
+		try {
+			credential = normalizeCookieHeaderInput(credential)
+		} catch (error: any) {
+			return REJECTED(error.message)
+		}
 		if (!cookieJar(credential).get("hatch_sess")) return REJECTED("Missing hatch_sess cookie")
 		const res = await request("https://muse.ai/api/session", {
 			headers: {

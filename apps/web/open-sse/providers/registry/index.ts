@@ -118,6 +118,7 @@ import p111 from "./selfhosted-embedding.ts"
 import p112 from "./selfhosted-stt.ts"
 import p113 from "./selfhosted-tts.ts"
 import p114 from "./sensenova.ts"
+import p146 from "./sensenova-intl.ts"
 import p115 from "./serper.ts"
 import p116 from "./siliconflow.ts"
 import p117 from "./stability-ai.ts"
@@ -294,4 +295,5 @@ export default [
 	p143,
 	p144,
 	p145,
+	p146,
 ] as RegistryEntry[]

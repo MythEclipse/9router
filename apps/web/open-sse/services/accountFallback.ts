@@ -91,7 +91,11 @@ export function checkFallbackError(status, errorText, backoffLevel = 0, provider
 				newBackoffLevel: newLevel,
 			}
 		}
-		return { shouldFallback: true, cooldownMs: rule.cooldownMs }
+		return {
+			shouldFallback: true,
+			cooldownMs: rule.cooldownMs,
+			modelScoped: Boolean(rule.modelScoped),
+		}
 	}
 
 	// Request-scoped client errors that matched no rule above: a 400 caused by the

@@ -303,6 +303,9 @@ export function createSSEStream(options: SSEStreamOptions = {}) {
 					let output
 					let injectedUsage = false
 					let responsesTerminal = false
+
+					// Upstream already sent the sentinel; flush() must not append a second one.
+					if (trimmed.startsWith("data:") && trimmed.slice(5).trim() === "[DONE]") streamDoneSent = true
 					const payload = framePayload(trimmed)
 
 					if (payload !== null && payload !== SSE_DONE_DATA) {
@@ -705,7 +708,12 @@ export function createSSEStream(options: SSEStreamOptions = {}) {
 				if (remaining) buffer += remaining
 
 				if (mode === STREAM_MODE.PASSTHROUGH) {
-					if (buffer) {
+					// An unterminated trailing "data: [DONE]" is the upstream sentinel: don't
+					// forward it raw (it would glue onto the properly framed one appended
+					// below, #5592).
+					const tail = buffer.trim()
+					const tailIsDone = tail.startsWith("data:") && tail.slice(5).trim() === "[DONE]"
+					if (!tailIsDone && buffer) {
 						let output = buffer
 						const payload = framePayload(buffer)
 						if (buffer.startsWith(SSE_DATA_PREFIX) && !buffer.startsWith(`${SSE_DATA_PREFIX} `)) {

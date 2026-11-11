@@ -58,6 +58,7 @@ export const UNSUPPORTED_SCHEMA_CONSTRAINTS = [
 	// Other unsupported keywords
 	"title",
 	"optional",
+	"~optional",
 	"deprecated",
 	"if",
 	"then",

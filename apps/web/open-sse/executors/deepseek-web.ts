@@ -1,5 +1,6 @@
 import { findDeepSeekPowNonce } from "../lib/deepseek-pow-hash.ts"
 import type { AssistantCompletionMessage } from "../types.ts"
+import { ACCEPT_ENCODING } from "../utils/zstdCompat.ts"
 import { BaseExecutor } from "./base.ts"
 import {
 	buildToolCallResponse,
@@ -16,7 +17,7 @@ const COMPLETION_URL = `${DEEPSEEK_API_BASE}/v0/chat/completion`
 
 const FAKE_HEADERS = {
 	Accept: "*/*",
-	"Accept-Encoding": "gzip, deflate, br, zstd",
+	"Accept-Encoding": ACCEPT_ENCODING,
 	"Accept-Language": "en-US,en;q=0.9",
 	Origin: DEEPSEEK_WEB_BASE,
 	Referer: `${DEEPSEEK_WEB_BASE}/`,

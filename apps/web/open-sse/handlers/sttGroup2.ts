@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer"
 import { PROVIDER_ID_TO_ALIAS, PROVIDER_MODELS } from "../config/providerModels.ts"
 import { HTTP_STATUS } from "../config/runtimeConfig.ts"
 import { createErrorResult } from "../utils/error.ts"
+import { FormDataImpl as FormData } from "../utils/formDataCompat.ts"
 import { transcribeCodex } from "./codexStt.ts"
 import { transcribeGeminiLive } from "./geminiLiveStt.ts"
 

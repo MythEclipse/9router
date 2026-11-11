@@ -46,6 +46,26 @@ const Antigravity = {
 	},
 	models: [
 		{
+			id: "gemini-4-carbon-high",
+			name: "Gemini 4 Carbon (High)",
+			upstreamModelId: "gemini-4-carbon-high(high)",
+		},
+		{
+			id: "gemini-4-carbon-medium",
+			name: "Gemini 4 Carbon (Medium)",
+			upstreamModelId: "gemini-4-carbon-medium(medium)",
+		},
+		{
+			id: "gemini-4-carbon-low",
+			name: "Gemini 4 Carbon (Low)",
+			upstreamModelId: "gemini-4-carbon-low(low)",
+		},
+		{
+			id: "gemini-4-carbon",
+			name: "Gemini 4 Carbon",
+			upstreamModelId: "gemini-4-carbon-medium(medium)",
+		},
+		{
 			id: "gemini-4-argon-high",
 			name: "Gemini 4 Argon (High)",
 			upstreamModelId: "gemini-4-argon-high(high)",

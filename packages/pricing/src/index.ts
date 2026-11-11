@@ -193,12 +193,33 @@ export const MODEL_PRICING = {
 		reasoning: 20.0,
 		cache_creation: 5.0,
 	},
+	"claude-fable-5-2": {
+		input: 8.0,
+		output: 40.0,
+		cached: 0.2,
+		reasoning: 40.0,
+		cache_creation: 10.0,
+	},
+	"claude-fable-5-1": {
+		input: 10.0,
+		output: 50.0,
+		cached: 1.0,
+		reasoning: 50.0,
+		cache_creation: 12.5,
+	},
 	"claude-fable-5": {
 		input: 10.0,
 		output: 50.0,
 		cached: 1.0,
 		reasoning: 50.0,
 		cache_creation: 12.5,
+	},
+	"claude-haiku-5-5": {
+		input: 0.1,
+		output: 0.5,
+		cached: 0.01,
+		reasoning: 0.5,
+		cache_creation: 0.125,
 	},
 	"claude-sonnet-5-5": {
 		input: 2.0,
@@ -1038,6 +1059,10 @@ export const PATTERN_PRICING = [
 	{
 		pattern: "gemini-*-pro",
 		pricing: { input: 2.0, output: 12.0, cached: 0.25, reasoning: 18.0, cache_creation: 2.0 },
+	},
+	{
+		pattern: "gemini-4-*",
+		pricing: { input: 2.0, output: 10.0, cached: 0.1, reasoning: 10.0, cache_creation: 0.1875 },
 	},
 	{
 		pattern: "gemini-3-*",

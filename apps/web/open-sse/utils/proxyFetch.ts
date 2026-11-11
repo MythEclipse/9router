@@ -9,7 +9,39 @@ import {
 	STALE_SOCKET_ERROR_CODES,
 	STALE_SOCKET_ERROR_SUBSTRINGS,
 } from "../config/runtimeConfig.ts"
+import { applyClaudeCliVersion, ensureClaudeCliVersion } from "./claudeCliVersion.ts"
 import { dbg } from "./debugLog.ts"
+
+const CLAUDE_UA_PROBE = /claude-cli\/\d/
+function hasClaudeCliHeader(headers: any): boolean {
+	if (!headers) return false
+	const values =
+		headers instanceof Headers
+			? [...headers.values()]
+			: Array.isArray(headers)
+				? headers.map((h: any) => h[1])
+				: Object.values(headers)
+	return values.some((v) => typeof v === "string" && CLAUDE_UA_PROBE.test(v))
+}
+
+/** scheme://host:port only — never credentials. */
+function safeProxyHost(proxyUrl: any): string {
+	try {
+		const parsed = new URL(String(proxyUrl))
+		return `${parsed.protocol}//${parsed.hostname}${parsed.port ? `:${parsed.port}` : ""}`
+	} catch {
+		return "unparseable-proxy-url"
+	}
+}
+
+/** Destination host only, never the full URL (which may carry a query/path). */
+function safeTargetHost(url: any): string {
+	try {
+		return new URL(typeof url === "string" ? url : url.toString()).host
+	} catch {
+		return "unparseable-url"
+	}
+}
 
 // Bun's fetch ignores undici's `dispatcher`, so a ProxyAgent silently becomes
 // a direct connection — the pool looks configured while every request actually
@@ -658,6 +690,13 @@ export async function proxyAwareFetch(
 	proxyOptions = null,
 	directFetch: DirectFetchFn | null = null,
 ) {
+	// Keep the spoofed Claude Code version current (new models require a minimum CLI version).
+	// Refresh in the background: the request uses the version already known, so an
+	// unreachable npm registry can never add latency to the chat path.
+	if (hasClaudeCliHeader(options?.headers)) {
+		void ensureClaudeCliVersion(originalFetch)
+		options = { ...options, headers: applyClaudeCliVersion(options.headers) }
+	}
 	const targetUrl = typeof url === "string" ? url : url.toString()
 
 	const connectionProxyUrl = resolveConnectionProxyUrl(targetUrl, proxyOptions)
@@ -671,6 +710,30 @@ export async function proxyAwareFetch(
 	const proxyWasAssigned = !!(proxyOptions?.proxyPoolId || proxyOptions?.enabled)
 	if (!proxyUrl && proxyOptions?.strictProxy === true && proxyWasAssigned) {
 		throw new Error("[ProxyFetch] strictProxy requires an active proxy URL; none resolved")
+	}
+
+	const effectiveDirectFetch = (options as any)?.directFetch || directFetch
+	// Protocol adapters that own their transport (wreq-js TLS impersonation)
+	// cannot use an undici dispatcher: they must drive the proxy themselves.
+	// Only adapters that declare `proxyCapable` opt in — any other adapter
+	// ignores the proxy URL and would leave over the direct interface, so they
+	// keep the undici path below.
+	if (proxyUrl && effectiveDirectFetch?.proxyCapable === true) {
+		try {
+			const res = await effectiveDirectFetch(url, { ...options, proxyUrl }, proxyUrl)
+			// Reported only after the adapter that holds the tunnel returned.
+			const via = res?.headers?.get?.("x-9r-proxy-via")
+			dbg(
+				"PROXY",
+				`PROXY ROUTING VERIFIED | ${safeTargetHost(targetUrl)} | transport=adapter | proxy=${via || safeProxyHost(proxyUrl)} | status=${res?.status}`,
+			)
+			return res
+		} catch (err: any) {
+			if (proxyOptions?.strictProxy === true) {
+				throw new Error(`[ProxyFetch] Proxy required but failed (strictProxy=true): ${err.message}`)
+			}
+			throw err
+		}
 	}
 
 	// Relay lane. The Vercel deploy path parks its URL in vercelRelayUrl, while
@@ -740,7 +803,13 @@ export async function proxyAwareFetch(
 			return await replayFreeTierRejectionDirect(url, options, res, proxyUrl, directFetch)
 		} catch (proxyError) {
 			// If a proxy was configured, never fall back to direct egress which leaks
-			// the host's main IP.
+			// the host's main IP. strictProxy names that contract in the message so a
+			// caller can tell a refused proxy from an ordinary network failure.
+			if (proxyOptions?.strictProxy === true) {
+				throw new Error(
+					`[ProxyFetch] Proxy required but failed (strictProxy=true): ${proxyError.message}; direct fallback blocked to protect main IP.`,
+				)
+			}
 			throw new Error(
 				`[ProxyFetch] Proxy required but failed (${proxyError.message}); direct fallback blocked to protect main IP.`,
 			)
