@@ -4,6 +4,7 @@
  * Also triggered by 409/429 error handler to sync exact resetAt from upstream.
  */
 
+import { primeQuotaObservation } from "open-sse/services/quotaExhaustion"
 import { getAntigravityUsage } from "open-sse/services/usage/google"
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy"
 import * as log from "../utils/logger.ts"
@@ -204,6 +205,17 @@ export function getAntigravityQuotaCache() {
 }
 
 /**
+ * Record a quota reading taken elsewhere (the pre-flight read in `sse/services/quotaPreflight.ts`)
+ * in the family-aware cache this provider's selection filter reads. Keeps one reading feeding
+ * both caches instead of asking Google twice.
+ */
+export function primeAntigravityQuotaCache(connectionId, quotas) {
+	if (!connectionId || !quotas || typeof quotas !== "object") return
+	if (Object.keys(quotas).length === 0) return
+	quotaCache.set(connectionId, applyActiveStrikeBlocks(connectionId, quotas))
+}
+
+/**
  * Refresh quota for a single antigravity connection from upstream API.
  * Updates in-memory cache only. Cache expiry is the upstream model resetAt.
  * @returns {object|null} quotas map or null on failure
@@ -253,7 +265,9 @@ async function _doRefresh(connectionId, accessToken, providerSpecificData, _now)
 		// Update in-memory cache. Caller logs CACHE_BLOCK only if requested model is exhausted.
 		// Strike blocks are re-asserted after every refresh so an optimistic
 		// upstream reading cannot resurrect a pair we just circuit-broke.
-		quotaCache.set(connectionId, applyActiveStrikeBlocks(connectionId, usage.quotas))
+		primeAntigravityQuotaCache(connectionId, usage.quotas)
+		// The same reading also feeds the provider-agnostic cache the selection path consults.
+		primeQuotaObservation(connectionId, "antigravity", usage.quotas)
 
 		return usage.quotas
 	} catch (e) {

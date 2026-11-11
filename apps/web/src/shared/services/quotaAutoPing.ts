@@ -3,6 +3,7 @@ import "open-sse/index"
 
 import { getExecutor } from "open-sse/executors/index"
 import { CLAUDE_CLI_SPOOF_HEADERS } from "open-sse/providers/shared"
+import { primeQuotaObservation } from "open-sse/services/quotaExhaustion"
 import { getClaudeUsage } from "open-sse/services/usage/claude"
 import { getCodexUsage } from "open-sse/services/usage/codex"
 import { proxyAwareFetch } from "open-sse/utils/proxyFetch"
@@ -247,6 +248,8 @@ async function pingConnection(
 
 	const usage = await handler.getUsage(connection.accessToken, proxyOptions)
 	const quotas = usage?.quotas || {}
+	// Selection reads the same cache: a window this tick found at 0% parks the account now.
+	if (usage?.quotas) primeQuotaObservation(connection.id, provider, usage.quotas)
 	const quota = quotas?.[providerConfig.quotaKey]
 	let resetAt = quota?.resetAt
 	if (resetAt) state.resetCache[key] = resetAt

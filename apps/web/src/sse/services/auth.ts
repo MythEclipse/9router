@@ -12,6 +12,7 @@ import {
 } from "open-sse/services/accountFallback"
 import { rankConnectionsByHealth } from "open-sse/services/connectionHealth"
 import { modelIdSpellings } from "open-sse/services/model"
+import { findConnectionQuotaBlock } from "open-sse/services/quotaExhaustion"
 import {
 	getProviderConnections,
 	getProxyPools,
@@ -23,6 +24,7 @@ import { pickProxyPoolId, resolveConnectionProxyConfig } from "@/lib/network/con
 import { markProxyHealthy, markProxyUnhealthy } from "@/lib/network/proxyHealth"
 import { FREE_PROVIDERS, resolveProviderId } from "@/shared/constants/providers"
 import { getAntigravityModelQuota, getAntigravityQuotaCache } from "./antigravityQuota.ts"
+import { ensureQuotaObservations } from "./quotaPreflight.ts"
 
 export { apiKeyGateFailure, shouldLogAuthFailure } from "./keyGate.ts"
 
@@ -256,6 +258,11 @@ export async function getProviderCredentials(
 		const isAntigravity = providerId === "antigravity"
 		const antigravityQuotaCache = isAntigravity && model ? getAntigravityQuotaCache() : null
 
+		// Read the quota endpoint the usage panel reads, so a window the dashboard shows at 0%
+		// parks the account before we spend a request finding out. Cold connections are awaited;
+		// warm ones refresh in the background. Fail-open by construction — see quotaPreflight.ts.
+		await ensureQuotaObservations(connections)
+
 		// Filter out model-locked, excluded, and Antigravity quota-exhausted connections.
 		const eligibleConnections = connections.filter((c) => {
 			if (excludeSet.has(c.id)) return false
@@ -286,6 +293,16 @@ export async function getProviderCredentials(
 					)
 					return false
 				}
+			}
+			// Every provider that reports quota: a window sitting at 0% with a reset ahead parks
+			// this connection until then, instead of costing a request per rotation attempt.
+			const quotaBlock = findConnectionQuotaBlock(c.id, model)
+			if (quotaBlock) {
+				log.info(
+					"QUOTA_SKIP",
+					`${(c.id || "").slice(0, 8)} | ${providerId} | ${quotaBlock.label} at 0% - skip upstream until ${quotaBlock.resetAt}`,
+				)
+				return false
 			}
 			return true
 		})
@@ -320,6 +337,11 @@ export async function getProviderCredentials(
 					if (resetAt && new Date(resetAt).getTime() > Date.now()) expiries.push(resetAt)
 				})
 			}
+			// Same for the generic quota observations: the retry hint should name the refill.
+			connections.forEach((c) => {
+				const block = findConnectionQuotaBlock(c.id, model)
+				if (block) expiries.push(block.resetAt)
+			})
 			const earliest = expiries.sort()[0] || null
 			if (earliest) {
 				const earliestConn = lockedConns[0]

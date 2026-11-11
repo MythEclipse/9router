@@ -14,6 +14,9 @@ async function client() {
 	})
 }
 
+import { primeQuotaObservation } from "open-sse/services/quotaExhaustion"
+import type { UsageQuotaMap } from "open-sse/services/usage/shared"
+import { getProviderConnectionById } from "@/lib/localDb"
 import { refreshAndUpdateCredentials } from "@/lib/usage/connectionRefresh"
 
 /**
@@ -38,6 +41,18 @@ export async function GET(
 		const answer = await (await client()).usage.connection({ connectionId, force })
 		if (answer.kind === "refusal") {
 			return NextResponse.json({ message: answer.refusal.message }, { status: answer.refusal.status })
+		}
+		// What the panel just showed the operator is what selection must act on: hand the same
+		// reading to the shared observation cache, so an account parked at 0% is skipped by the
+		// next request instead of costing one. Read-only failure here must not fail the panel.
+		try {
+			const quotas = (answer.usage as { quotas?: UsageQuotaMap } | null)?.quotas
+			if (quotas) {
+				const connection = await getProviderConnectionById(connectionId)
+				if (connection) primeQuotaObservation(connectionId, connection.provider, quotas)
+			}
+		} catch {
+			// ignore: the panel answer is already in hand
 		}
 		return NextResponse.json(answer.usage)
 	} catch (error) {

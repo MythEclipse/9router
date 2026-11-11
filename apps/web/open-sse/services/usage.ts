@@ -113,6 +113,12 @@ async function getQoderUsageFor(c: UsageHandlerContext): Promise<ProviderUsageRe
 	return getQoderUsage(resolved?.accessToken || c.accessToken, c.proxyOptions, c.provider || "qoder")
 }
 
+/** Whether this provider can report quota at all — the gate for a pre-flight read. */
+export function supportsUsage(provider: string): boolean {
+	if (!provider) return false
+	return Boolean(USAGE_HANDLERS[provider]) || isCustomQuotaProvider(provider)
+}
+
 export async function getUsageForProvider(
 	connection: UsageHandlerContext & { projectId?: string },
 	proxyOptions: ProxyOptions | null = null,
