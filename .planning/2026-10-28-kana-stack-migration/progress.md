@@ -3150,3 +3150,70 @@ direct fallback stays blocked with `direct fallback blocked to protect main IP`,
 suites were adapted to that guard rather than the reverse. The new test seam defaults to the real
 undici fetch and is test-only, so production cannot substitute a dial. SSRF pinning in
 `image.ts`, the `X-Forwarded-For` stripping in `custom-server.js`, and token storage are unchanged.
+
+---
+
+## Upstream v0.5.119 port (30 commits, `v0.5.116` → `54a88d04`)
+
+Same shape as the v0.5.116 port: no merge, one semantic edit per upstream change, `.js` → `.ts` path
+mapping (`open-sse/**/*.js` → `apps/web/open-sse/**/*.ts`, `src/**/*.js` → `apps/web/src/**/*.ts(x)`,
+`open-sse/providers/pricing.js` → `packages/pricing/src/index.ts`). The route-level validators land in
+`apps/api`, because that is where the fork's validation use cases live.
+
+### What the range actually contained
+
+| Area | Change |
+| ---- | ------ |
+| providers | Claude Fable 5.2, Haiku 5.5, Gemini 4 Carbon (antigravity, 4 tiers), SenseNova (Intl) as its own provider, CommandCode live catalogue, nvidia model refresh, `claude-fable-5.1` retired from github/opencode-zen |
+| transport | Codex CLI `0.167.1`, Claude Code CLI version resolved from npm instead of hardcoded, Codex image edits moved to the native `/images/edits` endpoint, `Accept-Encoding` keeps `zstd` only where `zlib.createZstdDecompress` exists |
+| reliability | opencode free-lane overload retry (8 attempts, 800 → 4000 ms), rejected sessions dropped by value, wreq sessions cached per proxy, single `[DONE]` in passthrough, nvidia `degraded` cooldown scoped to the model |
+| translation | `~optional` stripped from Gemini tool schemas, `reasoning` alias fallback, `is_error` always emitted on `tool_result`, Zed-safe content blocks |
+| product | ClinePass quota rows, Qoder catalog keeps `enable:false` entries and their display names, proxy-pool status filter with Shift+click ranges, `thinking_levels` in `/v1/models`, auto-ping catches a reset missed between ticks, model picker derives no-auth providers from the whole registry |
+
+### Behaviour gaps the port exposed
+
+These were real defects in the fork, not missing test files:
+
+- **`sensenova-6.8-flash-lite` had no capability entry**, so it resolved to `DEFAULT_CAPABILITIES`
+  (200k/64k) instead of the catalogue's 1M/128k. Upstream carries an exact-id row.
+- **The CommandCode resolver pre-filled the static catalogue itself**, so `directResolver` never saw
+  an empty list and never attached the "falling back to static catalog" warning.
+- **`validate-credential` did not normalize the provider id**, so `Fal.ai` fell through to
+  "Provider validation not supported"; its media probe also answered a best-effort `{valid:true}`
+  without sending a request, which reported a wrong key as valid; and a throwing probe escaped as a
+  500 instead of `{valid:false, error}`.
+- **`proxyFetch` collapsed every proxy failure into one message**, so a `strictProxy` caller could
+  not tell a refused proxy from a network error.
+
+### Deviations, deliberate
+
+- **Gemini 4 Argon pricing.** Upstream's `gemini-4-*` pattern rate applies to Argon; this fork pins
+  the tiered Argon ids to their own intro rate (`cache_creation: 2.0`) in
+  `packages/pricing/src/modelPricingB.ts`, and `gemini-4-argon-antigravity.test.ts` asserts that
+  entry. The exact entry wins over the pattern, so the ported test keeps the shared
+  input/output/cached/reasoning figures and expects the local `cache_creation`.
+- **`grok-web` is not part of this range** and was not created: it exists in neither `v0.5.116` nor
+  `54a88d04`.
+- **`~/.9router` config, credentials and tokens were not touched.** No new outbound host was
+  introduced beyond the provider endpoints upstream already targets (SenseNova Intl, ClinePass
+  usage-limits, CommandCode catalogue, fal validation).
+
+### Verification
+
+`bun run typecheck` clean (web + api). Full suite: 744 files, 8581 passed, 1 skipped, 0 failed —
++134 tests over the pre-port tree, all of them ports of the upstream suites added in this range
+(`clinepass-usage`, `muse-json-cookies`, `nvidia-params`, `opencode-overload-retry`,
+`passthrough-done-sentinel`, `proxy-pool-selection`, `qoder-model-catalog`, `fal-provider-validation`,
+`sensenova-intl-provider`, `v1-models-thinking-levels`, …). Two consecutive full runs, both clean.
+
+Two things the run taught:
+
+- **`testTimeout` is now 20 s, and the reason is module loading, not network.** Three route suites
+  (`protocol-messages-route`, `protocol-responses-route`, `provider-test-models-routing`) import a
+  Next handler that builds the whole `apps/api` graph; under 60-way parallelism that cold import
+  overshot the 5 s default and reported as a timeout while passing in under a second in isolation.
+  Raising the budget is honest because every test that reaches a provider stubs `fetch`; a real
+  upstream wait would still fail.
+- **`tests/__baseline__` and `capability-resolution-pinned` snapshots stay hand-edited.** Adding an
+  upstream capability row necessarily changes the pinned snapshot; `-u` still prunes the stale
+  duplicate exports in `tests/__baseline__` and turns a one-line change into a 1900-line diff.
