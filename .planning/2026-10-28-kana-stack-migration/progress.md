@@ -3217,3 +3217,47 @@ Two things the run taught:
 - **`tests/__baseline__` and `capability-resolution-pinned` snapshots stay hand-edited.** Adding an
   upstream capability row necessarily changes the pinned snapshot; `-u` still prunes the stale
   duplicate exports in `tests/__baseline__` and turns a one-line change into a 1900-line diff.
+
+---
+
+## Quota-aware rotation: skip an account the panel already shows at 0%
+
+Reported: an Antigravity account whose usage panel read `Gemini (Weekly) 0% · 1,000 / 1,000 · in
+6d 2h 20m` kept receiving requests. The dashboard knew, the request path did not — selection only
+learned about exhaustion from the account's own 409/429, so every rotation attempt began by
+spending a request on an account that could not serve it. The same held for every other provider
+that reports quota (codebuddy, claude, codex, kimi, zed, …).
+
+### What was added
+
+- `apps/web/open-sse/services/quotaExhaustion.ts` — the rule, shared by everything: a window at
+  0% whose reset is still ahead parks its connection until that reset. Two subtleties are pinned
+  in `tests/unit/quota-exhaustion-window.test.ts`:
+  - a row that **names a model** blocks only that model (`weekly Claude Sonnet 5 (7d)` must not
+    park `claude-opus-5-5`), while a row that names only the **family and a window**
+    (`Gemini (Weekly)`) blocks the family's shared pool. A row with any other discriminator
+    (`gemini_argon_weekly`) names a pool of its own and is left to the provider's mapping —
+    otherwise the Argon bucket would park plain Gemini.
+  - a `0%` row with **no reset time** blocks nothing: without a refill moment the reading is not
+    actionable, and parking on it would strand the account indefinitely.
+- `apps/web/src/sse/services/quotaPreflight.ts` — reads the same quota endpoint the panel reads
+  and hands the answer to the cache. Cold connections are **awaited** (selection is blind without
+  them); warm ones refresh in the background, one read per connection per 5 minutes, in-flight
+  de-duplicated, 2.5 s cap, every failure fail-open.
+- `auth.ts` — `ensureQuotaObservations()` before the eligibility filter, then the block check
+  beside the Antigravity one. When every account is parked, `retryAfter` now names the **soonest**
+  refill among the parked accounts, so the client is told when the provider will work again.
+- The reading reaches the cache from four places, so it is warm before the next request: the
+  pre-flight read, the usage panel route (`/api/usage/[connectionId]`, which primes from exactly
+  what the operator just saw), the Antigravity 429 path, and the auto-ping tick.
+- Antigravity keeps its family-aware cache (`sse/services/antigravityQuota.ts`, which maps
+  `gemini_weekly` → Gemini models, `claude_gpt_*` → Claude/GPT, Argon to its own pool); the
+  pre-flight read primes both caches from one HTTP call.
+
+### Verification
+
+`bun run typecheck` clean, `bun run lint` 0 violations, full suite 747 files / 8,614 tests green.
+New suites: `quota-exhaustion-window` (20), `quota-skip-selection` (5, including the reported
+Antigravity case and a codebuddy 5h case), `quota-preflight` (8). `antigravity-quota-routing` and
+`antigravity-weekly-quota` still pass unchanged, which is what proves the generic rule did not
+over-block the Argon pool.
