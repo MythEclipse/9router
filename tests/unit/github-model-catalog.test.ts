@@ -19,7 +19,6 @@ describe("GitHub Copilot fallback catalog", () => {
 		"gpt-6-sol",
 		"gpt-6.1-sol",
 		"claude-fable-5",
-		"claude-fable-5.1",
 		"claude-haiku-5.5",
 		"claude-opus-4.8",
 		"claude-opus-4.8-fast",

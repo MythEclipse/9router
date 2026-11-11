@@ -85,6 +85,14 @@ export default defineConfig({
 		],
 		// Allow many it.concurrent cases (real provider smoke runs ~50 providers in parallel)
 		maxConcurrency: 60,
+		// Route tests import a Next.js handler, which builds the whole `apps/api`
+		// use-case graph on first load. Under full-suite parallelism that cold
+		// import regularly overshoots the 5 s default and reports as a test
+		// timeout even though the assertion itself is instant (the same file
+		// passes in isolation in well under a second). The budget is for module
+		// loading, not for upstream waits: every test that talks to a provider
+		// stubs `fetch`.
+		testTimeout: 20000,
 		// Suppress noisy console output from handlers under test
 		silent: false,
 		// Point DATA_DIR at a throwaway temp dir before any module reads it, so the

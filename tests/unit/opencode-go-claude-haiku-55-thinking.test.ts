@@ -22,8 +22,10 @@ describe("opencode-go claude-haiku-5-5 thinking shape", () => {
 		expect(getCapabilitiesForModel("opencode-go", "claude-haiku-5-5").thinkingFormat).toBe(
 			"claude-adaptive",
 		)
+		// Haiku 5.5 is adaptive-only on the Claude API too; the 4.x ids are the ones
+		// that still take the extended-thinking budget shape.
 		expect(getCapabilitiesForModel(undefined, "claude-haiku-5-5").thinkingFormat).toBe(
-			"claude-budget",
+			"claude-adaptive",
 		)
 	})
 
@@ -35,12 +37,11 @@ describe("opencode-go claude-haiku-5-5 thinking shape", () => {
 		expect(body.output_config?.effort).toBeTruthy()
 	})
 
-	it("other providers keep the budget shape for the same model id", () => {
-		// Regression guard: the override must not leak past opencode-go.
+	it("the 5.x line keeps the adaptive shape on every provider", () => {
 		const body = applyThinking("claude", "claude-haiku-5-5", claudeWireBody(), "claude")
 
-		expect(body.thinking?.type).toBe("enabled")
-		expect(body.thinking?.budget_tokens).toBeGreaterThan(0)
-		expect(body.output_config).toBeUndefined()
+		expect(body.thinking?.type).toBe("adaptive")
+		expect(body.thinking).not.toHaveProperty("budget_tokens")
+		expect(body.output_config?.effort).toBeTruthy()
 	})
 })

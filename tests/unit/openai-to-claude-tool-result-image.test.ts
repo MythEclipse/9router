@@ -27,6 +27,9 @@ describe("OpenAI image content in Claude tool results", () => {
 					{
 						type: "tool_result",
 						tool_use_id: "call-1",
+						// Zed's Anthropic wire types require a non-optional bool, so it is
+						// always emitted (Anthropic itself treats it as optional).
+						is_error: false,
 						content: [
 							{ type: "text", text: "screenshot" },
 							{ type: "image", source: { type: "base64", media_type: "image/png", data: "aGVsbG8=" } },

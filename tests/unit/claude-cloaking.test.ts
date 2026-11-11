@@ -14,9 +14,9 @@ import {
 	decloakStreamChunk,
 } from "../../apps/web/open-sse/utils/claudeCloaking.js"
 
-it("advertises a Claude Code version accepted by Fable 5.1", () => {
+it("advertises a Claude Code version accepted by Fable 5.2", () => {
 	const body = applyCloaking({ messages: [] }, "sk-ant-oat-test", "session-id")
-	expect(body.system[0].text).toMatch(/^x-anthropic-billing-header: cc_version=2.1.280\./)
+	expect(body.system[0].text).toMatch(/^x-anthropic-billing-header: cc_version=2.1.322\./)
 })
 
 describe("cloakClaudeTools", () => {
