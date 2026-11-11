@@ -57,6 +57,20 @@ export function staticPlan(
 				request: { url: "https://api.openai.com/v1/models", headers: bearer(apiKey) },
 				verdict: (r) => r.ok,
 			}
+		case "fal":
+		case "fal-ai":
+			return {
+				request: {
+					url: "https://api.fal.ai/v1/models?limit=1",
+					headers: { Authorization: `Key ${apiKey}` },
+					timeoutMs: 8000,
+				},
+				verdict: (r) => {
+					if (r.ok) return true
+					if (r.status === 401 || r.status === 403) return false
+					return `Unable to verify API key (Fal returned ${r.status})`
+				},
+			}
 		case "vercel-ai-gateway":
 			return {
 				request: { url: "https://ai-gateway.vercel.sh/v1/models", headers: bearer(apiKey) },

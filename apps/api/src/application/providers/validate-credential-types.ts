@@ -61,6 +61,12 @@ export interface ValidateCredentialDependencies {
 	readonly providerConfig: (provider: string) => RegistryEntry | undefined
 	/** The provider's AI entry: noAuth, service kinds, apiKeyOptionalWith, credentialForm, probe configs. */
 	readonly aiProvider: (provider: string) => AiProviderEntry | undefined
+	/**
+	 * Canonical provider id. The dashboard may post the display name ("Fal.ai") or
+	 * an alias, and every plan here is keyed by id, so it is resolved once up front.
+	 * Optional: a caller that already holds an id can leave it out.
+	 */
+	readonly normalizeProviderId?: (provider: string) => string
 	readonly isOpenAICompatible: (provider: string) => boolean
 	readonly isAnthropicCompatible: (provider: string) => boolean
 	readonly isCustomEmbedding: (provider: string) => boolean
@@ -130,7 +136,7 @@ export interface ProbeConfig {
 /** One provider's probe, as a value rather than a branch. */
 export interface ProbePlan {
 	readonly request: ProbeRequest
-	readonly verdict: (response: ProbeResponse) => boolean
+	readonly verdict: (response: ProbeResponse) => boolean | string
 	readonly errorMessage?: string
 }
 

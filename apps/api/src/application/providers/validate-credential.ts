@@ -40,6 +40,7 @@ export function makeValidateCredential(dependencies: ValidateCredentialDependenc
 		defaultModel,
 		providerConfig,
 		aiProvider,
+		normalizeProviderId,
 		isOpenAICompatible,
 		isAnthropicCompatible,
 		isCustomEmbedding,
@@ -195,7 +196,8 @@ export function makeValidateCredential(dependencies: ValidateCredentialDependenc
 			readonly apiKey?: unknown
 			readonly providerSpecificData?: unknown
 		}): Promise<ValidationResult> {
-			const provider = String(input.provider ?? "").trim()
+			const requested = String(input.provider ?? "").trim()
+			const provider = normalizeProviderId ? normalizeProviderId(requested) : requested
 			const apiKey = typeof input.apiKey === "string" ? input.apiKey : ""
 			const providerSpecificData =
 				input.providerSpecificData && typeof input.providerSpecificData === "object"
@@ -232,6 +234,20 @@ export function makeValidateCredential(dependencies: ValidateCredentialDependenc
 				}
 			}
 
+			const planHost = {
+				providerConfig,
+				aiProvider,
+				defaultModel,
+				commandCodeBody,
+				commandCodeHeaders,
+				ollamaLocalHost,
+				tokenplanBaseUrl,
+			}
+			// A provider with a plan of its own answers through it when its media
+			// config names no auth scheme this path can replay (Fal's queue base URL),
+			// instead of the best-effort "valid" that never looks at the key.
+			const ownPlan = staticPlan(planHost, provider, apiKey)
+
 			const webProbe = await probeConfigDriven(
 				{ send, aiProvider, defaultModel },
 				provider,
@@ -240,7 +256,7 @@ export function makeValidateCredential(dependencies: ValidateCredentialDependenc
 			)
 			if (webProbe) return webProbe
 			const mediaProbe = await probeConfigDriven(
-				{ send, aiProvider, defaultModel },
+				{ send, aiProvider, defaultModel, ownPlan: ownPlan !== null },
 				provider,
 				apiKey,
 				"media",
@@ -251,39 +267,29 @@ export function makeValidateCredential(dependencies: ValidateCredentialDependenc
 			// answers during planning) or a plan; a plan is the only shape with
 			// `request`, so the field decides which.
 			const earlyPlan = early && "request" in early ? early : null
-			const plan =
-				earlyPlan ??
-				staticPlan(
-					{
-						providerConfig,
-						aiProvider,
-						defaultModel,
-						commandCodeBody,
-						commandCodeHeaders,
-						ollamaLocalHost,
-						tokenplanBaseUrl,
-					},
-					provider,
-					apiKey,
-				) ??
-				genericPlan(
-					{
-						providerConfig,
-						aiProvider,
-						defaultModel,
-						commandCodeBody,
-						commandCodeHeaders,
-						ollamaLocalHost,
-						tokenplanBaseUrl,
-					},
-					provider,
-					apiKey,
-				)
+			const plan = earlyPlan ?? ownPlan ?? genericPlan(planHost, provider, apiKey)
 			if (!plan) throw invalid("Provider validation not supported")
 
-			const response = await send(plan.request)
-			const valid = plan.verdict(response)
-			return { valid, error: valid ? null : (plan.errorMessage ?? refusalMessage(provider)) }
+			let response: ProbeResponse
+			try {
+				response = await send(plan.request)
+			} catch (error) {
+				// A network failure says nothing about the key, and the operator needs to
+				// know that rather than read "unsupported validation" (or a bare 500 from
+				// the route): the message is the only actionable detail there is.
+				return {
+					valid: false,
+					error: error instanceof Error && error.message ? error.message : "Invalid API key",
+				}
+			}
+			const verdictResult = plan.verdict(response)
+			const valid = typeof verdictResult === "boolean" ? verdictResult : false
+			const error = valid
+				? null
+				: typeof verdictResult === "string"
+					? verdictResult
+					: (plan.errorMessage ?? refusalMessage(provider))
+			return { valid, error }
 		},
 	}
 }

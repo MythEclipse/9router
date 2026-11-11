@@ -21,6 +21,8 @@ export interface ProbeConfigHost {
 	) => Promise<{ readonly status: number; readonly ok: boolean; readonly text?: string }>
 	readonly aiProvider: (provider: string) => AiProviderEntry | undefined
 	readonly defaultModel: (provider: string) => string
+	/** The provider has a plan of its own, which decides when its config cannot probe. */
+	readonly ownPlan?: boolean
 }
 
 /**
@@ -70,7 +72,10 @@ export async function probeConfigDriven(
 	const request = authRequest(host, provider, cfg, apiKey, "media")
 	// A scheme needing data this endpoint does not carry cannot be probed; saying
 	// so beats falling through to "not supported", which reads as a dashboard bug.
-	if (!request) return { valid: true, error: null }
+	// The exception is a provider with a plan of its own (Fal's model catalogue):
+	// the best-effort "valid" here never looks at the key, so it would report a
+	// wrong one as fine and the plan would never run.
+	if (!request) return host.ownPlan ? null : { valid: true, error: null }
 	const response = await send(request)
 	const valid = mediaProbeVerdict(response.status)
 	return { valid, error: valid ? null : refusalMessage(provider) }

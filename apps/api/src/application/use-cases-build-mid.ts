@@ -291,6 +291,7 @@ export function buildMidUseCases(deps: Dependencies) {
 			defaultModel: deps.defaultModelOf,
 			providerConfig: deps.providerEntry,
 			aiProvider: deps.aiProviderEntry,
+			normalizeProviderId: (provider) => deps.normalizeProviderId(provider),
 			isOpenAICompatible: (provider) => deps.providerCatalogue.isOpenAICompatible(provider),
 			isAnthropicCompatible: (provider) => deps.providerCatalogue.isAnthropicCompatible(provider),
 			isCustomEmbedding: (provider) => deps.providerCatalogue.isCustomEmbedding(provider),
