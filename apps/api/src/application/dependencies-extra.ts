@@ -172,6 +172,8 @@ export interface DependenciesExtra {
 		readonly apiKey: string
 		readonly sessionId?: string
 	}) => Record<string, string>
+	/** The header set a DeepAI Code probe must send: Api-Key plus lane and device. */
+	readonly deepaiCodeHeaders: (input: { readonly apiKey: string }) => Record<string, string>
 	/** The interactive web-login flow, backed by the browser driver. */
 	readonly webLogin: Omit<
 		import("./providers/web-login.ts").WebLoginDependencies,

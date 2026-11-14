@@ -51,6 +51,7 @@ export function makeValidateCredential(dependencies: ValidateCredentialDependenc
 		tokenplanBaseUrl,
 		commandCodeBody,
 		commandCodeHeaders,
+		deepaiCodeHeaders,
 		randomId,
 	} = dependencies
 
@@ -240,6 +241,7 @@ export function makeValidateCredential(dependencies: ValidateCredentialDependenc
 				defaultModel,
 				commandCodeBody,
 				commandCodeHeaders,
+				deepaiCodeHeaders,
 				ollamaLocalHost,
 				tokenplanBaseUrl,
 			}

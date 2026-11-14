@@ -11,6 +11,7 @@ import {
 } from "../providers/shared.ts"
 import { resolveOpenAICompatibleApiType } from "../services/provider.ts"
 import { buildClineHeaders } from "../shared/clineAuth.ts"
+import { buildDeepAiCodeHeaders, ensureDeepAiCodeShape } from "../shared/deepaiCode.ts"
 import { stripUnsupportedParams } from "../translator/concerns/paramSupport.ts"
 import { extractClaudeSessionIdFromUserId } from "../utils/claudeCloaking.ts"
 import { proxyAwareFetch } from "../utils/proxyFetch.ts"
@@ -71,6 +72,11 @@ const HEADER_HOOKS = {
 	},
 	// Stable device_id from OAuth connection (CLIProxyAPI KimiTokenStorage.DeviceID)
 	kimiHeaders: (h, c) => Object.assign(h, buildKimiHeaders(c?.providerSpecificData?.deviceId)),
+	// DeepAI Code: the key rides Api-Key (applied by auth), and every call also
+	// names a billing lane plus a device fingerprint - upstream answers 426
+	// lane_version_unsupported without the lane, and allocates the free daily
+	// allowance from the machine hash.
+	deepaiCodeHeaders: (h, c) => Object.assign(h, buildDeepAiCodeHeaders(c?.apiKey || c?.accessToken)),
 	// Muse: x-api-version only on subscription (minted key) requests - plain
 	// MiniMax Code (mcode): the placeholder x-api-key rides every request next
 	// to the Bearer token, plus per-request session/timezone headers. Static
@@ -133,6 +139,13 @@ export class DefaultExecutor extends BaseExecutor {
 			// quirk: some openai-compatible providers reject Anthropic's client_metadata field
 			if (this.config.quirks?.dropClientMetadata) {
 				delete transformed.client_metadata
+			}
+			// DeepAI Code validates the request shape itself: a chat body without a
+			// leading system turn, or a /responses body without instructions, is
+			// answered 400 "This request is not one DeepAI Code sends."
+			if (this.config.quirks?.deepaiCodeShape) {
+				const shaped = ensureDeepAiCodeShape(transformed)
+				if (shaped !== transformed) transformed = shaped
 			}
 			stripUnsupportedParams(this.provider, model, transformed)
 		}

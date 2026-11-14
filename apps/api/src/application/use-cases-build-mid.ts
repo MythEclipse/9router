@@ -302,6 +302,7 @@ export function buildMidUseCases(deps: Dependencies) {
 			tokenplanBaseUrl: deps.tokenplanBaseUrl,
 			commandCodeBody: deps.commandCodeBody,
 			commandCodeHeaders: deps.commandCodeHeaders,
+			deepaiCodeHeaders: deps.deepaiCodeHeaders,
 			randomId: () => deps.randomId(),
 		}),
 		webLogin: makeWebLogin({

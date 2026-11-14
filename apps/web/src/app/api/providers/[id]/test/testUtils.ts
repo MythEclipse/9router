@@ -19,6 +19,7 @@ import {
 	refreshProviderCredentials,
 	shouldRefreshCredentials,
 } from "open-sse/services/oauthCredentialManager"
+import { buildDeepAiCodeHeaders } from "open-sse/shared/deepaiCode"
 import { pingModelByKind } from "@/app/api/models/test/ping"
 import { getProviderConnectionById, updateProviderConnection } from "@/lib/localDb"
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy"
@@ -683,6 +684,26 @@ async function testApiKeyConnection(connection, effectiveProxy = null) {
 						: res.status === 401 || res.status === 403
 							? "Invalid API key"
 							: `Command Code API error (${res.status})`,
+				}
+			}
+			case "deepai-code": {
+				// The key rides Api-Key and /models answers 426 without a billing lane,
+				// so the default bearer probe would mark every valid key as broken.
+				const res = await fetchWithConnectionProxy(
+					"https://api.deepai.org/deepai_code/models",
+					{
+						headers: { ...buildDeepAiCodeHeaders(connection.apiKey), Accept: "application/json" },
+					},
+					effectiveProxy,
+				)
+				const valid = res.status !== 401 && res.status !== 403 && res.status !== 426
+				return {
+					valid,
+					error: valid
+						? null
+						: res.status === 426
+							? "DeepAI Code rejected this lane version. Update 9router."
+							: "Invalid API key",
 				}
 			}
 			case "cloudflare-ai": {

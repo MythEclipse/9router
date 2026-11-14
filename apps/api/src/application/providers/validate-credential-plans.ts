@@ -24,6 +24,8 @@ export interface ProbePlanHost {
 		readonly apiKey: string
 		readonly sessionId?: string
 	}) => Record<string, string>
+	/** The header set a DeepAI Code probe must send: Api-Key plus lane and device. */
+	readonly deepaiCodeHeaders: (input: { readonly apiKey: string }) => Record<string, string>
 	readonly ollamaLocalHost: (input: { providerSpecificData?: Record<string, unknown> }) => string
 	readonly tokenplanBaseUrl: (input: { providerSpecificData?: Record<string, unknown> }) => string
 }
@@ -45,6 +47,7 @@ export function staticPlan(
 		defaultModel,
 		commandCodeBody,
 		commandCodeHeaders,
+		deepaiCodeHeaders,
 		ollamaLocalHost,
 		tokenplanBaseUrl,
 	} = host
@@ -187,6 +190,26 @@ export function staticPlan(
 				verdict: (r) => r.ok,
 				errorMessage:
 					"Invalid token - copy userToken from chat.deepseek.com DevTools -> Application -> Local Storage/Cookies",
+			}
+		case "deepai-code":
+			// The key rides Api-Key, and /models answers 426 unless the call also
+			// names a billing lane, so a bare bearer probe would report every valid
+			// key as broken. 401 auth_required is the only "wrong key" verdict; 426
+			// means this 9router is older than the lane upstream now serves.
+			return {
+				request: {
+					url: "https://api.deepai.org/deepai_code/models",
+					method: "GET",
+					headers: {
+						...json,
+						...deepaiCodeHeaders({ apiKey }),
+					},
+				},
+				verdict: (r) => {
+					if (r.status === 426) return "DeepAI Code rejected this lane version. Update 9router."
+					return r.status !== 401 && r.status !== 403
+				},
+				errorMessage: refusalMessage(provider),
 			}
 		case "gemini-web":
 			return {

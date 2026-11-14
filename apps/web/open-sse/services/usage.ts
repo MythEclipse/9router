@@ -21,6 +21,7 @@ import { getCodeBuddyCnUsage, getCodeBuddyIntlUsage } from "./usage/codebuddy-cn
 import { getCommandCodeUsage } from "./usage/commandcode.ts"
 import { getCursorUsage } from "./usage/cursor.ts"
 import { getCustomCreditsUsage, isCustomQuotaProvider } from "./usage/customCredits.ts"
+import { getDeepAiCodeUsage } from "./usage/deepai-code.ts"
 import { getDeepseekUsage } from "./usage/deepseek.ts"
 import { getGlmUsage } from "./usage/glm.ts"
 import { getGrokCliUsage } from "./usage/grok-cli.ts"
@@ -96,6 +97,7 @@ const USAGE_HANDLERS: Record<string, (c: UsageHandlerContext) => Promise<Provide
 	"opencode-go": (c) => getOpenCodeGoUsage(c.apiKey, c.proxyOptions),
 	"opencode-zen": (c) => getOpenCodeZenUsage(c.apiKey, c.proxyOptions),
 	deepseek: (c) => getDeepseekUsage(c.apiKey, c.proxyOptions),
+	"deepai-code": (c) => getDeepAiCodeUsage(c.apiKey || c.accessToken, c.proxyOptions),
 	groq: (c) => getGroqUsage(c.apiKey, c.proxyOptions),
 	zed: (c) => getZedUsage(c.accessToken, c.providerSpecificData, c.proxyOptions),
 	"xiaomi-mimo": (c) => getXiaomiMimoUsage(c.accessToken, c.providerSpecificData, c.proxyOptions),

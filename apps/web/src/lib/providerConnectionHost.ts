@@ -42,6 +42,7 @@ import {
 } from "open-sse/services/webLogin"
 import { getWebLoginConfig, listWebLoginProviders } from "open-sse/services/webLoginConfig"
 import { buildCommandCodeHeaders } from "open-sse/shared/commandCodeHeaders"
+import { buildDeepAiCodeHeaders } from "open-sse/shared/deepaiCode"
 import { openaiToCommandCodeRequest } from "open-sse/translator/request/openai-to-commandcode"
 import { fetch as undiciFetch } from "undici"
 import { pingModelByKind, WEB_COOKIE_PROVIDERS } from "@/app/api/models/test/ping"
@@ -413,6 +414,9 @@ export const commandCodeBody = (model: string) =>
  */
 export const commandCodeHeaders = (input: { apiKey: string; sessionId?: string }) =>
 	buildCommandCodeHeaders(input)
+
+/** The header set a DeepAI Code probe must send: Api-Key plus lane and device. */
+export const deepaiCodeHeaders = (input: { apiKey: string }) => buildDeepAiCodeHeaders(input.apiKey)
 
 /**
  * The interactive web-login flow.

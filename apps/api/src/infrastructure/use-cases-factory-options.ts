@@ -248,6 +248,7 @@ export interface UseCaseOptions {
 	readonly tokenplanBaseUrl?: ValidateDependencies["tokenplanBaseUrl"]
 	readonly commandCodeBody?: ValidateDependencies["commandCodeBody"]
 	readonly commandCodeHeaders?: ValidateDependencies["commandCodeHeaders"]
+	readonly deepaiCodeHeaders?: ValidateDependencies["deepaiCodeHeaders"]
 	/** The interactive web-login flow, backed by the browser driver. */
 	readonly webLogin?: Omit<WebLoginDependencies, "connections" | "providerLabel">
 	/** The free/oauth/apikey/compatible questions a batch test groups by. */

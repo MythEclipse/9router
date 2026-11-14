@@ -93,6 +93,8 @@ export interface ValidateCredentialDependencies {
 		readonly apiKey: string
 		readonly sessionId?: string
 	}) => Record<string, string>
+	/** The header set a DeepAI Code probe must send: Api-Key plus lane and device. */
+	readonly deepaiCodeHeaders: (input: { readonly apiKey: string }) => Record<string, string>
 	readonly randomId: () => string
 }
 

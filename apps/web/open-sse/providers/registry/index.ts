@@ -39,6 +39,7 @@ import p35 from "./commandcode.ts"
 import p36 from "./coqui.ts"
 import p37 from "./cursor.ts"
 import p38 from "./dahl.ts"
+import p147 from "./deepai-code.ts"
 import p39 from "./deepgram.ts"
 import p40 from "./deepseek.ts"
 import p41 from "./deepseek-web.ts"
@@ -189,6 +190,7 @@ export default [
 	p37,
 	p38,
 	p39,
+	p147,
 	p40,
 	p41,
 	p42,

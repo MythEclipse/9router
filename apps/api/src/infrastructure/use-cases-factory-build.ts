@@ -247,6 +247,7 @@ export function buildTailDeps(options: UseCaseOptions, ctx: TailCtx) {
 		tokenplanBaseUrl: options.tokenplanBaseUrl ?? (() => ""),
 		commandCodeBody: options.commandCodeBody ?? (() => ({})),
 		commandCodeHeaders: options.commandCodeHeaders ?? (() => ({})),
+		deepaiCodeHeaders: options.deepaiCodeHeaders ?? (() => ({})),
 		webLogin: options.webLogin ?? unavailableWebLogin(),
 		batchClassifiers: options.batchClassifiers ?? ungroupableProviders(),
 		clientListingRegistry: options.clientListingRegistry ?? unlistableProviders(),

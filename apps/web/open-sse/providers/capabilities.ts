@@ -1386,6 +1386,139 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, Partial<ModelC
 			maxOutput: 131072,
 		},
 	},
+	// DeepAI Code: limits, input modalities and reasoning flags come from the live
+	// /deepai_code/models catalogue (27 models, verified with a real key). Its
+	// OpenAI-shaped lane takes reasoning_effort, not a vendor thinking object, so
+	// thinkingFormat is pinned to openai; without that a reasoning turn would be
+	// sent zai/deepseek-shaped fields the endpoint rejects. maxOutput is
+	// deliberately absent: the catalogue's maxTokens is the model's own cap and
+	// guessing a lower number here would truncate real responses.
+	"deepai-code": {
+		"glm-5.3-flash": {
+			vision: true,
+			reasoning: true,
+			thinkingFormat: "openai",
+			contextWindow: 1048576,
+		},
+		"deepseek-v4.1-flash": {
+			vision: true,
+			reasoning: true,
+			thinkingFormat: "openai",
+			contextWindow: 1048576,
+		},
+		"mimo-2.6-flash": {
+			vision: true,
+			reasoning: true,
+			thinkingFormat: "openai",
+			contextWindow: 1048576,
+		},
+		"mimo-2.6-pro": {
+			vision: true,
+			reasoning: true,
+			thinkingFormat: "openai",
+			contextWindow: 1048576,
+		},
+		"qwen-3.8-flash": {
+			vision: true,
+			reasoning: true,
+			thinkingFormat: "openai",
+			contextWindow: 991000,
+		},
+		"minimax-m3.1-flash": {
+			vision: true,
+			reasoning: true,
+			thinkingFormat: "openai",
+			contextWindow: 1048576,
+		},
+		"muse-ember": { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 1048576 },
+		"gpt-6-luna": { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 1048576 },
+		"solar-mini-4": { reasoning: true, thinkingFormat: "openai", contextWindow: 524288 },
+		"glyph-cluster": { reasoning: true, thinkingFormat: "openai", contextWindow: 256000 },
+		"deepai-cyber": { reasoning: true, thinkingFormat: "openai", contextWindow: 1048576 },
+		"minimax-m3": { reasoning: true, thinkingFormat: "openai", contextWindow: 512000 },
+		"glm-5.3": { reasoning: true, thinkingFormat: "openai", contextWindow: 1048576 },
+		"kimi-k3": { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 1048576 },
+		"kimi-k3.1-pro": {
+			vision: true,
+			reasoning: true,
+			thinkingFormat: "openai",
+			contextWindow: 1000000,
+		},
+		"gpt-6.1-terra": {
+			vision: true,
+			reasoning: true,
+			thinkingFormat: "openai",
+			contextWindow: 1048576,
+		},
+		"muse-spark-1.3": {
+			vision: true,
+			reasoning: true,
+			thinkingFormat: "openai",
+			contextWindow: 1048576,
+		},
+		"gemini-4-hydrogen": {
+			vision: true,
+			reasoning: true,
+			thinkingFormat: "openai",
+			contextWindow: 1000000,
+		},
+		"gpt-6.1-sol": {
+			vision: true,
+			reasoning: true,
+			thinkingFormat: "openai",
+			contextWindow: 1048576,
+		},
+		"gemini-4-argon": {
+			vision: true,
+			reasoning: true,
+			thinkingFormat: "openai",
+			contextWindow: 1048576,
+		},
+		"gemini-4-carbon": {
+			vision: true,
+			reasoning: true,
+			thinkingFormat: "openai",
+			contextWindow: 1000000,
+		},
+		"claude-sonnet-5-5": {
+			vision: true,
+			reasoning: true,
+			thinkingFormat: "openai",
+			contextWindow: 1000000,
+		},
+		"claude-opus-5-5": {
+			vision: true,
+			reasoning: true,
+			thinkingFormat: "openai",
+			contextWindow: 1000000,
+		},
+		"muse-wonder": {
+			vision: true,
+			reasoning: true,
+			thinkingFormat: "openai",
+			contextWindow: 1048576,
+		},
+		"qwen-3.8-max-prime": {
+			vision: true,
+			reasoning: true,
+			thinkingFormat: "openai",
+			contextWindow: 1000000,
+		},
+		"claude-fable-5-2": {
+			vision: true,
+			reasoning: true,
+			thinkingFormat: "openai",
+			contextWindow: 1000000,
+		},
+		// gpt-6-astra answers only on the Responses lane, which nests effort under
+		// reasoning:{effort} and rejects a top-level reasoning_effort.
+		"gpt-6-astra": {
+			vision: true,
+			reasoning: true,
+			thinkingFormat: "openai-responses",
+			contextWindow: 1048576,
+		},
+	},
 }
 
 // Qoder CN serves the identical model catalog from the CN gateway, so it shares
