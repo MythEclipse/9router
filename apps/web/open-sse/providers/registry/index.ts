@@ -123,7 +123,6 @@ import p146 from "./sensenova-intl.ts"
 import p115 from "./serper.ts"
 import p116 from "./siliconflow.ts"
 import p117 from "./stability-ai.ts"
-import p148 from "./systemone.ts"
 import p118 from "./tavily.ts"
 import p119 from "./tencent.ts"
 import p120 from "./tinyfish.ts"
@@ -299,5 +298,4 @@ export default [
 	p144,
 	p145,
 	p146,
-	p148,
 ] as RegistryEntry[]

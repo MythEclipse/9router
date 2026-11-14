@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { PROVIDER_MODELS } from "../../apps/web/open-sse/config/providerModels.js"
 import { pickDecisionReviewTarget } from "../../apps/web/open-sse/handlers/safeguardsReview.js"
 import {
 	buildSystemoneAuthHeaders,
@@ -12,16 +13,17 @@ import REGISTRY from "../../apps/web/open-sse/providers/registry/index.js"
 import { getProvidersByKind } from "../../apps/web/src/shared/constants/providers.js"
 
 const GOOGLE_URL = "https://generativelanguage.googleapis.com/v1beta/decisions"
-const cfg = PROVIDER_MEDIA.systemone?.systemoneConfig
+const cfg = PROVIDER_MEDIA.gemini?.systemoneConfig
 
-describe("System One (Google) provider", () => {
-	const entry = REGISTRY.find((candidate) => candidate.id === "systemone")
+describe("Gemini System One (decisions) lane", () => {
+	const entry = REGISTRY.find((candidate) => candidate.id === "gemini")
 
-	it("is registered as a System One apikey provider", () => {
+	it("rides on the gemini provider instead of a second credential", () => {
+		// The whole point: one Gemini connection serves chat, embeddings and decisions.
 		expect(entry).toBeDefined()
-		expect(entry.category).toBe("apikey")
-		expect(entry.authType).toBe("apikey")
-		expect(entry.serviceKinds).toEqual(["systemone"])
+		expect(entry.serviceKinds).toContain("systemone")
+		expect(entry.serviceKinds).toContain("llm")
+		expect(entry.serviceKinds).toContain("embedding")
 		expect(cfg?.baseUrl).toBe(GOOGLE_URL)
 		expect(cfg?.path).toBe("/v1beta/decisions")
 	})
@@ -32,24 +34,24 @@ describe("System One (Google) provider", () => {
 		expect(cfg?.stateField).toBe("input")
 	})
 
-	it("appears in getProvidersByKind('systemone')", () => {
-		const found = getProvidersByKind("systemone").find((provider) => provider.id === "systemone")
+	it("appears in getProvidersByKind('systemone') as gemini", () => {
+		const found = getProvidersByKind("systemone").find((provider) => provider.id === "gemini")
 		expect(found).toBeDefined()
-		expect(found.alias).toBe("systemone")
 		expect(found.systemoneConfig?.baseUrl).toBe(GOOGLE_URL)
 	})
 
-	it("lists gemini-decision-1 as a System One model", () => {
-		const kinds = Object.fromEntries(entry.models.map((model) => [model.id, model.kind]))
-		expect(kinds).toEqual({ "gemini-decision-1": "systemone" })
+	it("resolves gemini/gemini-decision-1 through the gemini model list", () => {
+		const decision = PROVIDER_MODELS.gemini.find((model) => model.id === "gemini-decision-1")
+		expect(decision).toBeDefined()
+		expect(decision.kind).toBe("systemone")
 	})
 
 	it("does not displace the existing safeguards reviewer", () => {
-		// pickDecisionReviewTarget prefers the lowest priority; a keyed lane must never
-		// take over reviews on installs that only configured the free lanes.
+		// pickDecisionReviewTarget prefers the lowest priority; attaching a keyed lane to a
+		// chat provider must not take over reviews from the free decision lanes.
 		const target = pickDecisionReviewTarget({}, null)
-		expect(target?.provider).not.toBe("systemone")
-		expect(entry.priority).toBeGreaterThan(60)
+		expect(target?.provider).not.toBe("gemini")
+		expect(entry.priority).toBeGreaterThan(30)
 	})
 
 	it.each([
@@ -105,7 +107,7 @@ describe("System One state field and auth helpers", () => {
 	})
 })
 
-describe("handleSystemoneCore for systemone", () => {
+describe("handleSystemoneCore for the gemini decisions lane", () => {
 	afterEach(() => vi.unstubAllGlobals())
 
 	// The lane forwards the JSON reply untouched, so the fixture is the protocol shape
@@ -139,14 +141,14 @@ describe("handleSystemoneCore for systemone", () => {
 
 	async function call(
 		body,
-		credentials = { apiKey: "google_test_key" },
+		credentials = { apiKey: "gemini_connection_key" },
 		model = "gemini-decision-1",
 	) {
 		const fetchMock = vi.fn(async () => new Response(JSON.stringify(upstreamReply), { status: 200 }))
 		vi.stubGlobal("fetch", fetchMock)
 		const result = await handleSystemoneCore({
 			body,
-			modelInfo: { provider: "systemone", model },
+			modelInfo: { provider: "gemini", model },
 			credentials,
 		})
 		const callArgs = fetchMock.mock.calls[0]
@@ -158,11 +160,12 @@ describe("handleSystemoneCore for systemone", () => {
 		}
 	}
 
-	it("posts to the decisions endpoint with x-goog-api-key and no Authorization", async () => {
+	it("posts to the decisions endpoint with the connection key in x-goog-api-key", async () => {
 		const r = await call({ state: "The blue mug arrived cracked.", questions })
 		expect(r.result.success).toBe(true)
 		expect(r.url).toBe(GOOGLE_URL)
-		expect(r.headers["x-goog-api-key"]).toBe("google_test_key")
+		// Same key as chat and embeddings: there is no second credential to enter.
+		expect(r.headers["x-goog-api-key"]).toBe("gemini_connection_key")
 		expect(r.headers.Authorization).toBeUndefined()
 		expect(r.headers["Content-Type"]).toBe("application/json")
 		expect(r.headers["x-opencode-session"]).toBeUndefined()
