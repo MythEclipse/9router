@@ -144,6 +144,7 @@ export type {
 	HourlySpendRow,
 	LatencySample,
 	LatencySampleQuery,
+	ServiceKind,
 } from "./repos/usageRepo.ts"
 // Usage
 export {
@@ -157,7 +158,10 @@ export {
 	getSparks,
 	getUsageHistory,
 	getUsageStats,
+	RECENT_REQUESTS_LIMIT,
+	SERVICE_KINDS,
 	saveRequestUsage,
+	serviceKindOf,
 	statsEmitter,
 	trackPendingRequest,
 } from "./repos/usageRepo.ts"

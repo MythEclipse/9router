@@ -33,6 +33,7 @@ import {
 	maskApiKey,
 	PERIOD_MS,
 	pendingRequests,
+	RECENT_REQUESTS_LIMIT,
 } from "./usageState.ts"
 import type { UsageCounter, UsageDay, UsageStats } from "./usageTypes.ts"
 
@@ -92,13 +93,17 @@ export async function getUsageStats(
 	// Read enough recent rows to account for filtered lifecycle/zero-usage entries.
 	// `meta` must come along: the `model` column holds the requested name (a combo
 	// survives there) and the real target rides in `meta.resolvedModel`, so a row
-	// mapped without it reports the combo as if it were a model.
+	// mapped without it reports the combo as if it were a model. `endpoint` comes
+	// along for the same reason: it is the only lane marker a usage row has.
 	const recentSql = filterApiKey
-		? `SELECT timestamp, provider, model, tokens, status, meta FROM usageHistory WHERE apiKey = ? ORDER BY id DESC LIMIT 100`
-		: `SELECT timestamp, provider, model, tokens, status, meta FROM usageHistory ORDER BY id DESC LIMIT 100`
+		? `SELECT timestamp, provider, model, endpoint, tokens, status, meta FROM usageHistory WHERE apiKey = ? ORDER BY id DESC LIMIT 150`
+		: `SELECT timestamp, provider, model, endpoint, tokens, status, meta FROM usageHistory ORDER BY id DESC LIMIT 150`
 	const recentParams = filterApiKey ? [filterApiKey] : []
 	const recentRows = db.all<DbRow>(recentSql, recentParams)
-	const recentRequests = mapRecentRequests(recentRows, { limit: 20, isModelAllowed: modelAllowed })
+	const recentRequests = mapRecentRequests(recentRows, {
+		limit: RECENT_REQUESTS_LIMIT,
+		isModelAllowed: modelAllowed,
+	})
 
 	const stats: UsageStats = {
 		totalRequests: 0,

@@ -58,6 +58,12 @@ module.exports = {
   forwardRef: (fn) => fn,
   memo: (fn) => fn,
   Fragment: Symbol("Fragment"),
+  // lucide-react builds every glyph with React.createElement at module load, so
+  // the icon registry cannot even be imported without it.
+  createElement: (type, props, ...children) => ({
+    type,
+    props: { ...(props || {}), children: children.length > 1 ? children : children[0] },
+  }),
   default: {},
   __esModule: true,
 };
@@ -113,7 +119,12 @@ const dynamic = () => {
   Component.__panel = panel;
   return Component;
 };
-module.exports = { __esModule: true, default: dynamic, dynamic };
+// esbuild emits a CJS require for an aliased module and then reads the
+// namespace's "default", so the export has to BE the function: exporting an
+// object with a "default" key leaves it pointing at that object instead.
+module.exports = dynamic;
+module.exports.default = dynamic;
+module.exports.__esModule = true;
 `,
 )
 
@@ -161,7 +172,7 @@ function loadComponent() {
 		"npx",
 		[
 			"esbuild",
-			path.join(here, "UsageStats.js"),
+			path.join(here, "UsageStats.tsx"),
 			"--bundle",
 			"--format=cjs",
 			"--platform=node",
@@ -210,19 +221,41 @@ const STATS = {
 	totalCompletionTokens: 500,
 	totalCost: 0.42,
 	activeRequests: [],
+	// One row per lane: the stream draws a box for each lane that has traffic, so
+	// the fixture has to carry more than a chat row for that to be visible here.
 	recentRequests: [
-		{ id: "r1", provider: "opencode", model: "m", timestamp: Date.now(), status: "ok" },
+		{ id: "r1", provider: "opencode", model: "m", timestamp: Date.now(), status: "ok", kind: "llm" },
+		{
+			id: "r2",
+			provider: "openai",
+			model: "text-embedding-3-small",
+			timestamp: Date.now(),
+			status: "success",
+			kind: "embedding",
+		},
+		{
+			id: "r3",
+			provider: "opencode",
+			model: "jev-1.13-free",
+			timestamp: Date.now(),
+			status: "success",
+			kind: "systemone",
+		},
 	],
 	errorProvider: "",
 	byProvider: [{ provider: "opencode", requests: 12 }],
 	byModel: [{ model: "m", requests: 12 }],
 }
 
-// useState order in the component: stats, loading, fetching, isApiKeyUser,
-// keyQuota, tableView, viewMode, providers, periodLocal.
+// useState order in the component, in source order: stats, sparks, loading,
+// fetching, isApiKeyUser, keyQuota, tableView, viewMode, providers, periodLocal,
+// chartUpdateKey. The queue is positional, so a state added to the component
+// without a line here silently shifts every value after it - which is how this
+// check spent a while asserting against a page whose session flag was `false`.
 function render({ isApiKeyUser, keyQuota = null }) {
 	globalThis.__STATE_QUEUE = [
 		STATS,
+		null,
 		false,
 		false,
 		isApiKeyUser,
@@ -231,6 +264,7 @@ function render({ isApiKeyUser, keyQuota = null }) {
 		"costs",
 		[],
 		"today",
+		0,
 	]
 	try {
 		return JSON.stringify(UsageStats({}), (_k, v) =>
@@ -247,6 +281,16 @@ const hasUsageChart = (t) => t.includes('"type":"dynamic:1"')
 const hasProviderBar = (t) => t.includes('"type":"dynamic:2"')
 const hasTopModels = (t) => t.includes('"type":"dynamic:3"')
 
+run("the live stream splits into one box per lane", () => {
+	// The regression this guards: the stream used to be one chat-shaped table, so
+	// an embedding or a System One request had nowhere to appear.
+	const tree = render({ isApiKeyUser: false })
+	assert.ok(tree.includes("Live Requests Stream"), "stream heading present")
+	assert.ok(tree.includes('"LLM"'), "LLM box present")
+	assert.ok(tree.includes('"Embedding"'), "embedding box present")
+	assert.ok(tree.includes('"System One"'), "system one box present")
+})
+
 run("a password session gets the provider map and every chart", () => {
 	const tree = render({ isApiKeyUser: false })
 	assert.ok(hasMap(tree), "provider map present")
@@ -256,13 +300,16 @@ run("a password session gets the provider map and every chart", () => {
 	assert.no(tree.includes("not available for this key"), "no unavailable note")
 })
 
-run("an API-key session keeps every chart", () => {
-	// The regression this whole change exists to undo: the charts used to be the
-	// thing hidden, which left a key holder with no usage view.
+run("an API-key session keeps its own usage chart", () => {
+	// The regression this check exists to undo: the charts used to be the thing
+	// hidden, which left a key holder with no usage view. What stays hidden for a
+	// key session is the catalog-wide pair (by provider, by model) - those describe
+	// providers the key never touched and read as "no usage" to its owner, so the
+	// component hides them deliberately.
 	const tree = render({ isApiKeyUser: true })
 	assert.ok(hasUsageChart(tree), "usage chart present")
-	assert.ok(hasProviderBar(tree), "by-provider chart present")
-	assert.ok(hasTopModels(tree), "by-model chart present")
+	assert.no(hasProviderBar(tree), "catalog-wide provider chart hidden")
+	assert.no(hasTopModels(tree), "catalog-wide model chart hidden")
 })
 
 run("an API-key session loses the provider map and gets the note", () => {
@@ -316,5 +363,5 @@ const failed = results.filter((r) => !r.ok)
 for (const r of results) {
 	console.log(`${r.ok ? "  ok  " : "  FAIL"} ${r.name}${r.err ? ` - ${r.err}` : ""}`)
 }
-console.log(`\n${results.length - failed.length}/${results.length} passed`)
+console.log(`\n${results.length - failed.length}/${results.length} checks passed`)
 process.exit(failed.length === 0 ? 0 : 1)

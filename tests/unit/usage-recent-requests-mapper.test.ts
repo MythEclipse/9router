@@ -10,6 +10,7 @@ const row = (over: Record<string, unknown> = {}) => ({
 	timestamp: "2026-01-15T10:00:00.000Z",
 	provider: "openai",
 	model: "gpt-5",
+	endpoint: "/api/v1/chat/completions",
 	tokens: JSON.stringify({ prompt_tokens: 10, completion_tokens: 5 }),
 	status: "ok",
 	meta: null,
@@ -24,11 +25,61 @@ describe("mapRecentRequests", () => {
 			model: "gpt-5",
 			requestedModel: undefined,
 			provider: "openai",
+			kind: "llm",
 			promptTokens: 10,
 			completionTokens: 5,
 			cachedTokens: 0,
 			status: "ok",
 		})
+	})
+
+	it("reports the lane the endpoint belongs to", () => {
+		const lanes = {
+			"/api/v1/embeddings": "embedding",
+			"/api/v1/systemone": "systemone",
+			"/api/v1/images/generations": "image",
+			"/api/v1/audio/speech": "tts",
+			"/v1/messages": "llm",
+		}
+		for (const [endpoint, kind] of Object.entries(lanes)) {
+			const [entry] = mapRecentRequests([row({ endpoint })])
+			expect(entry.kind, endpoint).toBe(kind)
+		}
+	})
+
+	it("keeps a media row that spent no tokens", () => {
+		// An image is billed per unit, not per token, so a zero-token row is a real
+		// request there — dropping it is what kept every non-LLM lane off the stream.
+		const rows = [
+			row({
+				endpoint: "/api/v1/images/generations",
+				tokens: JSON.stringify({ prompt_tokens: 0, completion_tokens: 0 }),
+			}),
+		]
+		expect(mapRecentRequests(rows)).toHaveLength(1)
+	})
+
+	it("keeps a media row recorded with the media handlers' success status", () => {
+		// The chat path writes `ok`; embeddings/systemone/image write `success`. The
+		// stream only ever matched `ok`, so those lanes vanished on every full frame.
+		const rows = [
+			row({
+				endpoint: "/api/v1/systemone",
+				status: "success",
+				tokens: JSON.stringify({ prompt_tokens: 0, completion_tokens: 0 }),
+			}),
+		]
+		expect(mapRecentRequests(rows)).toHaveLength(1)
+	})
+
+	it("still drops a chat row that spent no tokens", () => {
+		const rows = [
+			row({
+				endpoint: "/api/v1/chat/completions",
+				tokens: JSON.stringify({ prompt_tokens: 0, completion_tokens: 0 }),
+			}),
+		]
+		expect(mapRecentRequests(rows)).toHaveLength(0)
 	})
 
 	it("reads Anthropic-shaped token fields", () => {
@@ -120,11 +171,15 @@ describe("matches the inline chain it replaces", () => {
 				const resolved = meta?.resolvedModel
 				const display = typeof resolved === "string" && resolved ? resolved : r.model
 				const alias = r.model && r.model !== display ? r.model : undefined
+				// The chain being reproduced predates lanes; every fixture row here is a
+				// chat row, so the lane is a constant and the field set is what is compared.
+				const kind = "llm"
 				return {
 					timestamp: String(r.timestamp),
 					model: display,
 					requestedModel: alias,
 					provider: r.provider || "",
+					kind,
 					promptTokens: t.prompt_tokens || t.input_tokens || 0,
 					completionTokens: t.completion_tokens || t.output_tokens || 0,
 					cachedTokens: t.cached_tokens || t.cache_read_input_tokens || 0,

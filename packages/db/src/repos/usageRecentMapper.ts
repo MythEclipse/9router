@@ -6,6 +6,7 @@
 
 import { parseJson } from "../helpers/jsonCol.ts"
 import { labelForRow } from "../helpers/modelLabel.ts"
+import { serviceKindOf } from "../helpers/serviceKind.ts"
 
 import type { RecentRequest, UsageTokens } from "./usageTypes.ts"
 
@@ -16,15 +17,27 @@ interface RecentRowShape {
 	tokens?: unknown
 	status?: unknown
 	meta?: unknown
+	endpoint?: unknown
 }
+
+/**
+ * The statuses a billed row can carry.
+ *
+ * Chat writes `ok` (or the failing HTTP status), while the media handlers write
+ * `success`. Both mean "the request completed and was billed"; the stream must not
+ * lose a whole lane over a spelling, which is exactly what happened to the
+ * embedding and System One rows.
+ */
+const BILLED_STATUSES = new Set(["ok", "success"])
 
 /**
  * Map usageHistory rows onto the dashboard's recent-request list.
  *
- * Two rules live here and are easy to lose: the `meta` blob must be read so a combo
+ * Three rules live here and are easy to lose: the `meta` blob must be read so a combo
  * is reported by the model that actually served it (not the alias the caller asked
- * for), and only billed rows count — pending/error lifecycle rows belong to the
- * request log and would otherwise inflate the totals.
+ * for), only billed rows count — pending/error lifecycle rows belong to the request
+ * log and would otherwise inflate the totals — and every row carries the lane its
+ * endpoint belongs to, which is what the live stream splits its boxes by.
  */
 export function mapRecentRequests(
 	rows: RecentRowShape[],
@@ -40,6 +53,7 @@ export function mapRecentRequests(
 				model: label.display,
 				requestedModel: label.alias,
 				provider: (r.provider as string) || "",
+				kind: serviceKindOf(r.endpoint),
 				promptTokens: t.prompt_tokens || t.input_tokens || 0,
 				completionTokens: t.completion_tokens || t.output_tokens || 0,
 				cachedTokens: t.cached_tokens || t.cache_read_input_tokens || 0,
@@ -47,9 +61,13 @@ export function mapRecentRequests(
 			}
 		})
 		.filter((e) => {
-			if (e.status !== "ok") return false
+			if (!BILLED_STATUSES.has(e.status)) return false
 			if (isModelAllowed && !isModelAllowed(e.model)) return false
-			if (e.promptTokens === 0 && e.completionTokens === 0) return false
+			// A chat row that spent no tokens billed nothing, so it is noise here.
+			// The media lanes are the exception: an image or a synthesised voice is
+			// billed per unit and legitimately reports zero tokens, and dropping
+			// those rows is what kept them off the live stream entirely.
+			if (e.promptTokens === 0 && e.completionTokens === 0 && e.kind === "llm") return false
 			return true
 		})
 		.slice(0, limit)

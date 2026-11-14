@@ -5,6 +5,7 @@
  */
 
 import { labelForResolved } from "../helpers/modelLabel.ts"
+import { serviceKindOf } from "../helpers/serviceKind.ts"
 
 import { matchesAllowedModels as matchesModelPatterns, parseAllowedModels } from "./apiKeysRepo.ts"
 import { ensureRingInitialized, getConnectionMapCached } from "./usageDayRollup.ts"
@@ -13,6 +14,7 @@ import {
 	PENDING_TIMEOUT_MS,
 	pendingRequests,
 	pendingTimers,
+	RECENT_REQUESTS_LIMIT,
 	recentRing,
 	scheduleStatsEvent,
 	statsEmitter,
@@ -130,14 +132,18 @@ export async function getActiveRequests(
 				model: label.display,
 				requestedModel: label.alias,
 				provider: e.provider || "",
+				kind: serviceKindOf(e.endpoint),
 				promptTokens: t.prompt_tokens || t.input_tokens || 0,
 				completionTokens: t.completion_tokens || t.output_tokens || 0,
 				cachedTokens: t.cached_tokens || t.cache_read_input_tokens || 0,
 				status: e.status || "ok",
 			}
 		})
-		.filter((e) => e.promptTokens > 0 || e.completionTokens > 0)
-		.slice(0, 20)
+		// A chat row with no tokens billed nothing, but a media row (image, speech,
+		// embedding) is billed per unit and reports no tokens by design — dropping
+		// those is what kept every non-LLM lane off this stream.
+		.filter((e) => e.kind !== "llm" || e.promptTokens > 0 || e.completionTokens > 0)
+		.slice(0, RECENT_REQUESTS_LIMIT)
 
 	const errorProvider =
 		!filterApiKey && Date.now() - lastErrorProvider.ts < 10000 ? lastErrorProvider.provider : ""

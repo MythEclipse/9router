@@ -41,6 +41,15 @@ export function apiKeyBucketId(key: string): string {
 
 export const PENDING_TIMEOUT_MS = 60 * 1000
 export const RING_CAP = 50
+/**
+ * How many live rows the dashboard's request stream shows, across every lane.
+ *
+ * The stream splits into one box per lane (LLM, embedding, System One, …), so a
+ * handful of rows is not enough: a busy chat install would fill a 20-row window
+ * and starve the embedding box entirely. The ring already holds `RING_CAP` rows,
+ * so the readers hand all of them over and the page groups them.
+ */
+export const RECENT_REQUESTS_LIMIT = RING_CAP
 export const CONN_CACHE_TTL_MS = 30 * 1000
 export const PERIOD_MS: Record<string, number> = {
 	"24h": 86400000,

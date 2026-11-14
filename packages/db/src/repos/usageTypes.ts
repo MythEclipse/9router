@@ -6,6 +6,8 @@
  * importers are unaffected.
  */
 
+import type { ServiceKind } from "../helpers/serviceKind.ts"
+
 export interface UsageTokens {
 	prompt_tokens?: number
 	input_tokens?: number
@@ -150,6 +152,13 @@ export interface RecentRequest {
 	/** The name the caller asked for, when it differs from the serving model. */
 	requestedModel?: string
 	provider: string
+	/**
+	 * Which lane served it: chat, embeddings, System One, image, speech, …
+	 *
+	 * The live stream splits its boxes by this, so it is part of the row's
+	 * contract rather than something the dashboard re-derives from the model name.
+	 */
+	kind: ServiceKind
 	promptTokens: number
 	completionTokens: number
 	cachedTokens: number

@@ -124,18 +124,197 @@ function TopologyUnavailableNote() {
 	)
 }
 
-function RecentRequests({ requests = [] }) {
+/**
+ * One lane of the live stream.
+ *
+ * Ids match `serviceKindOf` in the db layer (packages/db/src/helpers/serviceKind.ts):
+ * the row says which lane served it and this table only decides how that lane is
+ * drawn, so a new lane on the gateway side does not need a second taxonomy here.
+ * Anything unrecognised falls back to the LLM box rather than disappearing.
+ */
+const LIVE_LANES: Record<string, { label: string; icon: string; accent: string }> = {
+	llm: { label: "LLM", icon: "stream", accent: "text-primary" },
+	embedding: { label: "Embedding", icon: "data_array", accent: "text-info" },
+	systemone: { label: "System One", icon: "psychology", accent: "text-warning" },
+	image: { label: "Image", icon: "brush", accent: "text-success" },
+	imageToText: { label: "Image to Text", icon: "image_search", accent: "text-success" },
+	tts: { label: "Text to Speech", icon: "record_voice_over", accent: "text-danger" },
+	stt: { label: "Speech to Text", icon: "mic", accent: "text-danger" },
+	music: { label: "Music", icon: "music_note", accent: "text-danger" },
+	video: { label: "Video", icon: "movie", accent: "text-warning" },
+	webSearch: { label: "Web Search", icon: "travel_explore", accent: "text-info" },
+	webFetch: { label: "Web Fetch", icon: "language", accent: "text-info" },
+	other: { label: "Other", icon: "bolt", accent: "text-text-muted" },
+}
+
+/**
+ * Box order. Chat first because it is the bulk of the traffic, then the lanes
+ * added later. Ordering by first arrival would make the boxes jump around while
+ * the stream is live.
+ */
+const LIVE_LANE_ORDER = Object.keys(LIVE_LANES)
+
+/** Height of one lane box. Fixed so a lane that goes quiet does not shrink the row. */
+const LIVE_LANE_HEIGHT = 288
+
+function laneOf(request) {
+	const kind = request?.kind
+	return typeof kind === "string" && LIVE_LANES[kind] ? kind : "llm"
+}
+
+/** Split the flat stream into one bucket per lane, in box order. */
+function groupByLane(requests = []) {
+	const buckets = {}
+	for (const request of requests) {
+		const kind = laneOf(request)
+		if (!buckets[kind]) buckets[kind] = []
+		buckets[kind].push(request)
+	}
+	return LIVE_LANE_ORDER.filter((kind) => buckets[kind]?.length).map((kind) => ({
+		kind,
+		requests: buckets[kind],
+	}))
+}
+
+function LiveRequestRow({ request: r }) {
+	const ok = !r.status || r.status === "ok" || r.status === "success"
+	const cleanModel = (r.model || "unknown").replace(/^\/+/, "")
+	// An image or a synthesised voice bills per unit and reports no tokens. A dash
+	// says "this lane has no token count" instead of claiming a real 0↑ 0↓.
+	const spentTokens = r.promptTokens > 0 || r.completionTokens > 0
+	return (
+		<tr className="hover:bg-bg-hover transition-colors group">
+			<td className="py-2 pl-3 pr-1 text-center align-middle">
+				<span className={`inline-block size-2 rounded-full ${ok ? "bg-success" : "bg-danger"}`} />
+			</td>
+			<td
+				className="py-2 px-2 font-mono text-xs text-text-main align-middle min-w-0"
+				title={cleanModel}
+			>
+				<div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-1.5">
+					<span className="truncate max-w-[120px] sm:max-w-[150px] font-medium text-text-main group-hover:text-primary transition-colors">
+						{cleanModel}
+					</span>
+					{r.requestedModel && r.requestedModel !== cleanModel && (
+						<span
+							className="text-[9px] font-mono text-text-muted/70 truncate max-w-[90px] self-start sm:self-auto"
+							title={`requested as ${r.requestedModel}`}
+						>
+							← {r.requestedModel}
+						</span>
+					)}
+					{r.provider && (
+						<span
+							className="text-[9px] uppercase font-mono px-1 py-0.2 rounded bg-surface-2 text-text-muted/90 self-start sm:self-auto border border-border-subtle truncate max-w-[90px]"
+							title={r.provider}
+						>
+							{r.provider}
+						</span>
+					)}
+				</div>
+			</td>
+			<td className="py-2 px-2 text-right whitespace-nowrap align-middle">
+				{spentTokens ? (
+					<div className="inline-flex items-center gap-1 font-mono text-[11px] sm:text-xs">
+						<span className="text-text-main font-medium">{fmt(r.promptTokens)}↑</span>
+						<span className="text-success font-medium">{fmt(r.completionTokens)}↓</span>
+						{r.cachedTokens > 0 && (
+							<span
+								className="text-[9px] sm:text-[10px] text-info bg-info/10 px-1 py-0.5 rounded leading-none border border-info/20"
+								title={`${fmt(r.cachedTokens)} cached tokens`}
+							>
+								⚡{fmt(r.cachedTokens)}
+							</span>
+						)}
+					</div>
+				) : (
+					<span className="text-text-muted/50" title="This lane reports no tokens">
+						—
+					</span>
+				)}
+			</td>
+			<td className="py-2 pl-2 pr-3 text-right text-text-muted whitespace-nowrap align-middle text-[11px] font-mono">
+				<TimeAgo timestamp={r.timestamp} />
+			</td>
+		</tr>
+	)
+}
+
+/** One box: everything one lane served, newest first. */
+function LiveRequestCard({ kind, requests, height = LIVE_LANE_HEIGHT }) {
+	const lane = LIVE_LANES[kind] ?? LIVE_LANES.other
 	return (
 		<Card
 			className="flex min-w-0 flex-col overflow-hidden bg-surface border border-border-subtle"
 			padding="none"
-			style={{ height: 420 }}
+			style={{ height }}
 		>
-			{/* Header */}
-			{/* The title takes the free space and the counter keeps its own width, so
-          a narrow card truncates "Live Requests Stream" instead of pushing
-          "N logged" past the card's right edge. */}
 			<div className="px-3.5 sm:px-4 py-2.5 border-b border-border-subtle shrink-0 flex items-center justify-between gap-2 bg-surface-2/40">
+				<div className="flex min-w-0 items-center gap-2">
+					<Icon name={lane.icon} size={15} className={lane.accent} />
+					<span className="truncate text-xs font-semibold text-text-muted uppercase tracking-wider">
+						{lane.label}
+					</span>
+				</div>
+				<div className="flex items-center gap-2 shrink-0">
+					<span className="inline-block size-1.5 rounded-full bg-success animate-pulse" />
+					<span className="text-[11px] text-text-muted font-mono">{requests.length} logged</span>
+				</div>
+			</div>
+			<div className="flex-1 overflow-y-auto custom-scrollbar">
+				<table className="w-full border-collapse text-xs">
+					<thead className="sticky top-0 bg-surface/95 backdrop-blur-xs border-b border-border-subtle z-10">
+						<tr>
+							<th className="py-2 pl-3 pr-1 text-center font-semibold text-text-muted w-6" title="Status">
+								<Icon
+									name="radio_button_checked"
+									size={11}
+									className="leading-none select-none text-text-muted/60"
+								/>
+							</th>
+							<th className="py-2 px-2 text-left font-semibold text-text-muted">
+								<span className="hidden xl:inline">Model &amp; Channel</span>
+								<span className="xl:hidden">Model</span>
+							</th>
+							<th className="py-2 px-2 text-right font-semibold text-text-muted whitespace-nowrap">
+								Tokens (In / Out)
+							</th>
+							<th className="py-2 pl-2 pr-3 text-right font-semibold text-text-muted whitespace-nowrap">
+								Time
+							</th>
+						</tr>
+					</thead>
+					<tbody className="divide-y divide-border-subtle/50">
+						{requests.map((r, i) => (
+							<LiveRequestRow key={`${r.timestamp}-${i}`} request={r} />
+						))}
+					</tbody>
+				</table>
+			</div>
+		</Card>
+	)
+}
+
+/**
+ * The live request stream, one box per lane.
+ *
+ * Every lane the gateway serves is recorded through the same usage write path, so
+ * this list used to read as if the install only ever chatted: an embedding or a
+ * System One decision was either filtered out upstream or buried in a chat-shaped
+ * table. The rows now carry their lane, and each lane gets its own box — one
+ * column when a single lane has traffic (the common case), packed side by side
+ * once there are more.
+ */
+function LiveRequestStream({ requests = [] }) {
+	const lanes = useMemo(() => groupByLane(requests), [requests])
+	// Two columns at most, and only from `lg`: a box holds the same four-column
+	// table the old single card did, and that table needs ~470px to keep Tokens
+	// and Time from clipping.
+	const columns = lanes.length > 1 ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1"
+
+	return (
+		<div className="flex min-w-0 flex-col gap-3">
+			<div className="flex items-center justify-between gap-2">
 				<div className="flex min-w-0 items-center gap-2">
 					<Icon name="stream" size={15} className="text-text-muted" />
 					<span className="truncate text-xs font-semibold text-text-muted uppercase tracking-wider">
@@ -149,98 +328,24 @@ function RecentRequests({ requests = [] }) {
 			</div>
 
 			{!requests.length ? (
-				<div className="flex-1 flex flex-col items-center justify-center gap-2 px-4 text-center">
+				<Card
+					className="flex min-w-0 flex-col items-center justify-center gap-2 border border-border-subtle bg-surface px-4 text-center"
+					padding="none"
+					style={{ height: 200 }}
+				>
 					<span className="text-text-muted text-sm">No requests logged for this timeframe.</span>
 					<a href="/dashboard/endpoint" className="text-xs text-primary hover:underline font-medium">
 						Send an API request to see real-time streaming metrics →
 					</a>
-				</div>
+				</Card>
 			) : (
-				<div className="flex-1 overflow-y-auto custom-scrollbar">
-					<table className="w-full border-collapse text-xs">
-						<thead className="sticky top-0 bg-surface/95 backdrop-blur-xs border-b border-border-subtle z-10">
-							<tr>
-								<th className="py-2 pl-3 pr-1 text-center font-semibold text-text-muted w-6" title="Status">
-									<Icon
-										name="radio_button_checked"
-										size={11}
-										className="leading-none select-none text-text-muted/60"
-									/>
-								</th>
-								<th className="py-2 px-2 text-left font-semibold text-text-muted">
-									<span className="hidden xl:inline">Model &amp; Channel</span>
-									<span className="xl:hidden">Model</span>
-								</th>
-								<th className="py-2 px-2 text-right font-semibold text-text-muted whitespace-nowrap">
-									Tokens (In / Out)
-								</th>
-								<th className="py-2 pl-2 pr-3 text-right font-semibold text-text-muted whitespace-nowrap">
-									Time
-								</th>
-							</tr>
-						</thead>
-						<tbody className="divide-y divide-border-subtle/50">
-							{requests.map((r, i) => {
-								const ok = !r.status || r.status === "ok" || r.status === "success"
-								const cleanModel = (r.model || "unknown").replace(/^\/+/, "")
-								return (
-									<tr key={i} className="hover:bg-bg-hover transition-colors group">
-										<td className="py-2 pl-3 pr-1 text-center align-middle">
-											<span
-												className={`inline-block size-2 rounded-full ${ok ? "bg-success" : "bg-danger"}`}
-											/>
-										</td>
-										<td
-											className="py-2 px-2 font-mono text-xs text-text-main align-middle min-w-0"
-											title={cleanModel}
-										>
-											<div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-1.5">
-												<span className="truncate max-w-[120px] sm:max-w-[150px] font-medium text-text-main group-hover:text-primary transition-colors">
-													{cleanModel}
-												</span>
-												{r.requestedModel && r.requestedModel !== cleanModel && (
-													<span
-														className="text-[9px] font-mono text-text-muted/70 truncate max-w-[90px] self-start sm:self-auto"
-														title={`requested as ${r.requestedModel}`}
-													>
-														← {r.requestedModel}
-													</span>
-												)}
-												{r.provider && (
-													<span
-														className="text-[9px] uppercase font-mono px-1 py-0.2 rounded bg-surface-2 text-text-muted/90 self-start sm:self-auto border border-border-subtle truncate max-w-[90px]"
-														title={r.provider}
-													>
-														{r.provider}
-													</span>
-												)}
-											</div>
-										</td>
-										<td className="py-2 px-2 text-right whitespace-nowrap align-middle">
-											<div className="inline-flex items-center gap-1 font-mono text-[11px] sm:text-xs">
-												<span className="text-text-main font-medium">{fmt(r.promptTokens)}↑</span>
-												<span className="text-success font-medium">{fmt(r.completionTokens)}↓</span>
-												{r.cachedTokens > 0 && (
-													<span
-														className="text-[9px] sm:text-[10px] text-info bg-info/10 px-1 py-0.5 rounded leading-none border border-info/20"
-														title={`${fmt(r.cachedTokens)} cached tokens`}
-													>
-														⚡{fmt(r.cachedTokens)}
-													</span>
-												)}
-											</div>
-										</td>
-										<td className="py-2 pl-2 pr-3 text-right text-text-muted whitespace-nowrap align-middle text-[11px] font-mono">
-											<TimeAgo timestamp={r.timestamp} />
-										</td>
-									</tr>
-								)
-							})}
-						</tbody>
-					</table>
+				<div className={`grid min-w-0 gap-3 ${columns}`}>
+					{lanes.map((lane) => (
+						<LiveRequestCard key={lane.kind} kind={lane.kind} requests={lane.requests} />
+					))}
 				</div>
 			)}
-		</Card>
+		</div>
 	)
 }
 
@@ -399,15 +504,6 @@ const PERIODS = [
 	{ value: "60d", label: "60D" },
 	{ value: "all", label: "All" },
 ]
-
-// The provider map is a wide canvas, but the request stream beside it is a
-// table and has to keep its four columns readable: at 2fr/1fr the stream card
-// lands at 351px and its table needs ~470px, so Tokens and Time were clipped.
-// Equally split on large screens the table fits exactly (527px card, 525px
-// table) and the map still gets ~525px for its eight nodes, its ring shrinking
-// with fitView.
-const TOPOLOGY_ROW_GRID =
-	"grid min-w-0 grid-cols-1 items-stretch gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
 
 export default function UsageStats({
 	period: periodProp,
@@ -864,32 +960,28 @@ export default function UsageStats({
 			{/* Overview cards */}
 			{loading ? spinner : <OverviewCards stats={stats} trends={sparks} />}
 
-			{/* Provider map + Recent Requests. The map shows every provider wired into
-          9Router, which is infrastructure rather than one key's usage, so an
-          API-key session gets a quiet note in its place. The note drops the
-          two-column grid too: RecentRequests is pinned to a fixed height, and
-          a three-line note beside it would leave most of the row empty. */}
+			{/* Provider map, then the live request stream. The map shows every
+          provider wired into 9Router, which is infrastructure rather than one
+          key's usage, so an API-key session gets a quiet note in its place. The
+          stream sits on its own full-width row: it is one box per lane (LLM,
+          embedding, System One, …), and squeezing that grid into half a row is
+          what forced the old single-table layout. */}
 			{loading || isApiKeyUser === null ? (
 				spinner
-			) : isApiKeyUser ? (
-				<>
-					<TopologyUnavailableNote />
-					<RecentRequests requests={stats.recentRequests || []} />
-				</>
 			) : (
-				<div className={TOPOLOGY_ROW_GRID}>
-					<div className="order-2 lg:order-1 min-w-0">
+				<>
+					{isApiKeyUser ? (
+						<TopologyUnavailableNote />
+					) : (
 						<ProviderTopology
 							providers={providers}
 							activeRequests={stats.activeRequests || []}
 							lastProvider={stats.recentRequests?.[0]?.provider || ""}
 							errorProvider={stats.errorProvider || ""}
 						/>
-					</div>
-					<div className="order-1 lg:order-2 min-w-0">
-						<RecentRequests requests={stats.recentRequests || []} />
-					</div>
-				</div>
+					)}
+					<LiveRequestStream requests={stats.recentRequests || []} />
+				</>
 			)}
 
 			{/* Charts. Both chart endpoints are scoped to the session's allowed models,

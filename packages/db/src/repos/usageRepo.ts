@@ -16,6 +16,7 @@
  * `@9router/db/repos/usageRepo`) importers keep working.
  */
 
+export { SERVICE_KINDS, type ServiceKind, serviceKindOf } from "../helpers/serviceKind.ts"
 export { getChartData } from "./usageChart.ts"
 export { flushDayRollup } from "./usageDayRollup.ts"
 export { __test__, getUsageHistory, saveRequestUsage } from "./usageHistory.ts"
@@ -31,7 +32,7 @@ export { getHourlySpend, getLatencySamples } from "./usageMetrics.ts"
 export { getActiveRequests, trackPendingRequest } from "./usagePending.ts"
 export { mapRecentRequests } from "./usageRecentMapper.ts"
 export { getSparks } from "./usageSparks.ts"
-export { statsEmitter } from "./usageState.ts"
+export { RECENT_REQUESTS_LIMIT, statsEmitter } from "./usageState.ts"
 export { getUsageStats } from "./usageStatsMain.ts"
 export type {
 	AccountUsageCounter,

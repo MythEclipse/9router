@@ -65,4 +65,38 @@ describe("recent requests", () => {
 			"gpt-5.6-sol",
 		])
 	})
+
+	it("labels every row's lane and keeps the lanes that report no tokens", async () => {
+		// The stream used to be chat-only in two independent ways: the row carried no
+		// lane, and a row with zero tokens was filtered out. An embedding, a System One
+		// decision and an image are all billed without completion tokens, so both rules
+		// had to go before those boxes could exist.
+		const base = { timestamp: new Date().toISOString(), status: "success" }
+		await db.saveRequestUsage({
+			...base,
+			provider: "openai",
+			model: "gpt-5.6-sol",
+			endpoint: "/api/v1/chat/completions",
+			tokens: { prompt_tokens: 741, completion_tokens: 19 },
+		})
+		await db.saveRequestUsage({
+			...base,
+			provider: "openai",
+			model: "text-embedding-3-small",
+			endpoint: "/api/v1/embeddings",
+			tokens: { prompt_tokens: 12, completion_tokens: 0 },
+		})
+		await db.saveRequestUsage({
+			...base,
+			provider: "opencode",
+			model: "jev-1.13-free",
+			endpoint: "/api/v1/systemone",
+			tokens: { prompt_tokens: 0, completion_tokens: 0 },
+		})
+
+		const [active, stats] = await Promise.all([db.getActiveRequests(), db.getUsageStats("today")])
+		for (const rows of [active.recentRequests, stats.recentRequests]) {
+			expect(rows.map((request) => request.kind).sort()).toEqual(["embedding", "llm", "systemone"])
+		}
+	})
 })
