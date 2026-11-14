@@ -1,6 +1,6 @@
 {
   "name": "9router-docs",
-  "version": "17.0.0",
+  "version": "18.0.0",
   "type": "module",
   "scripts": {
     "dev": "next dev -p 3001",
