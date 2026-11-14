@@ -27,13 +27,22 @@ export async function executorThrowResult(
 		requestedModel,
 		streamController,
 	} = ctx
+	// A provider-side rejection is the caller's mistake to fix, not a gateway
+	// failure: surface its own status and code so an agent can compact and retry
+	// instead of treating it as an upstream outage. Computed once here so the
+	// request log, usage row, error log and response all agree.
+	const reportedStatus = Number((error as { statusCode?: number }).statusCode)
+	const isClientError =
+		Number.isFinite(reportedStatus) && reportedStatus >= 400 && reportedStatus < 500
+	const effectiveStatus =
+		error.name === "AbortError" ? 499 : isClientError ? reportedStatus : HTTP_STATUS.BAD_GATEWAY
 	{
 		trackPendingRequest(trackedModel, provider, connectionId, false, true)
 		appendRequestLog({
 			model: trackedModel,
 			provider,
 			connectionId,
-			status: `FAILED ${error.name === "AbortError" ? 499 : HTTP_STATUS.BAD_GATEWAY}`,
+			status: `FAILED ${effectiveStatus}`,
 			requestedModel: model,
 		}).catch(() => {})
 		saveRequestDetail(
@@ -48,7 +57,7 @@ export async function executorThrowResult(
 				providerRequest: translatedBody || null,
 				response: {
 					error: error.message || String(error),
-					status: error.name === "AbortError" ? 499 : 502,
+					status: effectiveStatus,
 					thinking: null,
 				},
 				pxpipe: pxpipeSummary,
@@ -62,7 +71,7 @@ export async function executorThrowResult(
 			connectionId,
 			apiKey,
 			endpoint: clientRawRequest?.endpoint,
-			statusCode: error.name === "AbortError" ? 499 : 502,
+			statusCode: effectiveStatus,
 		})
 
 		if (error.name === "AbortError") {
@@ -72,12 +81,12 @@ export async function executorThrowResult(
 				result: createErrorResult(499, "Request aborted"),
 			} as ExecutorDispatchResult
 		}
-		const errMsg = formatProviderError(error, provider, model, HTTP_STATUS.BAD_GATEWAY)
+		const errMsg = formatProviderError(error, provider, model, effectiveStatus)
 		if (log?.errorLine) {
 			log.errorLine(
 				reqTag,
 				"✗",
-				`ERROR 502 · ${provider}/${model} · ${Date.now() - requestStartTime}ms\n    ${errMsg}${error.stack ? `\n    ${error.stack}` : ""}`,
+				`ERROR ${effectiveStatus} · ${provider}/${model} · ${Date.now() - requestStartTime}ms\n    ${errMsg}${error.stack ? `\n    ${error.stack}` : ""}`,
 			)
 		}
 		try {
@@ -86,7 +95,7 @@ export async function executorThrowResult(
 				provider,
 				model,
 				endpoint: clientRawRequest?.endpoint || "chat",
-				statusCode: 502,
+				statusCode: effectiveStatus,
 				errorMessage: errMsg,
 				errorType: "executor_error",
 				stack: error.stack || "",
@@ -95,14 +104,10 @@ export async function executorThrowResult(
 			/* fail open */
 		}
 		const isHideError = Boolean(hideError)
-		// A provider-side context rejection is the caller's mistake to fix, not a
-		// gateway failure: surface its own status and code so an agent can compact
-		// and retry instead of treating it as an upstream outage.
-		const statusCode = Number((error as { statusCode?: number }).statusCode)
-		if (Number.isFinite(statusCode) && statusCode >= 400 && statusCode < 500) {
+		if (isClientError) {
 			return {
 				kind: "return",
-				result: createErrorResult(statusCode, errMsg, undefined, null, isHideError),
+				result: createErrorResult(effectiveStatus, errMsg, undefined, null, isHideError),
 			}
 		}
 		return {
