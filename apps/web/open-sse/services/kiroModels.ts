@@ -21,14 +21,9 @@
 
 import { createHash } from "node:crypto"
 import { v4 as uuidv4 } from "uuid"
+import { buildKiroIdentityHeaders } from "../shared/kiroIdentity.ts"
 import type { Credentials, EngineLogger, RefreshedCredentials } from "../types.ts"
 import { refreshKiroToken } from "./tokenRefresh.ts"
-
-const KIRO_RUNTIME_SDK_VERSION = "1.0.0"
-const KIRO_AGENT_OS = "windows"
-const KIRO_AGENT_OS_VERSION = "10.0.26200"
-const KIRO_NODE_VERSION = "22.21.1"
-const KIRO_VERSION = "0.10.32"
 
 const DEFAULT_REGION = "us-east-1"
 const FETCH_TIMEOUT_MS = 30_000
@@ -103,29 +98,12 @@ function regionFromProfileArn(profileArn: unknown) {
 
 /**
  * Build the per-account fingerprint headers Kiro upstream validates.
- * Keyed off whatever stable identifier we have for this credential, so the
- * same account always presents the same machineId.
+ * The client identity (version + machine id) comes from the shared Kiro
+ * identity module so the catalog call cannot drift from the inference call.
  */
 function buildKiroFingerprintHeaders(credentials: Credentials) {
-	const seed =
-		credentials?.providerSpecificData?.clientId ||
-		credentials?.refreshToken ||
-		credentials?.providerSpecificData?.profileArn ||
-		credentials?.accessToken ||
-		"kiro-anonymous"
-	const machineId = createHash("sha256").update(String(seed)).digest("hex")
-
-	const userAgent =
-		`aws-sdk-js/${KIRO_RUNTIME_SDK_VERSION} ua/2.1 ` +
-		`os/${KIRO_AGENT_OS}#${KIRO_AGENT_OS_VERSION} ` +
-		`lang/js md/nodejs#${KIRO_NODE_VERSION} ` +
-		`api/codewhispererruntime#${KIRO_RUNTIME_SDK_VERSION} m/N,E ` +
-		`KiroIDE-${KIRO_VERSION}-${machineId}`
-	const amzUserAgent = `aws-sdk-js/${KIRO_RUNTIME_SDK_VERSION} KiroIDE-${KIRO_VERSION}-${machineId}`
-
 	return {
-		"User-Agent": userAgent,
-		"x-amz-user-agent": amzUserAgent,
+		...buildKiroIdentityHeaders(credentials, "runtime"),
 		"x-amzn-kiro-agent-mode": "vibe",
 		"x-amzn-codewhisperer-optout": "true",
 		"amz-sdk-request": "attempt=1; max=1",

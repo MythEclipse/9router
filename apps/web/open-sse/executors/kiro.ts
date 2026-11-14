@@ -8,6 +8,7 @@ import {
 import { PROVIDERS } from "../config/providers.ts"
 import { STREAM_FIRST_CHUNK_TIMEOUT_MS } from "../config/runtimeConfig.ts"
 import { refreshKiroToken } from "../services/tokenRefresh.ts"
+import { buildKiroIdentityHeaders } from "../shared/kiroIdentity.ts"
 import { crc32, parseEventFrame } from "../utils/awsEventStream.ts"
 import { SSE_DONE, SSE_HEADERS } from "../utils/sseConstants.ts"
 import { estimateInputTokens } from "../utils/usageTracking.ts"
@@ -45,6 +46,11 @@ export class KiroExecutor extends BaseExecutor {
 	buildHeaders(credentials, _stream = true, url = "") {
 		const headers = {
 			...this.config.headers,
+			// Kiro rejects any client below its IDE version floor with
+			// "This version of Kiro is no longer supported". The identity carries
+			// the version *and* a per-account machine id, so it is stamped here
+			// rather than in the static registry headers.
+			...buildKiroIdentityHeaders(credentials, "streaming"),
 			"Amz-Sdk-Request": "attempt=1; max=3",
 			"Amz-Sdk-Invocation-Id": uuidv4(),
 		}

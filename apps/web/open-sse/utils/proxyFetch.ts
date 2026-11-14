@@ -379,7 +379,13 @@ function resolveConnectionProxyUrl(targetUrl, proxyOptions) {
 // ISP DPI (VN → api.anthropic.com) RSTs Node's default TLS ClientHello curve
 // list; a single curve rewrites the fingerprint enough to pass. Empirically:
 // default agent = ECONNRESET 100%, X25519 = through 100%.
-const TLS_ECDH_CURVE = process.env.NINEROUTER_TLS_ECDH_CURVE || "X25519"
+//
+// X25519 must stay FIRST, but it cannot be the only offer: AWS OIDC
+// (oidc.*.amazonaws.com — the Kiro Builder ID / IdC device flow) resets a
+// ClientHello that advertises X25519 alone, which surfaces as "fetch failed"
+// when adding a Kiro account. prime256v1 / secp384r1 keep the DPI-rewritten
+// fingerprint while offering AWS a curve it accepts.
+const TLS_ECDH_CURVE = process.env.NINEROUTER_TLS_ECDH_CURVE || "X25519:prime256v1:secp384r1"
 
 // autoSelectFamilyAttemptTimeout = happy eyeballs (RFC 8305): race both address
 // families, fall over in 250ms — replaces the old global ipv4first flag, which fixed

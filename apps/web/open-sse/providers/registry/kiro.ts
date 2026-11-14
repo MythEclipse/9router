@@ -29,8 +29,9 @@ const Kiro = {
 		headers: {
 			"Content-Type": "application/json",
 			Accept: "application/vnd.amazon.eventstream",
-			"User-Agent": "AWS-SDK-JS/3.0.0 kiro-ide/1.0.0",
-			"X-Amz-User-Agent": "aws-sdk-js/3.0.0 kiro-ide/1.0.0",
+			// No static User-Agent here on purpose: Kiro validates the client
+			// version and expects a per-account machine id in the identity. The
+			// KiroExecutor stamps both headers from shared/kiroIdentity.ts.
 		},
 		tokenUrl: "https://prod.us-east-1.auth.desktop.kiro.dev/refreshToken",
 		authUrl: "https://prod.us-east-1.auth.desktop.kiro.dev",

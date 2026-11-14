@@ -1,3 +1,5 @@
+import { buildKiroIdentityHeaders } from "open-sse/shared/kiroIdentity"
+
 const BASE64_BLOCK_SIZE = 4
 
 function validateXaiOAuthEndpoint(rawUrl, field) {
@@ -65,6 +67,9 @@ export async function fetchKiroProfileArn(accessToken) {
 					"Content-Type": "application/json",
 					Accept: "application/json",
 					Authorization: `Bearer ${accessToken}`,
+					// Kiro rejects a stale client identity with "This version of
+					// Kiro is no longer supported" instead of returning profiles.
+					...buildKiroIdentityHeaders({ accessToken }, "runtime"),
 				},
 				body: JSON.stringify({ maxResults: 10 }),
 			},

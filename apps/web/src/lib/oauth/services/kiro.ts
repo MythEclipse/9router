@@ -1,3 +1,4 @@
+import { buildKiroIdentityHeaders } from "open-sse/shared/kiroIdentity"
 import { assertValidAwsRegion, KIRO_CONFIG } from "../constants/oauth.ts"
 
 /**
@@ -275,6 +276,9 @@ export class KiroService {
 				"x-amz-target": "AmazonCodeWhispererService.ListAvailableProfiles",
 				Authorization: `Bearer ${accessToken}`,
 				Accept: "application/json",
+				// Kiro gates on the client version: a stale identity answers
+				// "This version of Kiro is no longer supported" instead of profiles.
+				...buildKiroIdentityHeaders({ accessToken }, "runtime"),
 			},
 			body: JSON.stringify({ maxResults: 10 }),
 		})
@@ -306,8 +310,7 @@ export class KiroService {
 				Authorization: `Bearer ${apiKey}`,
 				TokenType: "API_KEY",
 				Accept: "application/json",
-				"User-Agent": "AWS-SDK-JS/3.0.0 kiro-ide/1.0.0",
-				"X-Amz-User-Agent": "aws-sdk-js/3.0.0 kiro-ide/1.0.0",
+				...buildKiroIdentityHeaders({ apiKey }, "runtime"),
 			},
 		})
 
@@ -363,6 +366,7 @@ export class KiroService {
 				"x-amz-target": target,
 				Authorization: `Bearer ${accessToken}`,
 				Accept: "application/json",
+				...buildKiroIdentityHeaders({ accessToken }, "runtime"),
 			},
 			body: JSON.stringify({
 				origin: "AI_EDITOR",
