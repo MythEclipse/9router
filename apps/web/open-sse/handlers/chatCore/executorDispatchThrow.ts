@@ -95,6 +95,16 @@ export async function executorThrowResult(
 			/* fail open */
 		}
 		const isHideError = Boolean(hideError)
+		// A provider-side context rejection is the caller's mistake to fix, not a
+		// gateway failure: surface its own status and code so an agent can compact
+		// and retry instead of treating it as an upstream outage.
+		const statusCode = Number((error as { statusCode?: number }).statusCode)
+		if (Number.isFinite(statusCode) && statusCode >= 400 && statusCode < 500) {
+			return {
+				kind: "return",
+				result: createErrorResult(statusCode, errMsg, undefined, null, isHideError),
+			}
+		}
 		return {
 			kind: "return",
 			result: createErrorResult(HTTP_STATUS.BAD_GATEWAY, errMsg, undefined, null, isHideError),

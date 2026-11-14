@@ -50,6 +50,11 @@ const DeepaiCode = {
 			// non-empty `instructions`, and the only model on that lane costs 50 Theos
 			// to test. The filler is cheap and keeps both lanes on the documented shape.
 			deepaiCodeShape: true,
+			// The lane advertises a 320k window but reads only the newest ~50k prompt
+			// tokens, discarding the rest from the front without an error. Budget the
+			// body here so a long thread keeps its system prompt and task statement
+			// instead of silently losing them. See shared/deepaiCode.ts.
+			deepaiCodeContext: true,
 		},
 		// 409 session_busy is capacity, not a bad key: retry before rotating.
 		retry: { 409: { attempts: 2, delayMs: 4000 } },

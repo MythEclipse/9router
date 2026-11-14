@@ -11,9 +11,14 @@ import {
 } from "../providers/shared.ts"
 import { resolveOpenAICompatibleApiType } from "../services/provider.ts"
 import { buildClineHeaders } from "../shared/clineAuth.ts"
-import { buildDeepAiCodeHeaders, ensureDeepAiCodeShape } from "../shared/deepaiCode.ts"
+import {
+	assertDeepAiCodeContextFits,
+	buildDeepAiCodeHeaders,
+	ensureDeepAiCodeShape,
+} from "../shared/deepaiCode.ts"
 import { stripUnsupportedParams } from "../translator/concerns/paramSupport.ts"
 import { extractClaudeSessionIdFromUserId } from "../utils/claudeCloaking.ts"
+import { dbg } from "../utils/debugLog.ts"
 import { proxyAwareFetch } from "../utils/proxyFetch.ts"
 import { injectReasoningContent } from "../utils/reasoningContentInjector.ts"
 import { BaseExecutor } from "./base.ts"
@@ -146,6 +151,15 @@ export class DefaultExecutor extends BaseExecutor {
 			if (this.config.quirks?.deepaiCodeShape) {
 				const shaped = ensureDeepAiCodeShape(transformed)
 				if (shaped !== transformed) transformed = shaped
+			}
+			// DeepAI Code advertises a 320k window it does not enforce: past ~50k
+			// prompt tokens it either returns an empty answer or silently drops the
+			// oldest turns (system prompt and task statement first). Reject here so
+			// the caller gets a real error it can act on, instead of a quiet trim
+			// that reproduces the upstream failure with a nicer face.
+			if (this.config.quirks?.deepaiCodeContext) {
+				const estimated = assertDeepAiCodeContextFits(transformed)
+				dbg("DEEPAI_CONTEXT", `prompt ~${estimated} tokens, within budget`)
 			}
 			stripUnsupportedParams(this.provider, model, transformed)
 		}

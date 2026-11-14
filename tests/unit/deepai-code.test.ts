@@ -10,14 +10,20 @@
 
 import { describe, expect, it } from "vitest"
 import { DefaultExecutor } from "../../apps/web/open-sse/executors/default.js"
+import { PROVIDER_CAPABILITIES } from "../../apps/web/open-sse/providers/capabilities.js"
 import DeepaiCode from "../../apps/web/open-sse/providers/registry/deepai-code.js"
+import { checkFallbackError } from "../../apps/web/open-sse/services/accountFallback.js"
 import {
+	assertDeepAiCodeContextFits,
 	buildDeepAiCodeHeaders,
+	DEEPAI_CODE_CONTEXT_BUDGET,
 	DEEPAI_CODE_LANE,
 	DEEPAI_CODE_SYSTEM_FILLER,
+	DeepAiCodeContextError,
 	deepaiCodeInstanceId,
 	deepaiCodeMachineId,
 	ensureDeepAiCodeShape,
+	estimateDeepAiCodeTokens,
 } from "../../apps/web/open-sse/shared/deepaiCode.js"
 
 const HEX64 = /^[0-9a-f]{64}$/
@@ -194,6 +200,155 @@ describe("registry entry", () => {
 		expect(DeepaiCode.models).toHaveLength(27)
 		for (const id of ["qwen-3.8-flash", "minimax-m3", "claude-sonnet-5-5", "claude-fable-5-2"]) {
 			expect(DeepaiCode.models.map((m) => m.id)).toContain(id)
+		}
+	})
+})
+
+describe("assertDeepAiCodeContextFits", () => {
+	/** A conversation whose head carries a task statement and whose tail is filler. */
+	const conversation = (blocks: number, wordsPerBlock = 1200) => {
+		const filler = (n: number) => Array.from({ length: n }, (_, i) => `word${i} lorem`).join(" ")
+		const messages: Array<{ role: string; content: string }> = [
+			{ role: "system", content: "You are Claude Code. Follow the repo conventions." },
+			{ role: "user", content: "TASK: migrate the billing module. Remember SECRET=ORANGE55." },
+			{ role: "assistant", content: "Understood." },
+		]
+		for (let i = 0; i < blocks; i++) {
+			messages.push({ role: "user", content: `BLOCK${i} ${filler(wordsPerBlock)}` })
+			messages.push({ role: "assistant", content: "ok" })
+		}
+		messages.push({ role: "user", content: "Reply with only the SECRET value." })
+		return { model: "gpt-6-luna", messages }
+	}
+
+	it("accepts a conversation inside the window and reports its size", () => {
+		const estimated = assertDeepAiCodeContextFits(conversation(1))
+		expect(estimated).toBeGreaterThan(0)
+		expect(estimated).toBeLessThanOrEqual(DEEPAI_CODE_CONTEXT_BUDGET)
+	})
+
+	it("throws instead of trimming when the prompt is too large", () => {
+		// The whole point: upstream drops the oldest turns silently, and trimming
+		// here would reproduce that failure with a nicer face.
+		expect(() => assertDeepAiCodeContextFits(conversation(30))).toThrow(DeepAiCodeContextError)
+	})
+
+	it("reports the measured size and the limit in the message", () => {
+		// A caller that can compact needs the numbers to know it must compact.
+		let message = ""
+		try {
+			assertDeepAiCodeContextFits(conversation(30))
+		} catch (error) {
+			message = (error as Error).message
+		}
+		expect(message).toMatch(/\d+ tokens/)
+		expect(message).toContain(String(DEEPAI_CODE_CONTEXT_BUDGET))
+		expect(message.toLowerCase()).toContain("compact")
+	})
+
+	it("carries a 400 context_length_exceeded, not a 502 gateway error", () => {
+		// A context overflow is the caller's to fix; reporting it as a gateway
+		// failure makes an agent retry the same oversized prompt forever.
+		const error = new DeepAiCodeContextError("too big")
+		expect(error.statusCode).toBe(400)
+		expect(error.code).toBe("context_length_exceeded")
+	})
+
+	it("never mutates the body it rejects", () => {
+		// Rejecting must not leave a half-trimmed body behind for a retry to send.
+		const body = conversation(30)
+		const before = JSON.stringify(body)
+		expect(() => assertDeepAiCodeContextFits(body)).toThrow()
+		expect(JSON.stringify(body)).toBe(before)
+	})
+
+	it("rejects a single pasted file that alone exceeds the window", () => {
+		// One big paste is the common way to blow the budget in a single turn.
+		const body = {
+			model: "gpt-6-luna",
+			messages: [
+				{ role: "system", content: "You are Claude Code." },
+				{ role: "user", content: `Here is the file:\n${"x".repeat(800000)}\n\nSummarize it.` },
+			],
+		}
+		expect(() => assertDeepAiCodeContextFits(body)).toThrow(DeepAiCodeContextError)
+	})
+
+	it("passes through shapes it cannot measure rather than rejecting on a guess", () => {
+		// Fail-open: a body with no message list must not be rejected blind.
+		expect(assertDeepAiCodeContextFits(null)).toBe(0)
+		expect(assertDeepAiCodeContextFits({ model: "x" })).toBe(0)
+	})
+})
+
+describe("estimateDeepAiCodeTokens", () => {
+	it("counts text at roughly four characters per token", () => {
+		const body = { messages: [{ role: "user", content: "x".repeat(4000) }] }
+		expect(estimateDeepAiCodeTokens(body)).toBeGreaterThanOrEqual(1000)
+		expect(estimateDeepAiCodeTokens(body)).toBeLessThan(1100)
+	})
+
+	it("counts tool schemas, which ride outside the messages", () => {
+		const messages = [{ role: "user", content: "hi" }]
+		const withoutTools = estimateDeepAiCodeTokens({ messages })
+		const withTools = estimateDeepAiCodeTokens({
+			messages,
+			tools: [{ name: "Read", description: "d".repeat(4000), input_schema: {} }],
+		})
+		expect(withTools).toBeGreaterThan(withoutTools + 900)
+	})
+
+	it("charges images a flat allowance rather than their base64 length", () => {
+		const body = {
+			messages: [
+				{
+					role: "user",
+					content: [{ type: "image_url", image_url: { url: "data:image/png;base64,AAA" } }],
+				},
+			],
+		}
+		expect(estimateDeepAiCodeTokens(body)).toBeGreaterThan(1000)
+	})
+})
+
+describe("combo behaviour", () => {
+	it("marks an oversized prompt as request-scoped so a combo moves to the next model", () => {
+		// The point of raising an error instead of trimming: a combo must be able
+		// to try a member with a bigger window. checkFallbackError reports
+		// requestScoped for an unmatched 4xx, which combo.ts advances on without
+		// cooling the account down.
+		const error = new DeepAiCodeContextError("Prompt is ~198697 tokens, ...")
+		const decision = checkFallbackError(error.statusCode, error.message, 0, "deepai-code")
+		expect(decision.requestScoped).toBe(true)
+		expect(decision.cooldownMs).toBe(0)
+	})
+
+	it("does not evict a healthy deepai-code account from rotation", () => {
+		// A context overflow says nothing about the credential: cooling it down
+		// would remove a working connection for later, smaller requests.
+		const error = new DeepAiCodeContextError("Prompt is ~198697 tokens, ...")
+		const decision = checkFallbackError(error.statusCode, error.message, 0, "deepai-code")
+		expect(decision.shouldFallback).toBe(false)
+	})
+})
+
+describe("published context window", () => {
+	it("publishes 50k, not the catalogue's 320k, so clients compact in time", () => {
+		// A client that trusts 320k never compacts, and the lane then either
+		// answers with nothing (~50k-92k) or silently drops the head (>92k).
+		const caps = PROVIDER_CAPABILITIES["deepai-code"]
+		expect(caps).toBeDefined()
+		for (const [model, entry] of Object.entries(caps as Record<string, any>)) {
+			expect(entry.contextWindow, `${model} contextWindow`).toBe(50000)
+		}
+	})
+
+	it("keeps the published window at or below the budget the executor enforces", () => {
+		// Publishing more than we are willing to send would put the client and
+		// the executor at odds: the client would build prompts we then have to cut.
+		const caps = PROVIDER_CAPABILITIES["deepai-code"] as Record<string, any>
+		for (const [model, entry] of Object.entries(caps)) {
+			expect(entry.contextWindow, `${model}`).toBeLessThanOrEqual(DEEPAI_CODE_CONTEXT_BUDGET)
 		}
 	})
 })
