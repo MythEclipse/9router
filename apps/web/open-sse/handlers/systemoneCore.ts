@@ -23,6 +23,50 @@ export function buildSystemoneUrl(override, cfg) {
 	return host + path
 }
 
+/** Canonical name of the state field on the System One wire. */
+const DEFAULT_STATE_FIELD = "state"
+
+/**
+ * Read the state out of a System One body.
+ *
+ * `state` is the canonical field; a lane whose upstream renamed it accepts that name too
+ * (Google's decisions endpoint calls it `input`), so one body stays valid for every lane
+ * and the handler renames it on the way out. A shorthand object (`{ prompt }` or
+ * `{ text }`) is unwrapped to its string.
+ */
+export function readSystemoneState(body) {
+	const raw = body?.state ?? body?.input
+	if (raw === undefined || raw === null) return undefined
+	if (typeof raw === "object" && !Array.isArray(raw)) {
+		if (typeof raw.prompt === "string") return raw.prompt
+		if (typeof raw.text === "string") return raw.text
+	}
+	return raw
+}
+
+/** Wire name this lane uses for the state (`input` on Google's decisions endpoint). */
+export function systemoneStateField(cfg) {
+	const field = cfg?.stateField
+	return typeof field === "string" && field.trim() ? field.trim() : DEFAULT_STATE_FIELD
+}
+
+/**
+ * Auth headers for a System One lane.
+ *
+ * `authHeader` follows the sttConfig vocabulary: "bearer" (also "token"/"key", or absent)
+ * means `Authorization: Bearer <token>`, while any other value is a literal header name
+ * carrying the raw key. Google rejects an API key sent in Authorization, so its lane names
+ * `x-goog-api-key`.
+ */
+export function buildSystemoneAuthHeaders(cfg, token) {
+	if (!token) return {}
+	const header = typeof cfg?.authHeader === "string" ? cfg.authHeader.trim() : ""
+	if (!header || header === "bearer" || header === "token" || header === "key") {
+		return { Authorization: `Bearer ${token}` }
+	}
+	return { [header]: token }
+}
+
 /**
  * Core System One (Jev) handler - native decision payload pass-through.
  * URL/headers come from the registry's systemoneConfig; body and JSON response
@@ -56,7 +100,9 @@ export async function handleSystemoneCore({ body, modelInfo, credentials, log, o
 	}
 
 	// Validate input at the trust boundary; question-level shape is upstream's job.
-	if (body.state === undefined || body.state === null) {
+	// `state` is canonical, `input` is the same field on lanes that renamed it (Google).
+	const state = readSystemoneState(body)
+	if (state === undefined) {
 		return createErrorResult(HTTP_STATUS.BAD_REQUEST, "Missing required field: state")
 	}
 	if (!body.questions || typeof body.questions !== "object" || Array.isArray(body.questions)) {
@@ -82,29 +128,22 @@ export async function handleSystemoneCore({ body, modelInfo, credentials, log, o
 		}
 	}
 
-	// Normalize shorthand state object (e.g. { prompt: "..." } or { text: "..." }) to string
-	let state = body.state
-	if (state && typeof state === "object" && !Array.isArray(state)) {
-		if (typeof (state as any).prompt === "string") {
-			state = (state as any).prompt
-		} else if (typeof (state as any).text === "string") {
-			state = (state as any).text
-		}
-	}
-
 	// noAuth free lanes carry accessToken "public" from the credential stub.
 	const token = credentials?.apiKey || credentials?.accessToken
 	const headers = {
 		"Content-Type": "application/json",
-		...(token ? { Authorization: `Bearer ${token}` } : {}),
+		...buildSystemoneAuthHeaders(cfg, token),
 		...((cfg.headers as Record<string, string> | undefined) || {}),
 		// Zen lanes expect the official client session header; other providers don't need it.
 		...(OPENCODE_PROVIDERS.has(provider) ? { "x-opencode-session": generateSessionId() } : {}),
 	}
 	// Cloudflare validates the body model as a short selector (e.g. "clef-flash"), not the full id.
+	// The state goes out under this lane's own name and the alias key is dropped, so an
+	// upstream is never handed both `state` and `input`.
+	const { state: _state, input: _input, ...rest } = body
 	const requestBody = {
-		...body,
-		state,
+		...rest,
+		[systemoneStateField(cfg)]: state,
 		questions,
 		model: getModelUpstreamId(provider, model) || model,
 	}

@@ -146,6 +146,11 @@ export interface MediaServiceConfig extends ProviderExtras {
 	path?: string
 	authType?: string
 	authHeader?: string
+	/**
+	 * System One only: the wire name of the state on this lane. Google's decisions
+	 * endpoint calls it `input`; the router accepts `state` or `input` either way.
+	 */
+	stateField?: string
 	format?: string
 	defaultModel?: string
 	models?: Array<Record<string, unknown>>

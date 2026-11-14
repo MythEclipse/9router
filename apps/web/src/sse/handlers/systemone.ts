@@ -70,7 +70,12 @@ export async function handleSystemone(request) {
 		log.warn("SYSTEMONE", "Missing model")
 		return errorResponse(HTTP_STATUS.BAD_REQUEST, "Missing model")
 	}
-	if (body.state === undefined || body.state === null) {
+	// `state` is canonical; `input` is the same field on lanes that renamed it (Google).
+	// Presence only - the core handler does the real normalization.
+	if (
+		(body.state === undefined || body.state === null) &&
+		(body.input === undefined || body.input === null)
+	) {
 		return errorResponse(HTTP_STATUS.BAD_REQUEST, "Missing required field: state")
 	}
 	if (!body.questions || typeof body.questions !== "object" || Array.isArray(body.questions)) {
