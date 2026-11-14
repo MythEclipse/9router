@@ -43,7 +43,9 @@ async function chatWith(jwt, ua) {
 	return proxyAwareFetch(CHAT_URL, { method: "POST", headers, body: JSON.stringify(body) })
 }
 
-describe("MiMo Free bootstrap (live)", () => {
+const RUN_LIVE = process.env.RUN_LIVE_TESTS === "true" || process.env.LIVE_TESTS === "1"
+
+describe.skipIf(!RUN_LIVE)("MiMo Free bootstrap (live)", () => {
 	it("bootstrap returns 200 with JWT", async () => {
 		const { status, jwt } = await bootstrapWith(CHROME_UA)
 		expect(status).toBe(200)
@@ -51,7 +53,7 @@ describe("MiMo Free bootstrap (live)", () => {
 	})
 })
 
-describe("MiMo Free anti-abuse gate (live)", () => {
+describe.skipIf(!RUN_LIVE)("MiMo Free anti-abuse gate (live)", () => {
 	// Issue #1933 was "502 MiMo bootstrap failed: 403 Illegal access" — the
 	// upstream gates on a Chrome-like User-Agent. That gate is what this test
 	// guards: a request carrying CHROME_UA must get past it. Asserting the
