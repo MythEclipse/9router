@@ -69,6 +69,8 @@ export interface ConnectionNode {
 	readonly apiType?: string
 	readonly baseUrl?: string
 	readonly name?: string
+	/** openai-compatible only: copy of the node's native Structured Output flag. */
+	readonly supportsJsonSchema?: boolean
 	readonly quotaEnabled?: boolean
 	readonly quotaPath?: string
 }

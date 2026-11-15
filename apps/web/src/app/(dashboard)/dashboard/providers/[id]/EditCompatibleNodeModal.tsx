@@ -20,6 +20,7 @@ interface EditCompatibleNodeModalProps {
 		logo?: string
 		quotaEnabled?: boolean
 		quotaPath?: string
+		supportsJsonSchema?: boolean
 	}
 	onSave(...args: unknown[]): unknown
 	onClose(...args: unknown[]): unknown
@@ -34,6 +35,7 @@ interface EditCompatibleFormData {
 	logo: string
 	quotaEnabled: boolean
 	quotaPath: string
+	supportsJsonSchema: boolean
 }
 
 export default function EditCompatibleNodeModal({
@@ -55,6 +57,7 @@ export default function EditCompatibleNodeModal({
 		logo: node?.logo || "",
 		quotaEnabled: node?.quotaEnabled === true,
 		quotaPath: node?.quotaPath || "/credits",
+		supportsJsonSchema: node?.supportsJsonSchema === true,
 	}))
 	const [saving, setSaving] = useState(false)
 	const [checkKey, setCheckKey] = useState("")
@@ -79,6 +82,7 @@ export default function EditCompatibleNodeModal({
 				quotaEnabled: boolean
 				quotaPath: string
 				apiType?: string
+				supportsJsonSchema?: boolean
 			} = {
 				name: formData.name,
 				prefix: formData.prefix,
@@ -89,6 +93,7 @@ export default function EditCompatibleNodeModal({
 			}
 			if (!isAnthropic) {
 				payload.apiType = formData.apiType
+				payload.supportsJsonSchema = formData.supportsJsonSchema
 			}
 			await onSave(payload)
 		} finally {
@@ -146,12 +151,20 @@ export default function EditCompatibleNodeModal({
 					hint="The provider prefix used in model IDs"
 				/>
 				{!isAnthropic && (
-					<Select
-						label="API Type"
-						options={apiTypeOptions}
-						value={formData.apiType}
-						onChange={(e) => setFormData({ ...formData, apiType: e.target.value })}
-					/>
+					<>
+						<Select
+							label="API Type"
+							options={apiTypeOptions}
+							value={formData.apiType}
+							onChange={(e) => setFormData({ ...formData, apiType: e.target.value })}
+						/>
+						<Toggle
+							checked={formData.supportsJsonSchema}
+							onChange={(value) => setFormData({ ...formData, supportsJsonSchema: value })}
+							label="Native JSON Schema"
+							description="This endpoint implements response_format: json_schema. Leave off to keep the schema in the prompt and ask for a plain JSON object instead."
+						/>
+					</>
 				)}
 				<Input
 					label="Base URL"

@@ -108,7 +108,9 @@ export function makeProviderNodes(deps: ProviderNodeDependencies) {
 			return nodes.create({
 				id: `${idPrefix(type, deps)}${deps.generateId()}`,
 				...shared,
-				...(type === OPENAI_COMPATIBLE ? { apiType: body.apiType } : {}),
+				...(type === OPENAI_COMPATIBLE
+					? { apiType: body.apiType, supportsJsonSchema: body.supportsJsonSchema === true }
+					: {}),
 				...quota,
 			})
 		},
@@ -146,7 +148,16 @@ export function makeProviderNodes(deps: ProviderNodeDependencies) {
 				baseUrl: sanitizeBaseUrl(type, body.baseUrl ?? existing.baseUrl),
 			}
 			if (logo !== undefined) patch.logo = logo
-			if (type === OPENAI_COMPATIBLE) patch.apiType = body.apiType
+			if (type === OPENAI_COMPATIBLE) {
+				patch.apiType = body.apiType
+				// Preserved when absent, for the same reason as quotaEnabled: a client
+				// that never sends the flag must not switch native Structured Output
+				// back off on a node that opted in.
+				patch.supportsJsonSchema =
+					typeof body.supportsJsonSchema === "boolean"
+						? body.supportsJsonSchema
+						: existing.supportsJsonSchema === true
+			}
 
 			if (type === OPENAI_COMPATIBLE || type === "anthropic-compatible") {
 				// Preserved when absent: an older client that never sent the field would
@@ -184,7 +195,13 @@ export function makeProviderNodes(deps: ProviderNodeDependencies) {
 							prefix: node.prefix,
 							baseUrl: node.baseUrl,
 							nodeName: node.name,
-							...(node.type === OPENAI_COMPATIBLE ? { apiType: node.apiType } : {}),
+							...(node.type === OPENAI_COMPATIBLE
+								? {
+										apiType: node.apiType,
+										// The router reads this off the connection, not the node.
+										supportsJsonSchema: node.supportsJsonSchema === true,
+									}
+								: {}),
 							...(node.quotaEnabled === undefined
 								? {}
 								: { quotaEnabled: node.quotaEnabled, quotaPath: node.quotaPath }),

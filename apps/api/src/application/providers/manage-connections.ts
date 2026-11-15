@@ -64,7 +64,9 @@ function nodeFields(
 ): Record<string, unknown> {
 	return {
 		prefix: node.prefix,
-		...(options.includeApiType ? { apiType: node.apiType } : {}),
+		...(options.includeApiType
+			? { apiType: node.apiType, supportsJsonSchema: node.supportsJsonSchema === true }
+			: {}),
 		baseUrl: node.baseUrl,
 		nodeName: node.name,
 		...(options.includeQuota

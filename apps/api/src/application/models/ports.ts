@@ -72,6 +72,8 @@ export interface ProviderNodeRow {
 	readonly name?: string
 	readonly prefix?: string
 	readonly baseUrl?: string
+	/** openai-compatible only: the endpoint implements `response_format: json_schema`. */
+	readonly supportsJsonSchema?: boolean
 	readonly [key: string]: unknown
 }
 

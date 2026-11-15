@@ -12,6 +12,7 @@ interface AddCompatibleFormData {
 	logo: string
 	quotaEnabled: boolean
 	quotaPath: string
+	supportsJsonSchema: boolean
 }
 
 interface VariantConfig {
@@ -86,6 +87,7 @@ function AddCompatibleModal({ variant, isOpen, onClose, onCreated }: AddCompatib
 		logo: "",
 		quotaEnabled: false,
 		quotaPath: "/credits",
+		supportsJsonSchema: false,
 	})
 
 	const [formData, setFormData] = useState<AddCompatibleFormData>(initialFormData())
@@ -115,7 +117,12 @@ function AddCompatibleModal({ variant, isOpen, onClose, onCreated }: AddCompatib
 				body: JSON.stringify({
 					name: formData.name,
 					prefix: formData.prefix,
-					...(config.hasApiType ? { apiType: formData.apiType } : {}),
+					...(config.hasApiType
+						? {
+								apiType: formData.apiType,
+								supportsJsonSchema: formData.supportsJsonSchema,
+							}
+						: {}),
 					baseUrl: formData.baseUrl,
 					type: config.type,
 					brand: variant || undefined,
@@ -201,12 +208,20 @@ function AddCompatibleModal({ variant, isOpen, onClose, onCreated }: AddCompatib
 					hint="The provider prefix used in model IDs"
 				/>
 				{config.hasApiType && (
-					<Select
-						label="API Type"
-						options={API_TYPE_OPTIONS}
-						value={formData.apiType}
-						onChange={(e) => handleApiTypeChange(e.target.value)}
-					/>
+					<>
+						<Select
+							label="API Type"
+							options={API_TYPE_OPTIONS}
+							value={formData.apiType}
+							onChange={(e) => handleApiTypeChange(e.target.value)}
+						/>
+						<Toggle
+							checked={formData.supportsJsonSchema}
+							onChange={(value) => setFormData({ ...formData, supportsJsonSchema: value })}
+							label="Native JSON Schema"
+							description="This endpoint implements response_format: json_schema. Leave off to keep the schema in the prompt and ask for a plain JSON object instead."
+						/>
+					</>
 				)}
 				<Input
 					label="Base URL"

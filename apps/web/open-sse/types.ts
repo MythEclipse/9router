@@ -48,6 +48,12 @@ export interface ProviderSpecificData {
 	baseUrl?: string
 	region?: string
 	apiType?: string
+	/**
+	 * openai-compatible nodes only: the endpoint implements `response_format:
+	 * json_schema` natively, so the request keeps it instead of being downgraded
+	 * to `json_object` plus a schema in the system prompt.
+	 */
+	supportsJsonSchema?: boolean
 	userId?: string
 	systemId?: string
 	organizationId?: string

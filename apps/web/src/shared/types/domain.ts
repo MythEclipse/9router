@@ -43,6 +43,8 @@ export interface ProviderNode {
 	prefix?: string
 	apiType?: string
 	baseUrl?: string
+	/** openai-compatible only: keep `response_format: json_schema` as sent. */
+	supportsJsonSchema?: boolean
 	data?: Record<string, unknown>
 	createdAt?: string
 	updatedAt?: string

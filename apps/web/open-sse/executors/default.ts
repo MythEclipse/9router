@@ -132,6 +132,7 @@ export class DefaultExecutor extends BaseExecutor {
 	transformRequest(model, body, stream, credentials) {
 		let transformed = this.applyJsonSchemaFallback(
 			this.applyNousAttribution(model, body, stream, credentials),
+			credentials,
 		)
 
 		if (transformed && typeof transformed === "object") {
@@ -203,8 +204,21 @@ export class DefaultExecutor extends BaseExecutor {
 	}
 
 	// Fallback json_schema → json_object for openai-compatible providers without native Structured Output.
-	applyJsonSchemaFallback(body) {
+	//
+	// A compatible node is an endpoint nobody here has probed, so the default is
+	// the soft path: the schema is appended to the system prompt and the upstream
+	// is only asked for "some JSON object". That keeps the request alive but hands
+	// back no guarantee - the model is free to answer with prose, fences or a
+	// different shape, and only a downstream repair (JSON Guard, or the caller's
+	// own parser) makes it usable.
+	//
+	// `supportsJsonSchema` on the node's providerSpecificData opts the node out of
+	// that downgrade: the request keeps the schema it asked for, so the upstream
+	// constrains generation itself. Opt-in, because passing the field to an
+	// endpoint that does not implement it is a 400, not a better answer.
+	applyJsonSchemaFallback(body, credentials = null) {
 		if (!this.provider?.startsWith?.("openai-compatible-")) return body
+		if (credentials?.providerSpecificData?.supportsJsonSchema === true) return body
 		const rf = body?.response_format
 		if (rf?.type !== "json_schema" || !rf.json_schema?.schema) return body
 

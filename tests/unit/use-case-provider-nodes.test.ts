@@ -138,6 +138,39 @@ describe("providerNodes.create", () => {
 			h.useCase.create({ type: "openai-compatible", name: "x", prefix: "x" }),
 		).rejects.toMatchObject({ message: "Invalid OpenAI compatible API type" })
 	})
+
+	it("stores native Structured Output as an opt-in boolean", async () => {
+		const h = harness()
+		const node = await h.useCase.create({
+			type: "openai-compatible",
+			apiType: "chat",
+			name: "Oc",
+			prefix: "oc",
+			supportsJsonSchema: true,
+		})
+		expect(node.supportsJsonSchema).toBe(true)
+	})
+
+	it("defaults the flag to off, and never gives it to an Anthropic node", async () => {
+		// The fallback only exists on the OpenAI-compatible path; an Anthropic
+		// node carrying the flag would claim a capability nothing reads.
+		const h = harness()
+		const compatible = await h.useCase.create({
+			type: "openai-compatible",
+			apiType: "chat",
+			name: "Oc",
+			prefix: "oc",
+		})
+		expect(compatible.supportsJsonSchema).toBe(false)
+
+		const anthropic = await h.useCase.create({
+			type: "anthropic-compatible",
+			name: "Ac",
+			prefix: "ac",
+			supportsJsonSchema: true,
+		})
+		expect(anthropic).not.toHaveProperty("supportsJsonSchema")
+	})
 })
 
 describe("providerNodes.update", () => {
@@ -218,6 +251,33 @@ describe("providerNodes.update", () => {
 		const h = harness([])
 		await expect(h.useCase.update("nope", { name: "x", prefix: "x" })).rejects.toMatchObject({
 			code: "NOT_FOUND",
+		})
+	})
+
+	it("preserves the Structured Output flag when the client does not send it", async () => {
+		// Same reasoning as quotaEnabled: a client that never learned the field must
+		// not switch the node's native structured output back off on every save.
+		const h = harness([{ ...existing, supportsJsonSchema: true }])
+		await h.useCase.update("node-1", { name: "Work", prefix: "work", apiType: "chat" })
+		expect(h.patches[0]?.patch.supportsJsonSchema).toBe(true)
+	})
+
+	it("turns the flag off when the client sends false", async () => {
+		const h = harness([{ ...existing, supportsJsonSchema: true }])
+		await h.useCase.update("node-1", {
+			name: "Work",
+			prefix: "work",
+			apiType: "chat",
+			supportsJsonSchema: false,
+		})
+		expect(h.patches[0]?.patch.supportsJsonSchema).toBe(false)
+	})
+
+	it("copies the flag onto the connections, which is where the router reads it", async () => {
+		const h = harness([{ ...existing, supportsJsonSchema: true }])
+		await h.useCase.update("node-1", { name: "Work", prefix: "work", apiType: "chat" })
+		expect(h.connectionPatches[0]?.patch.providerSpecificData).toMatchObject({
+			supportsJsonSchema: true,
 		})
 	})
 })
