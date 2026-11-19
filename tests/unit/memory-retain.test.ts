@@ -236,6 +236,19 @@ describe("recallForRequest", () => {
 		expect(calls[0].url).toContain("/banks/shared-bank/memories/recall")
 	})
 
+	it("disables the optional include sections with null, never a boolean", async () => {
+		// Hindsight's `include` fields are object-or-null; `false` is a 422. The
+		// failure is invisible in production because a non-2xx fails open as
+		// "no memory", so the stage looks healthy and never injects anything.
+		stubFetch(() => new Response(JSON.stringify({ results: [] }), { status: 200 }))
+		await recallForRequest({ config: CONFIG, query: "q", apiKey: "key-a" })
+		const include = calls[0].body.include as Record<string, unknown>
+		expect(include).toEqual({ entities: null, chunks: null, source_facts: null })
+		for (const value of Object.values(include)) {
+			expect(value).not.toBe(false)
+		}
+	})
+
 	it("carries the shared tags of a bank whose knowledge is tagged, not untagged", async () => {
 		const tagged = resolveMemoryConfig({
 			settings: { memory: { sharedTags: ["host:omarchy", "knowledge:decision"] } },

@@ -13,7 +13,7 @@
     "dev:node": "cross-env NEXT_DIST_DIR=.next-dev next dev --port 20128 --hostname 127.0.0.1",
     "build": "bun --bun next build",
     "build:node": "next build",
-    "postbuild": "node scripts/ensure-sharp-runtime-alias.mjs && node scripts/copy-standalone-assets.mjs",
+    "postbuild": "node scripts/verify-server-chunks.mjs && node scripts/ensure-sharp-runtime-alias.mjs && node scripts/copy-standalone-assets.mjs",
     "start": "bun custom-server.js --port 20127",
     "start:node": "node custom-server.js --port 20127"
   },

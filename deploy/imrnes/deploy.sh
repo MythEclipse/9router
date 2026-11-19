@@ -114,6 +114,15 @@ case "$resolved_next" in
 esac
 say "next     : resolves inside the release"
 
+# ── build integrity ─────────────────────────────────────────────────────────
+# A corrupt server chunk answers 500 on every route that needs it while
+# /api/health keeps answering 200, so the health probes below cannot see it.
+# The postbuild gate catches this in CI; re-checking here closes the other
+# door — a payload built by hand outside CI. node_modules is in place now, so
+# the verifier's own dependency resolves.
+say "── build integrity ──"
+( cd "$STAGING" && node scripts/verify-server-chunks.mjs ) || fatal "server chunk verification failed"
+
 rm -rf "$RELEASE"
 mv "$STAGING" "$RELEASE"
 chown -R "$SERVICE_USER:$SERVICE_USER" "$RELEASE"
@@ -202,17 +211,25 @@ systemctl start "$UNIT"
 # Both probes must pass. /api/health alone is not enough: it answers 200 from a
 # process that cannot open its database, which is exactly what a Node launcher
 # against bun:sqlite produced — a green deploy with a broken dashboard.
+#
+# The chat probe is the third leg, and the one that exercises the Next route
+# loader: a corrupt server chunk answers 500 at module load (ChunkLoadError)
+# while /api/health keeps reporting 200. A healthy route answers 4xx for a
+# bogus key; 500/000 means the route failed to load.
 say "── health ──"
 healthy=0
 for attempt in $(seq 1 40); do
   health=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:$PORT/api/health" 2>/dev/null || echo 000)
   auth=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:$PORT/api/auth/status" 2>/dev/null || echo 000)
-  if [ "$health" = "200" ] && [ "$auth" = "200" ]; then
-    say "attempt $attempt: /api/health $health, /api/auth/status $auth"
+  chat=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 -X POST "http://127.0.0.1:$PORT/api/v1/chat/completions" \
+    -H 'Content-Type: application/json' -H 'Authorization: Bearer health-probe-invalid' -d '{}' 2>/dev/null || echo 000)
+  case "$chat" in 400|401|403|404|429) chat_ok=1 ;; *) chat_ok=0 ;; esac
+  if [ "$health" = "200" ] && [ "$auth" = "200" ] && [ "$chat_ok" = "1" ]; then
+    say "attempt $attempt: /api/health $health, /api/auth/status $auth, /api/v1/chat/completions $chat"
     healthy=1
     break
   fi
-  [ "$attempt" = "40" ] && say "attempt $attempt: /api/health $health, /api/auth/status $auth"
+  [ "$attempt" = "40" ] && say "attempt $attempt: /api/health $health, /api/auth/status $auth, /api/v1/chat/completions $chat"
   sleep 2
 done
 

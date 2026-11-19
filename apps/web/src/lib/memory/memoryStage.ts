@@ -77,7 +77,11 @@ export async function recallForRequest(input: {
 			prefer_observations: true,
 			tags: [principalTag(apiKey), ...config.sharedTags],
 			tags_match: config.includeShared ? "any" : "any_strict",
-			include: { chunks: false, source_facts: false },
+			// `include` takes an object-or-null per field, not a boolean: `null`
+			// disables, `{}` enables with defaults. Sending `false` is a 422, which
+			// fails open as "no memory" — the stage looks healthy and silently never
+			// injects anything.
+			include: { entities: null, chunks: null, source_facts: null },
 		},
 		{ timeoutMs: config.timeoutMs, signal: input.signal, operation: "recall" },
 	)
