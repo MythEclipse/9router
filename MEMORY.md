@@ -4,18 +4,22 @@ The gateway can recall from and retain to a [Hindsight](https://hindsight.vector
 memory service on every chat turn, so a client needs no memory integration of its
 own: the context is already in the prompt and shared across a combo.
 
-Off by default. `Settings → memory` (or `POST /api/settings`) turns it on:
+## Off by default, on per key or per combo
+
+There is **no global switch**. The `memory` block in settings is connection
+settings only — where Hindsight is, which bank, what budget:
 
 ```jsonc
 {
   "memory": {
-    "enabled": true,
     "baseUrl": "http://localhost:8888",
     "apiKey": "<bearer token, if the deployment needs one>",
     "bankId": "9router",
     "recall": true,
     "retain": true,
     "includeShared": true,
+    "sharedTags": [],
+    "retainTags": [],
     "recallBudget": "mid",
     "recallMaxTokens": 1200,
     "timeoutMs": 800
@@ -23,8 +27,36 @@ Off by default. `Settings → memory` (or `POST /api/settings`) turns it on:
 }
 ```
 
-A combo may retune any of these under `comboStrategies[<name>].memory`. It cannot
-*enable* a stage the operator left off.
+Turning it on is a per-scope decision, made in one of two places:
+
+**1. One API key** — the default way. The opt-in is stored in `kv` scope
+`memoryOptIn`, keyed by the key's id (never the secret, which can rotate and would
+land in logs):
+
+```bash
+curl -X POST http://localhost:20128/api/memory \
+  -H "Content-Type: application/json" \
+  -d '{"action":"opt-in","keyId":"<api key id>"}'
+```
+
+**2. One combo** — for a combo that should always carry memory, whatever key calls
+it. `enabled: true` inside the combo block is the switch:
+
+```jsonc
+{
+  "comboStrategies": {
+    "public": { "memory": { "enabled": true, "includeShared": false } }
+  }
+}
+```
+
+A key that opted in runs the stage even when no combo asks for it; a combo that
+opted in runs it for every caller. Anything unnamed stays off, so enabling memory
+for one caller can never enable it for every caller on the gateway — which is the
+blast radius a global switch would create on a public combo.
+
+A combo block may also retune any connection field for its own traffic, and it
+applies only to requests routed through that combo.
 
 ## One bank, isolated by tag
 
@@ -86,12 +118,14 @@ and the chat request continues. Nothing in this stage can fail a request.
 
 ## Admin
 
-`GET /api/memory` — reachability, effective config (token withheld), breaker state.
+`GET /api/memory` — reachability, connection config (token withheld), breaker
+state, and which key ids have opted in.
+`POST /api/memory` with `{action:"opt-in"|"opt-out", keyId}` — the per-key switch.
 `POST /api/memory` with `{action:"purge", apiKey}` — delete one principal's retained
 conversations, filtered server-side by that principal's tag.
 `POST /api/memory` with `{action:"reflect", query}` — run reflect once.
 
-All three sit behind the dashboard auth gate.
+All of them sit behind the dashboard auth gate.
 
 ## Local setup
 

@@ -19,6 +19,8 @@
  * Every route sits behind the dashboard auth gate (the `/api/*` deny-by-default
  * rule in `dashboardGuard.ts`), so no extra check is duplicated here.
  */
+
+import { listOptedInKeys, setKeyOptIn } from "@9router/db/repos/memoryOptInRepo"
 import { NextResponse } from "next/server"
 import { getSettings } from "@/lib/localDb"
 import { bankPath, resolveMemoryConfig } from "@/lib/memory/config"
@@ -39,8 +41,11 @@ interface DocumentListResponse {
 /** Health + effective config, with the bearer token withheld. */
 export async function GET() {
 	const settings = (await getSettings()) as Record<string, unknown>
-	const config = resolveMemoryConfig(settings)
-	const health = config.enabled
+	const config = resolveMemoryConfig({ settings })
+	// Probed whenever a URL is configured, not only when the stage is "on": there
+	// is no global switch any more, and an operator checking health before opting a
+	// key in still needs an answer.
+	const health = config.baseUrl
 		? await getHindsight<{ status?: string; database?: string }>(
 				{ baseUrl: config.baseUrl, apiKey: config.apiKey },
 				"/health",
@@ -50,7 +55,9 @@ export async function GET() {
 
 	return NextResponse.json(
 		{
-			enabled: config.enabled,
+			// Per-key enablement means there is no single on/off to report; the list of
+			// opted-in keys is what answers "is it on, and for whom".
+			optedInKeys: await listOptedInKeys(),
 			baseUrl: config.baseUrl,
 			bankId: config.bankId,
 			recall: config.recall,
@@ -83,12 +90,25 @@ export async function POST(request: Request) {
 	}
 
 	const settings = (await getSettings()) as Record<string, unknown>
-	const config = resolveMemoryConfig(settings)
-	if (!config.enabled) {
-		return NextResponse.json({ error: "Memory stage is disabled" }, { status: 400 })
+	const config = resolveMemoryConfig({ settings })
+	// Admin verbs are gated on the *connection* being configured, not on the stage
+	// being enabled: with per-key opt-in there is no global "enabled" to check, and
+	// an operator must be able to opt a key in before any request can use memory.
+	if (!config.baseUrl) {
+		return NextResponse.json(
+			{ error: "Memory stage has no Hindsight URL configured" },
+			{ status: 400 },
+		)
 	}
 	const endpoint = { baseUrl: config.baseUrl, apiKey: config.apiKey }
 	const action = typeof body.action === "string" ? body.action : ""
+
+	if (action === "opt-in" || action === "opt-out") {
+		const keyId = typeof body.keyId === "string" ? body.keyId.trim() : ""
+		if (!keyId) return NextResponse.json({ error: "keyId is required" }, { status: 400 })
+		await setKeyOptIn(keyId, action === "opt-in")
+		return NextResponse.json({ keyId, optedIn: action === "opt-in" })
+	}
 
 	if (action === "purge") {
 		const principal = principalHash(typeof body.apiKey === "string" ? body.apiKey : "")

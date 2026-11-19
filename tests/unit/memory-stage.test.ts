@@ -101,30 +101,84 @@ describe("transcript reading", () => {
 	})
 })
 
-describe("memory config", () => {
-	it("is off unless the operator enabled it", () => {
-		expect(resolveMemoryConfig({}).enabled).toBe(false)
+describe("memory config: off by default, on per scope", () => {
+	it("is off when nothing opted in — no global switch exists", () => {
+		// A settings row with connection details but no opt-in runs nothing. There is
+		// deliberately no `memory.enabled` here to fall back on.
+		const config = resolveMemoryConfig({
+			settings: { memory: { baseUrl: "http://h:8888", bankId: "shared" } },
+		})
+		expect(config.enabled).toBe(false)
 	})
 
-	it("lets a combo retune an enabled stage", () => {
-		const config = resolveMemoryConfig(
-			{
-				memory: { enabled: true, bankId: "shared", recallMaxTokens: 1200 },
-				comboStrategies: { public: { memory: { recallMaxTokens: 300, includeShared: false } } },
-			},
-			"public",
-		)
+	it("does not read a global enabled flag even if one is present", () => {
+		// Guards the migration: an old row that still carries `enabled: true` must not
+		// switch the stage on for every caller of the gateway.
+		const config = resolveMemoryConfig({
+			settings: { memory: { enabled: true, baseUrl: "http://h:8888" } },
+		})
+		expect(config.enabled).toBe(false)
+	})
+
+	it("turns on for a key that opted in, even with no combo", () => {
+		const config = resolveMemoryConfig({
+			settings: { memory: { baseUrl: "http://h:8888", bankId: "shared" } },
+			keyOptedIn: true,
+		})
+		expect(config.enabled).toBe(true)
 		expect(config.bankId).toBe("shared")
-		expect(config.recallMaxTokens).toBe(300)
+	})
+
+	it("turns on for a combo that opted in, even with no key opt-in", () => {
+		const config = resolveMemoryConfig({
+			settings: {
+				memory: { bankId: "shared" },
+				comboStrategies: { public: { memory: { enabled: true, includeShared: false } } },
+			},
+			comboName: "public",
+		})
+		expect(config.enabled).toBe(true)
 		expect(config.includeShared).toBe(false)
 	})
 
-	it("never lets a combo enable a stage the operator left off", () => {
-		const config = resolveMemoryConfig(
-			{ memory: { enabled: false }, comboStrategies: { public: { memory: { enabled: true } } } },
-			"public",
-		)
+	it("leaves a different combo off", () => {
+		const config = resolveMemoryConfig({
+			settings: {
+				comboStrategies: { public: { memory: { enabled: true } } },
+			},
+			comboName: "private",
+		})
 		expect(config.enabled).toBe(false)
+	})
+
+	it("lets a combo retune an enabled stage", () => {
+		const config = resolveMemoryConfig({
+			settings: {
+				memory: { recallMaxTokens: 1200 },
+				comboStrategies: { public: { memory: { enabled: true, recallMaxTokens: 300 } } },
+			},
+			comboName: "public",
+		})
+		expect(config.recallMaxTokens).toBe(300)
+	})
+
+	it("does not let a combo's knobs leak into a request it does not cover", () => {
+		const config = resolveMemoryConfig({
+			settings: {
+				memory: { recallMaxTokens: 1200 },
+				comboStrategies: { public: { memory: { enabled: true, recallMaxTokens: 300 } } },
+			},
+			comboName: "private",
+			keyOptedIn: true,
+		})
+		expect(config.enabled).toBe(true)
+		// The key opted in, but the combo block belongs to another combo.
+		expect(config.recallMaxTokens).toBe(1200)
+	})
+
+	it("turns on for a trusted caller such as the dashboard", () => {
+		const config = resolveMemoryConfig({ settings: {}, trustedCaller: true })
+		expect(config.enabled).toBe(true)
 	})
 })
 

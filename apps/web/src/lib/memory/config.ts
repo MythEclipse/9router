@@ -1,15 +1,25 @@
 /**
  * Resolving the memory stage's configuration.
  *
- * Two layers, no migration: the global defaults live in the `settings` row
- * (`DEFAULT_SETTINGS.memory`), and a combo may override any of them under
- * `comboStrategies[<name>].memory`. That is the same row and the same per-combo
- * map the routing strategy already reads, so nothing new is stored and a combo
- * can be given its own bank without touching the global setting.
+ * **Nothing here is enabled globally.** The global `memory` block is connection
+ * settings only — where Hindsight is, which bank, what budget — and it carries no
+ * `enabled` flag. Turning the stage on is a per-scope decision, made in one of two
+ * places:
  *
- * `enabled` is the master switch and the only field that cannot be turned on by
- * an override: a per-combo block may narrow or retune an enabled stage, never
- * enable one the operator left off.
+ *   - a **per-key opt-in**, stored in `kv` scope `memoryOptIn` and keyed by the
+ *     key's id (see `memoryOptInRepo`). This is the default way: one key gets
+ *     memory, every other key on the gateway does not.
+ *   - `comboStrategies[<name>].memory.enabled`, for a combo that should always
+ *     carry memory regardless of which key calls it.
+ *
+ * The reason for the split is blast radius. A global switch turns memory on for
+ * every caller at once — including a public combo, where "retain" means one
+ * caller's conversation becomes readable context for the next. A per-key or
+ * per-combo switch makes enabling it an explicit act with a named owner, and
+ * anything unnamed stays off.
+ *
+ * Both scopes share the same connection settings; they decide *whether* the stage
+ * runs, and the narrowest scope that asked for it has the last word on tuning.
  */
 
 export type RecallBudget = "low" | "mid" | "high"
@@ -104,25 +114,51 @@ function asTags(value: unknown): string[] {
 	return [...seen]
 }
 
+export interface MemoryConfigInput {
+	/** The settings row (`getSettings()`), or a partial stand-in. */
+	settings: Record<string, unknown> | null | undefined
+	/** The resolved combo entry name, when the request routes as one. */
+	comboName?: string | null
+	/**
+	 * Whether the calling API key opted in (`memoryOptInRepo.isKeyOptedIn`).
+	 *
+	 * A key that opted in runs the stage even when no combo asks for it; that is the
+	 * point of a per-key switch. Default false — an unknown or keyless caller gets no
+	 * memory unless a combo it reaches explicitly enables it.
+	 */
+	keyOptedIn?: boolean
+	/**
+	 * Whether the caller may run the stage without opting in.
+	 *
+	 * Only for the dashboard/admin path and local single-user mode, where there is
+	 * no third party whose conversation could leak into another's context. Passed
+	 * explicitly rather than inferred from "no API key", because "no key" is also
+	 * what a misconfigured public caller looks like.
+	 */
+	trustedCaller?: boolean
+}
+
 /**
- * Fold the global block and an optional per-combo block into one config.
+ * Fold the connection settings, the per-combo block and the per-key opt-in into
+ * one config for this request.
  *
- * @param settings the settings row (`getSettings()`), or a partial stand-in
- * @param comboName the resolved combo entry name, when the request routes as one
+ * Enablement is the OR of the scope decisions; the last word on tuning goes to the
+ * narrowest scope that asked for the stage, so a combo's block beats the global
+ * connection settings.
  */
-export function resolveMemoryConfig(
-	settings: Record<string, unknown> | null | undefined,
-	comboName?: string | null,
-): MemoryConfig {
+export function resolveMemoryConfig(input: MemoryConfigInput): MemoryConfig {
+	const { settings, comboName, keyOptedIn, trustedCaller } = input
 	const global = asRecord(settings?.memory)
 	const perCombo = comboName
 		? asRecord(asRecord(settings?.comboStrategies)?.[comboName])?.memory
 		: undefined
 	const override = asRecord(perCombo) ?? {}
 
-	const enabled = asBoolean(global?.enabled, DEFAULTS.enabled)
-	// A per-combo block cannot enable a stage the operator left off; it only tunes
-	// one that is already on.
+	const comboEnabled = asBoolean(override.enabled, false)
+	const enabled = comboEnabled || keyOptedIn === true || trustedCaller === true
+	// A scope that did not enable the stage contributes no tuning either: applying a
+	// combo's knobs to a request the combo does not cover would tune a stage nobody
+	// asked to run.
 	const tuned = enabled ? { ...(global ?? {}), ...override } : (global ?? {})
 
 	return {

@@ -1,3 +1,4 @@
+import { isKeyOptedIn, keyIdOfSecret } from "@9router/db/repos/memoryOptInRepo"
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig"
 import {
 	augmentModelsWithCapacityAdapter,
@@ -147,9 +148,19 @@ export async function handleChat(
 	// and inject one copy of the same block per member. One recall, one mutation of
 	// this shared body, and every member and retry inherits it.
 	//
+	// Nothing is enabled globally: the stage runs only when this key opted in
+	// (`kv` scope `memoryOptIn`) or the combo it routes through says so. A public
+	// combo therefore cannot hand memory to every caller of the gateway, which is
+	// the blast radius a global switch would create.
+	//
 	// Fail-open throughout: a timeout injects nothing and a failed retain is
 	// dropped. Memory must never be the reason a chat request fails.
-	const memoryConfig = resolveMemoryConfig(settings as Record<string, unknown>, comboEntryName)
+	const keyId = apiKey ? await keyIdOfSecret(apiKey) : null
+	const memoryConfig = resolveMemoryConfig({
+		settings: settings as Record<string, unknown>,
+		comboName: comboEntryName,
+		keyOptedIn: await isKeyOptedIn(keyId),
+	})
 	if (memoryConfig.enabled) {
 		const memoryTag = log.tagForSession?.(apiKey || "local") || ""
 		const sessionId = memorySessionId({ request, body, apiKey })

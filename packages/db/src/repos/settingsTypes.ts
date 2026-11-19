@@ -40,22 +40,30 @@ export interface ComboStrategy {
 	confidenceThreshold?: number
 	routerModel?: string
 	/**
-	 * Per-combo memory tuning. Same fields as the global `memory` block; it can
-	 * retune an enabled stage but never enable one the operator left off.
+	 * Per-combo memory: the combo's own opt-in plus any retuning of the global
+	 * connection settings.
+	 *
+	 * `enabled: true` here is what turns the stage on for requests routed through
+	 * this combo, whatever key called it. That is the intended way to give one
+	 * public combo memory without giving it to the whole gateway.
 	 */
-	memory?: Partial<MemorySettings>
+	memory?: Partial<MemorySettings> & { enabled?: boolean }
 	[key: string]: unknown
 }
 
 /**
- * The Hindsight-backed memory stage.
+ * The Hindsight-backed memory stage: **connection settings only**.
+ *
+ * There is deliberately no `enabled` flag here. Turning the stage on is a
+ * per-scope decision — a per-key opt-in (`kv` scope `memoryOptIn`) or
+ * `comboStrategies[<name>].memory.enabled` — so enabling it for one caller can
+ * never enable it for every caller on the gateway. See `lib/memory/config.ts`.
  *
  * One shared bank, isolated by a gateway-assigned principal tag rather than by
  * bank separation — see `apps/web/src/lib/memory/principal.ts`. `includeShared`
  * decides whether recall also returns the bank's untagged corpus.
  */
 export interface MemorySettings {
-	enabled: boolean
 	baseUrl: string
 	/** Bearer token for the Hindsight deployment; never returned to a browser. */
 	apiKey: string
@@ -213,14 +221,15 @@ export const DEFAULT_SETTINGS = {
 		CUSTOM_PLUGIN_KEYS.map((key) => [key, { enabled: false, models: [] as string[] }]),
 	),
 	requireLogin: true,
-	// Hindsight-backed memory stage. Off by default: it is an external service
-	// with a per-turn cost, so it must be a deliberate opt-in.
+	// Hindsight-backed memory stage: connection settings only, and no `enabled`
+	// flag. Enablement is per key (`kv` scope `memoryOptIn`) or per combo
+	// (`comboStrategies[<name>].memory.enabled`), so switching memory on for one
+	// caller can never switch it on for every caller on the gateway.
 	//
 	// `includeShared: true` returns the bank's untagged corpus alongside this
 	// caller's own memories. Turn it off for a public combo whose bank has no
 	// curated shared material, so one bank behaves like one bank per caller.
 	memory: {
-		enabled: false,
 		baseUrl: process.env.HINDSIGHT_URL || "http://localhost:8888",
 		apiKey: process.env.HINDSIGHT_API_KEY || "",
 		bankId: "9router",

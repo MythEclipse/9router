@@ -17,7 +17,10 @@ import { principalTag } from "../../apps/web/src/lib/memory/principal"
  * down.
  */
 
-const CONFIG = resolveMemoryConfig({ memory: { enabled: true, bankId: "shared-bank" } })
+const CONFIG = resolveMemoryConfig({
+	settings: { memory: { bankId: "shared-bank" } },
+	trustedCaller: true,
+})
 const ENDPOINT = "http://localhost:8888"
 
 /** The bookmark store, in memory for one test. */
@@ -92,7 +95,8 @@ describe("retainDelta", () => {
 
 	it("stamps operator-chosen retain tags on top of the principal tag", async () => {
 		const sharing = resolveMemoryConfig({
-			memory: { enabled: true, sharedTags: ["host:omarchy"], retainTags: ["host:omarchy"] },
+			settings: { memory: { sharedTags: ["host:omarchy"], retainTags: ["host:omarchy"] } },
+			trustedCaller: true,
 		})
 		stubFetch(() => new Response("{}", { status: 202 }))
 		await retainDelta({
@@ -234,7 +238,8 @@ describe("recallForRequest", () => {
 
 	it("carries the shared tags of a bank whose knowledge is tagged, not untagged", async () => {
 		const tagged = resolveMemoryConfig({
-			memory: { enabled: true, sharedTags: ["host:omarchy", "knowledge:decision"] },
+			settings: { memory: { sharedTags: ["host:omarchy", "knowledge:decision"] } },
+			trustedCaller: true,
 		})
 		stubFetch(() => new Response(JSON.stringify({ results: [] }), { status: 200 }))
 		await recallForRequest({ config: tagged, query: "q", apiKey: "key-a" })
@@ -245,7 +250,8 @@ describe("recallForRequest", () => {
 
 	it("excludes the shared corpus when the config says so", async () => {
 		const isolated = resolveMemoryConfig({
-			memory: { enabled: true, includeShared: false },
+			settings: { memory: { includeShared: false } },
+			trustedCaller: true,
 		})
 		stubFetch(() => new Response(JSON.stringify({ results: [] }), { status: 200 }))
 		await recallForRequest({ config: isolated, query: "q", apiKey: "key-a" })
