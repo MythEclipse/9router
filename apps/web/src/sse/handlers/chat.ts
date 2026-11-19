@@ -189,7 +189,11 @@ export async function handleChat(
 			retainDelta({ config: memoryConfig, body, sessionId, apiKey, signal: request.signal })
 				.then((result) => {
 					if (result.retained > 0) {
-						log.debug("MEMORY", `retained ${result.retained} messages · ${memoryConfig.bankId}`)
+						// `line`, not `debug`: at the default INFO level a debug line is
+						// dropped, so a working retain left no trace at all and the only
+						// evidence was inside Hindsight's own log. Operators read this
+						// log to answer "is memory on?", which needs both halves.
+						log.line(memoryTag, "🧠", `RETAIN ${result.retained} messages · bank=${memoryConfig.bankId}`)
 					}
 				})
 				.catch(() => {

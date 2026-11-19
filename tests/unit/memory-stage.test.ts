@@ -12,7 +12,12 @@ import {
 	principalHash,
 	principalTag,
 } from "../../apps/web/src/lib/memory/principal"
-import { lastUserQuery, plainMessages, textOf } from "../../apps/web/src/lib/memory/transcript"
+import {
+	lastUserQuery,
+	plainMessages,
+	stripMemoryBlock,
+	textOf,
+} from "../../apps/web/src/lib/memory/transcript"
 
 const ENDPOINT = { baseUrl: "http://hindsight.test:8888", apiKey: "tok" }
 
@@ -179,6 +184,52 @@ describe("memory config: off by default, on per scope", () => {
 	it("turns on for a trusted caller such as the dashboard", () => {
 		const config = resolveMemoryConfig({ settings: {}, trustedCaller: true })
 		expect(config.enabled).toBe(true)
+	})
+})
+
+describe("recall output must not be retained back into the bank", () => {
+	// Recall injects <memory>…</memory> into the body and retain reads that same
+	// body, so an unstripped block is written back on every turn. Measured on a
+	// live document: 5,875 chars, nearly all of it the block, for a two-turn chat.
+	const block = [
+		"<memory>",
+		"The following notes were recalled from a persistent memory store.",
+		"",
+		"- [world] The user deploys 9router via CI on push to master.",
+		"</memory>",
+	].join("\n")
+
+	it("strips an injected block but keeps the caller's own words", () => {
+		const text = `system (2026-11-19T10:34:57Z): ${block}\nuser (2026-11-19T10:34:57Z): halo`
+		const clean = stripMemoryBlock(text)
+		expect(clean).not.toContain("<memory>")
+		expect(clean).not.toContain("deploys 9router via CI")
+		expect(clean).toContain("halo")
+	})
+
+	it("strips a block that was cut off mid-stream", () => {
+		// An aborted request can leave the closing tag missing; the text after it
+		// never existed, so dropping the tail is the whole fix.
+		const clean = stripMemoryBlock(`system: <memory>\n- [world] partial fact`)
+		expect(clean).toBe("system:")
+	})
+
+	it("leaves ordinary text untouched", () => {
+		expect(stripMemoryBlock("just a normal message")).toBe("just a normal message")
+		expect(stripMemoryBlock("")).toBe("")
+	})
+
+	it("plainMessages drops the block before retain can read it", () => {
+		const messages = plainMessages({
+			messages: [
+				{ role: "system", content: block },
+				{ role: "user", content: "pertanyaan saya" },
+			],
+		})
+		// The system turn was nothing but memory: it disappears entirely rather than
+		// being retained as an empty line.
+		expect(messages).toHaveLength(1)
+		expect(messages[0]).toEqual({ role: "user", text: "pertanyaan saya" })
 	})
 })
 

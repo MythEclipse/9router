@@ -15,6 +15,27 @@ export interface PlainMessage {
 	text: string
 }
 
+/**
+ * Remove an injected memory block from a message.
+ *
+ * Recall injects `<memory>…</memory>` into the request body, and retain reads that
+ * same body — so without this the recalled facts are written back into the bank on
+ * every turn. That is a feedback loop, not a copy: the next recall retrieves the
+ * re-retained text, extraction rewords it, and the block grows. One real document
+ * measured 5,875 chars of which nearly all was the block, dwarfing the two turns it
+ * was supposed to record.
+ *
+ * Stripping here rather than skipping the message keeps the original turn: only the
+ * injected envelope goes, and the user's own words stay.
+ */
+export function stripMemoryBlock(text: string): string {
+	if (!text || !text.includes("<memory>")) return text
+	return text
+		.replace(/<memory>[\s\S]*?<\/memory>/g, "")
+		.replace(/<memory>[\s\S]*$/g, "")
+		.trim()
+}
+
 /** The text of a content value: a string, or the text blocks of an array. */
 export function textOf(content: unknown): string {
 	if (typeof content === "string") return content
@@ -64,8 +85,11 @@ export function plainMessages(body: Record<string, unknown> | null | undefined):
 				textOf(record.content) ||
 				textOf(record.parts) ||
 				(typeof record.text === "string" ? record.text : "")
-			if (!text.trim()) continue
-			messages.push({ role: role || "unknown", text: text.trim() })
+			// Recall may have injected a memory block into an earlier turn of this very
+			// body; retaining it would write the bank back into itself.
+			const clean = stripMemoryBlock(text)
+			if (!clean) continue
+			messages.push({ role: role || "unknown", text: clean })
 		}
 		if (messages.length > 0) return messages
 	}
