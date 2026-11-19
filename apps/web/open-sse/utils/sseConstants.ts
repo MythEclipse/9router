@@ -20,6 +20,13 @@ export const SSE_HEADERS_CORS = {
 	"Cache-Control": "no-cache",
 	Connection: "keep-alive",
 	"Access-Control-Allow-Origin": "*",
+	// Every byte the client sees must leave as it is produced. Without this a
+	// reverse proxy (nginx, Caddy behind an nginx ingress, a CDN) is free to
+	// buffer the whole response and hand it over at the end - which is
+	// indistinguishable from the gateway collecting the answer first, and was
+	// reported exactly that way. `no` opts this response out of proxy buffering;
+	// it is the response-side counterpart to `proxy_buffering off`.
+	"X-Accel-Buffering": "no",
 }
 
 // Wire primitives, so no module has to retype them.

@@ -4,6 +4,7 @@
 // what the request asked for, so a mismatch degrades into working traffic instead
 // of an empty stream.
 
+import { BODY_SNIFF_BYTES, BODY_SNIFF_DEADLINE_MS } from "../config/runtimeConfig.ts"
 import { MODEL_FALLBACK } from "../translator/schema/defaults.ts"
 import { OPENAI_FINISH } from "../translator/schema/finishReasons.ts"
 import { chatChunkSse, sseChunk } from "../utils/sse.ts"
@@ -81,6 +82,162 @@ export function jsonResponseFromBody(body, sourceResponse) {
 		status: sourceResponse?.status || 200,
 		headers: { "content-type": SSE_CONTENT_TYPE_JSON },
 	})
+}
+
+/** Sentinel the read-ahead race resolves with when the deadline fires. */
+const SNIFF_DEADLINE = "__sniff_deadline__"
+
+/** A bounded look at an upstream body, plus the response to keep using downstream. */
+export interface SniffedResponse {
+	/** "sse" = event frames, "json" = one JSON document, "unknown" = neither yet. */
+	kind: "sse" | "json" | "unknown"
+	/** The bytes that were read ahead, decoded. */
+	prefix: string
+	/** The same response, with the read-ahead replayed in front of the live body. */
+	response: Response
+}
+
+/**
+ * Replay `head`, then continue from `reader`. Sequential by construction: at most
+ * one outstanding read, so the upstream is never drained twice in parallel.
+ */
+function replayBody(head: Uint8Array[], reader, pendingRead = null) {
+	let pending = pendingRead
+	const safeReader = reader && typeof reader.read === "function" ? reader : null
+	return new ReadableStream<Uint8Array>({
+		start(controller) {
+			for (const chunk of head || []) controller.enqueue(chunk)
+			if (!safeReader) controller.close()
+		},
+		async pull(controller) {
+			if (!safeReader) {
+				controller.close()
+				return
+			}
+			let result
+			try {
+				result = pending ? await pending : await safeReader.read()
+			} catch (error) {
+				controller.error(error)
+				return
+			}
+			pending = null
+			if (result.done) {
+				controller.close()
+				return
+			}
+			controller.enqueue(result.value)
+		},
+		cancel(reason) {
+			try {
+				safeReader?.cancel?.(reason)
+			} catch {
+				/* already closed */
+			}
+		},
+	})
+}
+
+/** Decide what a decoded prefix looks like. */
+function classifyPrefix(prefix: string): SniffedResponse["kind"] {
+	if (!prefix) return "unknown"
+	if (looksLikeSseText(prefix)) return "sse"
+	const text = prefix.trimStart()
+	// A JSON document (or an NDJSON line, which the stream parser would also treat
+	// as a frame) always opens with one of these.
+	if (text.startsWith("{") || text.startsWith("[")) return "json"
+	return "unknown"
+}
+
+/**
+ * Read a BOUNDED prefix of an upstream body to learn whether it speaks SSE or
+ * answers with one JSON document, and hand back a response that still carries
+ * every byte.
+ *
+ * This replaces the `await response.clone().text()` shape that used to gate the
+ * same decision. Reading a clone to completion drains the upstream stream before
+ * the first byte reaches the client, which turns every streamed answer into a
+ * buffered one: the client waits for the whole generation, then receives the
+ * frames in a single burst. A gateway must never do that - the read-ahead here
+ * stops at `maxBytes` (or `deadlineMs`) and is replayed, so the client's
+ * time-to-first-byte is unaffected.
+ *
+ * A response that already declares `text/event-stream` is returned untouched and
+ * never read: it has nothing to prove, and reading it is the bug.
+ */
+export async function sniffResponseBody(
+	response: Response,
+	options: { maxBytes?: number; deadlineMs?: number } = {},
+): Promise<SniffedResponse> {
+	const { maxBytes = BODY_SNIFF_BYTES, deadlineMs = BODY_SNIFF_DEADLINE_MS } = options
+	if (!response || typeof response !== "object") {
+		return { kind: "unknown", prefix: "", response }
+	}
+	if (isEventStreamResponse(response)) return { kind: "sse", prefix: "", response }
+
+	const body = response.body
+	if (!body || typeof body.getReader !== "function" || body.locked) {
+		// Nothing readable to inspect: leave the response for the caller to handle.
+		return { kind: "unknown", prefix: "", response }
+	}
+
+	const reader = body.getReader()
+	const decoder = new TextDecoder()
+	const head: Uint8Array[] = []
+	let prefix = ""
+	let pendingRead: ReturnType<typeof reader.read> | null = null
+	let timer: ReturnType<typeof setTimeout> | null = null
+	const budget = Number.isFinite(maxBytes) && maxBytes > 0 ? maxBytes : BODY_SNIFF_BYTES
+	const waitMs = Number.isFinite(deadlineMs) && deadlineMs > 0 ? deadlineMs : BODY_SNIFF_DEADLINE_MS
+
+	const deadline = new Promise((resolve) => {
+		timer = setTimeout(() => resolve(SNIFF_DEADLINE), waitMs)
+	})
+	const settle = (kind: SniffedResponse["kind"]): SniffedResponse => {
+		if (timer) {
+			clearTimeout(timer)
+			timer = null
+		}
+		return {
+			kind,
+			prefix,
+			response: new Response(replayBody(head, reader, pendingRead), {
+				status: response.status,
+				statusText: response.statusText,
+				headers: response.headers,
+			}),
+		}
+	}
+
+	while (true) {
+		if (!pendingRead) pendingRead = reader.read()
+		let result
+		try {
+			result = await Promise.race([pendingRead, deadline])
+		} catch {
+			// Upstream errored mid-peek; the replay surfaces the same error.
+			pendingRead = null
+			return settle(classifyPrefix(prefix))
+		}
+		if (result === SNIFF_DEADLINE) {
+			// Fail-open: keep the still-pending read so its chunk is replayed, and let
+			// the caller treat an undecided body as it always would.
+			return settle(classifyPrefix(prefix))
+		}
+		pendingRead = null
+		if (result.done) {
+			prefix += decoder.decode()
+			return settle(classifyPrefix(prefix))
+		}
+		head.push(result.value)
+		prefix += decoder.decode(result.value, { stream: true })
+		// Settle the moment the prefix is decisive. Waiting for the byte budget
+		// would delay the client's first token by however long the upstream takes
+		// to send that many bytes - the same latency bug in a smaller window.
+		const decided = classifyPrefix(prefix)
+		if (decided !== "unknown") return settle(decided)
+		if (prefix.length >= budget) return settle(decided)
+	}
 }
 
 /**

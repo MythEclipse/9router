@@ -1,10 +1,15 @@
 import { appendRequestLog, saveRequestDetail, trackPendingRequest } from "@/lib/usageDb"
-import { HTTP_STATUS, RESPONSE_PARSE_RETRY_ATTEMPTS } from "../../config/runtimeConfig.ts"
+import {
+	BODY_SNIFF_DEADLINE_MS,
+	HTTP_STATUS,
+	RESPONSE_PARSE_RETRY_ATTEMPTS,
+} from "../../config/runtimeConfig.ts"
 import { refreshWithRetry } from "../../services/tokenRefresh.ts"
 import {
 	collectJsonFrames,
 	isEventStreamResponse,
 	looksLikeSseText,
+	sniffResponseBody,
 } from "../../transformer/jsonToStreamConverter.ts"
 import {
 	degrade as degradeToolPayload,
@@ -27,20 +32,33 @@ import { buildRequestDetail, extractRequestConfig, saveFailedUsage } from "./req
  * Streaming responses are deliberately checked only when the client has not
  * received a stream yet; once bytes are sent, replaying the request would
  * duplicate a partial answer.
+ *
+ * The inspection is BOUNDED. This used to read `response.clone().text()` to
+ * completion, which buffered the whole upstream body before the request could be
+ * returned - the reason a streamed answer arrived in one burst after the model
+ * had finished. Only the first `BODY_SNIFF_BYTES` are read now, and a body that
+ * already declares `text/event-stream` is not read at all.
  */
 export async function responseBodyNeedsParseRetry(response) {
 	// HTTP failures (including rate limits and upstream 5xx responses) must
 	// follow the normal error/fallback path, never the malformed-body replay.
 	if (!response?.ok || response.status >= 400) return false
 	if (!response || typeof response.clone !== "function") return true
+	if (isEventStreamResponse(response)) {
+		// A declared SSE body is never malformed for being a stream. Whether it
+		// carries usable frames is decided downstream by the stream parser, which
+		// can still fall back - and doing it here would mean draining the stream.
+		return false
+	}
 	let text = ""
 	try {
-		text = await response.clone().text()
+		const sniffed = await sniffResponseBody(response, { deadlineMs: BODY_SNIFF_DEADLINE_MS })
+		text = sniffed.prefix
 	} catch {
 		return true
 	}
 	if (!text.trim()) return true
-	if (isEventStreamResponse(response) || looksLikeSseText(text)) {
+	if (looksLikeSseText(text)) {
 		const frames = collectJsonFrames(text)
 		if (frames.some((frame) => frame?.error || frame?.type === "error")) return false
 		return frames.length === 0
@@ -296,14 +314,12 @@ export async function dispatchExecutor(
 		finalBody = _retryState.finalBody
 		providerResponseFormat = _retryState.providerResponseFormat
 	} else if (providerResponse?.ok && stream) {
-		const initialText =
-			typeof providerResponse.clone === "function"
-				? await providerResponse
-						.clone()
-						.text()
-						.catch(() => "")
-				: ""
-		if (!isEventStreamResponse(providerResponse) && !looksLikeSseText(initialText)) {
+		// Bounded look, not a full drain: reading a clone to completion here would
+		// buffer the whole generation before the client saw its first token.
+		const sniffed = await sniffResponseBody(providerResponse)
+		providerResponse = sniffed.response
+		const looksLikeSse = sniffed.kind === "sse" || looksLikeSseText(sniffed.prefix)
+		if (!looksLikeSse) {
 			await retryMalformedResponse({
 				..._retryState,
 				executor,

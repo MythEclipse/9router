@@ -76,3 +76,66 @@ export function readCursorFrame(buffer, offset, frameNum, tag) {
 	}
 	return { status: "ok", payload, offset: newOffset }
 }
+
+/**
+ * Incremental frame assembler for a length-prefixed protobuf stream.
+ *
+ * Cursor's reply is `[flags:1][length:4 BE][payload:length]` repeated. `readCursorFrame`
+ * can only decode a buffer that already holds a complete frame, which is why the
+ * transport used to buffer the whole answer with `arrayBuffer()` — the entire
+ * generation arrived as one burst at the end.
+ *
+ * This class keeps a rolling buffer and emits each frame as soon as its declared
+ * length has arrived, so the caller can forward bytes while the upstream is still
+ * generating. Feed it whatever chunks arrive; it returns every frame that is now
+ * complete and holds the remainder until more bytes come.
+ *
+ * A frame is only decoded once ALL of its bytes are present, so `decompressPayload`
+ * keeps its whole-frame contract and gzip frames still inflate correctly.
+ */
+export class CursorFrameAssembler {
+	private buffer: Buffer = Buffer.alloc(0)
+	private frameCount = 0
+
+	constructor(private readonly tag = "") {}
+
+	/**
+	 * Feed a chunk. Returns the frames completed by it, in order.
+	 * A frame with a broken length is reported as `skip` (matching `readCursorFrame`)
+	 * and the assembler keeps going, so one bad frame cannot wedge the stream.
+	 */
+	push(chunk: Uint8Array | Buffer): Array<{ status: "ok" | "skip"; payload?: Buffer }> {
+		if (chunk && chunk.length) {
+			this.buffer = this.buffer.length
+				? Buffer.concat([this.buffer, Buffer.from(chunk)])
+				: Buffer.from(chunk)
+		}
+
+		const frames: Array<{ status: "ok" | "skip"; payload?: Buffer }> = []
+		let offset = 0
+		while (offset + 5 <= this.buffer.length) {
+			const length = this.buffer.readUInt32BE(offset + 1)
+			const end = offset + 5 + length
+			// The rest of this frame has not arrived yet: keep what we have and wait.
+			if (end > this.buffer.length) break
+			const frame = readCursorFrame(this.buffer, offset, this.frameCount, this.tag)
+			this.frameCount++
+			if (frame.status === "done") break
+			offset = frame.offset
+			if (frame.status === "skip") {
+				frames.push({ status: "skip" })
+				continue
+			}
+			frames.push({ status: "ok", payload: frame.payload })
+		}
+
+		// Drop the bytes already consumed so the buffer does not grow with the answer.
+		if (offset > 0) this.buffer = this.buffer.subarray(offset)
+		return frames
+	}
+
+	/** True when a partial frame is still waiting for bytes. */
+	get pendingBytes(): number {
+		return this.buffer.length
+	}
+}

@@ -7,6 +7,7 @@ import {
 	jsonResponseFromBody,
 	looksLikeSseText,
 	readJsonBody,
+	sniffResponseBody,
 	sseResponseFromCompletion,
 } from "../transformer/jsonToStreamConverter.ts"
 import { FORMATS } from "../translator/formats.ts"
@@ -43,52 +44,55 @@ export async function respondFromUpstream(ctx) {
 	// `stream` so the flag never left). Piping that body through the SSE parser
 	// emits zero frames - the client hangs on an empty stream and usage bills 0
 	// tokens - so branch on what actually arrived, not on what we asked for.
-	const rawUpstreamText =
-		providerResponse && typeof providerResponse.clone === "function"
-			? await providerResponse
-					.clone()
-					.text()
-					.catch(() => "")
-			: ""
-	if (stream && !isEventStreamResponse(providerResponse) && !looksLikeSseText(rawUpstreamText)) {
-		const mismatchedBody = await readJsonBody(providerResponse)
-		if (mismatchedBody === null) {
-			// Nothing readable came back and the client never asked for a stream, so it
-			// gets a clean gateway error instead of a response with no body to parse.
-			if (!clientRequestedStreaming) {
-				await logInvalidCodexUpstream({
-					provider,
-					model,
-					providerResponse,
-					rawText: rawUpstreamText,
-					statusCode: providerResponse?.status || HTTP_STATUS.BAD_GATEWAY,
-					reqTag,
-					log,
+	//
+	// The look is BOUNDED and replayed. This used to read a clone to completion,
+	// which drained the upstream before the first byte reached the client and so
+	// buffered every streamed answer end-to-end - the exact opposite of what a
+	// streaming gateway is for. An SSE content type is never inspected at all.
+	if (stream && !isEventStreamResponse(providerResponse)) {
+		const sniffed = await sniffResponseBody(providerResponse)
+		providerResponse = sniffed.response
+		const looksLikeSse = sniffed.kind === "sse" || looksLikeSseText(sniffed.prefix)
+		if (!looksLikeSse) {
+			const mismatchedBody = await readJsonBody(providerResponse)
+			if (mismatchedBody === null) {
+				// Nothing readable came back and the client never asked for a stream, so it
+				// gets a clean gateway error instead of a response with no body to parse.
+				if (!clientRequestedStreaming) {
+					await logInvalidCodexUpstream({
+						provider,
+						model,
+						providerResponse,
+						rawText: sniffed.prefix,
+						statusCode: providerResponse?.status || HTTP_STATUS.BAD_GATEWAY,
+						reqTag,
+						log,
+					})
+					appendLog({ status: `FAILED ${HTTP_STATUS.BAD_GATEWAY}` })
+					streamController.handleComplete()
+					return createErrorResult(HTTP_STATUS.BAD_GATEWAY, `Invalid JSON response from ${provider}`)
+				}
+			} else if (clientRequestedStreaming && isChatCompletionBody(mismatchedBody)) {
+				// A streaming client gets the completion replayed as chunks, which the
+				// normal pipeline then reshapes into its own format.
+				providerResponse = sseResponseFromCompletion(mismatchedBody, providerResponse)
+				providerResponseFormat = FORMATS.OPENAI
+			} else {
+				const result = await handleNonStreamingResponse({
+					...sharedCtx,
+					stream: clientRequestedStreaming,
+					providerResponse: jsonResponseFromBody(mismatchedBody, providerResponse),
+					sourceFormat,
+					targetFormat: providerResponseFormat,
+					reqLogger,
+					toolNameMap,
+					customToolNames,
+					trackDone,
+					appendLog,
 				})
-				appendLog({ status: `FAILED ${HTTP_STATUS.BAD_GATEWAY}` })
 				streamController.handleComplete()
-				return createErrorResult(HTTP_STATUS.BAD_GATEWAY, `Invalid JSON response from ${provider}`)
+				return result as ChatCoreResult
 			}
-		} else if (clientRequestedStreaming && isChatCompletionBody(mismatchedBody)) {
-			// A streaming client gets the completion replayed as chunks, which the
-			// normal pipeline then reshapes into its own format.
-			providerResponse = sseResponseFromCompletion(mismatchedBody, providerResponse)
-			providerResponseFormat = FORMATS.OPENAI
-		} else {
-			const result = await handleNonStreamingResponse({
-				...sharedCtx,
-				stream: clientRequestedStreaming,
-				providerResponse: jsonResponseFromBody(mismatchedBody, providerResponse),
-				sourceFormat,
-				targetFormat: providerResponseFormat,
-				reqLogger,
-				toolNameMap,
-				customToolNames,
-				trackDone,
-				appendLog,
-			})
-			streamController.handleComplete()
-			return result as ChatCoreResult
 		}
 	}
 

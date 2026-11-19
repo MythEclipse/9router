@@ -36,7 +36,7 @@ import {
 export { buildAgentRunFrame, encodeKvClientMessage, isAgentCapableRequest } from "./cursorProto.ts"
 
 import { executeAgent } from "./cursorAgent.ts"
-import { debugLog, readCursorFrame } from "./cursorFrame.ts"
+import { CursorFrameAssembler, debugLog, readCursorFrame } from "./cursorFrame.ts"
 
 export { tailOnlyCursorMessages } from "./cursorAgent.ts"
 
@@ -82,7 +82,7 @@ export interface CursorFetchOptions {
 export interface CursorHttp2Response {
 	status: number | string | string[] | undefined
 	headers: Record<string, string | string[] | undefined>
-	body: Buffer
+	body: Buffer | ReadableStream<Uint8Array>
 }
 
 function isComposerModel(model) {
@@ -98,6 +98,32 @@ function visibleComposerContentFromThinking(thinking) {
 	const endIdx = thinking.lastIndexOf(endTag)
 	if (endIdx < 0) return ""
 	return thinking.slice(endIdx + endTag.length).trimStart()
+}
+
+/** Read a body that may be a Buffer or a live stream out to text. */
+async function readBodyAsText(body) {
+	if (!body) return ""
+	if (Buffer.isBuffer(body)) return body.toString()
+	if (typeof body === "string") return body
+	if (typeof body.getReader === "function") {
+		const reader = body.getReader()
+		const chunks = []
+		try {
+			while (true) {
+				const { done, value } = await reader.read()
+				if (done) break
+				chunks.push(Buffer.from(value))
+			}
+		} finally {
+			try {
+				reader.releaseLock()
+			} catch {
+				/* already released */
+			}
+		}
+		return Buffer.concat(chunks).toString()
+	}
+	return ""
 }
 
 function createErrorResponse(jsonError) {
@@ -127,6 +153,313 @@ function createErrorResponse(jsonError) {
 // Long-session empty-turn recovery: Cursor occasionally answers a long
 // history replay with HTTP 200 and zero deltas (empty turn). One retry on a
 // tail-only frame recovers the session instead of failing the client turn.
+
+/** Wall-clock bound on the read-ahead that decides "is this a Cursor error?".
+ *  An error envelope arrives in the first frame; a healthy generation that is
+ *  still silent this long is not one and must not be held back. */
+const CURSOR_STREAM_PRIME_MS = 5000
+
+/**
+ * The frame→SSE state machine shared by both entry points.
+ *
+ * `transformProtobufToSSE` (buffered) and `transformProtobufStreamToSSE` (live)
+ * differ only in WHERE the frames come from. Keeping one state machine means the
+ * streaming path cannot drift from the buffered one in tool-call accumulation,
+ * Composer thinking scrubbing, or usage accounting - the three places this
+ * decoder is subtle.
+ */
+class CursorSseSink {
+	readonly responseId: string
+	readonly created: number
+	private readonly model: string
+	private readonly body: Record<string, unknown>
+	private readonly chunks: string[] = []
+	private taken = 0
+	private totalContent = ""
+	private totalThinking = ""
+	private emittedComposerThinkingContentLength = 0
+	private readonly toolCalls: any[] = []
+	private readonly toolCallsMap = new Map<string, any>()
+	private readonly finalizedIds = new Set<string>()
+	private readonly emittedToolCallIds = new Set<string>()
+	private frameCount = 0
+	private errorResponse: Response | null = null
+	private halted = false
+
+	constructor(model, body) {
+		this.model = model
+		this.body = body
+		this.responseId = `chatcmpl-cursor-${Date.now()}`
+		this.created = Math.floor(Date.now() / 1000)
+	}
+
+	/** A terminal response decided by a pre-content upstream error, if any. */
+	get error(): Response | null {
+		return this.errorResponse
+	}
+	/** True when chunks are waiting to be taken. */
+	get hasEmitted(): boolean {
+		return this.chunks.length > this.taken
+	}
+	/** True when the sink stopped early (error after content, or bad frame). */
+	get stopped(): boolean {
+		return this.halted
+	}
+	get framesSeen(): number {
+		return this.frameCount
+	}
+
+	/** Chunks produced since the last call. */
+	takeChunks(): string[] {
+		const out = this.chunks.slice(this.taken)
+		this.taken = this.chunks.length
+		return out
+	}
+
+	private emit(chunk: string) {
+		this.chunks.push(chunk)
+	}
+
+	/** Decode and emit one frame payload. */
+	processPayload(payload: Buffer) {
+		if (this.halted) return
+		this.frameCount++
+
+		// Check for JSON error frames (byte-guard: only decode if starts with '{')
+		if (payload[0] === 0x7b) {
+			try {
+				const text = payload.toString("utf-8")
+				if (text.includes('"error"')) {
+					const hasContent = this.chunks.length > 0 || this.totalContent || this.toolCallsMap.size > 0
+					debugLog(`[CURSOR SSE] Error frame (hasContent=${hasContent}): ${text.slice(0, 500)}`)
+					if (hasContent) {
+						this.halted = true
+						return
+					}
+					this.errorResponse = createErrorResponse(JSON.parse(text))
+					return
+				}
+			} catch {}
+		}
+
+		const result = extractTextFromResponse(new Uint8Array(payload))
+		debugLog(`[CURSOR DECODED SSE] Frame ${this.frameCount}:`, result)
+
+		if (result.error) {
+			const hasContent = this.chunks.length > 0 || this.totalContent || this.toolCallsMap.size > 0
+			debugLog(`[CURSOR SSE] Decoded error (hasContent=${hasContent}): ${result.error}`)
+			if (hasContent) {
+				this.halted = true
+				return
+			}
+			this.errorResponse = new Response(
+				JSON.stringify({
+					error: {
+						message: result.error,
+						type: "rate_limit_error",
+						code: "rate_limited",
+					},
+				}),
+				{
+					status: HTTP_STATUS.RATE_LIMITED,
+					headers: { "Content-Type": "application/json" },
+				},
+			)
+			return
+		}
+
+		if (result.toolCall) {
+			const tc = result.toolCall
+
+			if (this.chunks.length === 0) {
+				this.emit(
+					chatChunkSse({
+						id: this.responseId,
+						created: this.created,
+						model: this.model,
+						delta: { role: "assistant", content: "" },
+					}),
+				)
+			}
+
+			if (this.toolCallsMap.has(tc.id)) {
+				// Accumulate arguments for existing tool call
+				const existing = this.toolCallsMap.get(tc.id)
+				existing.function.arguments += tc.function.arguments
+				existing.isLast = tc.isLast
+
+				// Stream the delta arguments
+				if (tc.function.arguments) {
+					this.emittedToolCallIds.add(tc.id)
+					this.emit(
+						chatChunkSse({
+							id: this.responseId,
+							created: this.created,
+							model: this.model,
+							delta: {
+								tool_calls: [
+									{
+										index: existing.index,
+										id: tc.id,
+										type: "function",
+										function: {
+											name: tc.function.name,
+											arguments: tc.function.arguments,
+										},
+									},
+								],
+							},
+						}),
+					)
+				}
+			} else {
+				// New tool call - assign index and add to map
+				const toolCallIndex = this.toolCalls.length
+				this.finalizedIds.add(tc.id)
+				this.toolCalls.push({ ...tc, index: toolCallIndex })
+				this.toolCallsMap.set(tc.id, { ...tc, index: toolCallIndex })
+
+				// Stream initial tool call with name
+				this.emittedToolCallIds.add(tc.id)
+				this.emit(
+					chatChunkSse({
+						id: this.responseId,
+						created: this.created,
+						model: this.model,
+						delta: {
+							tool_calls: [
+								{
+									index: toolCallIndex,
+									id: tc.id,
+									type: "function",
+									function: {
+										name: tc.function.name,
+										arguments: tc.function.arguments,
+									},
+								},
+							],
+						},
+					}),
+				)
+			}
+		}
+
+		if (result.text) {
+			this.totalContent += result.text
+			this.emit(
+				chatChunkSse({
+					id: this.responseId,
+					created: this.created,
+					model: this.model,
+					delta:
+						this.chunks.length === 0 && this.toolCalls.length === 0
+							? { role: "assistant", content: result.text }
+							: { content: result.text },
+				}),
+			)
+		}
+
+		if (isComposerModel(this.model) && result.thinking) {
+			this.totalThinking += result.thinking
+			const visibleContent = visibleComposerContentFromThinking(this.totalThinking)
+			if (visibleContent.length > this.emittedComposerThinkingContentLength) {
+				const deltaContent = visibleContent.slice(this.emittedComposerThinkingContentLength)
+				this.emittedComposerThinkingContentLength = visibleContent.length
+				this.totalContent += deltaContent
+				this.emit(
+					chatChunkSse({
+						id: this.responseId,
+						created: this.created,
+						model: this.model,
+						delta:
+							this.chunks.length === 0 && this.toolCalls.length === 0
+								? { role: "assistant", content: deltaContent }
+								: { content: deltaContent },
+					}),
+				)
+			}
+		}
+	}
+
+	/** Emit the trailing chunks: unfinished tool calls, the finish frame, `[DONE]`. */
+	finalize() {
+		debugLog(
+			`[CURSOR SSE] Parsed ${this.frameCount} frames, toolCallsMap size: ${this.toolCallsMap.size}, toolCalls array: ${this.toolCalls.length}`,
+		)
+
+		// Finalize all remaining tool calls in map (stream may have ended without isLast=true)
+		for (const [id, tc] of this.toolCallsMap.entries()) {
+			if (!this.finalizedIds.has(id)) {
+				debugLog(`[CURSOR SSE] Finalizing incomplete tool call: ${id}, isLast=${tc.isLast}`)
+				const toolCallIndex = this.toolCalls.length
+				this.toolCalls.push({
+					id: tc.id,
+					type: tc.type,
+					index: toolCallIndex,
+					function: {
+						name: tc.function.name,
+						arguments: tc.function.arguments,
+					},
+				})
+
+				// Emit SSE chunk for the finalized tool call if not already emitted
+				if (!this.emittedToolCallIds.has(tc.id)) {
+					this.emit(
+						chatChunkSse({
+							id: this.responseId,
+							created: this.created,
+							model: this.model,
+							delta: {
+								tool_calls: [
+									{
+										index: toolCallIndex,
+										id: tc.id,
+										type: "function",
+										function: {
+											name: tc.function.name,
+											arguments: tc.function.arguments,
+										},
+									},
+								],
+							},
+						}),
+					)
+				}
+			}
+		}
+
+		if (this.chunks.length === 0 && this.toolCalls.length === 0) {
+			this.emit(
+				chatChunkSse({
+					id: this.responseId,
+					created: this.created,
+					model: this.model,
+					delta: { role: "assistant", content: "" },
+				}),
+			)
+		}
+
+		const usage = estimateUsage(this.body, this.totalContent.length, FORMATS.OPENAI)
+
+		this.emit(
+			`data: ${JSON.stringify({
+				id: this.responseId,
+				object: "chat.completion.chunk",
+				created: this.created,
+				model: this.model,
+				choices: [
+					{
+						index: 0,
+						delta: {},
+						finish_reason: this.toolCalls.length > 0 ? "tool_calls" : "stop",
+					},
+				],
+				usage,
+			})}\n\n`,
+		)
+		this.emit(SSE_DONE)
+	}
+}
 
 export class CursorExecutor extends BaseExecutor {
 	constructor() {
@@ -232,7 +565,10 @@ export class CursorExecutor extends BaseExecutor {
 					: await this.makeFetchRequest(url, headers, transformedBody, signal, proxyOptions)
 
 			if (response.status !== 200) {
-				const errorText = response.body?.toString() || "Unknown error"
+				// The body may now be a live stream (the fetch transport forwards it),
+				// so read it out before reporting. An error body is never streamed to
+				// the client, so draining it here costs nothing.
+				const errorText = (await readBodyAsText(response.body)) || "Unknown error"
 				const errorResponse = new Response(
 					JSON.stringify({
 						error: {
@@ -251,8 +587,8 @@ export class CursorExecutor extends BaseExecutor {
 
 			const transformedResponse =
 				stream !== false
-					? this.transformProtobufToSSE(response.body, model, body)
-					: this.transformProtobufToJSON(response.body, model, body)
+					? await this.transformProtobufToSSEOrStream(response, model, body, signal)
+					: await this.transformProtobufToJSONOrBuffered(response, model, body)
 
 			return { response: transformedResponse, url, headers, transformedBody: body }
 		} catch (error) {
@@ -271,6 +607,34 @@ export class CursorExecutor extends BaseExecutor {
 			)
 			return { response: errorResponse, url, headers, transformedBody: body }
 		}
+	}
+
+	/**
+	 * The JSON (non-streaming) path needs the whole body. The fetch transport now
+	 * hands back a live stream, so drain it here - this is the one place buffering
+	 * is correct, because the client asked for a single document.
+	 */
+	async transformProtobufToJSONOrBuffered(response, model, body) {
+		const source = response?.body
+		if (source && typeof source.getReader === "function") {
+			const reader = source.getReader()
+			const chunks = []
+			try {
+				while (true) {
+					const { done, value } = await reader.read()
+					if (done) break
+					chunks.push(Buffer.from(value))
+				}
+			} finally {
+				try {
+					reader.releaseLock()
+				} catch {
+					/* already released */
+				}
+			}
+			return this.transformProtobufToJSON(Buffer.concat(chunks), model, body)
+		}
+		return this.transformProtobufToJSON(source, model, body)
 	}
 
 	transformProtobufToJSON(buffer, model, body) {
@@ -425,254 +789,141 @@ export class CursorExecutor extends BaseExecutor {
 		})
 	}
 
+	/**
+	 * Pick the streaming path when the transport handed us a live body, and fall
+	 * back to the buffered decoder when it handed us a Buffer (the h2 transport
+	 * still returns a Buffer; that path keeps working unchanged).
+	 */
+	async transformProtobufToSSEOrStream(response, model, body, signal = null) {
+		const source = response?.body
+		if (source && typeof source.getReader === "function") {
+			return this.transformProtobufStreamToSSE(source, model, body, signal)
+		}
+		return this.transformProtobufToSSE(source, model, body)
+	}
+
 	transformProtobufToSSE(buffer, model, body) {
-		const responseId = `chatcmpl-cursor-${Date.now()}`
-		const created = Math.floor(Date.now() / 1000)
+		const sink = new CursorSseSink(model, body)
+		debugLog(`[CURSOR SSE] Total length: ${buffer.length} bytes`)
 
-		const chunks = []
-		let offset = 0
-		let totalContent = ""
-		let totalThinking = ""
-		let emittedComposerThinkingContentLength = 0
-		const toolCalls = []
-		const toolCallsMap = new Map() // Track streaming tool calls by ID
-		const finalizedIds = new Set()
-		const emittedToolCallIds = new Set()
-		let frameCount = 0
-
-		debugLog(`[CURSOR BUFFER SSE] Total length: ${buffer.length} bytes`)
-
-		while (offset < buffer.length) {
-			const frame = readCursorFrame(buffer, offset, frameCount, " SSE")
-			if (frame.status === "done") break
-			offset = frame.offset
-			frameCount++
+		// Buffered entry point: the whole body is already in hand, so feed it through
+		// the shared state machine one frame at a time. Kept for the non-streaming
+		// (JSON) path and for callers that already hold the bytes.
+		const assembler = new CursorFrameAssembler(" SSE")
+		for (const frame of assembler.push(buffer)) {
 			if (frame.status === "skip") continue
-			const payload = frame.payload
-
-			// Check for JSON error frames (byte-guard: only decode if starts with '{')
-			if (payload[0] === 0x7b) {
-				try {
-					const text = payload.toString("utf-8")
-					if (text.includes('"error"')) {
-						const hasContent = chunks.length > 0 || totalContent || toolCallsMap.size > 0
-						debugLog(`[CURSOR BUFFER SSE] Error frame (hasContent=${hasContent}): ${text.slice(0, 500)}`)
-						if (hasContent) {
-							break
-						}
-						return createErrorResponse(JSON.parse(text))
-					}
-				} catch {}
-			}
-
-			const result = extractTextFromResponse(new Uint8Array(payload))
-			debugLog(`[CURSOR DECODED SSE] Frame ${frameCount}:`, result)
-
-			if (result.error) {
-				const hasContent = chunks.length > 0 || totalContent || toolCallsMap.size > 0
-				debugLog(`[CURSOR BUFFER SSE] Decoded error (hasContent=${hasContent}): ${result.error}`)
-				if (hasContent) {
-					break
-				}
-				return new Response(
-					JSON.stringify({
-						error: {
-							message: result.error,
-							type: "rate_limit_error",
-							code: "rate_limited",
-						},
-					}),
-					{
-						status: HTTP_STATUS.RATE_LIMITED,
-						headers: { "Content-Type": "application/json" },
-					},
-				)
-			}
-
-			if (result.toolCall) {
-				const tc = result.toolCall
-
-				if (chunks.length === 0) {
-					chunks.push(
-						chatChunkSse({ id: responseId, created, model, delta: { role: "assistant", content: "" } }),
-					)
-				}
-
-				if (toolCallsMap.has(tc.id)) {
-					// Accumulate arguments for existing tool call
-					const existing = toolCallsMap.get(tc.id)
-					const _oldArgsLen = existing.function.arguments.length
-					existing.function.arguments += tc.function.arguments
-					existing.isLast = tc.isLast
-
-					// Stream the delta arguments
-					if (tc.function.arguments) {
-						emittedToolCallIds.add(tc.id)
-						chunks.push(
-							chatChunkSse({
-								id: responseId,
-								created,
-								model,
-								delta: {
-									tool_calls: [
-										{
-											index: existing.index,
-											id: tc.id,
-											type: "function",
-											function: {
-												name: tc.function.name,
-												arguments: tc.function.arguments,
-											},
-										},
-									],
-								},
-							}),
-						)
-					}
-				} else {
-					// New tool call - assign index and add to map
-					const toolCallIndex = toolCalls.length
-					finalizedIds.add(tc.id)
-					toolCalls.push({ ...tc, index: toolCallIndex })
-					toolCallsMap.set(tc.id, { ...tc, index: toolCallIndex })
-
-					// Stream initial tool call with name
-					emittedToolCallIds.add(tc.id)
-					chunks.push(
-						chatChunkSse({
-							id: responseId,
-							created,
-							model,
-							delta: {
-								tool_calls: [
-									{
-										index: toolCallIndex,
-										id: tc.id,
-										type: "function",
-										function: {
-											name: tc.function.name,
-											arguments: tc.function.arguments,
-										},
-									},
-								],
-							},
-						}),
-					)
-				}
-			}
-
-			if (result.text) {
-				totalContent += result.text
-				chunks.push(
-					chatChunkSse({
-						id: responseId,
-						created,
-						model,
-						delta:
-							chunks.length === 0 && toolCalls.length === 0
-								? { role: "assistant", content: result.text }
-								: { content: result.text },
-					}),
-				)
-			}
-
-			if (isComposerModel(model) && result.thinking) {
-				totalThinking += result.thinking
-				const visibleContent = visibleComposerContentFromThinking(totalThinking)
-				if (visibleContent.length > emittedComposerThinkingContentLength) {
-					const deltaContent = visibleContent.slice(emittedComposerThinkingContentLength)
-					emittedComposerThinkingContentLength = visibleContent.length
-					totalContent += deltaContent
-					chunks.push(
-						chatChunkSse({
-							id: responseId,
-							created,
-							model,
-							delta:
-								chunks.length === 0 && toolCalls.length === 0
-									? { role: "assistant", content: deltaContent }
-									: { content: deltaContent },
-						}),
-					)
-				}
-			}
+			sink.processPayload(frame.payload)
+			if (sink.error) return sink.error
+			if (sink.stopped) break
 		}
 
-		debugLog(
-			`[CURSOR BUFFER SSE] Parsed ${frameCount} frames, toolCallsMap size: ${toolCallsMap.size}, toolCalls array: ${toolCalls.length}`,
-		)
-
-		// Finalize all remaining tool calls in map (stream may have ended without isLast=true)
-		for (const [id, tc] of toolCallsMap.entries()) {
-			if (!finalizedIds.has(id)) {
-				debugLog(`[CURSOR BUFFER SSE] Finalizing incomplete tool call: ${id}, isLast=${tc.isLast}`)
-				const toolCallIndex = toolCalls.length
-				toolCalls.push({
-					id: tc.id,
-					type: tc.type,
-					index: toolCallIndex,
-					function: {
-						name: tc.function.name,
-						arguments: tc.function.arguments,
-					},
-				})
-
-				// Emit SSE chunk for the finalized tool call if not already emitted
-				if (!emittedToolCallIds.has(tc.id)) {
-					chunks.push(
-						chatChunkSse({
-							id: responseId,
-							created,
-							model,
-							delta: {
-								tool_calls: [
-									{
-										index: toolCallIndex,
-										id: tc.id,
-										type: "function",
-										function: {
-											name: tc.function.name,
-											arguments: tc.function.arguments,
-										},
-									},
-								],
-							},
-						}),
-					)
-				}
-			}
-		}
-
-		if (chunks.length === 0 && toolCalls.length === 0) {
-			chunks.push(
-				chatChunkSse({ id: responseId, created, model, delta: { role: "assistant", content: "" } }),
-			)
-		}
-
-		const usage = estimateUsage(body, totalContent.length, FORMATS.OPENAI)
-
-		chunks.push(
-			`data: ${JSON.stringify({
-				id: responseId,
-				object: "chat.completion.chunk",
-				created,
-				model,
-				choices: [
-					{
-						index: 0,
-						delta: {},
-						finish_reason: toolCalls.length > 0 ? "tool_calls" : "stop",
-					},
-				],
-				usage,
-			})}\n\n`,
-		)
-		chunks.push(SSE_DONE)
-
-		return new Response(chunks.join(""), {
+		if (sink.error) return sink.error
+		sink.finalize()
+		return new Response(sink.takeChunks().join(""), {
 			status: 200,
 			headers: { ...SSE_HEADERS },
 		})
+	}
+
+	/**
+	 * Streaming entry point: forward Cursor's framed reply as SSE while it arrives.
+	 *
+	 * The transport used to `arrayBuffer()` the whole answer because
+	 * `readCursorFrame` needs a complete frame. `CursorFrameAssembler` removes that
+	 * constraint, so this returns a live `ReadableStream` and the client sees each
+	 * frame as it is produced instead of waiting for the model to finish.
+	 */
+	transformProtobufStreamToSSE(source, model, body, signal = null) {
+		const sink = new CursorSseSink(model, body)
+		const assembler = new CursorFrameAssembler(" STREAM")
+		const encoder = new TextEncoder()
+		let reader = null
+
+		const cancelSource = (reason) => {
+			try {
+				reader?.cancel?.(reason)
+			} catch {
+				/* already released */
+			}
+		}
+
+		return new Response(
+			new ReadableStream({
+				start(controller) {
+					if (signal) {
+						const onAbort = () => cancelSource(new Error("Request aborted"))
+						if (signal.aborted) onAbort()
+						else signal.addEventListener("abort", onAbort, { once: true })
+					}
+				},
+				async pull(controller) {
+					// Emit anything the sink is holding before asking for more bytes.
+					const flush = () => {
+						for (const chunk of sink.takeChunks()) controller.enqueue(encoder.encode(chunk))
+					}
+
+					while (true) {
+						if (!reader) reader = source.getReader()
+						let result
+						try {
+							result = await reader.read()
+						} catch (error) {
+							controller.error(error)
+							return
+						}
+
+						if (result.done) {
+							// A truncated trailing frame is undecodable; drop it rather than
+							// throwing away a whole answer.
+							if (assembler.pendingBytes > 0) {
+								debugLog(
+									`[CURSOR STREAM] ${assembler.pendingBytes} trailing bytes formed no complete frame`,
+								)
+							}
+							if (sink.error) {
+								controller.error(sink.error)
+								return
+							}
+							sink.finalize()
+							flush()
+							controller.close()
+							return
+						}
+
+						for (const frame of assembler.push(result.value)) {
+							if (frame.status === "skip") continue
+							sink.processPayload(frame.payload)
+							if (sink.error || sink.stopped) break
+						}
+						if (sink.error) {
+							controller.error(sink.error)
+							return
+						}
+						if (sink.stopped) {
+							sink.finalize()
+							flush()
+							controller.close()
+							return
+						}
+						// Hand over whatever this chunk produced. If it produced nothing
+						// (a frame split across chunks), keep reading instead of returning:
+						// returning here would stall the stream until the next pull, and
+						// nothing guarantees another pull ever comes.
+						if (sink.hasEmitted) {
+							flush()
+							return
+						}
+					}
+				},
+				cancel(reason) {
+					cancelSource(reason)
+				},
+			}),
+			{
+				status: 200,
+				headers: { ...SSE_HEADERS },
+			},
+		)
 	}
 
 	async refreshCredentials() {

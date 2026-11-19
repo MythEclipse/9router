@@ -22,8 +22,21 @@ const CODEX_SSE_USER_OUTPUT_PATTERNS = [
 	"event: response.function_call_arguments.delta",
 	'"type":"response.output_text.delta"',
 	'"type":"response.function_call_arguments.delta"',
+	// Reasoning is real output too. Without these a model that thinks before it
+	// answers keeps this peek reading (up to CODEX_SSE_PEEK_BYTES) while the
+	// client waits for a first token the upstream has already sent.
+	"event: response.reasoning_summary_text.delta",
+	"event: response.reasoning_text.delta",
+	"event: response.output_item.added",
+	'"type":"response.reasoning_summary_text.delta"',
+	'"type":"response.reasoning_text.delta"',
+	'"type":"response.output_item.added"',
 ]
 const CODEX_SSE_PEEK_BYTES = 256 * 1024
+// Wall-clock bound on the same peek: an error envelope shows up in the first
+// frames, so a stream that is still silent this long is not one and must not be
+// held back any further.
+const CODEX_SSE_PEEK_DEADLINE_MS = 3000
 const CODEX_MODEL_CAPACITY_MESSAGE = "Selected model is at capacity. Please try a different model."
 function isCodexResponsesLiteModel(model) {
 	const baseId = String(model || "").replace(/\([^()]+\)\s*$/, "")
@@ -395,6 +408,10 @@ export class CodexExecutor extends BaseExecutor {
 	// Peek first N bytes of SSE body to detect upstream transient errors.
 	// Returns { matched: string|null, message: string|null, accountFallback: boolean, replacementBody: ReadableStream|null }.
 	// Caller must use replacementBody when no error matched (original body has been read).
+	//
+	// The peek is bounded in BYTES and in TIME, and ends at the first real output.
+	// It exists only to catch an error envelope that arrives under HTTP 200; it
+	// must never hold a healthy generation back while the client waits.
 	async _peekSseTransientError(response) {
 		if (!response || !response.ok || !response.body)
 			return { matched: null, message: null, accountFallback: false, replacementBody: null }
@@ -404,6 +421,7 @@ export class CodexExecutor extends BaseExecutor {
 		let text = ""
 		let matched = null
 		let accountFallback = false
+		const peekDeadline = Date.now() + CODEX_SSE_PEEK_DEADLINE_MS
 		try {
 			while (text.length < CODEX_SSE_PEEK_BYTES) {
 				const { done, value } = await reader.read()
@@ -423,6 +441,9 @@ export class CodexExecutor extends BaseExecutor {
 					break
 				}
 				if (CODEX_SSE_USER_OUTPUT_PATTERNS.some((p) => lowerText.includes(p))) break
+				// Fail-open on a slow stream: whatever arrived is replayed and the
+				// caller decides. Checked between chunks so no read is abandoned.
+				if (Date.now() > peekDeadline) break
 			}
 		} catch (e) {
 			dbg("CODEX", `peek read error: ${e.message}`)

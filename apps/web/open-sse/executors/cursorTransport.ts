@@ -61,7 +61,10 @@ export async function makeFetchRequest(
 	return {
 		status: response.status,
 		headers: Object.fromEntries(response.headers.entries()),
-		body: Buffer.from(await response.arrayBuffer()),
+		// Hand the live body through. Cursor's reply is framed protobuf, and
+		// `CursorFrameAssembler` decodes frames incrementally, so draining here with
+		// `arrayBuffer()` would buffer the whole answer for no reason.
+		body: response.body ?? Buffer.alloc(0),
 	}
 }
 

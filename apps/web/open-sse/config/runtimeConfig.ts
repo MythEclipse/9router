@@ -192,6 +192,16 @@ export const MAX_STREAM_BYTES_PER_REQUEST = envBytes(
 // Maximum JSON body size for non-streaming responses
 export const MAX_JSON_BODY_SIZE = envBytes("MAX_JSON_BODY_SIZE", 5 * 1024 * 1024) // 5MB default
 
+// Bounded read-ahead used to tell an SSE body from a JSON one when the upstream
+// sent no (or an unrecognised) content type. The prefix is replayed to the caller
+// afterwards, so this is a window onto the stream, not a buffer of the answer.
+// Env: BODY_SNIFF_BYTES.
+export const BODY_SNIFF_BYTES = envBytes("BODY_SNIFF_BYTES", 8 * 1024)
+
+// How long that read-ahead may wait for bytes before the body is given the
+// benefit of the doubt and left streaming. Env: BODY_SNIFF_DEADLINE_MS.
+export const BODY_SNIFF_DEADLINE_MS = envMs("BODY_SNIFF_DEADLINE_MS", 5 * 1000)
+
 // Longest tool name accepted by Responses-style backends (OpenAI caps at 64;
 // these accept 128). Shared by the opencode-family executors and the translator.
 export const MAX_TOOL_NAME_LEN = 128
