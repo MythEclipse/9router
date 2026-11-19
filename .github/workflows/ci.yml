@@ -112,8 +112,20 @@ jobs:
    # (docs/CODEX_STT.md): audio is converted to mono 24 kHz PCM16 locally before
    # upload. The codex-stt-* tests exercise that real conversion, so the runner
    # needs the same binary the server does rather than a mock of it.
+   #
+   # Not a bare `apt-get install ffmpeg`: that step took 16 s on one runner and
+   # 879 s (then failed) on another, because apt fetched part of the dependency
+   # set from security.ubuntu.com, which was unreachable there. The script pins
+   # apt to the archive host and falls back to a static build, so a single
+   # unreachable host cannot block the test suite. See scripts/ci-install-ffmpeg.sh.
+   - name: Restore ffmpeg cache
+     uses: actions/cache@v6
+     with:
+      path: ~/.cache/ci-ffmpeg
+      key: ffmpeg-static-${{ runner.os }}-v1
+
    - name: Install ffmpeg
-     run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+     run: bash scripts/ci-install-ffmpeg.sh --cache-dir "$HOME/.cache/ci-ffmpeg"
 
    - name: Run tests
      run: bun run test
@@ -424,8 +436,20 @@ jobs:
    # (docs/CODEX_STT.md): audio is converted to mono 24 kHz PCM16 locally before
    # upload. The codex-stt-* tests exercise that real conversion, so the runner
    # needs the same binary the server does rather than a mock of it.
+   #
+   # Not a bare `apt-get install ffmpeg`: that step took 16 s on one runner and
+   # 879 s (then failed) on another, because apt fetched part of the dependency
+   # set from security.ubuntu.com, which was unreachable there. The script pins
+   # apt to the archive host and falls back to a static build, so a single
+   # unreachable host cannot block the test suite. See scripts/ci-install-ffmpeg.sh.
+   - name: Restore ffmpeg cache
+     uses: actions/cache@v6
+     with:
+      path: ~/.cache/ci-ffmpeg
+      key: ffmpeg-static-${{ runner.os }}-v1
+
    - name: Install ffmpeg
-     run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+     run: bash scripts/ci-install-ffmpeg.sh --cache-dir "$HOME/.cache/ci-ffmpeg"
 
    - name: Run tests
      run: bun run test
