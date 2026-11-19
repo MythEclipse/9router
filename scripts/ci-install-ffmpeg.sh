@@ -107,14 +107,14 @@ fi
 
 # --- Layer 2: apt, with every source pinned to the working archive host ------
 #
-# Pick the host that is actually serving the archive in this image rather than
-# hardcoding one. `azure.archive.ubuntu.com` is what GitHub's Ubuntu runners use;
-# the fallback keeps this working on a plain ubuntu image too.
+# Pick the host that is actually serving the Ubuntu archive in this image rather
+# than hardcoding one. Only a host that serves Ubuntu's own archive is valid: the
+# runner also has `packages.microsoft.com` in its sources, and rewriting the
+# security pocket to that host would produce a broken apt (no such dists). The
+# runner's own apt-mirrors.txt may also be in play, which is why detection reads
+# the source files rather than assuming a name.
 detect_archive_host() {
 	local host=""
-	# Ubuntu 24.04+ uses deb822 (`URIs:` lines in *.sources); older images use the
-	# one-line `deb http://host/...` format. Cover both, and never pick the security
-	# host - that is the one that hangs.
 	local sources=()
 	[ -r /etc/apt/sources.list ] && sources+=(/etc/apt/sources.list)
 	if [ -d /etc/apt/sources.list.d ]; then
@@ -123,16 +123,26 @@ detect_archive_host() {
 		done < <(find /etc/apt/sources.list.d -maxdepth 1 -type f \
 			\( -name '*.list' -o -name '*.sources' \) 2>/dev/null)
 	fi
+	# Ubuntu 24.04+ uses deb822 (`URIs:` lines in *.sources); older images use the
+	# one-line `deb http://host/...` format. Cover both. Candidates must look like
+	# an Ubuntu archive and must not be the security host that was hanging.
+	local candidates=""
 	for f in "${sources[@]}"; do
 		[ -r "$f" ] || continue
-		host=$(grep -hoE '(URIs:|deb )[^#]*https?://[^/ ]+' "$f" 2>/dev/null |
+		candidates="$candidates$(grep -hoE '(URIs:|deb )[^#]*https?://[^/ ]+' "$f" 2>/dev/null |
 			grep -oE 'https?://[^/ ]+' |
-			sed -E 's#https?://##' |
-			grep -v 'security\.ubuntu\.com' |
-			head -1)
-		[ -n "$host" ] && break
+			sed -E 's#https?://##')"$'\n'
 	done
-	# The runner image points at the Azure mirror; keep that as the default.
+	host=$(printf '%s' "$candidates" |
+		grep -E 'ubuntu' |
+		grep -vE 'security\.ubuntu\.com' |
+		grep -E 'archive\.ubuntu\.com|\.archive\.ubuntu\.com|azure\.archive\.ubuntu\.com' |
+		head -1)
+	# Fall back to any Ubuntu host that is not the security pocket.
+	if [ -z "$host" ]; then
+		host=$(printf '%s' "$candidates" | grep -E 'ubuntu' | grep -vE 'security\.ubuntu\.com' | head -1)
+	fi
+	# Last resort: the mirror GitHub's Ubuntu runners use.
 	if [ -z "$host" ]; then host="azure.archive.ubuntu.com"; fi
 	printf '%s' "$host"
 }
