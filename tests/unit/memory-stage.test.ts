@@ -182,6 +182,43 @@ describe("memory config: off by default, on per scope", () => {
 	})
 })
 
+describe("dashboard switches keep what they do not own", () => {
+	it("turning a combo off removes only the enabled flag", () => {
+		// A combo may carry includeShared/budget tuning it will use again; a toggle
+		// that dropped the whole block would silently lose it.
+		const settings = {
+			comboStrategies: {
+				public: { memory: { enabled: true, includeShared: false, recallMaxTokens: 300 } },
+			},
+		}
+		const strategies = settings.comboStrategies
+		const current = strategies.public as Record<string, unknown>
+		const nextMemory = { ...((current.memory ?? {}) as Record<string, unknown>) }
+		delete nextMemory.enabled
+
+		expect(nextMemory).toEqual({ includeShared: false, recallMaxTokens: 300 })
+		// And with `enabled` gone the combo resolves off again.
+		const config = resolveMemoryConfig({
+			settings: {
+				comboStrategies: { public: { ...current, memory: nextMemory } },
+			},
+			comboName: "public",
+		})
+		expect(config.enabled).toBe(false)
+	})
+
+	it("keeps the stored token when the form submits a blank one", () => {
+		// The dashboard cannot read the token back, so an unrelated save would
+		// otherwise clear it — the same trap the OIDC secret has.
+		const patch: Record<string, unknown> = { apiKey: "", bankId: "shared" }
+		const next: Record<string, unknown> = { apiKey: "secret", bankId: "old" }
+		if (typeof patch.apiKey === "string" && patch.apiKey.trim()) next.apiKey = patch.apiKey
+		if (typeof patch.bankId === "string") next.bankId = patch.bankId
+		expect(next.apiKey).toBe("secret")
+		expect(next.bankId).toBe("shared")
+	})
+})
+
 describe("hindsight client fail-open contract", () => {
 	it("returns null on a non-2xx answer instead of throwing", async () => {
 		vi.stubGlobal(

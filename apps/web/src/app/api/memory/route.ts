@@ -21,8 +21,9 @@
  */
 
 import { listOptedInKeys, setKeyOptIn } from "@9router/db/repos/memoryOptInRepo"
+import type { MemorySettings } from "@9router/db/repos/settingsTypes"
 import { NextResponse } from "next/server"
-import { getSettings } from "@/lib/localDb"
+import { getSettings, updateSettings } from "@/lib/localDb"
 import { bankPath, resolveMemoryConfig } from "@/lib/memory/config"
 import {
 	deleteHindsight,
@@ -53,16 +54,37 @@ export async function GET() {
 			)
 		: null
 
+	// Which combos opted in, so the page can render their switches without
+	// re-deriving the rules. A combo entry exists for tuning alone, so "has a
+	// memory block" and "memory is on for this combo" are different questions.
+	const strategies = (settings.comboStrategies ?? {}) as Record<string, unknown>
+	const combos = Object.entries(strategies)
+		.map(([name, value]) => {
+			const block = (value as { memory?: Record<string, unknown> } | null)?.memory
+			return {
+				name,
+				memoryEnabled: block?.enabled === true,
+				includeShared: block?.includeShared !== false,
+			}
+		})
+		.sort((a, b) => a.name.localeCompare(b.name))
+
 	return NextResponse.json(
 		{
 			// Per-key enablement means there is no single on/off to report; the list of
 			// opted-in keys is what answers "is it on, and for whom".
 			optedInKeys: await listOptedInKeys(),
+			combos,
 			baseUrl: config.baseUrl,
 			bankId: config.bankId,
 			recall: config.recall,
 			retain: config.retain,
 			includeShared: config.includeShared,
+			sharedTags: config.sharedTags,
+			retainTags: config.retainTags,
+			recallBudget: config.recallBudget,
+			recallMaxTokens: config.recallMaxTokens,
+			timeoutMs: config.timeoutMs,
 			// The token itself never leaves the server; the form only needs to know
 			// whether one is set.
 			apiKeyConfigured: Boolean(config.apiKey),
@@ -108,6 +130,80 @@ export async function POST(request: Request) {
 		if (!keyId) return NextResponse.json({ error: "keyId is required" }, { status: 400 })
 		await setKeyOptIn(keyId, action === "opt-in")
 		return NextResponse.json({ keyId, optedIn: action === "opt-in" })
+	}
+
+	// Per-combo switch. Written through the same settings row the routing strategy
+	// reads, under `comboStrategies[<name>].memory`, so a combo that opts in carries
+	// memory whatever key calls it. Turning it off removes only the `enabled` flag:
+	// a combo may keep `includeShared`/budget tuning it will use again later.
+	if (action === "combo-opt-in" || action === "combo-opt-out") {
+		const comboName = typeof body.comboName === "string" ? body.comboName.trim() : ""
+		if (!comboName) return NextResponse.json({ error: "comboName is required" }, { status: 400 })
+		const strategies = ((settings.comboStrategies ?? {}) as Record<string, unknown>) ?? {}
+		const current = (strategies[comboName] ?? {}) as Record<string, unknown>
+		const currentMemory = (current.memory ?? {}) as Record<string, unknown>
+		const nextMemory: Record<string, unknown> = { ...currentMemory }
+		if (action === "combo-opt-in") nextMemory.enabled = true
+		else delete nextMemory.enabled
+
+		await updateSettings({
+			comboStrategies: {
+				...strategies,
+				[comboName]: { ...current, memory: nextMemory },
+			},
+		} as Parameters<typeof updateSettings>[0])
+		return NextResponse.json({ comboName, memoryEnabled: action === "combo-opt-in" })
+	}
+
+	// Connection settings. Only the fields the form owns are written, so a
+	// concurrent edit elsewhere in the settings row cannot be clobbered by a save
+	// from this page.
+	if (action === "save-config") {
+		const patch = (body.config ?? {}) as Record<string, unknown>
+		const current = config
+		// Start from the resolved config so every required field has a value, then
+		// apply only the fields this form owns. Building a partial object and casting
+		// it would let a missing required field reach the settings row.
+		const next: MemorySettings = {
+			baseUrl: current.baseUrl,
+			apiKey: current.apiKey,
+			bankId: current.bankId,
+			recall: current.recall,
+			retain: current.retain,
+			includeShared: current.includeShared,
+			sharedTags: current.sharedTags,
+			retainTags: current.retainTags,
+			recallBudget: current.recallBudget,
+			recallMaxTokens: current.recallMaxTokens,
+			timeoutMs: current.timeoutMs,
+		}
+		for (const field of ["baseUrl", "bankId"] as const) {
+			if (typeof patch[field] === "string") next[field] = (patch[field] as string).trim()
+		}
+		// An empty string means "leave the stored token alone" rather than "clear
+		// it": the form cannot read the token back, so an unrelated save would
+		// otherwise wipe it. A dedicated clear is a separate, explicit verb.
+		if (typeof patch.apiKey === "string" && patch.apiKey.trim()) next.apiKey = patch.apiKey.trim()
+		for (const field of ["recall", "retain", "includeShared"] as const) {
+			if (typeof patch[field] === "boolean") next[field] = patch[field]
+		}
+		if (Array.isArray(patch.sharedTags))
+			next.sharedTags = patch.sharedTags.filter((t) => typeof t === "string")
+		if (Array.isArray(patch.retainTags))
+			next.retainTags = patch.retainTags.filter((t) => typeof t === "string")
+		if (
+			patch.recallBudget === "low" ||
+			patch.recallBudget === "mid" ||
+			patch.recallBudget === "high"
+		) {
+			next.recallBudget = patch.recallBudget
+		}
+		for (const field of ["recallMaxTokens", "timeoutMs"] as const) {
+			const value = Number(patch[field])
+			if (Number.isFinite(value) && value > 0) next[field] = Math.trunc(value)
+		}
+		await updateSettings({ memory: next })
+		return NextResponse.json({ saved: true })
 	}
 
 	if (action === "purge") {

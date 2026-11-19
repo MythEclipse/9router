@@ -27,7 +27,9 @@ settings only — where Hindsight is, which bank, what budget:
 }
 ```
 
-Turning it on is a per-scope decision, made in one of two places:
+Turning it on is a per-scope decision, made in one of two places. Both are
+switches on the dashboard page at **Workshop → Memory (Hindsight)**, which renders
+one list per key and one per combo; the API calls below are the same verbs.
 
 **1. One API key** — the default way. The opt-in is stored in `kv` scope
 `memoryOptIn`, keyed by the key's id (never the secret, which can rotate and would
@@ -119,8 +121,13 @@ and the chat request continues. Nothing in this stage can fail a request.
 ## Admin
 
 `GET /api/memory` — reachability, connection config (token withheld), breaker
-state, and which key ids have opted in.
+state, which key ids have opted in, and each combo's memory switch.
 `POST /api/memory` with `{action:"opt-in"|"opt-out", keyId}` — the per-key switch.
+`POST /api/memory` with `{action:"combo-opt-in"|"combo-opt-out", comboName}` — the
+per-combo switch. Turning one off drops only `enabled`, so tuning the combo carries
+is kept.
+`POST /api/memory` with `{action:"save-config", config}` — connection and tuning.
+A blank `apiKey` means "keep the stored token", since the form cannot read it back.
 `POST /api/memory` with `{action:"purge", apiKey}` — delete one principal's retained
 conversations, filtered server-side by that principal's tag.
 `POST /api/memory` with `{action:"reflect", query}` — run reflect once.
