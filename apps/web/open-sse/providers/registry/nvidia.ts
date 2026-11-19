@@ -40,7 +40,26 @@ const Nvidia = {
 		{ id: "deepseek-ai/deepseek-v4-pro", name: "DeepSeek V4 Pro" },
 		{ id: "deepseek-ai/deepseek-v4-flash", name: "DeepSeek V4 Flash" },
 		{ id: "moonshotai/kimi-k2.6", name: "Kimi K2.6" },
-		{ id: "nvidia/nv-embedqa-e5-v5", name: "NV EmbedQA E5 v5", kind: "embedding" },
+		// NIM retrieval models are asymmetric: they reject a request with no
+		// `input_type`, so each entry declares the one it defaults to. The
+		// adapter applies it - see handlers/embeddingProviders/nvidia.ts.
+		// `nvidia/nv-embedqa-e5-v5` is retired (410 Gone, EOL 2026-08-25).
+		{
+			id: "nvidia/nemotron-3.5-embed-8b",
+			name: "Nemotron 3.5 Embed 8B",
+			kind: "embedding",
+			dimensions: 4096,
+			inputType: "passage",
+			truncate: "END",
+		},
+		{
+			id: "nvidia/nemotron-3-embed-1b",
+			name: "Nemotron 3 Embed 1B",
+			kind: "embedding",
+			dimensions: 2048,
+			inputType: "passage",
+			truncate: "END",
+		},
 		{
 			id: "nvidia/parakeet-ctc-1.1b-asr",
 			name: "Parakeet CTC 1.1B",

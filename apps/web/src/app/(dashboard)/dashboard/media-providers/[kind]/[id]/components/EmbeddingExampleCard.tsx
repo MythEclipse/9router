@@ -29,6 +29,11 @@ export function EmbeddingExampleCard({ providerId, customAlias }) {
 	const [selectedModel, setSelectedModel] = useState(embeddingModels[0]?.id ?? "")
 	const [input, setInput] = useState("The quick brown fox jumps over the lazy dog")
 	const [dimensions, setDimensions] = useState("")
+	// Asymmetric retrieval models (NVIDIA NIM's Nemotron Embed, for one) refuse a
+	// request that does not say which side of the query/passage pair the text is,
+	// so the selector only appears for a model that declares the requirement.
+	// Left empty, the adapter applies the model's own default.
+	const [inputType, setInputType] = useState("")
 	const [apiKey, setApiKey] = useState("")
 	const [useTunnel, setUseTunnel] = useState(false)
 	// Seeded from the client origin at first paint, then editable so the snippet
@@ -54,15 +59,19 @@ export function EmbeddingExampleCard({ providerId, customAlias }) {
 
 	const endpoint = useTunnel ? tunnelEndpoint : localEndpoint
 	const modelFull = selectedModel ? `${providerAlias}/${selectedModel}` : ""
+	const selectedEntry = embeddingModels.find((m) => m.id === selectedModel)
+	const supportsInputType = Boolean(selectedEntry?.inputType)
+	const defaultInputType = supportsInputType ? String(selectedEntry.inputType) : ""
 
 	// Build request body - include dimensions only if user provided a positive number
 	const buildBody = () => {
-		const body: { model: string; input: string; dimensions?: number } = {
+		const body: { model: string; input: string; dimensions?: number; input_type?: string } = {
 			model: modelFull,
 			input: input.trim(),
 		}
 		const dim = Number(dimensions)
 		if (dimensions && Number.isFinite(dim) && dim > 0) body.dimensions = dim
+		if (supportsInputType && inputType) body.input_type = inputType
 		return body
 	}
 
@@ -144,6 +153,21 @@ export function EmbeddingExampleCard({ providerId, customAlias }) {
 						</select>
 					)}
 				</Row>
+
+				{/* Input type - asymmetric retrieval models only (query vs passage) */}
+				{supportsInputType && (
+					<Row label="Input Type">
+						<select
+							value={inputType}
+							onChange={(e) => setInputType(e.target.value)}
+							className="w-full px-3 py-1.5 text-sm border border-border rounded-lg bg-background focus:outline-none focus:border-primary"
+						>
+							<option value="">Model default ({defaultInputType})</option>
+							<option value="query">query - the search text</option>
+							<option value="passage">passage - the document</option>
+						</select>
+					</Row>
+				)}
 
 				{/* Endpoint */}
 				<Row label="Endpoint">

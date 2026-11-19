@@ -2,6 +2,7 @@
 
 import gemini from "./gemini.ts"
 import github from "./github.ts"
+import nvidia from "./nvidia.ts"
 import ollamaLocal from "./ollamaLocal.ts"
 import createOpenAIEmbeddingAdapter from "./openai.ts"
 import openaiCompatNode from "./openaiCompatNode.ts"
@@ -15,7 +16,6 @@ const OPENAI_COMPAT_PROVIDERS = [
 	"fireworks",
 	"together",
 	"nebius",
-	"nvidia",
 	"jina-ai",
 	"vercel-ai-gateway",
 ]
@@ -25,6 +25,10 @@ const ADAPTERS = {
 	gemini,
 	google_ai_studio: gemini,
 	github,
+	// NVIDIA NIM is OpenAI-shaped but its retrieval models are asymmetric and
+	// reject a request with no `input_type`, so it needs its own body builder
+	// rather than the plain OpenAI one.
+	nvidia,
 	// Self-hosted reads creds.providerSpecificData.baseUrl (one provider, many
 	// servers) - but via its OWN adapter, not openaiCompatNode: that one falls back
 	// to api.openai.com when no baseUrl is set, which under a provider called

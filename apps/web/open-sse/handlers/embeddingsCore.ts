@@ -51,6 +51,12 @@ export async function handleEmbeddingsCore({
 			input,
 			encoding_format: body.encoding_format || "float",
 			dimensions: body.dimensions,
+			// Asymmetric retrieval models (NVIDIA NIM) need to know which side of
+			// the pair this text is. Forwarded when the caller sends it; the
+			// adapter supplies the model's default otherwise.
+			input_type: body.input_type ?? body.inputType,
+			modality: body.modality,
+			truncate: body.truncate,
 		})
 	} catch (error) {
 		log?.debug?.("EMBEDDINGS", `Request build failed: ${error.message}`)
@@ -59,7 +65,9 @@ export async function handleEmbeddingsCore({
 
 	log?.debug?.(
 		"EMBEDDINGS",
-		`${provider.toUpperCase()} | ${model} | input_type=${Array.isArray(input) ? `array[${input.length}]` : "string"}`,
+		`${provider.toUpperCase()} | ${model} | input=${Array.isArray(input) ? `array[${input.length}]` : "string"}${
+			requestBody?.input_type ? ` | input_type=${requestBody.input_type}` : ""
+		}`,
 	)
 
 	let providerResponse
