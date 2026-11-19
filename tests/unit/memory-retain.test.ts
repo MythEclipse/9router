@@ -90,6 +90,50 @@ describe("retainDelta", () => {
 		expect(String(item.content)).not.toContain("turn two question")
 	})
 
+	it("stamps operator-chosen retain tags on top of the principal tag", async () => {
+		const sharing = resolveMemoryConfig({
+			memory: { enabled: true, sharedTags: ["host:omarchy"], retainTags: ["host:omarchy"] },
+		})
+		stubFetch(() => new Response("{}", { status: 202 }))
+		await retainDelta({
+			config: sharing,
+			body: {
+				messages: [
+					{ role: "user", content: "q1" },
+					{ role: "assistant", content: "a1" },
+					{ role: "user", content: "q2" },
+				],
+			},
+			sessionId: "s",
+			apiKey: "k",
+		})
+		// Opting into a shared tag is what makes one bank readable by another
+		// writer (a personal coding agent); it is off by default for that reason.
+		expect((calls[0].body.items as Array<Record<string, unknown>>)[0].tags).toEqual([
+			principalTag("k"),
+			"host:omarchy",
+		])
+	})
+
+	it("stamps only the principal tag by default", async () => {
+		stubFetch(() => new Response("{}", { status: 202 }))
+		await retainDelta({
+			config: CONFIG,
+			body: {
+				messages: [
+					{ role: "user", content: "q1" },
+					{ role: "assistant", content: "a1" },
+					{ role: "user", content: "q2" },
+				],
+			},
+			sessionId: "s",
+			apiKey: "k",
+		})
+		expect((calls[0].body.items as Array<Record<string, unknown>>)[0].tags).toEqual([
+			principalTag("k"),
+		])
+	})
+
 	it("sends nothing when the conversation has not grown", async () => {
 		stubFetch(() => new Response("{}", { status: 202 }))
 		const body = {

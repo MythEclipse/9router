@@ -70,6 +70,8 @@ export interface MemorySettings {
 	 * principal's write scope by naming one.
 	 */
 	sharedTags: string[]
+	/** Extra tags stamped on retain. Keep empty for a public combo — see MemoryConfig. */
+	retainTags: string[]
 	recallBudget: string
 	recallMaxTokens: number
 	timeoutMs: number
@@ -226,6 +228,7 @@ export const DEFAULT_SETTINGS = {
 		retain: true,
 		includeShared: true,
 		sharedTags: [],
+		retainTags: [],
 		recallBudget: "mid",
 		recallMaxTokens: 1200,
 		timeoutMs: 800,

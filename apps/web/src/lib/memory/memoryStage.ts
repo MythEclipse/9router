@@ -209,8 +209,9 @@ export async function retainDelta(input: {
 					update_mode: "append",
 					context: "chat turn",
 					timestamp,
-					// The tag is the isolation boundary; the caller never chooses it.
-					tags: [principalTag(apiKey)],
+					// The principal tag is the isolation boundary and the caller never
+					// chooses it. `retainTags` is empty unless an operator opted in.
+					tags: [principalTag(apiKey), ...config.retainTags],
 				},
 			],
 		},

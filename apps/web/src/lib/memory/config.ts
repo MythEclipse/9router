@@ -35,15 +35,22 @@ export interface MemoryConfig {
 	includeShared: boolean
 	/**
 	 * Extra tags OR'd into every recall, for a bank whose shared corpus is tagged
-	 * rather than untagged.
-	 *
-	 * A bank seeded by another tool commonly tags its knowledge (`host:omarchy`,
-	 * `knowledge:decision`) instead of leaving it untagged, and recall filtered to
-	 * the principal tag alone would never see any of it. These are read-side only:
-	 * the gateway never writes them, so a caller cannot inherit another principal's
-	 * write scope by naming one.
+	 * (`host:omarchy`, `knowledge:decision`) rather than left untagged. Read-side
+	 * only: the gateway never writes these, so a caller cannot reach another
+	 * principal's write scope by naming one.
 	 */
 	sharedTags: string[]
+	/**
+	 * Tags stamped on every retain, in addition to the principal tag.
+	 *
+	 * Empty by default, and it should stay empty for a bank that serves a public
+	 * combo. These tags are readable by every caller that lists them in
+	 * `sharedTags`, so stamping one on retain publishes that conversation to all of
+	 * them — a public caller's chat becomes another public caller's memory. Set it
+	 * only when the bank has a single trusted writer (e.g. sharing one bank with a
+	 * personal coding agent, where the "other caller" is you).
+	 */
+	retainTags: string[]
 	recallBudget: RecallBudget
 	recallMaxTokens: number
 	timeoutMs: number
@@ -58,6 +65,7 @@ const DEFAULTS: MemoryConfig = {
 	retain: true,
 	includeShared: true,
 	sharedTags: [],
+	retainTags: [],
 	recallBudget: "mid",
 	recallMaxTokens: 1200,
 	timeoutMs: 800,
@@ -126,6 +134,7 @@ export function resolveMemoryConfig(
 		retain: asBoolean(tuned.retain, DEFAULTS.retain),
 		includeShared: asBoolean(tuned.includeShared, DEFAULTS.includeShared),
 		sharedTags: asTags(tuned.sharedTags),
+		retainTags: asTags(tuned.retainTags),
 		recallBudget: asBudget(tuned.recallBudget, DEFAULTS.recallBudget),
 		recallMaxTokens: asPositiveInt(tuned.recallMaxTokens, DEFAULTS.recallMaxTokens),
 		timeoutMs: asPositiveInt(tuned.timeoutMs, DEFAULTS.timeoutMs),
