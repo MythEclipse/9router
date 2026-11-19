@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
 	adminOnlyAttempt,
+	dropBlankMemoryApiKey,
 	dropBlankOidcSecret,
 	loginGateView,
 	mayRevertSettings,
@@ -287,5 +288,53 @@ describe("revertIsEmpty", () => {
 
 	it("treats one restored key as something", () => {
 		expect(revertIsEmpty({ theme: "dark" })).toBe(false)
+	})
+})
+
+describe("dropBlankMemoryApiKey", () => {
+	it("drops a blank token so the stored one survives a settings save", () => {
+		// The dashboard cannot read the token back, so it posts an empty field every
+		// time an operator saves anything else on that page.
+		expect(dropBlankMemoryApiKey({ memory: { enabled: true, apiKey: "" } })).toEqual({
+			memory: { enabled: true },
+		})
+	})
+
+	it("keeps a real token", () => {
+		expect(dropBlankMemoryApiKey({ memory: { apiKey: "tok" } })).toEqual({
+			memory: { apiKey: "tok" },
+		})
+	})
+
+	it("leaves a body without a memory block untouched", () => {
+		expect(dropBlankMemoryApiKey({ theme: "dark" })).toEqual({ theme: "dark" })
+	})
+
+	it("does not mutate the caller's object", () => {
+		const body = { memory: { apiKey: "" } }
+		dropBlankMemoryApiKey(body)
+		expect(body.memory.apiKey).toBe("")
+	})
+})
+
+describe("publicSettings and the memory token", () => {
+	it("never sends the memory bearer token to a browser", () => {
+		const settings = publicSettings({ memory: { enabled: true, apiKey: "secret-token" } })
+		expect(settings.memory).not.toHaveProperty("apiKey")
+		expect(JSON.stringify(settings)).not.toContain("secret-token")
+	})
+
+	it("reports whether a token is configured instead", () => {
+		expect(publicSettings({ memory: { apiKey: "x" } }).memory).toMatchObject({
+			apiKeyConfigured: true,
+		})
+		expect(publicSettings({ memory: { apiKey: "" } }).memory).toMatchObject({
+			apiKeyConfigured: false,
+		})
+	})
+
+	it("keeps the rest of the memory block readable by the form", () => {
+		const settings = publicSettings({ memory: { enabled: true, bankId: "shared" } })
+		expect(settings.memory).toMatchObject({ enabled: true, bankId: "shared" })
 	})
 })

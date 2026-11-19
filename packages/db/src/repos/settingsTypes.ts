@@ -39,7 +39,40 @@ export interface ComboStrategy {
 	sessionSticky?: boolean
 	confidenceThreshold?: number
 	routerModel?: string
+	/**
+	 * Per-combo memory tuning. Same fields as the global `memory` block; it can
+	 * retune an enabled stage but never enable one the operator left off.
+	 */
+	memory?: Partial<MemorySettings>
 	[key: string]: unknown
+}
+
+/**
+ * The Hindsight-backed memory stage.
+ *
+ * One shared bank, isolated by a gateway-assigned principal tag rather than by
+ * bank separation — see `apps/web/src/lib/memory/principal.ts`. `includeShared`
+ * decides whether recall also returns the bank's untagged corpus.
+ */
+export interface MemorySettings {
+	enabled: boolean
+	baseUrl: string
+	/** Bearer token for the Hindsight deployment; never returned to a browser. */
+	apiKey: string
+	bankId: string
+	recall: boolean
+	retain: boolean
+	includeShared: boolean
+	/**
+	 * Extra tags OR'd into every recall, for a bank whose shared corpus is tagged
+	 * (`host:omarchy`, `knowledge:decision`) rather than left untagged. Read-side
+	 * only: the gateway never writes these, so a caller cannot reach another
+	 * principal's write scope by naming one.
+	 */
+	sharedTags: string[]
+	recallBudget: string
+	recallMaxTokens: number
+	timeoutMs: number
 }
 
 /** A provider's account-rotation strategy, keyed by provider id. */
@@ -79,6 +112,8 @@ export interface Settings {
 	comboStrategies: Record<string, ComboStrategy>
 	capacityAdapter: Record<string, CapacityAdapterEntry>
 	customPlugins: Record<string, CustomPluginSetting>
+	/** Hindsight-backed memory stage: one shared bank, isolated by principal tag. */
+	memory: MemorySettings
 	requireLogin: boolean
 	antiProbeMetadata: boolean
 	requireApiKey: boolean
@@ -176,6 +211,25 @@ export const DEFAULT_SETTINGS = {
 		CUSTOM_PLUGIN_KEYS.map((key) => [key, { enabled: false, models: [] as string[] }]),
 	),
 	requireLogin: true,
+	// Hindsight-backed memory stage. Off by default: it is an external service
+	// with a per-turn cost, so it must be a deliberate opt-in.
+	//
+	// `includeShared: true` returns the bank's untagged corpus alongside this
+	// caller's own memories. Turn it off for a public combo whose bank has no
+	// curated shared material, so one bank behaves like one bank per caller.
+	memory: {
+		enabled: false,
+		baseUrl: process.env.HINDSIGHT_URL || "http://localhost:8888",
+		apiKey: process.env.HINDSIGHT_API_KEY || "",
+		bankId: "9router",
+		recall: true,
+		retain: true,
+		includeShared: true,
+		sharedTags: [],
+		recallBudget: "mid",
+		recallMaxTokens: 1200,
+		timeoutMs: 800,
+	} satisfies MemorySettings,
 	// Custom-model editor: warn about name/owned_by that claim a vendor the
 	// target model does not match. Persisted so every administrator sees the
 	// same editor rather than each browser deciding for itself.

@@ -8,6 +8,14 @@ import { detectFormatByEndpoint } from "open-sse/translator/formats"
 import { handleBypassRequest } from "open-sse/utils/bypassHandler"
 import { stripModelContextMarker } from "open-sse/utils/modelMarkers"
 import { getSettings } from "@/lib/localDb"
+import { resolveMemoryConfig } from "@/lib/memory/config"
+import {
+	injectMemoryBlock,
+	memorySessionId,
+	recallForRequest,
+	retainDelta,
+} from "@/lib/memory/memoryStage"
+import { lastUserQuery } from "@/lib/memory/transcript"
 import { parseJsonBody } from "@/shared/utils/parseJsonBody"
 import { isClaudeEndpoint, validateClaudeMessageBody } from "../protocol/claudeValidation.ts"
 import { isResponsesEndpoint, validateResponsesBody } from "../protocol/responsesValidation.ts"
@@ -132,6 +140,52 @@ export async function handleChat(
 	// strategy applies, with a hop limit so a studio/combo cycle cannot recurse.
 	const comboEntryName = await resolveComboEntryName(modelStr)
 	const comboModels = await getComboModels(comboEntryName)
+
+	// Memory stage. Runs HERE, not in chatCore: everything below this line
+	// re-enters handleChatCore per account attempt, per combo member and per fusion
+	// panel leg, so a recall placed there would cost one Hindsight call per attempt
+	// and inject one copy of the same block per member. One recall, one mutation of
+	// this shared body, and every member and retry inherits it.
+	//
+	// Fail-open throughout: a timeout injects nothing and a failed retain is
+	// dropped. Memory must never be the reason a chat request fails.
+	const memoryConfig = resolveMemoryConfig(settings as Record<string, unknown>, comboEntryName)
+	if (memoryConfig.enabled) {
+		const memoryTag = log.tagForSession?.(apiKey || "local") || ""
+		const sessionId = memorySessionId({ request, body, apiKey })
+		if (memoryConfig.recall) {
+			const recalled = await recallForRequest({
+				config: memoryConfig,
+				query: lastUserQuery(body),
+				apiKey,
+				signal: request.signal,
+			})
+			if (recalled.block) {
+				injectMemoryBlock(body, clientFormat, recalled.block)
+				log.line(
+					memoryTag,
+					"🧠",
+					`RECALL ${recalled.facts} facts · ${recalled.ms}ms · bank=${memoryConfig.bankId}`,
+				)
+			} else if (recalled.reason && recalled.reason !== "no memories") {
+				log.debug("MEMORY", `recall skipped: ${recalled.reason}`)
+			}
+		}
+		if (memoryConfig.retain && sessionId) {
+			// Not awaited: the answer must not wait on an extraction job. The
+			// bookmark only advances on success, so a dropped retain is retried by
+			// the next request instead of losing the turn.
+			retainDelta({ config: memoryConfig, body, sessionId, apiKey, signal: request.signal })
+				.then((result) => {
+					if (result.retained > 0) {
+						log.debug("MEMORY", `retained ${result.retained} messages · ${memoryConfig.bankId}`)
+					}
+				})
+				.catch(() => {
+					/* fail-open: retain is best effort */
+				})
+		}
+	}
 
 	if (comboModels) {
 		// Check for combo-specific strategy first, fallback to global

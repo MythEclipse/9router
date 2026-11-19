@@ -16,6 +16,7 @@ export type {
 	CapacityAdapterEntry,
 	ComboStrategy,
 	CustomPluginSetting,
+	MemorySettings,
 	ProviderStrategy,
 	Settings,
 	SettingsUpdate,

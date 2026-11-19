@@ -25,6 +25,7 @@
 import { invalid, unauthorized } from "../../domain/errors.ts"
 import {
 	adminOnlyAttempt,
+	dropBlankMemoryApiKey,
 	dropBlankOidcSecret,
 	loginGateView,
 	passwordChangeOf,
@@ -145,6 +146,7 @@ export function makeManageSettings({
 
 			fields = await withHashedPassword(fields)
 			fields = dropBlankOidcSecret(fields)
+			fields = dropBlankMemoryApiKey(fields)
 
 			await recordBeforeImage(fields)
 			await store.update(fields)

@@ -60,11 +60,25 @@ export function refusesAdminOnlyWrite(role: string | null | undefined): boolean 
  *
  * `oidcConfigured` is derived rather than stored: the client secret never leaves
  * the server, so the form cannot tell whether OIDC is set up by looking at it.
+ *
+ * The memory stage's bearer token is stripped for the same reason: it authorizes
+ * writes into the shared memory bank, and `publicSettings` is what every dashboard
+ * session reads. `apiKeyConfigured` lets the form show "set" without handing the
+ * value back, exactly as `oidcConfigured` does.
  */
 export function publicSettings(settings: Record<string, unknown>): Record<string, unknown> {
-	const { password, oidcClientSecret, ...safe } = settings
+	const { password, oidcClientSecret, memory, ...safe } = settings
+	const memorySettings =
+		memory && typeof memory === "object" ? (memory as Record<string, unknown>) : null
+	const safeMemory = memorySettings
+		? (() => {
+				const { apiKey, ...rest } = memorySettings
+				return { ...rest, apiKeyConfigured: Boolean(apiKey) }
+			})()
+		: undefined
 	return {
 		...safe,
+		...(safeMemory ? { memory: safeMemory } : {}),
 		oidcConfigured: Boolean(safe.oidcIssuerUrl && safe.oidcClientId && oidcClientSecret),
 		hasPassword: Boolean(password),
 	}
@@ -128,6 +142,27 @@ export function dropBlankOidcSecret(body: Record<string, unknown>): Record<strin
 	const copy = { ...body }
 	delete copy.oidcClientSecret
 	return copy
+}
+
+/**
+ * A memory bearer token sent as blank means "leave it alone", not "clear it".
+ *
+ * Same reason as the OIDC secret above: the dashboard cannot read the token back
+ * (`publicSettings` strips it and reports only `apiKeyConfigured`), so the form
+ * sends an empty field every time an operator saves anything else on that page.
+ * Letting that blank through would silently switch the memory stage off against a
+ * bank that still requires the token — a failure that looks like "Hindsight is
+ * down" rather than "someone saved the settings form".
+ */
+export function dropBlankMemoryApiKey(body: Record<string, unknown>): Record<string, unknown> {
+	const memory = body.memory
+	if (!memory || typeof memory !== "object" || Array.isArray(memory)) return body
+	const record = memory as Record<string, unknown>
+	if (!Object.hasOwn(record, "apiKey")) return body
+	const value = record.apiKey
+	if (typeof value === "string" && value.trim()) return body
+	const { apiKey, ...rest } = record
+	return { ...body, memory: rest }
 }
 
 /**
