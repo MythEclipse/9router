@@ -35,6 +35,8 @@ interface ComboRow {
 interface MemoryStatus {
 	optedInKeys: string[]
 	combos: ComboRow[]
+	/** False when this host still runs on the resolver's defaults. */
+	configured: boolean
 	baseUrl: string
 	bankId: string
 	recall: boolean
@@ -218,6 +220,15 @@ export default function MemoryClient() {
 							Refresh
 						</Button>
 					</div>
+					{/* Each host keeps its own settings row, so a URL here that nobody chose is
+					    the resolver's default, not a configuration. Say so instead of letting
+					    localhost:8888 read like a real target. */}
+					{status?.configured === false ? (
+						<p className="text-xs text-warning mt-2">
+							This host has no memory configuration yet — the values below are defaults. Fill in the
+							Hindsight URL and bank, then save.
+						</p>
+					) : null}
 				</Card>
 
 				{/* Per-key switches */}

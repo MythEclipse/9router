@@ -69,12 +69,23 @@ export async function GET() {
 		})
 		.sort((a, b) => a.name.localeCompare(b.name))
 
+	// Whether the operator has actually configured this, as opposed to the
+	// resolver falling back to its defaults. Every host keeps its own settings row,
+	// so one host being configured says nothing about another — without this flag
+	// the page renders "Bank 9router at http://localhost:8888" as if it were a
+	// real choice rather than an unset default.
+	const storedMemory = (settings.memory ?? null) as Record<string, unknown> | null
+	const configured = Boolean(
+		storedMemory && typeof storedMemory.baseUrl === "string" && storedMemory.baseUrl.trim(),
+	)
+
 	return NextResponse.json(
 		{
 			// Per-key enablement means there is no single on/off to report; the list of
 			// opted-in keys is what answers "is it on, and for whom".
 			optedInKeys: await listOptedInKeys(),
 			combos,
+			configured,
 			baseUrl: config.baseUrl,
 			bankId: config.bankId,
 			recall: config.recall,
