@@ -44,6 +44,13 @@ const CLAUDE_NO_XHIGH = ["none", "low", "medium", "high", "max"]
 
 // Model-name pattern overrides (glob, first match wins) — more precise than format default.
 const PATTERN_THINKING = [
+	// Antigravity's Gemini 3.8 lane rejects "minimal" with 400 ("Thinking level
+	// MINIMAL is not supported for this model") on every tier, so LOW is the floor.
+	// This set is what the clamp in thinkingUnified reads: advertising "minimal"
+	// makes `reasoning_effort: "none"` map to it and the request dies at the first
+	// token. Scoped to the provider because the direct Gemini API is not the same
+	// backend and may well accept it — `gemini-3.8-flash` on `gemini` keeps minimal.
+	{ provider: "antigravity", pattern: "*gemini-3.8*", levels: ["low", "medium", "high"] },
 	// Gemini 4 (Argon) rejects "minimal" with 400 — LOW is the floor; cannot disable thinking.
 	{ pattern: "*gemini-4*", levels: ["low", "medium", "high"] },
 	{ pattern: "*claude*4.6*", levels: CLAUDE_NO_XHIGH },

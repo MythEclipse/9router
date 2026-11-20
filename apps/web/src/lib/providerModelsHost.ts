@@ -8,6 +8,7 @@ import type { ModelListAdapter } from "9router-api/application/providers/ports"
 import { getModelsByProviderId } from "open-sse/config/providerModels"
 import { resolveOllamaLocalHost } from "open-sse/config/providers"
 import codexProvider from "open-sse/providers/registry/codex"
+import { ANTIGRAVITY_IDE_USER_AGENT } from "open-sse/providers/shared"
 import { resolveClineModels, resolveClinepassModels } from "open-sse/services/clinepassModels"
 import { resolveCommandCodeModels } from "open-sse/services/commandcodeModels"
 import { resolveCursorModels } from "open-sse/services/cursorModels"
@@ -345,20 +346,29 @@ export async function resolveCustomModels(
 				provider,
 				label: "Antigravity",
 				resolve: async () => {
+					// `fetchAvailableModels` is the only catalogue endpoint the Antigravity
+					// backend serves; `/v1internal:models` (and its sandbox host) answer an
+					// HTML 404, which silently demoted every connection to the static list.
+					//
+					// The User-Agent is not decoration: without an Antigravity one this
+					// endpoint answers 403 PERMISSION_DENIED, and the 403 looked like a
+					// transient failure, so the picker fell back to the static catalogue
+					// and kept offering models upstream had already stopped serving.
 					const response = await fetch(
-						"https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:models",
+						"https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
 						{
 							method: "POST",
 							headers: {
 								"Content-Type": "application/json",
 								Authorization: `Bearer ${connection.accessToken}`,
+								"User-Agent": ANTIGRAVITY_IDE_USER_AGENT,
 							},
 							body: JSON.stringify({}),
 							signal: AbortSignal.timeout(timeoutMs),
 						},
 					)
 					if (!response.ok) throw new Error(`${response.status} ${await response.text()}`)
-					return ((await response.json()) as { models?: unknown[] }).models || []
+					return parseAntigravityModels(await response.json())
 				},
 			})
 
@@ -667,6 +677,33 @@ function parseGeminiCliModels(data: unknown): unknown[] {
 			.map(([id, info]) => ({ id, name: info?.displayName || info?.name || id }))
 	}
 	return []
+}
+
+/**
+ * Antigravity answers `{ models: { <id>: entry } }`, keyed by the id the request
+ * must echo back. Three kinds of entry are not chat models and must not reach the
+ * picker:
+ *
+ *   - `disabled: true` — tier-gated (e.g. Gemini 4 Argon is "available to Ultra and
+ *     paid Pro plan subscribers"). The key is suffixed `-disabled` and answers 404
+ *     when sent, so listing it offers a model that fails on selection.
+ *   - `tab_*` — editor tab-completion lanes, not requestable chat models.
+ *   - `isInternal` — upstream's own internal aliases.
+ */
+function parseAntigravityModels(data: unknown): unknown[] {
+	const models = (data as { models?: unknown })?.models
+	if (!models || typeof models !== "object" || Array.isArray(models)) return []
+	return Object.entries(
+		models as Record<
+			string,
+			{ displayName?: string; name?: string; isInternal?: boolean; disabled?: boolean }
+		>,
+	)
+		.filter(
+			([id, info]) =>
+				!info?.isInternal && !info?.disabled && !id.endsWith("-disabled") && !id.startsWith("tab_"),
+		)
+		.map(([id, info]) => ({ id, name: info?.displayName || info?.name || id }))
 }
 
 /** Codex lists chat models only, and each one also gets a review variant. */
