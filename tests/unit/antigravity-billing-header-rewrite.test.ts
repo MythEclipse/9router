@@ -32,7 +32,10 @@ describe("Antigravity strips the Claude Code billing header from system prompts"
 			`${HEADER}\n\nYou are Claude Code, Anthropic's official CLI for Claude.`,
 		)
 		expect(text).not.toContain("x-anthropic-billing-header")
-		expect(text).toContain("You are Claude Code, Anthropic's official CLI for Claude.")
+		// The identity line that followed the header is rewritten to the Antigravity
+		// identity by ANTIGRAVITY_PROMPT_REWRITES (see antigravity-claude-code-fake-429).
+		expect(text).toContain("You are Antigravity, a powerful agentic AI coding assistant")
+		expect(text).not.toContain("Claude Code")
 	})
 
 	it("removes the header when it is not the first line", () => {

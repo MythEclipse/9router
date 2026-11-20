@@ -187,24 +187,14 @@ export const LOAD_CODE_ASSIST_METADATA = {
 
 // System prompts
 export const CLAUDE_SYSTEM_PROMPT = "You are Claude Code, Anthropic's official CLI for Claude."
-// Rewrite rules applied to Antigravity system prompts: competing-client branding
-// makes the backend flag the request and answer 429 Quota Exhausted.
-export const ANTIGRAVITY_PROMPT_REWRITES = [
-	{ from: "You are a Claude agent, built on Anthropic's Claude Agent SDK.", to: "" },
-	{
-		from:
-			/You are Hermes(?: Agent)?(?:,\s*(?:an intelligent AI assistant|an AI assistant|an AI agent))?(?:,?\s*(?:built|created)\s+by\s+Nous Research)?\./gi,
-		to: "You are an AI assistant.",
-	},
-	// Claude Code prepends this line to its system prompt. The Claude-format translator strips it,
-	// but OpenAI-format clients (e.g. proxies that convert Claude Code to /v1/chat/completions)
-	// pass it through, and any system text containing it gets a fake 429 RESOURCE_EXHAUSTED.
-	{ from: /^x-anthropic-billing-header:[^\n]*(?:\r?\n)*/gim, to: "" },
-	{
-		from: /opencode/gi,
-		to: (m) => (m === "OpenCode" ? "Antigravity" : m === "OPENCODE" ? "ANTIGRAVITY" : "antigravity"),
-	},
-]
+// Rewrite rules applied to a system prompt before it reaches a Google backend.
+//
+// These used to live here as an Antigravity-only list, which was too narrow: the
+// filter is on Google's side and keys off the text, so the gemini-cli lane (same
+// cloudcode host) hits it too. The rules — and the bisect evidence for each —
+// live in `googlePromptRewrites.ts`; this name is kept as the import point the
+// executors already use.
+export { GOOGLE_PROMPT_REWRITES as ANTIGRAVITY_PROMPT_REWRITES } from "./googlePromptRewrites.ts"
 
 export const ANTIGRAVITY_DEFAULT_SYSTEM =
 	"You are Antigravity, a powerful agentic AI coding assistant designed by the Google Deepmind team working on Advanced Agentic Coding.You are pair programming with a USER to solve their coding task. The task may require creating a new codebase, modifying or debugging an existing codebase, or simply answering a question.**Absolute paths only****Proactiveness**"

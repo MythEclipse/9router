@@ -3,6 +3,7 @@ import {
 	geminiCLIUserAgent,
 	OAUTH_ENDPOINTS,
 } from "../config/appConstants.ts"
+import { rewriteSystemInstruction } from "../config/googlePromptRewrites.ts"
 import { PROVIDERS } from "../config/providers.ts"
 import { BaseExecutor } from "./base.ts"
 
@@ -33,7 +34,13 @@ export class GeminiCLIExecutor extends BaseExecutor {
 		// Store model for use in buildHeaders (called by base.execute after transformRequest)
 		this._currentModel = model
 		// Cloud Code Assist wraps the Gemini payload: { project, model, request: <body> }
-		if (body && body.request && body.model) return body
+		if (body && body.request && body.model) {
+			rewriteSystemInstruction(body.request?.systemInstruction)
+			return body
+		}
+		// Same Google content filter as Antigravity: stock client sentences come back
+		// as a fake 429 RESOURCE_EXHAUSTED, so the prompt is rewritten here too.
+		rewriteSystemInstruction(body?.systemInstruction)
 		return {
 			project: credentials?.projectId || body?.project,
 			model,

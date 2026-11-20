@@ -3,10 +3,10 @@ import {
 	AG_DEFAULT_TOOLS,
 	AG_TOOL_SUFFIX,
 	ANTIGRAVITY_HEADERS,
-	ANTIGRAVITY_PROMPT_REWRITES,
 	OAUTH_ENDPOINTS,
 } from "../config/appConstants.ts"
 import { DEFAULT_THINKING_AG_SIGNATURE } from "../config/defaultThinkingSignature.ts"
+import { rewriteSystemInstruction } from "../config/googlePromptRewrites.ts"
 import { PROVIDERS } from "../config/providers.ts"
 import { HTTP_STATUS } from "../config/runtimeConfig.ts"
 import { getGeminiThoughtSignatureSync } from "../services/thoughtSignatureStore.ts"
@@ -341,16 +341,10 @@ export class AntigravityExecutor extends BaseExecutor {
 		} = body.request || {}
 		stripBlacklisted(requestWithoutTools)
 
-		// Rewrite competing-client branding in system prompts (e.g. Zed's Claude prompt,
-		// OpenCode naming) so Antigravity doesn't flag the request with a 429 Quota Exhausted.
-		if (requestWithoutTools.systemInstruction?.parts) {
-			for (const part of requestWithoutTools.systemInstruction.parts) {
-				if (typeof part.text !== "string") continue
-				for (const { from, to } of ANTIGRAVITY_PROMPT_REWRITES) {
-					part.text = part.text.replaceAll(from, to)
-				}
-			}
-		}
+		// Rewrite competing-client branding and the stock sentences Google's content
+		// filter rejects as a fake 429 RESOURCE_EXHAUSTED. The rules live in
+		// `googlePromptRewrites.ts` so every Google lane applies the same set.
+		rewriteSystemInstruction(requestWithoutTools.systemInstruction)
 
 		const generationConfig = { ...(requestWithoutTools.generationConfig || {}) }
 		if (generationConfig.maxOutputTokens > MAX_ANTIGRAVITY_OUTPUT_TOKENS) {
