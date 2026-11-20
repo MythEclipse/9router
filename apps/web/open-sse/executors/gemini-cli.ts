@@ -5,6 +5,7 @@ import {
 } from "../config/appConstants.ts"
 import { rewriteSystemInstruction } from "../config/googlePromptRewrites.ts"
 import { PROVIDERS } from "../config/providers.ts"
+import { composeSystemPrompt } from "../shared/nativeSystemPrompt.ts"
 import { BaseExecutor } from "./base.ts"
 
 export class GeminiCLIExecutor extends BaseExecutor {
@@ -35,17 +36,37 @@ export class GeminiCLIExecutor extends BaseExecutor {
 		this._currentModel = model
 		// Cloud Code Assist wraps the Gemini payload: { project, model, request: <body> }
 		if (body && body.request && body.model) {
-			rewriteSystemInstruction(body.request?.systemInstruction)
+			this.applySystemPrompt(body.request, model)
 			return body
 		}
 		// Same Google content filter as Antigravity: stock client sentences come back
 		// as a fake 429 RESOURCE_EXHAUSTED, so the prompt is rewritten here too.
-		rewriteSystemInstruction(body?.systemInstruction)
+		this.applySystemPrompt(body, model)
 		return {
 			project: credentials?.projectId || body?.project,
 			model,
 			request: body,
 		}
+	}
+
+	/**
+	 * Replace a client agent identity with the provider's own prompt, or rewrite the
+	 * filter-triggering sentences out of an ordinary user prompt.
+	 */
+	applySystemPrompt(request, model) {
+		if (!request) return
+		const systemText = (request.systemInstruction?.parts || [])
+			.map((part) => (typeof part?.text === "string" ? part.text : ""))
+			.join("\n")
+		const composed = composeSystemPrompt("gemini-cli", systemText, {
+			modelId: model,
+			modelName: model,
+		})
+		if (composed.usedNativePrompt) {
+			request.systemInstruction = { parts: [{ text: composed.text }] }
+			return
+		}
+		rewriteSystemInstruction(request.systemInstruction)
 	}
 
 	// Parse RetryInfo.retryDelay from Google API 429 body to surface upstream retry hint

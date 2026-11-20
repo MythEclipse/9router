@@ -205,6 +205,8 @@ export const NATIVE_PROMPTS: Record<string, string> = {
 	"codebuddy-cn": CODEBUDDY_NATIVE_PROMPT,
 	"codebuddy-intl": CODEBUDDY_NATIVE_PROMPT,
 	antigravity: ANTIGRAVITY_NATIVE_PROMPT,
+	// Same Google host and the same content filter, so the same identity applies.
+	"gemini-cli": ANTIGRAVITY_NATIVE_PROMPT,
 }
 
 /** Whether a provider has a captured native prompt. */
