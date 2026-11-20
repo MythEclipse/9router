@@ -1,8 +1,5 @@
-import {
-	isAgentIdentityPrompt,
-	neutralisedContent,
-	systemPromptText,
-} from "../shared/cliAgentPrompt.ts"
+import { systemPromptText } from "../shared/cliAgentPrompt.ts"
+import { composeSystemPrompt } from "../shared/nativeSystemPrompt.ts"
 import { DefaultExecutor } from "./default.ts"
 
 /**
@@ -23,15 +20,25 @@ export class CodeBuddyExecutor extends DefaultExecutor {
 		const transformed = super.transformRequest(model, body, stream, credentials)
 		transformed.stream = true
 
-		// Tencent's content filter rejects third-party CLI agent identities — see
-		// shared/cliAgentPrompt.ts for the marker set and why it is shared with the
-		// intl endpoint. Legitimate user system prompts are left untouched.
+		// Tencent's filter rejects third-party CLI agent identities, so the system
+		// prompt is rebuilt from CodeBuddy's own captured prompt. Whatever the client
+		// actually asked for is appended after it rather than thrown away — the old
+		// neutralise-the-whole-message rule deleted real user instructions that
+		// happened to share the message with the identity line.
 		if (Array.isArray(transformed.messages)) {
-			transformed.messages = transformed.messages.map((message) => {
-				if (!message || message.role !== "system") return message
-				if (!isAgentIdentityPrompt(systemPromptText(message.content))) return message
-				return { ...message, content: neutralisedContent(message.content) }
+			const clientSystemText = transformed.messages
+				.filter((m) => m && ["system", "developer"].includes(m.role))
+				.map((m) => systemPromptText(m.content))
+				.filter(Boolean)
+				.join("\n\n")
+			const composed = composeSystemPrompt("codebuddy-cn", clientSystemText, {
+				modelId: model,
+				modelName: model,
 			})
+			transformed.messages = [
+				{ role: "system", content: composed.text },
+				...transformed.messages.filter((m) => m && !["system", "developer"].includes(m.role)),
+			]
 		}
 
 		// CodeBuddy only surfaces model reasoning when the request carries the CLI's

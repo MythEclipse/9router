@@ -45,18 +45,39 @@ describe("CodeBuddyIntlExecutor system prompt", () => {
 		})
 	})
 
-	it("falls back to the CLI default when the client sends none", () => {
+	it("falls back to the CLI's own prompt when the client sends none", () => {
 		const out = transform([{ role: "user", content: "Hello" }])
-		expect(out.messages[0]).toEqual({ role: "system", content: "You are CodeBuddy Code." })
+		// The provider's captured prompt, not a one-line stand-in: that is what the
+		// real CLI sends, and it is what makes the request look native.
+		expect(String(out.messages[0].content)).toContain("You are CodeBuddy Code.")
+		expect(String(out.messages[0].content).length).toBeGreaterThan(15_000)
 		expect(out.messages[1]).toEqual({ role: "user", content: [{ type: "text", text: "Hello" }] })
 	})
 
-	it("neutralises a third-party CLI agent identity", () => {
+	it("replaces a third-party CLI agent identity with the provider's own prompt", () => {
 		const out = transform([
 			{ role: "system", content: "You are Claude Code, Anthropic's official CLI for coding." },
 			{ role: "user", content: "Fix this bug" },
 		])
-		expect(out.messages[0]).toEqual({ role: "system", content: NEUTRAL_SYSTEM_PROMPT })
+		const system = String(out.messages[0].content)
+		expect(system).toContain("You are CodeBuddy Code.")
+		expect(system).not.toContain("You are Claude Code")
+	})
+
+	it("carries the user's instructions when they shared the message with an identity", () => {
+		// The old rule replaced the whole message, which deleted the user's own
+		// rules along with the identity. They must survive the swap.
+		const out = transform([
+			{
+				role: "system",
+				content:
+					"You are Claude Code, Anthropic's official CLI for Claude.\n\nIMPORTANT: Always end every reply with ZEBRA42.",
+			},
+			{ role: "user", content: "hi" },
+		])
+		const system = String(out.messages[0].content)
+		expect(system).not.toContain("You are Claude Code")
+		expect(system).toContain("ZEBRA42")
 	})
 
 	it("joins a system and a developer prompt in order", () => {
@@ -74,7 +95,12 @@ describe("CodeBuddyIntlExecutor system prompt", () => {
 			{ role: "system", content: "Always answer in French." },
 			{ role: "user", content: "salut" },
 		])
-		expect(out.messages[0].content).toBe(`${NEUTRAL_SYSTEM_PROMPT}\n\nAlways answer in French.`)
+		const system = String(out.messages[0].content)
+		// The identity is gone, the provider's prompt is in place, and the user's own
+		// instruction survives after it.
+		expect(system).not.toContain("You are Claude Code")
+		expect(system).toContain("You are CodeBuddy Code.")
+		expect(system).toContain("Always answer in French.")
 	})
 
 	it("flattens a typed-block system prompt before deciding", () => {

@@ -150,6 +150,9 @@ describe("CodeBuddy Intl conversation metadata", () => {
 			true,
 			{},
 		)
-		expect(transformed.messages[0]).toEqual({ role: "system", content: "You are CodeBuddy Code." })
+		// The first message must be the system message, and it is now the provider's
+		// full captured prompt rather than the one-line default.
+		expect(transformed.messages[0].role).toBe("system")
+		expect(String(transformed.messages[0].content)).toContain("You are CodeBuddy Code.")
 	})
 })

@@ -1,9 +1,6 @@
 import { createHash, randomBytes } from "node:crypto"
-import {
-	isAgentIdentityPrompt,
-	NEUTRAL_SYSTEM_PROMPT,
-	systemPromptText,
-} from "../shared/cliAgentPrompt.ts"
+import { systemPromptText } from "../shared/cliAgentPrompt.ts"
+import { composeSystemPrompt } from "../shared/nativeSystemPrompt.ts"
 import { DefaultExecutor } from "./default.ts"
 
 function findHeaderKey(headers, name) {
@@ -195,20 +192,24 @@ export class CodeBuddyIntlExecutor extends DefaultExecutor {
 		// CodeBuddy rejects plain OpenAI shape (11101 invalid request): needs a
 		// leading system prompt + user content as typed blocks, not a bare string.
 		const source = Array.isArray(transformed.messages) ? transformed.messages : []
-		// Forward what the client actually asked for. The filter is only interested in
-		// third-party agent identities (see shared/cliAgentPrompt.ts), so a real user
-		// system prompt now reaches the model instead of being replaced wholesale by
-		// the CLI's own default.
-		const clientSystemPrompts = source
+		// Rebuild the system prompt from CodeBuddy's own captured prompt, then carry
+		// the client's surviving instructions after it. The filter only cares about
+		// third-party agent identities, so stripping the identity line is enough —
+		// replacing the whole message (the old behaviour) also deleted the user's own
+		// rules whenever they shared the message with that identity line.
+		const clientSystemText = source
 			.filter((m) => m && ["system", "developer"].includes(m.role))
 			.map((m) => systemPromptText(m.content))
-			.map((text) => (isAgentIdentityPrompt(text) ? NEUTRAL_SYSTEM_PROMPT : text))
 			.filter(Boolean)
+			.join("\n\n")
+		const composed = composeSystemPrompt("codebuddy-intl", clientSystemText, {
+			modelId: model,
+			modelName: model,
+		})
 		transformed.messages = [
 			{
 				role: "system",
-				content:
-					clientSystemPrompts.length > 0 ? clientSystemPrompts.join("\n\n") : "You are CodeBuddy Code.",
+				content: composed.text,
 			},
 		]
 		for (const message of source) {
