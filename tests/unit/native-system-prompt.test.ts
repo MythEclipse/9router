@@ -20,6 +20,7 @@
 import { describe, expect, it } from "vitest"
 
 import {
+	ANTIGRAVITY_NATIVE_PROMPT,
 	CODEBUDDY_NATIVE_PROMPT,
 	hasNativePrompt,
 } from "../../apps/web/open-sse/config/nativePrompts.js"
@@ -147,5 +148,39 @@ describe("composeSystemPrompt puts the provider's prompt first", () => {
 		expect(out.usedNativePrompt).toBe(true)
 		expect(out.carriedClientInstructions).toBe(false)
 		expect(out.text.startsWith("You are CodeBuddy Code.")).toBe(true)
+	})
+})
+
+describe("the Antigravity prompt is trimmed to what is safe", () => {
+	it("keeps the identity block the filter requires", () => {
+		expect(ANTIGRAVITY_NATIVE_PROMPT).toContain("<identity>")
+		expect(ANTIGRAVITY_NATIVE_PROMPT).toContain("You are Antigravity")
+	})
+
+	it("does not advertise tools the caller does not have", () => {
+		// The full captured prompt is 23k and names run_command, BypassSandbox,
+		// call_mcp_tool, invoke_subagent. Sent to a plain OpenAI client, the model
+		// listed all of them as available. Only behaviour sections are kept.
+		for (const tool of [
+			"run_command",
+			"BypassSandbox",
+			"call_mcp_tool",
+			"invoke_subagent",
+			"read_file",
+		]) {
+			expect(ANTIGRAVITY_NATIVE_PROMPT).not.toContain(tool)
+		}
+	})
+
+	it("does not leak the capture machine's paths or skills", () => {
+		// The capture ran on this developer's box and named their skills and a
+		// private MCP server; none of that may reach another user's request.
+		expect(ANTIGRAVITY_NATIVE_PROMPT).not.toContain("/home/asephs")
+		expect(ANTIGRAVITY_NATIVE_PROMPT).not.toContain(".gemini")
+		expect(ANTIGRAVITY_NATIVE_PROMPT).not.toContain("hindsight")
+	})
+
+	it("is registered so the executor picks it up", () => {
+		expect(hasNativePrompt("antigravity")).toBe(true)
 	})
 })

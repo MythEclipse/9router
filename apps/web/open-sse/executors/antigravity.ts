@@ -10,6 +10,7 @@ import { rewriteSystemInstruction } from "../config/googlePromptRewrites.ts"
 import { PROVIDERS } from "../config/providers.ts"
 import { HTTP_STATUS } from "../config/runtimeConfig.ts"
 import { getGeminiThoughtSignatureSync } from "../services/thoughtSignatureStore.ts"
+import { composeSystemPrompt } from "../shared/nativeSystemPrompt.ts"
 import {
 	cleanJSONSchemaForAntigravity,
 	normalizeGeminiContents,
@@ -341,10 +342,24 @@ export class AntigravityExecutor extends BaseExecutor {
 		} = body.request || {}
 		stripBlacklisted(requestWithoutTools)
 
-		// Rewrite competing-client branding and the stock sentences Google's content
-		// filter rejects as a fake 429 RESOURCE_EXHAUSTED. The rules live in
-		// `googlePromptRewrites.ts` so every Google lane applies the same set.
-		rewriteSystemInstruction(requestWithoutTools.systemInstruction)
+		// A client's own agent identity must not reach Google's filter (it answers a
+		// fake 429 RESOURCE_EXHAUSTED), and the request should look like the provider's
+		// own client. So an agent prompt is replaced with Antigravity's captured
+		// prompt, carrying the user's surviving instructions after it. An ordinary
+		// user prompt is left as sent, and only the stock sentences the filter rejects
+		// are rewritten out of it.
+		const systemText = (requestWithoutTools.systemInstruction?.parts || [])
+			.map((part) => (typeof part?.text === "string" ? part.text : ""))
+			.join("\n")
+		const composed = composeSystemPrompt("antigravity", systemText, {
+			modelId: model,
+			modelName: model,
+		})
+		if (composed.usedNativePrompt) {
+			requestWithoutTools.systemInstruction = { parts: [{ text: composed.text }] }
+		} else {
+			rewriteSystemInstruction(requestWithoutTools.systemInstruction)
+		}
 
 		const generationConfig = { ...(requestWithoutTools.generationConfig || {}) }
 		if (generationConfig.maxOutputTokens > MAX_ANTIGRAVITY_OUTPUT_TOKENS) {

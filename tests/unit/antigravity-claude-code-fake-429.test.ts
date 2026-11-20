@@ -76,18 +76,20 @@ describe("Antigravity strips Claude Code sentences that trigger a fake 429", () 
 		expect(text).not.toContain("pasted into the message by the user")
 	})
 
-	it("rewrites the desktop identity line to the Antigravity identity", () => {
+	it("replaces the desktop identity with Antigravity's own prompt", () => {
+		// Not a rewrite any more: an agent identity is swapped for the provider's
+		// captured prompt, which is what makes the request look native.
 		const text = systemTextSentToAntigravity(IDENTITY_DESKTOP)
-		expect(text).toContain(ANTIGRAVITY_IDENTITY)
+		expect(text).toContain("<identity>")
+		expect(text).toContain("You are Antigravity, a powerful agentic AI assistant")
 		expect(text).not.toContain("Claude Code")
 	})
 
-	it("rewrites the SDK-suffixed identity form too", () => {
-		// Longest form must win, otherwise the plain sentence's rule matches first and
-		// leaves ", running within the Claude Agent SDK." behind.
+	it("replaces the SDK-suffixed identity form too", () => {
 		const text = systemTextSentToAntigravity(IDENTITY_SDK)
-		expect(text).toContain(ANTIGRAVITY_IDENTITY)
+		expect(text).toContain("<identity>")
 		expect(text).not.toContain("Claude Agent SDK")
+		expect(text).not.toContain("Claude Code")
 	})
 
 	it("rewrites a bare 'You are Claude Code' in any other wording", () => {
@@ -120,7 +122,7 @@ describe("Antigravity strips Claude Code sentences that trigger a fake 429", () 
 		expect(text).not.toContain("Claude Code")
 		expect(text).not.toContain("Dual-use security tools")
 		expect(text).not.toContain("pasted into the message by the user")
-		expect(text).toContain(ANTIGRAVITY_IDENTITY)
+		expect(text).toContain("You are Antigravity, a powerful agentic AI assistant")
 		expect(text).toContain("You are an interactive CLI tool.")
 	})
 })

@@ -18,6 +18,8 @@
  * Providers with no captured prompt are left alone (see `hasNativePrompt`), so
  * this is opt-in and cannot regress a provider nobody has reverse-engineered.
  */
+
+import { rewritePromptText } from "../config/googlePromptRewrites.ts"
 import { getNativePrompt, type NativePromptContext } from "../config/nativePrompts.ts"
 import { isAgentIdentityPrompt } from "../shared/cliAgentPrompt.ts"
 import { stripClientIdentity } from "../shared/clientIdentity.ts"
@@ -75,7 +77,7 @@ export function composeSystemPrompt(
 		return { text: source, usedNativePrompt: false, carriedClientInstructions: false }
 	}
 
-	const clientInstructions = stripClientIdentity(source)
+	const clientInstructions = rewritePromptText(stripClientIdentity(source))
 	const carry = clientInstructions.length >= 24
 
 	// Only the values the request can actually know; anything else keeps the

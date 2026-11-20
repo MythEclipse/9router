@@ -24,6 +24,9 @@
  * Each entry below is captured from the real client, not hand-written, and keeps
  * its dynamic slots (`{{...}}`) for the values only the request knows.
  */
+import { ANTIGRAVITY_NATIVE_PROMPT } from "./antigravityNativePrompt.ts"
+
+export { ANTIGRAVITY_NATIVE_PROMPT }
 
 export interface NativePromptContext {
 	/** Absolute path to the provider CLI's bundled docs, when it ships them. */
@@ -201,6 +204,7 @@ When referencing specific functions or pieces of code include the pattern \`file
 export const NATIVE_PROMPTS: Record<string, string> = {
 	"codebuddy-cn": CODEBUDDY_NATIVE_PROMPT,
 	"codebuddy-intl": CODEBUDDY_NATIVE_PROMPT,
+	antigravity: ANTIGRAVITY_NATIVE_PROMPT,
 }
 
 /** Whether a provider has a captured native prompt. */
