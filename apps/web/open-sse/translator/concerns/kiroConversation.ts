@@ -249,6 +249,32 @@ function toolResultText(toolResult: unknown) {
 	return `[Tool result${result?.status === "error" ? " (error)" : ""}: ${content}]`
 }
 
+/**
+ * State, in the conversation, that the caller gave this model no tools.
+ *
+ * CodeWhisperer injects its own agent toolset server-side when a request carries
+ * no `tools`, so without this the model believes it can read files and run
+ * commands. Measured on kr/claude-sonnet-4.5 with no tools declared: asked to
+ * read /etc/hostname it answered with fabricated contents and presented them as
+ * the file; asked for a real config.yaml on disk it reported a fabricated one.
+ * An explicit empty `tools` array does not stop the injection, but this notice
+ * does — the same request then answers "I cannot read that file."
+ *
+ * Prepended so it reads as standing context rather than as a reply to the user's
+ * own words, and only added when the client declared nothing, so a caller that
+ * does pass tools is untouched.
+ */
+function prependNoToolsNotice(finalUser: KiroUserInputMessage) {
+	const notice =
+		"[System note: you have no tools available in this conversation. You cannot read files, run commands, browse, or search the web, and you must not claim to have done so. If the user asks for something that would need a tool, say plainly that you cannot do it here.]"
+	const existing = typeof finalUser.content === "string" ? finalUser.content : ""
+	if (existing.startsWith("[System note: you have no tools available")) return
+	// An empty turn carries no request to mislead about, and Kiro requires its own
+	// placeholder text there — the placeholder must stay exactly as it is.
+	if (!existing.trim() || existing.trim() === KIRO_EMPTY_USER_PLACEHOLDER) return
+	finalUser.content = `${notice}\n\n${existing}`
+}
+
 function mergeUser(target: KiroUserInputMessage, source: KiroUserInputMessage) {
 	appendText(target, source.content)
 	if (Array.isArray(source.images) && source.images.length > 0) {
@@ -604,7 +630,22 @@ export function canonicalizeKiroConversation({
 		throw new Error("canonicalizeKiroConversation: conversation does not end in a user turn")
 	}
 	finalUser.userInputMessageContext ||= {}
-	if (toolSpecs.length > 0) {
+	// CodeWhisperer injects its own agent toolset server-side when the request
+	// carries no `tools`, so a client that declared nothing still gets a model that
+	// believes it can read files and run commands. Measured on kr/claude-sonnet-4.5:
+	// asked to list its tools with none declared, it named eight (read_file,
+	// execute_command, create_agent, …); asked to read /etc/hostname it replied with
+	// fabricated contents ("ip-172-31-24-137") as if it had read the file, and
+	// reported a fabricated config.yaml for a real one on disk. An empty `tools`
+	// array does not suppress the injection — only the prompt does.
+	//
+	// So when the client declared no tools, say so in the conversation instead of
+	// leaving the model to assume it has the server's set. Measured: with this line
+	// the same request answers "I cannot read that file. I have no tools available",
+	// which is the truth the caller needs.
+	if (toolSpecs.length === 0) {
+		prependNoToolsNotice(finalUser)
+	} else {
 		finalUser.userInputMessageContext.tools = clone(toolSpecs)
 	}
 	cleanUserContext(finalUser)
