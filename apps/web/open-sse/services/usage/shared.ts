@@ -31,6 +31,12 @@ export interface UsageQuotaRow {
 	unit?: string
 	/** True when the row is a usage percentage the UI should invert. */
 	percentageIsUsed?: boolean
+	/**
+	 * One of several interchangeable credit pools (e.g. CodeBuddy's monthly base
+	 * plus its bonus packs). Exhaustion parks the account only when every pool in
+	 * the set reads 0%; a single pool with credit left still serves requests.
+	 */
+	pooled?: boolean
 	/** Extra provider-specific fields the UI passes through. */
 	[key: string]: unknown
 }

@@ -17,6 +17,10 @@
  *
  * We surface one quota row per package - a cadence label (Monthly/Weekly/Daily)
  * for refill packs, "Bonus Pack N" for bonus packs (soonest-expiring first).
+ *
+ * Both kinds are interchangeable credits (bonus is consumed first, the refill
+ * covers the rest), so every row is marked `pooled`: exhaustion parks the
+ * account only when the whole set is spent, never when a single pack runs dry.
  */
 
 import { PROVIDERS } from "../../providers/index.ts"
@@ -119,6 +123,8 @@ async function getCodeBuddyUsage(
 				total: num(acc.CycleCapacitySizePrecise, acc.CycleCapacitySize),
 				resetAt: parseResetTime(acc.CycleEndTime),
 				unlimited: false,
+				// One of the interchangeable credit pools (see the module header).
+				pooled: true,
 				// Recurring allowance: the CycleEndTime is the next refresh, not the
 				// final expiry. The UI must show "Resets in", not "Expires in".
 				recurring: true,
@@ -134,6 +140,8 @@ async function getCodeBuddyUsage(
 				total: num(acc.CapacitySizePrecise, acc.CapacitySize),
 				resetAt: parseResetTime(acc.CycleEndTime),
 				unlimited: false,
+				// One of the interchangeable credit pools (see the module header).
+				pooled: true,
 				recurring: false,
 			}
 		})

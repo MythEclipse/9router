@@ -17,6 +17,10 @@
  * 2. A row that names a model only blocks that model. Google and Claude report one row per
  *    model; without this, a single exhausted model would park the whole account for a week.
  *    Rows with no model name in them (Weekly, 5h, Session, Monthly, Credits) are account-wide.
+ * 3. Rows marked `pooled` are interchangeable credits (CodeBuddy's monthly base plus its bonus
+ *    packs): any pool with credit left serves the request, so the set parks the connection only
+ *    when every pool in it is spent. A spent bonus pack alone never parks an account whose
+ *    monthly quota still has credit.
  */
 
 import type { UsageQuotaMap, UsageQuotaRow } from "./usage/shared.ts"
@@ -167,6 +171,43 @@ export function rowAppliesToModel(text: string, model: string): boolean {
 	)
 }
 
+/** An applicable row, kept with its map key for the log line. */
+interface ApplicableRow {
+	key: string
+	row: UsageQuotaRow
+}
+
+/** Whether a row is spent: a definite 0% reading (an unlimited row never is). */
+function rowIsSpent(row: UsageQuotaRow): boolean {
+	if (row.unlimited === true) return false
+	const remaining = rowRemainingPercentage(row)
+	return remaining !== null && remaining <= 0
+}
+
+/** The latest reset among the spent rows in a set — the moment the last one refills. */
+function latestSpentBlock(
+	rows: readonly ApplicableRow[],
+	now: number,
+): QuotaExhaustionBlock | null {
+	let worst: QuotaExhaustionBlock | null = null
+	for (const { key, row } of rows) {
+		if (!rowIsSpent(row)) continue
+		const resetAt = typeof row.resetAt === "string" ? row.resetAt : null
+		if (!resetAt) continue
+		const resetMs = new Date(resetAt).getTime()
+		if (!Number.isFinite(resetMs) || resetMs <= now) continue
+		if (!worst || resetMs > worst.resetMs) {
+			worst = {
+				key,
+				label: typeof row.name === "string" && row.name ? row.name : key,
+				resetAt,
+				resetMs,
+			}
+		}
+	}
+	return worst
+}
+
 /**
  * The window that parks this connection for `model`, or null when it can serve the request.
  *
@@ -180,27 +221,27 @@ export function findExhaustedQuotaWindow(
 ): QuotaExhaustionBlock | null {
 	if (!quotas || typeof quotas !== "object") return null
 
-	let worst: QuotaExhaustionBlock | null = null
+	const pooled: ApplicableRow[] = []
+	const hard: ApplicableRow[] = []
 	for (const [key, row] of Object.entries(quotas)) {
 		if (!row || typeof row !== "object") continue
-		if (row.unlimited === true) continue
-		const remaining = rowRemainingPercentage(row)
-		if (remaining === null || remaining > 0) continue
-		const resetAt = typeof row.resetAt === "string" ? row.resetAt : null
-		if (!resetAt) continue
-		const resetMs = new Date(resetAt).getTime()
-		if (!Number.isFinite(resetMs) || resetMs <= now) continue
 		if (model && !rowAppliesToModel(rowText(key, row), model)) continue
-		if (!worst || resetMs > worst.resetMs) {
-			worst = {
-				key,
-				label: typeof row.name === "string" && row.name ? row.name : key,
-				resetAt,
-				resetMs,
-			}
-		}
+		if (row.pooled === true) pooled.push({ key, row })
+		else hard.push({ key, row })
 	}
-	return worst
+
+	// A pooled set parks only when every pool in it is spent: any pool with credit left
+	// (or one we cannot read — fail open) still serves the request. Other rows block on
+	// their own, exactly as before.
+	const pooledBlock =
+		pooled.length > 0 && pooled.every(({ row }) => rowIsSpent(row))
+			? latestSpentBlock(pooled, now)
+			: null
+	const hardBlock = latestSpentBlock(hard, now)
+	if (pooledBlock && hardBlock) {
+		return pooledBlock.resetMs >= hardBlock.resetMs ? pooledBlock : hardBlock
+	}
+	return pooledBlock ?? hardBlock
 }
 
 // connectionId → what the last usage read said.

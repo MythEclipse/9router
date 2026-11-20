@@ -158,6 +158,119 @@ describe("findExhaustedQuotaWindow", () => {
 		)
 		expect(block?.resetAt).toBe(IN_SIX_DAYS)
 	})
+
+	it("does not park a pooled set while the monthly pool still has credit", () => {
+		// The reported case: a spent bonus pack must not park an account whose
+		// monthly quota is still serving.
+		expect(
+			findExhaustedQuotaWindow(
+				{
+					Monthly: {
+						name: "Monthly",
+						used: 300,
+						total: 1000,
+						resetAt: IN_SIX_DAYS,
+						pooled: true,
+					},
+					"Bonus Pack 1": {
+						name: "Bonus Pack 1",
+						used: 100,
+						total: 100,
+						resetAt: IN_AN_HOUR,
+						pooled: true,
+					},
+				},
+				"claude-sonnet-5-5",
+				NOW,
+			),
+		).toBeNull()
+	})
+
+	it("does not park a pooled set while a bonus pack still has credit", () => {
+		expect(
+			findExhaustedQuotaWindow(
+				{
+					Monthly: {
+						name: "Monthly",
+						used: 1000,
+						total: 1000,
+						resetAt: IN_SIX_DAYS,
+						pooled: true,
+					},
+					"Bonus Pack 1": {
+						name: "Bonus Pack 1",
+						used: 10,
+						total: 100,
+						resetAt: IN_AN_HOUR,
+						pooled: true,
+					},
+				},
+				"claude-sonnet-5-5",
+				NOW,
+			),
+		).toBeNull()
+	})
+
+	it("parks a pooled set only when every pool is spent", () => {
+		const block = findExhaustedQuotaWindow(
+			{
+				Monthly: {
+					name: "Monthly",
+					used: 1000,
+					total: 1000,
+					resetAt: IN_SIX_DAYS,
+					pooled: true,
+				},
+				"Bonus Pack 1": {
+					name: "Bonus Pack 1",
+					used: 100,
+					total: 100,
+					resetAt: IN_AN_HOUR,
+					pooled: true,
+				},
+			},
+			"claude-sonnet-5-5",
+			NOW,
+		)
+		expect(block?.resetAt).toBe(IN_SIX_DAYS)
+	})
+
+	it("fails open on a pooled set with an unreadable pool", () => {
+		expect(
+			findExhaustedQuotaWindow(
+				{
+					Monthly: {
+						name: "Monthly",
+						used: 1000,
+						total: 1000,
+						resetAt: IN_SIX_DAYS,
+						pooled: true,
+					},
+					"Bonus Pack 1": { name: "Bonus Pack 1", used: 0, total: 0, pooled: true },
+				},
+				"claude-sonnet-5-5",
+				NOW,
+			),
+		).toBeNull()
+	})
+
+	it("still parks on a hard window while a pooled set has credit", () => {
+		const block = findExhaustedQuotaWindow(
+			{
+				"5h": {
+					name: "Session (5h)",
+					used: 100,
+					total: 100,
+					remainingPercentage: 0,
+					resetAt: IN_AN_HOUR,
+				},
+				Monthly: { name: "Monthly", used: 0, total: 1000, resetAt: IN_SIX_DAYS, pooled: true },
+			},
+			"claude-sonnet-5-5",
+			NOW,
+		)
+		expect(block?.resetAt).toBe(IN_AN_HOUR)
+	})
 })
 
 describe("model matching", () => {
