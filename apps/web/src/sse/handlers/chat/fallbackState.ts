@@ -84,6 +84,14 @@ export class FallbackState {
 	readonly excludeConnectionIds = new Set<string>()
 	readonly hideError: boolean
 	/**
+	 * How many account attempts this loop has started. The budget below is a
+	 * wall-clock deadline, so on its own it cannot tell "we are out of time"
+	 * apart from "the first attempt ate all the time" — and the loop stopped on
+	 * the second reading, reporting a rotation it never ran. Counting attempts
+	 * lets `shouldStopForBudget` guarantee at least one rotation.
+	 */
+	private attemptsStarted = 0
+	/**
 	 * Response builders bound to the client format. The single-model path sets
 	 * them to the builders bound to `request.url` rather than the array form.
 	 */
@@ -163,11 +171,38 @@ export class FallbackState {
 	}
 
 	/**
+	 * Record that an attempt is about to start. Called from the top of the
+	 * attempt, before the credential is picked, so the count reflects attempts
+	 * that really happened rather than ones the loop considered.
+	 */
+	noteAttemptStarted(): void {
+		this.attemptsStarted += 1
+	}
+
+	/** How many attempts this loop has started (0 before the first). */
+	get attemptCount(): number {
+		return this.attemptsStarted
+	}
+
+	/**
 	 * Only stop once an attempt has actually failed: a first attempt that is
 	 * slow to start is not the same thing as an exhausted rotation.
+	 *
+	 * The deadline alone was not enough. It is a wall clock, and one slow attempt
+	 * can outlast the whole budget by itself — antigravity answers a spent quota
+	 * after ~47s against a 25s generic budget, so the very first failure looked
+	 * like an exhausted rotation and the loop returned it without ever trying the
+	 * second account. The line still said "→ NEXT PROXY/ACCOUNT", which made a
+	 * skipped rotation read like a performed one.
+	 *
+	 * So a rotation is always given one chance: while fewer than two attempts have
+	 * started, the budget cannot stop the loop. Past that the deadline governs
+	 * again, which is what bounds a provider with many dead credentials.
 	 */
 	shouldStopForBudget(): boolean {
-		return this.budgetSpent() && Boolean(this.proxy.lastError)
+		if (!this.proxy.lastError) return false
+		if (this.attemptsStarted < 2) return false
+		return this.budgetSpent()
 	}
 
 	/** Log the single "budget spent" line, for whichever caller shape saw it. */

@@ -189,6 +189,7 @@ export async function tryNextAccount(ctx: AccountAttemptContext): Promise<Attemp
 		state.logBudgetSpent({ accounts: true, pools: true })
 		return { kind: "return", response: state.lastErrorResponse() }
 	}
+	state.noteAttemptStarted()
 
 	const credentials: any = await getProviderCredentials(
 		provider,
@@ -298,7 +299,9 @@ export async function tryNextAccount(ctx: AccountAttemptContext): Promise<Attemp
 		// The probe carries its own AbortSignal, but the fallback loop holds no
 		// reference to it: past the caller's deadline every further proxy answers
 		// the same spent-quota 429 into a void, so hand back the last error now.
-		if (state.budgetSpent()) {
+		// `shouldStopForBudget` (not the bare deadline) so the guaranteed first
+		// rotation is honoured here too.
+		if (state.shouldStopForBudget()) {
 			state.logBudgetSpent({ accounts: true })
 			return { kind: "return", response: failure.response }
 		}
@@ -336,7 +339,7 @@ async function rotateOpencodeSessionForAttempt(
 		error: failure.error ?? null,
 		headers: proxy.headers,
 	})
-	if (ctx.loop.state.budgetSpent()) {
+	if (ctx.loop.state.shouldStopForBudget()) {
 		ctx.loop.state.logBudgetSpent({ accounts: true })
 		return { kind: "return", response: failure.response }
 	}
